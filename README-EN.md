@@ -115,6 +115,14 @@ This project consists of three core files, each with its own specific function:
     ```bash
     node gemini-api-server.js 0.0.0.0 --port 3001 --api-key your_secret_key --log-prompts file
     ```
+*   **Start with Base64 Encoded Credentials** (e.g., for Docker or CI/CD environments)
+    ```bash
+    node gemini-api-server.js --oauth-creds-base64 "YOUR_BASE64_ENCODED_OAUTH_CREDS_JSON"
+    ```
+*   **Start with Specified Credential File Path** (e.g., for custom credential location)
+    ```bash
+    node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
+    ```
 
 #### 💻 Call the API (Default API Key: `123456`)
 *   **List Models**
@@ -123,7 +131,7 @@ This project consists of three core files, each with its own specific function:
     ```
 *   **Generate Content (with system prompt)**
     ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-1.5-pro-latest:generateContent" \
+    curl "http://localhost:3000/v1beta/models/gemini-2.5-pro:generateContent" \
       -H "Content-Type: application/json" \
       -H "x-goog-api-key: 123456" \
       -d &#39;{
@@ -133,7 +141,7 @@ This project consists of three core files, each with its own specific function:
     ```
 *   **Stream Generate Content**
     ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-1.5-flash-latest:streamGenerateContent?key=123456" \
+    curl "http://localhost:3000/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=123456" \
       -H "Content-Type: application/json" \
       -d &#39;{"contents":[{"parts":[{"text":"Write a five-line poem about the universe"}]}]}&#39;
     ```
@@ -160,7 +168,7 @@ This project consists of three core files, each with its own specific function:
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer sk-your-key" \
       -d &#39;{
-        "model": "gemini-1.5-pro-latest",
+        "model": "gemini-2.5-pro",
         "messages": [
           {"role": "system", "content": "You are a cat named Neko."},
           {"role": "user", "content": "Hello, what is your name?"}
@@ -173,7 +181,7 @@ This project consists of three core files, each with its own specific function:
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer sk-your-key" \
       -d &#39;{
-        "model": "gemini-1.5-flash-latest",
+        "model": "gemini-2.5-flash",
         "messages": [
           {"role": "user", "content": "Write a five-line poem about the universe"}
         ],
@@ -194,8 +202,6 @@ This project consists of three core files, each with its own specific function:
     *   **Response Caching**: Add caching logic for frequently repeated questions to reduce API calls and improve response speed.
     *   **Custom Content Filtering**: Add keyword filtering or content review logic before requests are sent or returned to meet compliance requirements.
 
-*   **⚖️ Multi-Account Load Balancing (Advanced Usage)**: Run multiple instances of `GeminiCli2API` (each authorized with a different Google account), and then use a load balancer like [gemini-balance](https://github.com/snailyp/gemini-balance/) to achieve load balancing. This can create a huge shared pool of free quota, ideal for teams or high-request scenarios.
-
 ---
 
 ## 📄 License
@@ -204,4 +210,4 @@ This project is licensed under the [**GNU General Public License v3 (GPLv3)**](h
 
 ## 🙏 Acknowledgements
 
-The development of this project was greatly inspired by the official Google Gemini CLI, and it references some of the code implementation from its `gemini-cli.ts` (Cline 3.18.0 version). Sincere thanks to the official Google team for their excellent work!
+The development of this project was greatly inspired by the official Google Gemini CLI, and referenced some code implementations of Cline 3.18.0 version `gemini-cli.ts`. I would like to express my sincere gratitude to the Google official team and the Cline development team for their excellent work!

@@ -115,6 +115,14 @@
     ```bash
     node gemini-api-server.js 0.0.0.0 --port 3001 --api-key your_secret_key --log-prompts file
     ```
+*   **通过 base64 编码的凭证启动** (例如，用于 Docker 或 CI/CD 环境)
+    ```bash
+    node gemini-api-server.js --oauth-creds-base64 "YOUR_BASE64_ENCODED_OAUTH_CREDS_JSON"
+    ```
+*   **通过指定凭证文件路径启动** (例如，用于自定义凭证位置)
+    ```bash
+    node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
+    ```
 
 #### 💻 调用 API (默认 API Key: `123456`)
 *   **列出模型**
@@ -123,7 +131,7 @@
     ```
 *   **生成内容 (带系统提示)**
     ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-1.5-pro-latest:generateContent" \
+    curl "http://localhost:3000/v1beta/models/gemini-2.5-pro:generateContent" \
       -H "Content-Type: application/json" \
       -H "x-goog-api-key: 123456" \
       -d '{
@@ -133,7 +141,7 @@
     ```
 *   **流式生成内容**
     ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-1.5-flash-latest:streamGenerateContent?key=123456" \
+    curl "http://localhost:3000/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=123456" \
       -H "Content-Type: application/json" \
       -d '{"contents":[{"parts":[{"text":"写一首关于宇宙的五行短诗"}]}]}'
     ```
@@ -160,7 +168,7 @@
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer sk-your-key" \
       -d '{
-        "model": "gemini-1.5-pro-latest",
+        "model": "gemini-2.5-pro",
         "messages": [
           {"role": "system", "content": "你是一只名叫 Neko 的猫。"},
           {"role": "user", "content": "你好，你叫什么名字？"}
@@ -173,7 +181,7 @@
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer sk-your-key" \
       -d '{
-        "model": "gemini-1.5-flash-latest",
+        "model": "gemini-2.5-flash",
         "messages": [
           {"role": "user", "content": "写一首关于宇宙的五行短诗"}
         ],
@@ -194,8 +202,6 @@
     *   **响应缓存**: 对高频重复问题添加缓存逻辑，降低 API 调用，提升响应速度。
     *   **自定义内容过滤**: 在请求发送或返回前增加关键词过滤或内容审查逻辑，满足合规要求。
 
-*   **⚖️ 多账号负载均衡 (高级用法)**: 运行多个 `GeminiCli2API` 实例（每个使用不同 Google 账号授权），再通过[gemini-balance](https://github.com/snailyp/gemini-balance/) 等实现负载均衡。这能创建一个巨大的共享免费额度池，非常适合团队或高请求量场景。
-
 ---
 
 ## 📄 开源许可
@@ -204,4 +210,4 @@
 
 ## 🙏 致谢
 
-本项目的开发受到了官方 Google Gemini CLI 的极大启发，并参考了其 `gemini-cli.ts` (Cline 3.18.0 版本) 的部分代码实现。在此对 Google 官方团队的卓越工作表示衷心的感谢！
+本项目的开发受到了官方 Google Gemini CLI 的极大启发，并参考了Cline 3.18.0 版本 `gemini-cli.ts` 的部分代码实现。在此对 Google 官方团队和 Cline 开发团队的卓越工作表示衷心的感谢！

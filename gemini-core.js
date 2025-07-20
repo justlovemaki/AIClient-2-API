@@ -101,6 +101,7 @@ export function extractResponseText(responseObject) {
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
     const compliantResponse = { candidates: codeAssistResponse.candidates };
+    if (codeAssistResponse.usageMetadata) compliantResponse.usageMetadata = codeAssistResponse.usageMetadata;
     if (codeAssistResponse.promptFeedback) compliantResponse.promptFeedback = codeAssistResponse.promptFeedback;
     if (codeAssistResponse.automaticFunctionCallingHistory) compliantResponse.automaticFunctionCallingHistory = codeAssistResponse.automaticFunctionCallingHistory;
     return compliantResponse;
@@ -123,12 +124,14 @@ export async function getRequestBody(req) {
 
 // --- Main Service Class ---
 export class GeminiApiService {
-    constructor(host = 'localhost') {
+    constructor(host = 'localhost', oauthCredsBase64 = null, oauthCredsFilePath = null) {
         this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
         this.projectId = null;
         this.availableModels = [];
         this.isInitialized = false;
         this.host = host;
+        this.oauthCredsBase64 = oauthCredsBase64;
+        this.oauthCredsFilePath = oauthCredsFilePath;
     }
 
     async initialize() {
@@ -142,7 +145,23 @@ export class GeminiApiService {
 
     async initializeAuth(forceRefresh = false) {
         if (this.authClient.credentials.access_token && !forceRefresh) return;
-        const credPath = path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
+
+        if (this.oauthCredsBase64) {
+            try {
+                const decoded = Buffer.from(this.oauthCredsBase64, 'base64').toString('utf8');
+                const credentials = JSON.parse(decoded);
+                this.authClient.setCredentials(credentials);
+                console.log('[Auth] Authentication configured successfully from base64 string.');
+                // If using base64, we don't refresh and save to file automatically
+                // as the source of truth is the provided string.
+                return;
+            } catch (error) {
+                console.error('[Auth] Failed to parse base64 OAuth credentials:', error);
+                throw new Error(`Failed to load OAuth credentials from base64 string.`);
+            }
+        }
+
+        const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
         try {
             const data = await fs.readFile(credPath, "utf8");
             const credentials = JSON.parse(data);
@@ -157,7 +176,7 @@ export class GeminiApiService {
             }
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.log(`[Auth] '${CREDENTIALS_FILE}' not found. Starting new authentication flow...`);
+                console.log(`[Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
                 const newTokens = await this.getNewToken(credPath);
                 this.authClient.setCredentials(newTokens);
                 console.log('[Auth] New token obtained and loaded into memory.');

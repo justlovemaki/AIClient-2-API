@@ -61,6 +61,16 @@
  *      node openai-api-server.js --port 8088 --api-key your_secret_key 0.0.0.0
  *      ```
  *
+ *    - **通过 base64 编码的凭证启动** (例如，用于 Docker 或 CI/CD 环境)
+ *      ```bash
+ *      node openai-api-server.js --oauth-creds-base64 "YOUR_BASE64_ENCODED_OAUTH_CREDS_JSON"
+ *      ```
+ *
+ *    - **通过指定凭证文件路径启动** (例如，用于自定义凭证位置)
+ *      ```bash
+ *      node openai-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
+ *      ```
+ *
  * 4. 调用 API 接口 (假设 API Key: `your_secret_key`, 服务运行在 `localhost:8000`):
  *
  *    - **a) 列出可用模型**
@@ -115,6 +125,8 @@ const PROMPT_LOG_BASE_NAME = 'prompts';
 let PROMPT_LOG_FILENAME = '';
 let REQUIRED_API_KEY = '123456'; // Default API Key
 let SERVER_PORT = 8000; // Default Port
+let OAUTH_CREDS_BASE64 = null; // New variable for base64 encoded OAuth credentials
+let OAUTH_CREDS_FILE_PATH = null; // New variable for OAuth credentials file path
 
 const args = process.argv.slice(2);
 const remainingArgs = [];
@@ -145,6 +157,20 @@ for (let i = 0; i < args.length; i++) {
             i++; // Skip the value
         } else {
             console.warn(`[Config Warning] --log-prompts flag requires a value.`);
+        }
+    } else if (args[i] === '--oauth-creds-base64') {
+        if (i + 1 < args.length) {
+            OAUTH_CREDS_BASE64 = args[i + 1];
+            i++; // Skip the value
+        } else {
+            console.warn(`[Config Warning] --oauth-creds-base64 flag requires a value.`);
+        }
+    } else if (args[i] === '--oauth-creds-file') {
+        if (i + 1 < args.length) {
+            OAUTH_CREDS_FILE_PATH = args[i + 1];
+            i++; // Skip the value
+        } else {
+            console.warn(`[Config Warning] --oauth-creds-file flag requires a value.`);
         }
     } else {
         remainingArgs.push(args[i]);
@@ -303,8 +329,12 @@ function toOpenAIChatCompletion(geminiResponse, model) {
             },
             finish_reason: "stop",
         }],
-        usage: {
-            prompt_tokens: 0, // Note: Gemini API doesn't provide token counts
+        usage: geminiResponse.usageMetadata ? {
+            prompt_tokens: geminiResponse.usageMetadata.promptTokenCount || 0,
+            completion_tokens: geminiResponse.usageMetadata.candidatesTokenCount || 0,
+            total_tokens: geminiResponse.usageMetadata.totalTokenCount || 0,
+        } : {
+            prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
         },
@@ -323,6 +353,15 @@ function toOpenAIStreamChunk(geminiChunk, model) {
             delta: { content: text },
             finish_reason: null,
         }],
+        usage: geminiChunk.usageMetadata ? {
+            prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+            completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
+            total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
+        } : {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        },
     };
 }
 
@@ -359,7 +398,7 @@ function isAuthorized(req, requestUrl) {
 let apiServiceInstance = null;
 async function getApiService() {
     if (!apiServiceInstance) {
-        apiServiceInstance = new GeminiApiService(HOST);
+        apiServiceInstance = new GeminiApiService(HOST, OAUTH_CREDS_BASE64, OAUTH_CREDS_FILE_PATH);
         await apiServiceInstance.initialize();
     } else if (!apiServiceInstance.isInitialized) { // Ensure re-initialization if not already initialized
         await apiServiceInstance.initialize();
@@ -396,6 +435,8 @@ async function handleStreamRequest(res, service, model, requestBody) {
             res.end();
         }
     }
+    const expiryDate = service.authClient.credentials.expiry_date;
+    console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
 }
 
 async function handleUnaryRequest(res, service, model, requestBody) {
@@ -409,6 +450,8 @@ async function handleUnaryRequest(res, service, model, requestBody) {
     process.stdout.write('\n');
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(openAIResponse));
+    const expiryDate = service.authClient.credentials.expiry_date;
+    console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
 }
 
 function handleError(res, error) {
@@ -433,13 +476,13 @@ async function requestHandler(req, res) {
 
     try {
         const service = await getApiService();
-        const expiryDate = service.authClient.credentials.expiry_date;
-        console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
         
         if (req.method === 'GET' && requestUrl.pathname === '/v1/models') {
             const models = await service.listModels();
             const openAIModels = toOpenAIModelList(models.models.map(m => m.name.replace('models/', '')));
             res.writeHead(200, { 'Content-Type': 'application/json' });
+            const expiryDate = service.authClient.credentials.expiry_date;
+            console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
             return res.end(JSON.stringify(openAIModels));
         }
 
@@ -478,6 +521,7 @@ server.listen(SERVER_PORT, HOST, () => {
     console.log(`  Port: ${SERVER_PORT}`);
     console.log(`  Required API Key: ${REQUIRED_API_KEY}`);
     console.log(`  Prompt Logging: ${PROMPT_LOG_MODE}${PROMPT_LOG_MODE === 'file' ? ` (to ${PROMPT_LOG_FILENAME})` : ''}`);
+    console.log(`  OAuth Creds File Path: ${OAUTH_CREDS_FILE_PATH || 'Default'}`);
     console.log(`---------------------------------------------`);
     console.log(`\nServer running on http://${HOST}:${SERVER_PORT}`);
     console.log('Initializing backend service... This may take a moment.');

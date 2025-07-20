@@ -51,6 +51,12 @@
  *    // 指定 API Key 和端口 (参数顺序无关)
  *    node gemini-api-server-final.js --api-key your_secret_key --port 3001
  *
+ *    // 通过 base64 编码的凭证启动 (例如，用于 Docker 或 CI/CD 环境)
+ *    node gemini-api-server.js --oauth-creds-base64 "YOUR_BASE64_ENCODED_OAUTH_CREDS_JSON"
+ *
+ *    // 通过指定凭证文件路径启动 (例如，用于自定义凭证位置)
+ *    node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
+ *
  * 3. 调用 API 接口 (默认 API Key: 123456):
  *
  *    // a) 列出可用模型 (GET 请求，密钥在 URL 参数中)
@@ -98,6 +104,8 @@ const PROMPT_LOG_BASE_NAME = 'prompts';
 let PROMPT_LOG_FILENAME = '';
 let REQUIRED_API_KEY = '123456'; // Default API Key
 let SERVER_PORT = 3000; // Default Port
+let OAUTH_CREDS_BASE64 = null; // New variable for base64 encoded OAuth credentials
+let OAUTH_CREDS_FILE_PATH = null; // New variable for OAuth credentials file path
 
 const args = process.argv.slice(2);
 const remainingArgs = [];
@@ -128,6 +136,20 @@ for (let i = 0; i < args.length; i++) {
             i++; // Skip the value
         } else {
             console.warn(`[Config Warning] --port flag requires a value.`);
+        }
+    } else if (args[i] === '--oauth-creds-base64') {
+        if (i + 1 < args.length) {
+            OAUTH_CREDS_BASE64 = args[i + 1];
+            i++; // Skip the value
+        } else {
+            console.warn(`[Config Warning] --oauth-creds-base64 flag requires a value.`);
+        }
+    } else if (args[i] === '--oauth-creds-file') {
+        if (i + 1 < args.length) {
+            OAUTH_CREDS_FILE_PATH = args[i + 1];
+            i++; // Skip the value
+        } else {
+            console.warn(`[Config Warning] --oauth-creds-file flag requires a value.`);
         }
     } else {
         remainingArgs.push(args[i]);
@@ -164,7 +186,7 @@ function isAuthorized(req, requestUrl) {
 let apiServiceInstance = null;
 async function getApiService() {
     if (!apiServiceInstance) {
-        apiServiceInstance = new GeminiApiService(HOST);
+        apiServiceInstance = new GeminiApiService(HOST, OAUTH_CREDS_BASE64, OAUTH_CREDS_FILE_PATH);
         await apiServiceInstance.initialize();
     } else if (!apiServiceInstance.isInitialized) {
         await apiServiceInstance.initialize();
@@ -184,6 +206,8 @@ async function handleStreamRequest(res, service, model, requestBody) {
     }
     process.stdout.write('\n');
     res.end();
+    const expiryDate = service.authClient.credentials.expiry_date;
+    console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
 }
 async function handleUnaryRequest(res, service, model, requestBody) {
     const response = await service.generateContent(model, requestBody);
@@ -195,6 +219,8 @@ async function handleUnaryRequest(res, service, model, requestBody) {
     const responseString = JSON.stringify(response);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(responseString);
+    const expiryDate = service.authClient.credentials.expiry_date;
+    console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
 }
 function handleError(res, error) {
     console.error('\n[Server] Request failed:', error.stack);
@@ -218,12 +244,12 @@ async function requestHandler(req, res) {
 
     try {
         const service = await getApiService();
-        const expiryDate = service.authClient.credentials.expiry_date;
-        console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
         
         if (req.method === 'GET' && requestUrl.pathname === '/v1beta/models') {
             const models = await service.listModels();
             res.writeHead(200, { 'Content-Type': 'application/json' });
+            const expiryDate = service.authClient.credentials.expiry_date;
+            console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
             return res.end(JSON.stringify(models));
         }
         
@@ -264,6 +290,7 @@ server.listen(SERVER_PORT, HOST, () => {
     console.log(`  Port: ${SERVER_PORT}`);
     console.log(`  Required API Key: ${REQUIRED_API_KEY}`);
     console.log(`  Prompt Logging: ${PROMPT_LOG_MODE}${PROMPT_LOG_MODE === 'file' ? ` (to ${PROMPT_LOG_FILENAME})` : ''}`);
+    console.log(`  OAuth Creds File Path: ${OAUTH_CREDS_FILE_PATH || 'Default'}`);
     console.log(`--------------------------`);
     console.log(`\nGemini API Server (Final) running on http://${HOST}:${SERVER_PORT}`);
     console.log('Initializing service... This may take a moment.');
