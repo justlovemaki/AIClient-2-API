@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "dependencies": {
+    "google-auth-library": "^10.1.0",
+    "uuid": "^11.1.0"
+  }
+}
