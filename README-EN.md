@@ -1,167 +1,207 @@
-# GeminiCli2API
 <div align="center">
-This project contains two Node.js HTTP servers. They act as local proxies for the Google Cloud Code Assist API. One of the servers also provides an OpenAI API compatible interface. This allows you to bypass the terminal interface and integrate with any client through an API.
 
-[中文](./README.md) / [English](./README-EN.md)
+# GeminiCli2API 🚀
+
+**A powerful proxy that wraps the Google Gemini CLI into a local API, providing an OpenAI-compatible interface.**
+
 </div>
 
-## Project Overview
+<div align="center">
 
--   `gemini-api-server.js`: This is a standalone Node.js HTTP server. It acts as a local proxy for the Google Cloud Code Assist API. This server provides all features and bug fixes. It is designed to be robust and flexible. With a fully controllable logging system, it is easy to monitor.
--   `openai-api-server.js`: This script is based on `gemini-api-server.js`. It creates a standalone Node.js HTTP server. This server is also a local proxy for the Google Cloud Code Assist API. However, it provides an OpenAI API compatible interface. Therefore, any client that supports the OpenAI API can use it directly.
--   `gemini-core.js`: This file contains the core logic shared by both servers. For example, authentication, API calls, request/response handling, and logging functions.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Node.js](https://img.shields.io/badge/Node.js-≥18.0.0-green.svg)](https://nodejs.org/)
 
-## Feature Description
+[**中文**](./README.md) | [**English**](./README-EN.md)
 
-### Problems Solved
+</div>
 
--   Solves the problem of reduced free quotas for the official Gemini API. Now, users can authorize with their Gemini CLI account to make 1000 requests per day.
--   Provides compatibility with the OpenAI API, making it convenient for existing OpenAI clients to use.
+> `GeminiCli2API` includes two independent Node.js HTTP servers that act as local proxies for the Google Cloud Code Assist API. One of these servers also provides an interface fully compatible with the OpenAI API. This allows you to break free from the terminal interface and easily integrate Gemini&#39;s powerful capabilities into any of your favorite clients or applications in API form.
 
-### Current Limitations
+---
 
--   Cannot use the built-in functions of the original Gemini CLI.
--   Does not support multimodal capabilities. (todo)
+## 📝 Project Overview
 
-## Main Features
+This project consists of three core files, each with its own specific function:
 
-### Gemini API Server (`gemini-api-server.js`)
+*   `gemini-api-server.js`: 💎 **Native Gemini Proxy Service**
+    *   An independent Node.js HTTP server that acts as a local proxy for the Google Cloud Code Assist API.
+    *   It provides all core functionalities and bug fixes, designed to be robust, flexible, and equipped with a fully controllable logging system for easy monitoring and debugging.
 
--   **Automatic Authentication and Token Renewal**: On the first run, the script guides the user to complete Google account manual authorization through a browser. It will obtain an OAuth token. This token is securely stored locally and automatically refreshed before it expires. This ensures the continuous operation of the service without manual intervention.
--   **Manual Authorization Flow**:
-    1.  **Copy Authorization Link**: The terminal will output a Google authorization URL. Please copy this URL.
-    2.  **Open the Link in a Browser**: Open the URL in a browser on any device with a graphical interface (e.g., your local computer).
-    3.  **Complete Authorization**: Log in to your Google account and grant permissions.
-    4.  **Copy the Redirected URL**: After authorization, the browser will attempt to redirect to a URL, extract the authorization code, complete authentication, and start the service normally.
--   **Flexible API Key Validation**: Users can provide the key in the URL query parameter (`?key=...`) or the `x-goog-api-key` request header. As long as the key is correct, the request can be authorized. The key can be set via the `--api-key` startup parameter.
--   **Role Normalization Fix**: The server automatically adds the necessary 'user'/'model' roles to the request body. At the same time, it correctly preserves `systemInstruction` (or `system_instruction`).
--   **Fixed Model List**: The server specifically provides and uses the `gemini-1.5-pro-latest` and `gemini-1.5-flash-latest` models.
--   **Full Gemini API Endpoint Support**: Implements `listModels`, `generateContent`, `streamGenerateContent`.
--   **Fully Controllable Logging System**: Includes the remaining validity period of the token. It can output timestamped prompt logs to the console or a file. Supports log printing.
+*   `openai-api-server.js`: 🔄 **OpenAI Compatible Proxy Service**
+    *   Built on top of `gemini-api-server.js`, it also acts as a proxy for the Google API.
+    *   Crucially, it exposes an interface compatible with the OpenAI API. This means any client that supports the OpenAI API can switch to use it seamlessly without any code modification.
 
-### OpenAI Compatible API Server (`openai-api-server.js`)
+*   `gemini-core.js`: ⚙️ **Core Shared Logic**
+    *   This is the heart shared by both servers, containing core functionalities such as authentication, API calls, request/response handling, and logging.
 
--   **OpenAI API Compatibility**: Implements the `/v1/models` and `/v1/chat/completions` endpoints.
--   **Format Conversion**: Automatically converts requests/responses between OpenAI format and the internal Gemini format.
--   **Streaming Support**: Fully supports OpenAI's streaming responses (`"stream": true`).
--   **Flexible Authentication**: Supports API key validation through the `Authorization: Bearer <key>` request header, URL query parameters (`?key=...`), or the `x-goog-api-key` request header.
--   **Configurability**: The listening address, port, API key, and prompt logging mode can be configured via command-line arguments.
--   **Reuses Core Logic**: The underlying communication with Google services still uses `gemini-core.js`.
+---
 
-## Installation
+## 💡 Core Advantages
 
-1.  **Environment Setup**:
-    Create a `package.json` file in the project root directory with the content: `{"type": "module"}`. This is to avoid module type warnings.
-    (This project already provides a `package.json` file, no need to create it manually)
+*   ✅ **Break Through Official Limits**: Solves the problem of tight quotas on the official free Gemini API. With this project, you can use your Gemini CLI account authorization to enjoy higher daily request limits.
+*   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, allowing your existing toolchains and clients (like LobeChat, NextChat, etc.) to access Gemini at zero cost.
+*   ✅ **Enhanced Controllability**: With powerful logging features, you can capture and record all request prompts, which is convenient for auditing, debugging, and building private datasets.
+*   ✅ **Easy to Extend**: The code structure is clear, making it convenient for you to perform secondary development to implement custom features like unified prefix prompts, response caching, content filtering, etc.
+
+### ⚠️ Current Limitations
+
+*   Some built-in command functions of the original Gemini CLI have not yet been implemented.
+*   Multimodal capabilities (like image input) are still in the development plan (TODO).
+
+---
+
+## 🛠️ Key Features
+
+### 💎 Gemini API Server (`gemini-api-server.js`)
+
+*   🔐 **Automatic Authentication & Token Renewal**: The first run will guide you through Google account authorization via a browser. The obtained OAuth token will be securely stored locally and automatically refreshed before expiration, ensuring uninterrupted service.
+*   🔗 **Simplified Manual Authorization Flow**:
+    1.  **Copy Authorization Link**: The terminal will output a Google authorization URL.
+    2.  **Browser Authorization**: Open the URL in a browser on any device with a GUI, log in, and grant permissions.
+    3.  **Paste Redirect URL**: After authorization, the browser will attempt to redirect to a `localhost` address. Paste it back into the terminal to complete authentication.
+    > Credential file will be stored at:
+    > *   **Windows**: `C:\Users\USERNAME\.gemini\oauth_creds.json`
+    > *   **macOS/Linux**: `~/.gemini/oauth_creds.json`
+*   🔑 **Flexible API Key Validation**: Supports providing API keys via URL query parameters (`?key=...`) or the `x-goog-api-key` request header.
+*   🔧 **Role Normalization Fix**: Automatically adds the necessary &#39;user&#39;/&#39;model&#39; roles to the request body and correctly handles `systemInstruction`.
+*   🤖 **Fixed Model List**: Defaults to providing and using the `gemini-2.5-pro` and `gemini-2.5-flash` models.
+*   🌐 **Full Gemini API Endpoint Support**: Fully implements `listModels`, `generateContent`, and `streamGenerateContent`.
+*   📜 **Fully Controllable Logging System**: Can output timestamped prompt logs to the console or a file, and display the remaining token validity period.
+
+### 🔄 OpenAI Compatible API Server (`openai-api-server.js`)
+
+*   🌍 **OpenAI API Compatibility**: Perfectly implements the core `/v1/models` and `/v1/chat/completions` endpoints.
+*   🔄 **Automatic Format Conversion**: Automatically and seamlessly converts requests/responses between OpenAI format and Gemini format internally.
+*   💨 **Streaming Support**: Fully supports OpenAI&#39;s streaming responses (`"stream": true`), providing a typewriter-like real-time experience.
+*   🛡️ **Multiple Authentication Methods**: Supports API key validation via `Authorization: Bearer <key>`, URL query parameters (`?key=...`), and the `x-goog-api-key` request header.
+*   ⚙️ **Highly Configurable**: Flexibly configure listening address, port, API key, and log mode via command-line arguments.
+*   ♻️ **Reuses Core Logic**: Shares `gemini-core.js` with the Gemini API Server at its core, ensuring stability and consistency.
+
+---
+
+## 📦 Installation Guide
+
+1.  **Prerequisites**:
+    *   Please ensure you have [Node.js](https://nodejs.org/) installed (recommended version >= 18.0.0).
+    *   This project already includes `package.json` and sets `{"type": "module"}`, so you don&#39;t need to create it manually.
 
 2.  **Install Dependencies**:
+    After cloning this repository, execute the following in the project root directory:
     ```bash
     npm install
     ```
-    This will install `google-auth-library` and `uuid`.
+    This will automatically install necessary dependencies like `google-auth-library` and `uuid`.
 
-## Usage Instructions and Command Line Examples
+---
+
+## 🚀 Quick Start
 
 ### 1. Gemini API Server (`gemini-api-server.js`)
 
-**Start the service** (the following parameters can be combined):
-
--   **Default start**: Listen on `localhost:3000`, do not print prompts
+#### ▶️ Start the Service
+*   **Default Start** (listens on `localhost:3000`)
     ```bash
     node gemini-api-server.js
     ```
--   **Specify listening IP**: Listen on all network interfaces (e.g., for Docker or LAN access)
+*   **Listen on All Network Interfaces** (for Docker or LAN access)
     ```bash
     node gemini-api-server.js 0.0.0.0
     ```
--   **Print prompts to console**: Listen on `localhost` and output prompt details to the console
+*   **Print Prompts to Console**
     ```bash
     node gemini-api-server.js --log-prompts console
     ```
--   **Print prompts to file**: Listen on `localhost` and save prompt details to a new file with a startup timestamp (e.g., `prompts-20231027-153055.log`)
+*   **Combine Parameters** (specify IP, port, API Key, and log to a file)
     ```bash
-    node gemini-api-server.js --log-prompts file
+    node gemini-api-server.js 0.0.0.0 --port 3001 --api-key your_secret_key --log-prompts file
     ```
--   **Combine parameters** (parameter order does not matter):
-    -   Run on a specified IP and print prompts to the console
-        ```bash
-        node gemini-api-server.js 192.168.1.100 --log-prompts console
-        ```
-    -   Run on all network interfaces and print prompts to a file
-        ```bash
-        node gemini-api-server.js --log-prompts file 0.0.0.0
-        ```
-    -   Specify API Key and port
-        ```bash
-        node gemini-api-server.js --api-key your_secret_key --port 3001
-        ```
 
-**Call API Endpoints** (Default API Key: `123456`):
-
--   **a) List available models** (GET request, key in URL parameter)
+#### 💻 Call the API (Default API Key: `123456`)
+*   **List Models**
     ```bash
     curl "http://localhost:3000/v1beta/models?key=123456"
     ```
--   **b) Generate content - single turn conversation** (POST request, key in request header)
+*   **Generate Content (with system prompt)**
     ```bash
     curl "http://localhost:3000/v1beta/models/gemini-1.5-pro-latest:generateContent" \
       -H "Content-Type: application/json" \
       -H "x-goog-api-key: 123456" \
-      -d '{"contents":[{"parts":[{"text":"Explain what a proxy server is in one sentence"}]}]}'
-    ```
--   **c) Generate content - with system prompt** (POST request, key in request header, note `system_instruction`)
-    ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-1.5-pro-latest:generateContent" \
-      -H "Content-Type: application/json" \
-      -H "x-goog-api-key: 123456" \
-      -d '{
+      -d &#39;{
         "system_instruction": { "parts": [{ "text": "You are a cat named Neko." }] },
         "contents": [{ "parts": [{ "text": "Hello, what is your name?" }] }]
-      }'
+      }&#39;
     ```
--   **d) Stream generate content** (POST request, key in URL parameter)
+*   **Stream Generate Content**
     ```bash
     curl "http://localhost:3000/v1beta/models/gemini-1.5-flash-latest:streamGenerateContent?key=123456" \
       -H "Content-Type: application/json" \
-      -d '{"contents":[{"parts":[{"text":"Write a five-line poem about the universe"}]}]}'
+      -d &#39;{"contents":[{"parts":[{"text":"Write a five-line poem about the universe"}]}]}&#39;
     ```
 
 ### 2. OpenAI Compatible API Server (`openai-api-server.js`)
 
-**Start the service**:
+#### ▶️ Start the Service
+*Startup parameters are identical to `gemini-api-server.js`.*
 
--   **Same as Gemini API Server**:
+*   **Example** (listens on `localhost:8000`, API Key is `sk-your-key`)
+    ```bash
+    node openai-api-server.js --port 8000 --api-key sk-your-key
+    ```
 
-
-**Call API Endpoints** (Assuming API Key: `your_secret_key`, service running on `localhost:8000`):
-
--   **a) List available models**:
+#### 💻 Call the API (as an OpenAI client)
+*   **List Models**
     ```bash
     curl http://localhost:8000/v1/models \
-      -H "Authorization: Bearer your_secret_key"
+      -H "Authorization: Bearer sk-your-key"
     ```
--   **b) Generate content - with system prompt (non-streaming)**:
+*   **Generate Content (non-streaming)**
     ```bash
     curl http://localhost:8000/v1/chat/completions \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer your_secret_key" \
-      -d '{
+      -H "Authorization: Bearer sk-your-key" \
+      -d &#39;{
         "model": "gemini-1.5-pro-latest",
         "messages": [
           {"role": "system", "content": "You are a cat named Neko."},
           {"role": "user", "content": "Hello, what is your name?"}
         ]
-      }'
+      }&#39;
     ```
--   **c) Generate content - streaming**:
+*   **Stream Generate Content**
     ```bash
     curl http://localhost:8000/v1/chat/completions \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer your_secret_key" \
-      -d '{
+      -H "Authorization: Bearer sk-your-key" \
+      -d &#39;{
         "model": "gemini-1.5-flash-latest",
         "messages": [
           {"role": "user", "content": "Write a five-line poem about the universe"}
         ],
         "stream": true
-      }'
+      }&#39;
+    ```
+
+---
+
+## 🌟 Special Usage & Advanced Tips
+
+*   **🔌 Connect to Any OpenAI Client**: This is the killer feature of this project. Through `openai-api-server.js`, you can point the API address of any application that supports OpenAI (like LobeChat, NextChat, VS Code extensions, etc.) to this service to use Gemini seamlessly.
+
+*   **🔍 Centralized Request Monitoring & Auditing**: Use the `--log-prompts` parameter to capture all system prompts and user requests sent by clients. This is crucial for analyzing, debugging, and optimizing prompts, and even for building private datasets.
+
+*   **🛠️ Foundation for Secondary Development**:
+    *   **Unified System Prompt**: Modify `gemini-core.js` to enforce a unified, invisible system prompt for all requests, ensuring AI responses follow a specific role or format.
+    *   **Response Caching**: Add caching logic for frequently repeated questions to reduce API calls and improve response speed.
+    *   **Custom Content Filtering**: Add keyword filtering or content review logic before requests are sent or returned to meet compliance requirements.
+
+*   **⚖️ Multi-Account Load Balancing (Advanced Usage)**: Run multiple instances of `GeminiCli2API` (each authorized with a different Google account), and then use a load balancer like [gemini-balance](https://github.com/snailyp/gemini-balance/) to achieve load balancing. This can create a huge shared pool of free quota, ideal for teams or high-request scenarios.
+
+---
+
+## 📄 License
+
+This project is licensed under the [**GNU General Public License v3 (GPLv3)**](https://www.gnu.org/licenses/gpl-3.0). For details, please see the `LICENSE` file in the root directory.
+
+## 🙏 Acknowledgements
+
+The development of this project was greatly inspired by the official Google Gemini CLI, and it references some of the code implementation from its `gemini-cli.ts` (Cline 3.18.0 version). Sincere thanks to the official Google team for their excellent work!
