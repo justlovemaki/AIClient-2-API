@@ -124,9 +124,9 @@ export async function getRequestBody(req) {
 
 // --- Main Service Class ---
 export class GeminiApiService {
-    constructor(host = 'localhost', oauthCredsBase64 = null, oauthCredsFilePath = null) {
+    constructor(host = 'localhost', oauthCredsBase64 = null, oauthCredsFilePath = null, projectId = null) {
         this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
-        this.projectId = null;
+        this.projectId = projectId; // Set projectId from constructor argument
         this.availableModels = [];
         this.isInitialized = false;
         this.host = host;
@@ -138,7 +138,15 @@ export class GeminiApiService {
         if (this.isInitialized) return;
         console.log('[Service] Initializing Gemini API Service...');
         await this.initializeAuth();
-        this.projectId = await this.discoverProjectAndModels();
+        // Only discover project ID if it's not already provided
+        if (!this.projectId) {
+            this.projectId = await this.discoverProjectAndModels();
+        } else {
+            console.log(`[Service] Using provided Project ID: ${this.projectId}`);
+            // Still need to ensure models are set up even if project ID is provided
+            this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+            console.log(`[Service] Using fixed models: [${this.availableModels.join(', ')}]`);
+        }
         this.isInitialized = true;
         console.log(`[Service] Initialization complete. Project ID: ${this.projectId}`);
     }
@@ -239,7 +247,12 @@ export class GeminiApiService {
     }
 
     async discoverProjectAndModels() {
-        if (this.projectId) return this.projectId;
+        // If projectId is already set, return it directly
+        if (this.projectId) {
+            console.log(`[Service] Using pre-configured Project ID: ${this.projectId}`);
+            return this.projectId;
+        }
+
         console.log('[Service] Discovering Project ID...');
         this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
         console.log(`[Service] Using fixed models: [${this.availableModels.join(', ')}]`);
@@ -249,7 +262,7 @@ export class GeminiApiService {
                 return loadResponse.cloudaicompanionProject;
             }
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: { pluginType: 'GEMINI' } };
+            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: { pluginType: 'GEMINI' } , cloudaicompanionProject: 'default',};
             let lro = await this.callApi('onboardUser', onboardRequest);
             while (!lro.done) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -278,11 +291,14 @@ export class GeminiApiService {
 
     async callApi(method, body, isRetry = false) {
         try {
+            console.log(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`);
+            console.log(body);
             const res = await this.authClient.request({
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
                 method: "POST", headers: { "Content-Type": "application/json" },
                 responseType: "json", body: JSON.stringify(body),
             });
+            console.log(res.data);
             return res.data;
         } catch (error) {
             if (error.response?.status === 401 && !isRetry) {

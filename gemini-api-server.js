@@ -57,6 +57,9 @@
  *    // 通过指定凭证文件路径启动 (例如，用于自定义凭证位置)
  *    node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
  *
+ *    // 通过指定项目ID启动 (例如，用于多项目环境)
+ *    node gemini-api-server.js --project-id your-gcp-project-id
+ *
  * 3. 调用 API 接口 (默认 API Key: 123456):
  *
  *    // a) 列出可用模型 (GET 请求，密钥在 URL 参数中)
@@ -106,6 +109,7 @@ let REQUIRED_API_KEY = '123456'; // Default API Key
 let SERVER_PORT = 3000; // Default Port
 let OAUTH_CREDS_BASE64 = null; // New variable for base64 encoded OAuth credentials
 let OAUTH_CREDS_FILE_PATH = null; // New variable for OAuth credentials file path
+let PROJECT_ID = null; // New variable for project ID
 
 const args = process.argv.slice(2);
 const remainingArgs = [];
@@ -151,6 +155,13 @@ for (let i = 0; i < args.length; i++) {
         } else {
             console.warn(`[Config Warning] --oauth-creds-file flag requires a value.`);
         }
+    } else if (args[i] === '--project-id') { // New argument for project ID
+        if (i + 1 < args.length) {
+            PROJECT_ID = args[i + 1];
+            i++; // Skip the value
+        } else {
+            console.warn(`[Config Warning] --project-id flag requires a value.`);
+        }
     } else {
         remainingArgs.push(args[i]);
     }
@@ -186,7 +197,7 @@ function isAuthorized(req, requestUrl) {
 let apiServiceInstance = null;
 async function getApiService() {
     if (!apiServiceInstance) {
-        apiServiceInstance = new GeminiApiService(HOST, OAUTH_CREDS_BASE64, OAUTH_CREDS_FILE_PATH);
+        apiServiceInstance = new GeminiApiService(HOST, OAUTH_CREDS_BASE64, OAUTH_CREDS_FILE_PATH, PROJECT_ID);
         await apiServiceInstance.initialize();
     } else if (!apiServiceInstance.isInitialized) {
         await apiServiceInstance.initialize();
@@ -291,6 +302,7 @@ server.listen(SERVER_PORT, HOST, () => {
     console.log(`  Required API Key: ${REQUIRED_API_KEY}`);
     console.log(`  Prompt Logging: ${PROMPT_LOG_MODE}${PROMPT_LOG_MODE === 'file' ? ` (to ${PROMPT_LOG_FILENAME})` : ''}`);
     console.log(`  OAuth Creds File Path: ${OAUTH_CREDS_FILE_PATH || 'Default'}`);
+    console.log(`  Project ID: ${PROJECT_ID || 'Auto-discovered'}`); // Log the project ID
     console.log(`--------------------------`);
     console.log(`\nGemini API Server (Final) running on http://${HOST}:${SERVER_PORT}`);
     console.log('Initializing service... This may take a moment.');

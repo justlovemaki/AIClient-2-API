@@ -123,6 +123,10 @@ This project consists of three core files, each with its own specific function:
     ```bash
     node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
     ```
+*   **Start with Specified Project ID** (e.g., for multi-project environments)
+    ```bash
+    node gemini-api-server.js --project-id your-gcp-project-id
+    ```
 
 #### 💻 Call the API (Default API Key: `123456`)
 *   **List Models**

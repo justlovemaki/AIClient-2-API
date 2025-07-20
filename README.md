@@ -123,6 +123,10 @@
     ```bash
     node gemini-api-server.js --oauth-creds-file "/path/to/your/oauth_creds.json"
     ```
+*   **通过指定项目ID启动** (例如，用于多项目环境)
+    ```bash
+    node gemini-api-server.js --project-id your-gcp-project-id
+    ```
 
 #### 💻 调用 API (默认 API Key: `123456`)
 *   **列出模型**
