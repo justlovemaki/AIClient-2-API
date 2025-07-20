@@ -147,6 +147,9 @@ export class GeminiApiService {
             this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
             console.log(`[Service] Using fixed models: [${this.availableModels.join(', ')}]`);
         }
+        if (this.projectId === 'default') {
+            throw new Error("Error: 'default' is not a valid project ID. Please provide a valid Google Cloud Project ID using the --project-id argument.");
+        }
         this.isInitialized = true;
         console.log(`[Service] Initialization complete. Project ID: ${this.projectId}`);
     }
@@ -291,14 +294,11 @@ export class GeminiApiService {
 
     async callApi(method, body, isRetry = false) {
         try {
-            console.log(`${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`);
-            console.log(body);
             const res = await this.authClient.request({
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
                 method: "POST", headers: { "Content-Type": "application/json" },
                 responseType: "json", body: JSON.stringify(body),
             });
-            console.log(res.data);
             return res.data;
         } catch (error) {
             if (error.response?.status === 401 && !isRetry) {
