@@ -129,6 +129,23 @@ This project consists of three core files, each with its own specific function:
     ```
 
 #### 💻 Call the API (Default API Key: `123456`)
+> **Hint**: If you are in an environment where you cannot directly access Google services, please set up a global HTTP/HTTPS proxy for your terminal first.
+> 
+> - **Windows (CMD):**
+>   ```cmd
+>   set http_proxy=http://127.0.0.1:7890
+>   set https_proxy=http://127.0.0.1:7890
+>   ```
+> - **Windows (PowerShell):**
+>   ```powershell
+>   $env:http_proxy="http://127.0.0.1:7890"
+>   $env:https_proxy="http://127.0.0.1:7890"
+>   ```
+> - **macOS/Linux (Bash/Zsh):**
+>   ```bash
+>   export http_proxy=http://127.0.0.1:7890
+>   export https_proxy=http://127.0.0.1:7890
+>   ```
 *   **List Models**
     ```bash
     curl "http://localhost:3000/v1beta/models?key=123456"
@@ -161,6 +178,7 @@ This project consists of three core files, each with its own specific function:
     ```
 
 #### 💻 Call the API (as an OpenAI client)
+
 *   **List Models**
     ```bash
     curl http://localhost:8000/v1/models \

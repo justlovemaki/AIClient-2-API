@@ -294,11 +294,14 @@ export class GeminiApiService {
 
     async callApi(method, body, isRetry = false) {
         try {
-            const res = await this.authClient.request({
+            const requestOptions = {
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
-                method: "POST", headers: { "Content-Type": "application/json" },
-                responseType: "json", body: JSON.stringify(body),
-            });
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                responseType: "json",
+                body: JSON.stringify(body),
+            };
+            const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
             if (error.response?.status === 401 && !isRetry) {
@@ -312,11 +315,15 @@ export class GeminiApiService {
 
     async * streamApi(method, body, isRetry = false) {
         try {
-            const res = await this.authClient.request({
+            const requestOptions = {
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
-                method: "POST", params: { alt: "sse" }, headers: { "Content-Type": "application/json" },
-                responseType: "stream", body: JSON.stringify(body),
-            });
+                method: "POST",
+                params: { alt: "sse" },
+                headers: { "Content-Type": "application/json" },
+                responseType: "stream",
+                body: JSON.stringify(body),
+            };
+            const res = await this.authClient.request(requestOptions);
             if (res.status !== 200) {
                 let errorBody = '';
                 for await (const chunk of res.data) errorBody += chunk.toString();
