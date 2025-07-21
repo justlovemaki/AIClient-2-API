@@ -17,7 +17,7 @@ export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
     STREAM_GENERATE_CONTENT: 'streamGenerateContent',
 };
-
+const SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'system_prompt.txt');
 // --- Utility Functions ---
 
 export function ensureRolesInContents(requestBody) {
@@ -54,41 +54,77 @@ export function formatExpiryTime(expiryTimestamp) {
     return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
 }
 
-export async function logPrompt(promptText, logMode, logFilename) {
+export async function logConversation(type, content, logMode, logFilename) {
     if (logMode === 'none') return;
-    const logContent = `--- Prompt Log @ ${new Date().toISOString()} ---\n${promptText}\n--------------------------------------\n\n`;
-    if (logMode === 'console') {
-        console.log(logContent);
+
+    const timestamp = new Date().toLocaleString();
+    const logEntry = `${timestamp} [${type.toUpperCase()}]:\n${content}\n\n\n--------------------------------------\n\n\n`;
+
+    if (logMode === 'console' && type === 'input') {
+        console.log(logEntry);
     } else if (logMode === 'file') {
         try {
-            await fs.appendFile(logFilename, logContent);
+            // Append to the file
+            await fs.appendFile(logFilename, logEntry);
         } catch (err) {
-            console.error(`[Error] Failed to write prompt to ${logFilename}:`, err);
+            console.error(`[Error] Failed to write conversation log to ${logFilename}:`, err);
         }
     }
 }
 
 export function extractPromptText(requestBody) {
-    if (!requestBody) return "[No request body found]";
-    const logParts = [];
-    
-    // ** FIX: Check for both snake_case and camelCase for system instruction **
-    const systemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
+    if (!requestBody || !Array.isArray(requestBody.contents)) return "[No request body found]";
 
-    if (systemInstruction && Array.isArray(systemInstruction.parts)) {
-        const systemText = systemInstruction.parts.filter(p => p && typeof p.text === 'string').map(p => p.text).join('\n');
-        if (systemText) logParts.push(`[SYSTEM INSTRUCTION]\n${systemText}`);
-    }
+    let latestPrompt = "[No text prompt found]";
 
-    if (Array.isArray(requestBody.contents)) {
-        const userText = requestBody.contents.flatMap(c => (c && Array.isArray(c.parts) ? c.parts : [])).filter(p => p && typeof p.text === 'string').map(p => p.text).join('\n');
-        if (userText) {
-            if (logParts.length > 0) logParts.push('----------------------');
-            logParts.push(`[USER PROMPT]\n${userText}`);
+    // Iterate through contents in reverse to find the latest user prompt
+    for (let i = requestBody.contents.length - 1; i >= 0; i--) {
+        const content = requestBody.contents[i];
+        if (content && content.role === 'user' && Array.isArray(content.parts)) {
+            const userParts = content.parts.filter(part => part && typeof part.text === 'string');
+            if (userParts.length > 0) {
+                latestPrompt = userParts.map(part => part.text).join('\n');
+                break; // Found the latest user prompt, exit loop
+            }
         }
     }
-    if (logParts.length === 0) return "[No text prompt or system instruction found]";
-    return logParts.join('\n');
+    return latestPrompt;
+}
+
+
+export async function manageSystemPrompt(requestBody) {
+    const incomingSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
+    let incomingSystemText = '';
+
+    if (incomingSystemInstruction && Array.isArray(incomingSystemInstruction.parts)) {
+        incomingSystemText = incomingSystemInstruction.parts
+            .filter(p => p && typeof p.text === 'string')
+            .map(p => p.text)
+            .join('\n');
+    }
+
+    try {
+        let currentSystemText = '';
+        try {
+            currentSystemText = await fs.readFile(SYSTEM_PROMPT_FILE, 'utf8');
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.error(`[System Prompt Manager] Error reading system prompt file: ${error.message}`);
+            }
+            // If file doesn't exist, currentSystemText remains empty, which is fine.
+        }
+
+        if (incomingSystemText && incomingSystemText !== currentSystemText) {
+            await fs.writeFile(SYSTEM_PROMPT_FILE, incomingSystemText);
+            console.log('[System Prompt Manager] System prompt updated in file.');
+        } else if (!incomingSystemText && currentSystemText) {
+            // If incoming request has no system prompt but file has one, clear the file
+            await fs.writeFile(SYSTEM_PROMPT_FILE, '');
+            console.log('[System Prompt Manager] System prompt cleared from file.');
+        }
+    } catch (error) {
+        console.error(`[System Prompt Manager] Failed to manage system prompt file: ${error.message}`);
+    }
 }
 
 export function extractResponseText(responseObject) {

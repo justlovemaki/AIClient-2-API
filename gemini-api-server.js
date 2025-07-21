@@ -94,10 +94,11 @@ import {
     GeminiApiService,
     API_ACTIONS,
     formatExpiryTime,
-    logPrompt,
+    logConversation, // Changed from logPrompt
     extractPromptText,
     extractResponseText,
-    getRequestBody
+    getRequestBody,
+    manageSystemPrompt,
 } from './gemini-core.js';
 
 // --- Configuration Parsing ---
@@ -209,9 +210,13 @@ async function handleStreamRequest(res, service, model, requestBody) {
     const stream = service.generateContentStream(model, requestBody);
     console.log('[Server Response Stream]');
     process.stdout.write('> ');
+    let fullResponseText = '';
     for await (const chunk of stream) {
         const chunkText = extractResponseText(chunk);
-        if (chunkText) process.stdout.write(chunkText);
+        if (chunkText) {
+            process.stdout.write(chunkText);
+            fullResponseText += chunkText;
+        }
         const chunkString = JSON.stringify(chunk);
         res.write(`data: ${chunkString}\n\n`);
     }
@@ -219,6 +224,8 @@ async function handleStreamRequest(res, service, model, requestBody) {
     res.end();
     const expiryDate = service.authClient.credentials.expiry_date;
     console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
+
+    await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }
 async function handleUnaryRequest(res, service, model, requestBody) {
     const response = await service.generateContent(model, requestBody);
@@ -232,6 +239,8 @@ async function handleUnaryRequest(res, service, model, requestBody) {
     res.end(responseString);
     const expiryDate = service.authClient.credentials.expiry_date;
     console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
+
+    await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }
 function handleError(res, error) {
     console.error('\n[Server] Request failed:', error.stack);
@@ -271,16 +280,16 @@ async function requestHandler(req, res) {
             const [, model, action] = urlMatch;
             const requestBody = await getRequestBody(req);
             
-            if (PROMPT_LOG_MODE !== 'none') {
-                const promptText = extractPromptText(requestBody);
-                await logPrompt(promptText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-            }
+            await manageSystemPrompt(requestBody); // Call the new function here
+            const promptText = extractPromptText(requestBody);
+            await logConversation('input', promptText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
             
             if (action === API_ACTIONS.STREAM_GENERATE_CONTENT) {
                 await handleStreamRequest(res, service, model, requestBody);
             } else {
                 await handleUnaryRequest(res, service, model, requestBody);
             }
+
             return;
         }
 

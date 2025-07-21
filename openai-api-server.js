@@ -117,10 +117,11 @@ import {
     GeminiApiService,
     API_ACTIONS,
     formatExpiryTime,
-    logPrompt,
+    logConversation, // Changed from logPrompt
     extractPromptText,
     getRequestBody,
-    extractResponseText
+    extractResponseText,
+    manageSystemPrompt, // New import
 } from './gemini-core.js';
 
 // --- Configuration Parsing ---
@@ -424,12 +425,14 @@ async function handleStreamRequest(res, service, model, requestBody) {
     const stream = service.generateContentStream(model, requestBody);
     console.log('[Server Response Stream]');
     process.stdout.write('> ');
+    let fullResponseText = ''; // Declare fullResponseText here
     try {
         for await (const chunk of stream) {
             const openAIChunk = toOpenAIStreamChunk(chunk, model);
             const chunkText = openAIChunk.choices[0].delta.content || "";
             if (chunkText) {
                 process.stdout.write(chunkText);
+                fullResponseText += chunkText; // Accumulate text here
             }
             res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
         }
@@ -447,6 +450,8 @@ async function handleStreamRequest(res, service, model, requestBody) {
         if (!res.writableEnded) {
             res.end();
         }
+        // Log the full conversation here
+        await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     }
     const expiryDate = service.authClient.credentials.expiry_date;
     console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
@@ -465,6 +470,8 @@ async function handleUnaryRequest(res, service, model, requestBody) {
     res.end(JSON.stringify(openAIResponse));
     const expiryDate = service.authClient.credentials.expiry_date;
     console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(expiryDate)}`);
+
+    await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }
 
 function handleError(res, error) {
@@ -504,10 +511,9 @@ async function requestHandler(req, res) {
             const model = openaiRequest.model;
             const geminiRequest = toGeminiRequest(openaiRequest);
 
-            if (PROMPT_LOG_MODE !== 'none') {
-                const promptText = extractPromptText(geminiRequest); // Use geminiRequest for logging
-                await logPrompt(promptText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-            }
+            await manageSystemPrompt(geminiRequest); // Call the new function here
+            const promptText = extractPromptText(geminiRequest); // Use geminiRequest for logging
+            await logConversation('input', promptText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 
             if (openaiRequest.stream) {
                 await handleStreamRequest(res, service, model, geminiRequest);
