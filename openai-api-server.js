@@ -488,6 +488,11 @@ async function requestHandler(req, res) {
     console.log(`\n[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
     
     const requestUrl = new URL(req.url, `http://${req.headers.host}`);
+    if (req.method === 'OPTIONS'){
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        console.log("OPTIONS REQUEST SUCCESS");
+        return res.end("OPTIONS REQUEST SUCCESS");
+    }
 
     if (!isAuthorized(req, requestUrl)) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -496,7 +501,7 @@ async function requestHandler(req, res) {
 
     try {
         const service = await getApiService();
-        
+    
         if (req.method === 'GET' && requestUrl.pathname === '/v1/models') {
             const models = await service.listModels();
             const openAIModels = toOpenAIModelList(models.models.map(m => m.name.replace('models/', '')));
