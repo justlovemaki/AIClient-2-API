@@ -17,14 +17,16 @@ export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
     STREAM_GENERATE_CONTENT: 'streamGenerateContent',
 };
-const SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'system_prompt.txt');
+const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'fetch_system_prompt.txt');
+// New constant for system prompt override file (optional, can be configured via env var)
+const INPUT_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'input_system_prompt.txt');
 // --- Utility Functions ---
 
 export function ensureRolesInContents(requestBody) {
     if (!requestBody || !Array.isArray(requestBody.contents)) {
         return requestBody;
     }
-    const newRequestBody = JSON.parse(JSON.stringify(requestBody));
+    const newRequestBody = requestBody;
 
     // ** FIX: Rename system_instruction to systemInstruction for the internal API **
     // Ensure system_instruction is correctly renamed before further processing
@@ -35,7 +37,7 @@ export function ensureRolesInContents(requestBody) {
 
     newRequestBody.contents.forEach((content, index) => {
         if (!content.role) {
-            content.role = (index % 2 === 0) ? 'user' : 'model';
+            content.role = 'auto';
         }
     });
     return newRequestBody;
@@ -106,7 +108,7 @@ export async function manageSystemPrompt(requestBody) {
     try {
         let currentSystemText = '';
         try {
-            currentSystemText = await fs.readFile(SYSTEM_PROMPT_FILE, 'utf8');
+            currentSystemText = await fs.readFile(FETCH_SYSTEM_PROMPT_FILE, 'utf8');
         } catch (error) {
             if (error.code !== 'ENOENT') {
                 console.error(`[System Prompt Manager] Error reading system prompt file: ${error.message}`);
@@ -115,11 +117,11 @@ export async function manageSystemPrompt(requestBody) {
         }
 
         if (incomingSystemText && incomingSystemText !== currentSystemText) {
-            await fs.writeFile(SYSTEM_PROMPT_FILE, incomingSystemText);
+            await fs.writeFile(FETCH_SYSTEM_PROMPT_FILE, incomingSystemText);
             console.log('[System Prompt Manager] System prompt updated in file.');
         } else if (!incomingSystemText && currentSystemText) {
             // If incoming request has no system prompt but file has one, clear the file
-            await fs.writeFile(SYSTEM_PROMPT_FILE, '');
+            await fs.writeFile(FETCH_SYSTEM_PROMPT_FILE, '');
             console.log('[System Prompt Manager] System prompt cleared from file.');
         }
     } catch (error) {
@@ -160,7 +162,7 @@ export async function getRequestBody(req) {
 
 // --- Main Service Class ---
 export class GeminiApiService {
-    constructor(host = 'localhost', oauthCredsBase64 = null, oauthCredsFilePath = null, projectId = null) {
+    constructor(host = 'localhost', oauthCredsBase64 = null, oauthCredsFilePath = null, projectId = null, systemPromptFilePath = null, systemPromptMode = 'overwrite') {
         this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
         this.projectId = projectId; // Set projectId from constructor argument
         this.availableModels = [];
@@ -168,6 +170,8 @@ export class GeminiApiService {
         this.host = host;
         this.oauthCredsBase64 = oauthCredsBase64;
         this.oauthCredsFilePath = oauthCredsFilePath;
+        this.systemPromptFilePath = systemPromptFilePath || INPUT_SYSTEM_PROMPT_FILE; // Store the new parameters
+        this.systemPromptMode = systemPromptMode; // 'overwrite' or 'append'
     }
 
     async initialize() {
@@ -392,16 +396,79 @@ export class GeminiApiService {
         }
     }
 
+    async _applySystemPromptFromFile(requestBody) {
+        if (!this.systemPromptFilePath) {
+            return requestBody;
+        }
+
+        // requestBody is already a deep copy from ensureRolesInContents, so no need to copy again.
+        try {
+            await fs.access(this.systemPromptFilePath, fs.constants.F_OK);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                console.warn(`[System Prompt] Specified system prompt file not found: ${this.systemPromptFilePath}`);
+                return requestBody;
+            } else {
+                console.error(`[System Prompt] Error accessing system prompt file ${this.systemPromptFilePath}: ${error.message}`);
+                return requestBody;
+            }
+        }
+
+        // requestBody is already a deep copy from ensureRolesInContents, so no need to copy again.
+        try {
+            const filePromptContent = await fs.readFile(this.systemPromptFilePath, 'utf8');
+            const currentSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
+            let existingSystemText = '';
+
+            if (currentSystemInstruction && Array.isArray(currentSystemInstruction.parts)) {
+                existingSystemText = currentSystemInstruction.parts
+                    .filter(p => p && typeof p.text === 'string')
+                    .map(p => p.text)
+                    .join('\n');
+            }
+
+            let newSystemText = '';
+            if (this.systemPromptMode === 'append') {
+                newSystemText = existingSystemText ? `${existingSystemText}\n${filePromptContent}` : filePromptContent;
+            } else { // default to 'overwrite'
+                newSystemText = filePromptContent;
+            }
+
+            if (newSystemText) {
+                requestBody.systemInstruction = { parts: [{ text: newSystemText }] };
+                // Ensure system_instruction (old name) is also updated or removed if present
+                if (requestBody.system_instruction) {
+                    delete requestBody.system_instruction;
+                }
+            }
+        } catch (error) {
+            console.error(`[System Prompt] Error reading system prompt file ${this.systemPromptFilePath}: ${error.message}`);
+        }
+        return requestBody;
+    }
+
     async generateContent(model, requestBody) {
-        const compliantRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model, project: this.projectId, request: compliantRequestBody };
+        // First, ensure roles are set and system_instruction is renamed to systemInstruction
+        const compliantRequestBodyInitial = ensureRolesInContents(requestBody);
+        
+        // Then, apply system prompt from file to the now compliant request body
+        let modifiedRequestBody = await this._applySystemPromptFromFile(compliantRequestBodyInitial);
+        await manageSystemPrompt(requestBody);
+
+        const apiRequest = { model, project: this.projectId, request: modifiedRequestBody };
         const response = await this.callApi(API_ACTIONS.GENERATE_CONTENT, apiRequest);
         return toGeminiApiResponse(response.response);
     }
 
     async * generateContentStream(model, requestBody) {
-        const compliantRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model, project: this.projectId, request: compliantRequestBody };
+        // First, ensure roles are set and system_instruction is renamed to systemInstruction
+        const compliantRequestBodyInitial = ensureRolesInContents(requestBody);
+
+        // Then, apply system prompt from file to the now compliant request body
+        let modifiedRequestBody = await this._applySystemPromptFromFile(compliantRequestBodyInitial);
+        await manageSystemPrompt(requestBody);
+
+        const apiRequest = { model, project: this.projectId, request: modifiedRequestBody };
         const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
         for await (const chunk of stream) {
             yield toGeminiApiResponse(chunk.response);
