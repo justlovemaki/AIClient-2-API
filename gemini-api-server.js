@@ -450,11 +450,30 @@ async function handleOpenAIStreamRequest(res, service, model, requestBody) {
         // Send the final [DONE] message according to OpenAI spec
         res.write('data: [DONE]\n\n');
     } catch (error) {
-        console.error('\n[Server] Error during stream processing:', error.stack);
+        const statusCode = error.response?.status || 500;
+        console.error(`\n[Server] Error during stream processing (${statusCode}):`, error.message);
+
+        if (statusCode === 429) {
+            console.error('[Server] Rate limit exceeded during streaming. The system has automatic retry mechanisms.');
+        } else if (statusCode >= 500) {
+            console.error('[Server] Server error during streaming. This is usually temporary.');
+        }
+
         if (!res.writableEnded) {
-            // We may not be able to write headers, but we can try to send an error payload.
-            const errorPayload = { error: { message: "An error occurred during streaming.", details: error.message } };
-            res.end(JSON.stringify(errorPayload)); // End the response with an error
+            // Send error in SSE format for streaming responses
+            const errorMessage = statusCode === 429 ?
+                "Rate limit exceeded. Please try again in a moment." :
+                "An error occurred during streaming.";
+            const errorPayload = {
+                error: {
+                    message: errorMessage,
+                    code: statusCode,
+                    details: error.message
+                }
+            };
+            res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
         }
     } finally {
         process.stdout.write('\n');
@@ -500,12 +519,78 @@ async function handleOpenAIUnaryRequest(res, service, model, requestBody) {
     await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }
 function handleError(res, error) {
-    console.error('\n[Server] Request failed:', error.stack);
+    const statusCode = error.response?.status || 500;
+    let errorMessage = error.message;
+    let suggestions = [];
+
+    // 提供针对不同错误类型的详细信息和建议
+    switch (statusCode) {
+        case 401:
+            errorMessage = 'Authentication failed. Please check your credentials.';
+            suggestions = [
+                'Verify your OAuth credentials are valid',
+                'Try re-authenticating by deleting the credentials file',
+                'Check if your Google Cloud project has the necessary permissions'
+            ];
+            break;
+        case 403:
+            errorMessage = 'Access forbidden. Insufficient permissions.';
+            suggestions = [
+                'Ensure your Google Cloud project has the Code Assist API enabled',
+                'Check if your account has the necessary permissions',
+                'Verify the project ID is correct'
+            ];
+            break;
+        case 429:
+            errorMessage = 'Too many requests. Rate limit exceeded.';
+            suggestions = [
+                'The request has been automatically retried with exponential backoff',
+                'If the issue persists, try reducing the request frequency',
+                'Consider upgrading your API quota if available'
+            ];
+            break;
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+            errorMessage = 'Server error occurred. This is usually temporary.';
+            suggestions = [
+                'The request has been automatically retried',
+                'If the issue persists, try again in a few minutes',
+                'Check Google Cloud status page for service outages'
+            ];
+            break;
+        default:
+            if (statusCode >= 400 && statusCode < 500) {
+                errorMessage = `Client error (${statusCode}): ${error.message}`;
+                suggestions = ['Check your request format and parameters'];
+            } else if (statusCode >= 500) {
+                errorMessage = `Server error (${statusCode}): ${error.message}`;
+                suggestions = ['This is a server-side issue, please try again later'];
+            }
+    }
+
+    console.error(`\n[Server] Request failed (${statusCode}): ${errorMessage}`);
+    if (suggestions.length > 0) {
+        console.error('[Server] Suggestions:');
+        suggestions.forEach((suggestion, index) => {
+            console.error(`  ${index + 1}. ${suggestion}`);
+        });
+    }
+    console.error('[Server] Full error details:', error.stack);
+
     if (!res.headersSent) {
-        const statusCode = error.response?.status || 500;
         res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     }
-    const errorPayload = { error: { message: error.message, details: error.response?.data } };
+
+    const errorPayload = {
+        error: {
+            message: errorMessage,
+            code: statusCode,
+            suggestions: suggestions,
+            details: error.response?.data
+        }
+    };
     res.end(JSON.stringify(errorPayload));
 }
 
