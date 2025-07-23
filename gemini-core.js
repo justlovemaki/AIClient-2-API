@@ -332,7 +332,10 @@ export class GeminiApiService {
         return { models: formattedModels };
     }
 
-    async callApi(method, body, isRetry = false) {
+    async callApi(method, body, isRetry = false, retryCount = 0) {
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second base delay
+
         try {
             const requestOptions = {
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
@@ -347,13 +350,33 @@ export class GeminiApiService {
             if (error.response?.status === 401 && !isRetry) {
                 console.log('[API] Received 401. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
-                return this.callApi(method, body, true);
+                return this.callApi(method, body, true, retryCount);
             }
+
+            // Handle 429 (Too Many Requests) with exponential backoff
+            if (error.response?.status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, body, isRetry, retryCount + 1);
+            }
+
+            // Handle other retryable errors (5xx server errors)
+            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[API] Received ${error.response.status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, body, isRetry, retryCount + 1);
+            }
+
             throw error;
         }
     }
 
-    async * streamApi(method, body, isRetry = false) {
+    async * streamApi(method, body, isRetry = false, retryCount = 0) {
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second base delay
+
         try {
             const requestOptions = {
                 url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
@@ -374,9 +397,28 @@ export class GeminiApiService {
             if (error.response?.status === 401 && !isRetry) {
                 console.log('[API] Received 401 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
-                yield* this.streamApi(method, body, true);
+                yield* this.streamApi(method, body, true, retryCount);
                 return;
             }
+
+            // Handle 429 (Too Many Requests) with exponential backoff
+            if (error.response?.status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(method, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            // Handle other retryable errors (5xx server errors)
+            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[API] Received ${error.response.status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(method, body, isRetry, retryCount + 1);
+                return;
+            }
+
             throw error;
         }
     }
@@ -406,7 +448,19 @@ export class GeminiApiService {
             await fs.access(this.systemPromptFilePath, fs.constants.F_OK);
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.warn(`[System Prompt] Specified system prompt file not found: ${this.systemPromptFilePath}`);
+                // 只有在用户明确指定了系统提示文件路径时才显示警告
+                if (this.systemPromptFilePath !== INPUT_SYSTEM_PROMPT_FILE) {
+                    console.warn(`[System Prompt] Specified system prompt file not found: ${this.systemPromptFilePath}`);
+                } else {
+                    // 对于默认文件，创建一个空的文件并给出友好提示
+                    try {
+                        await fs.writeFile(this.systemPromptFilePath, '');
+                        console.log(`[System Prompt] Created default system prompt file: ${this.systemPromptFilePath}`);
+                        console.log(`[System Prompt] You can edit this file to add custom system prompts.`);
+                    } catch (createError) {
+                        console.debug(`[System Prompt] Could not create default system prompt file: ${createError.message}`);
+                    }
+                }
                 return requestBody;
             } else {
                 console.error(`[System Prompt] Error accessing system prompt file ${this.systemPromptFilePath}: ${error.message}`);
