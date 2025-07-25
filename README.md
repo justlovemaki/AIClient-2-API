@@ -1,8 +1,8 @@
 <div align="center">
 
-# GeminiCli2API 🚀
+# Gemini-CLI-2-API 🚀
 
-**一个将 Google Gemini CLI 封装为本地 API 的强大代理，并提供 OpenAI 兼容接口。**
+**一个能将多种大模型 API（Gemini, OpenAI, Claude...）统一封装为本地 OpenAI 兼容接口的强大代理。**
 
 </div>
 
@@ -15,30 +15,43 @@
 
 </div>
 
-> `GeminiCli2API` 是一个将 Google Gemini CLI 封装为本地 API 的强大代理，它通过一个统一的 Node.js HTTP 服务器，同时提供了对原生 Gemini API 和 OpenAI 兼容 API 的支持。这让您可以摆脱终端界面的束缚，将 Gemini 的强大能力以 API 的形式轻松接入到任何您喜爱的客户端或应用中。
-
----
-
-## 📝 项目概述
-
-本项目由两个核心文件构成，各司其职：
-
-*   `gemini-api-server.js`: 💎 **统一的 Gemini & OpenAI 代理服务**
-    *   一个独立的 Node.js HTTP 服务器，作为 Google Cloud Code Assist API 的本地代理。
-    *   它同时处理原生 Gemini API (路径: `/v1beta/...`) 和 OpenAI 兼容 API (路径: `/v1/...`) 的请求。
-    *   设计稳健、灵活，并配备了全面可控的日志系统，方便监控和调试。
-
-*   `gemini-core.js`: ⚙️ **核心逻辑**
-    *   这是服务器的心脏，包含了认证、API 调用、请求/响应格式转换、以及日志记录等所有核心功能。
+> `GeminiCli2API` 是一个多功能、轻量化的 API 代理，旨在提供极致的灵活性和易用性。它通过一个 Node.js HTTP 服务器，将 Google Gemini (CLI 授权)、OpenAI、Claude 等多种后端 API 统一转换为标准的 OpenAI 格式接口。项目开箱即用，`npm install` 后即可直接运行，无需复杂配置。您只需在配置文件中轻松切换模型服务商，就能让任何兼容 OpenAI 的客户端或应用，通过同一个 API 地址，无缝地使用不同的大模型能力，彻底摆脱为不同服务维护多套配置和处理接口不兼容问题的烦恼。
 
 ---
 
 ## 💡 核心优势
 
-*   ✅ **突破官方限制**：解决了 Gemini 官方免费 API 额度紧张的问题。通过本项目，您可以使用 Gemini CLI 的账号授权，享受更高的每日请求限额。
-*   ✅ **无缝兼容 OpenAI**：提供了与 OpenAI API 完全兼容的接口，让您现有的工具链和客户端（如 LobeChat, NextChat 等）可以零成本接入 Gemini。
+*   ✅ **多模型统一接入**：一个接口，通吃 Gemini、OpenAI、Claude 等多种模型。通过简单的启动参数或请求头，即可在不同模型服务商之间自由切换。
+*   ✅ **突破官方限制**：通过支持 Gemini CLI 的 OAuth 授权方式，有效绕过官方免费 API 的速率和配额限制，让您享受更高的请求额度和使用频率。
+*   ✅ **无缝兼容 OpenAI**：提供与 OpenAI API 完全兼容的接口，让您现有的工具链和客户端（如 LobeChat, NextChat 等）可以零成本接入所有支持的模型。
 *   ✅ **增强的可控性**：通过强大的日志功能，可以捕获并记录所有请求的提示词（Prompts），便于审计、调试和构建私有数据集。
-*   ✅ **易于扩展**：代码结构清晰，方便您进行二次开发，实现如统一前置提示词、响应缓存、内容过滤等自定义功能。
+*   ✅ **极易扩展**：得益于全新的模块化和策略模式设计，添加一个新的模型服务商变得前所未有的简单。
+
+---
+
+## 📝 项目架构
+
+告别了过去简单的结构，我们引入了更专业、更具扩展性的设计模式，让项目脱胎换骨：
+
+*   **`src/api-server.js`**: 🚀 **项目启动入口**
+    *   作为项目的总指挥，它负责启动和管理整个 HTTP 服务，解析命令行参数，并加载所有配置。
+
+*   **`src/adapter.js`**: 🔌 **服务适配器**
+    *   采用经典的适配器模式，为每种 AI 服务（Gemini, OpenAI, Claude）创建一个统一的接口。无论后端服务如何变化，对主服务来说，调用方式都是一致的。
+
+*   **`src/provider-strategies.js`**: 🎯 **提供商策略模式**
+    *   我们为每种 API 协议（如 OpenAI、Gemini、Claude）都定义了一套策略。这套策略精确地处理了该协议下的请求解析、响应格式化、模型名称提取等所有细节，确保了协议之间的完美转换。
+
+*   **`src/convert.js`**: 🔄 **格式转换中心**
+    *   这是实现“万物皆可 OpenAI”魔法的核心。它负责在不同的 API 协议格式之间进行精确、无损的数据转换。
+
+*   **`src/common.js`**: 🛠️ **通用工具库**
+    *   存放着项目共享的常量、工具函数和通用处理器，让代码更加整洁和高效。
+
+*   **`src/gemini/`, `src/openai/`, `src/claude/`**: 📦 **提供商实现目录**
+    *   每个目录都包含了对应服务商的核心逻辑、API 调用和策略实现，结构清晰，便于您未来添加更多新的服务商。
+
+---
 
 ### ⚠️ 目前的局限
 
@@ -49,23 +62,16 @@
 
 ## 🛠️ 主要功能
 
-### 💎 统一 API 服务器 (`gemini-api-server.js`)
-
 #### 通用功能
-*   🔐 **自动认证与令牌续期**: 首次运行将引导您通过浏览器完成 Google 账号授权。获取的 OAuth 令牌会安全存储在本地，并在过期前自动刷新，确保服务不间断。
-*   🔗 **简化的授权流程**: 如果需要认证，终端会提供一个授权URL，您在浏览器中授权后，即可完成认证。
-*   🛡️ **多样的APIKEY认证方式**: 支持通过 `Authorization: Bearer <key>` (OpenAI 方式), URL 查询参数 (`?key=...`) 和 `x-goog-api-key` 请求头进行统一的 API 密钥校验。
-*   ⚙️ **高度可配置**: 可通过命令行参数灵活配置监听地址、端口、API 密钥和日志模式。
+*   🔐 **智能认证与令牌续期**: 针对需要 OAuth 的服务（如 `gemini-cli-oauth`），首次运行将引导您通过浏览器完成授权，并能自动刷新令牌。
+*   🛡️ **统一的 API Key 认证**: 所有服务均通过统一的 `Authorization: Bearer <key>` 方式进行认证，简单方便。
+*   ⚙️ **高度可配置**: 可通过 `config.json` 文件或命令行参数，灵活配置监听地址、端口、API 密钥、模型提供商以及日志模式。
 *   📜 **全面可控的日志系统**: 可将带时间戳的提示词日志输出到控制台或文件，并显示令牌剩余有效期。
 
 #### OpenAI 兼容接口 (`/v1/...`)
 *   🌍 **完美兼容**: 实现了 `/v1/models` 和 `/v1/chat/completions` 核心端点。
-*   🔄 **自动格式转换**: 在内部自动将 OpenAI 格式的请求/响应与 Gemini 格式进行无缝转换。
+*   🔄 **自动格式转换**: 在内部自动将不同模型的请求/响应与 OpenAI 格式进行无缝转换。
 *   💨 **流式传输支持**: 完全支持 OpenAI 的流式响应 (`"stream": true`)，提供打字机般的实时体验。
-
-#### Gemini 原生接口 (`/v1beta/...`)
-*   🌐 **完整的端点支持**: 完整实现了 `listModels`, `generateContent`, 和 `streamGenerateContent`。
-*   🤖 **固定的模型列表**: 默认提供并使用 `gemini-2.5-pro` 和 `gemini-2.5-flash` 模型。
 
 ---
 
@@ -80,40 +86,86 @@
     ```bash
     npm install
     ```
-    这将自动安装 `google-auth-library` 和 `uuid` 等必要依赖。
+    这将自动安装所有必要依赖。
 
 ---
 
 ## 🚀 快速开始
 
-### ▶️ 启动服务
+### 1. 配置文件 (`config.json`)
 
-*   **默认启动** (监听 `localhost:3000`, API Key 为 `123456`)
-    ```bash
-    node gemini-api-server.js
-    ```
-*   **监听所有网络接口并指定端口和Key** (用于 Docker 或局域网访问)
-    ```bash
-    node gemini-api-server.js 0.0.0.0 --port 8000 --api-key your_secret_key
-    ```
-*   **记录提示词到文件**
-    ```bash
-    node gemini-api-server.js --log-prompts file
-    ```
-*   **通过指定项目ID启动**
-    ```bash
-    node gemini-api-server.js --project-id your-gcp-project-id
-    ```
+我们推荐使用 `config.json` 文件来管理您的配置，这比冗长的命令行参数更清晰。
 
-*更多启动参数，如通过 base64 凭证或文件路径启动，请参考 `gemini-api-server.js` 文件顶部的注释。*
+首先，手动创建 `config.json` 文件，并填入您的配置信息。
+
+```json
+{
+    "REQUIRED_API_KEY": "123456",
+    "SERVER_PORT": 3000,
+    "HOST": "localhost",
+    "MODEL_PROVIDER": "gemini-cli-oauth",
+    "OPENAI_API_KEY": "sk-your-openai-key",
+    "OPENAI_BASE_URL": "https://api.openai.com/v1",
+    "CLAUDE_API_KEY": "sk-ant-your-claude-key",
+    "CLAUDE_BASE_URL": "https://api.anthropic.com/v1",
+    "PROJECT_ID": "your-gcp-project-id",
+    "PROMPT_LOG_MODE": "console"
+}
+```
+
+### 2. 配置参数详解
+
+以下是 `config.json` 文件中所有支持的参数及其详细说明：
+
+| 参数名                          | 类型    | 描述                                                                                                                            | 默认值/可选值                                                                                             |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `REQUIRED_API_KEY`              | string  | 用于保护您的 API 服务的密钥。客户端在请求时必须提供此密钥。                                                                     | 任意字符串, 默认为 `"123456"`                                                                             |
+| `SERVER_PORT`                   | number  | 服务器监听的端口号。                                                                                                            | 任意有效端口号, 默认为 `3000`                                                                             |
+| `HOST`                          | string  | 服务器监听的主机地址。`localhost` 只允许本机访问，`0.0.0.0` 允许局域网或公网访问。                                                | 默认为 `"localhost"`                                                                                      |
+| `MODEL_PROVIDER`                | string  | 指定后端使用的模型服务商。这是核心配置，决定了 API 请求将转发给哪个平台。                                                         | 可选值: `"gemini-cli-oauth"`, `"openai-custom"`, `"claude-custom"`, `"openai-kiro-oauth"`                  |
+| `OPENAI_API_KEY`                | string  | 当 `MODEL_PROVIDER` 为 `openai-custom` 时，需要提供您的 OpenAI API 密钥。                                                         | `null`                                                                                                    |
+| `OPENAI_BASE_URL`               | string  | 当 `MODEL_PROVIDER` 为 `openai-custom` 时，可以指定 OpenAI 兼容的 API 地址。                                                      | 默认为 `"https://api.openai.com/v1"`                                                                      |
+| `CLAUDE_API_KEY`                | string  | 当 `MODEL_PROVIDER` 为 `claude-custom` 时，需要提供您的 Claude API 密钥。                                                         | `null`                                                                                                    |
+| `CLAUDE_BASE_URL`               | string  | 当 `MODEL_PROVIDER` 为 `claude-custom` 时，可以指定 Claude 兼容的 API 地址。                                                      | 默认为 `"https://api.anthropic.com/v1"`                                                                   |
+| `GEMINI_OAUTH_CREDS_BASE64`     | string  | (Gemini-CLI 模式) 您的 Google OAuth 凭据的 Base64 编码字符串。                                                                  | `null`                                                                                                    |
+| `GEMINI_OAUTH_CREDS_FILE_PATH`  | string  | (Gemini-CLI 模式) 您的 Google OAuth 凭据 JSON 文件的路径。                                                                      | `null`                                                                                                    |
+| `PROJECT_ID`                    | string  | (Gemini-CLI 模式) 您的 Google Cloud 项目 ID。                                                                                   | `null`                                                                                                    |
+| `SYSTEM_PROMPT_FILE_PATH`       | string  | 用于加载系统提示词的外部文件路径。                                                                                              | 默认为 `"input_system_prompt.txt"`                                                                        |
+| `SYSTEM_PROMPT_MODE`            | string  | 系统提示词的应用模式。`overwrite` 会覆盖客户端的提示，`append` 会追加到客户端提示之后。                                           | 可选值: `"overwrite"`, `"append"`                                                                         |
+| `PROMPT_LOG_MODE`               | string  | 请求和响应的日志记录模式。`none` 不记录，`console` 打印到控制台，`file` 保存到日志文件。                                          | 可选值: `"none"`, `"console"`, `"file"`                                                                   |
+| `PROMPT_LOG_BASE_NAME`          | string  | 当 `PROMPT_LOG_MODE` 为 `file` 时，生成的日志文件的基础名称。                                                                   | 默认为 `"prompt_log"`                                                                                     |
+| `REQUEST_MAX_RETRIES`           | number  | 当 API 请求失败时，自动重试的最大次数。                                                                                         | 默认为 `3`                                                                                                |
+| `REQUEST_BASE_DELAY`            | number  | 自动重试之间的基础延迟时间（毫秒）。每次重试后延迟会增加。                                                                      | 默认为 `1000`                                                                                             |
+
+### 3. 启动服务
+
+*   **使用 `config.json` 启动** (推荐)
+    ```bash
+    node src/api-server.js
+    ```
+*   **通过命令行参数启动** (会覆盖 `config.json` 中的同名配置)
+    *   **启动 OpenAI 代理**:
+        ```bash
+        node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx
+        ```
+    *   **启动 Claude 代理**:
+        ```bash
+        node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx
+        ```
+    *   **监听所有网络接口并指定端口和Key** (用于 Docker 或局域网访问)
+        ```bash
+        node src/api-server.js --host 0.0.0.0 --port 8000 --api-key your_secret_key
+        ```
+
+*更多启动参数，请参考 `src/api-server.js` 文件顶部的注释。*
 
 ---
 
-### 💻 调用 API
+### 4. 调用 API
 
-> **提示**: 如果您在无法直接访问 Google 服务的环境中使用，请先为您的终端设置全局 HTTP/HTTPS 代理。
+> **提示**: 如果您在无法直接访问 Google/OpenAI/Claude 服务的环境中使用，请先为您的终端设置全局 HTTP/HTTPS 代理。
 
-#### 1. 使用 OpenAI 兼容接口 (`/v1/...`)
+所有请求都使用标准的 OpenAI 格式。
 
 *   **列出模型**
     ```bash
@@ -126,7 +178,7 @@
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer 123456" \
       -d '{
-        "model": "gemini-2.5-pro",
+        "model": "gemini-1.5-flash-latest",
         "messages": [
           {"role": "system", "content": "你是一只名叫 Neko 的猫。"},
           {"role": "user", "content": "你好，你叫什么名字？"}
@@ -139,7 +191,7 @@
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer 123456" \
       -d '{
-        "model": "gemini-2.5-flash",
+        "model": "claude-3-opus-20240229",
         "messages": [
           {"role": "user", "content": "写一首关于宇宙的五行短诗"}
         ],
@@ -147,50 +199,25 @@
       }'
     ```
 
-#### 2. 使用 Gemini 原生接口 (`/v1beta/...`)
-
-*   **列出模型**
-    ```bash
-    curl "http://localhost:3000/v1beta/models?key=123456"
-    ```
-*   **生成内容 (带系统提示)**
-    ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-2.5-pro:generateContent" \
-      -H "Content-Type: application/json" \
-      -H "x-goog-api-key: 123456" \
-      -d '{
-        "system_instruction": { "parts": [{ "text": "你是一只名叫 Neko 的猫。" }] },
-        "contents": [{ "parts": [{ "text": "你好，你叫什么名字？" }] }]
-      }'
-    ```
-*   **流式生成内容**
-    ```bash
-    curl "http://localhost:3000/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=123456" \
-      -H "Content-Type: application/json" \
-      -d '{"contents":[{"parts":[{"text":"写一首关于宇宙的五行短诗"}]}]}'
-    ```
-
 ---
 
 ## 🌟 特殊用法与进阶技巧
 
-*   **🔌 对接任意 OpenAI 客户端**: 这是本项目的杀手级功能。将任何支持 OpenAI 的应用（如 LobeChat, NextChat, VS Code 插件等）的 API 地址指向本服务 (`http://localhost:3000`)，即可无缝使用 Gemini。
+*   **🔌 对接任意 OpenAI 客户端**: 这是本项目的基本功能。将任何支持 OpenAI 的应用（如 LobeChat, NextChat, VS Code 插件等）的 API 地址指向本服务 (`http://localhost:3000`)，即可无缝使用所有已配置的模型。
 
-*   **🔍 中心化请求监控与审计**: 使用 `--log-prompts file` 参数捕获所有客户端发送的系统提示词和用户请求保存到本地。这对于分析、调试和优化提示词，甚至构建私有数据集都至关重要。
+*   **🔍 中心化请求监控与审计**: 在 `config.json` 中设置 `"PROMPT_LOG_MODE": "file"` 来捕获所有请求和响应，并保存到本地日志文件。这对于分析、调试和优化提示词，甚至构建私有数据集都至关重要。
 
 *   **💡 动态系统提示词**:
-    *   通过 `--system-prompt-mode` 参数，您可以更灵活地控制系统提示词的行为。此功能与 `fetch_system_prompt.txt` 文件配合使用。
-    *   **用法**: `node gemini-api-server.js --system-prompt-mode [mode]`
+    *   通过在 `config.json` 中设置 `SYSTEM_PROMPT_FILE_PATH` 和 `SYSTEM_PROMPT_MODE`，您可以更灵活地控制系统提示词的行为。
     *   **支持的模式**:
-        *   `override`: 完全忽略客户端的系统提示词，强制使用 `fetch_system_prompt.txt` 的内容。
-        *   `append`: 在客户端系统提示词的末尾追加 `fetch_system_prompt.txt` 的内容，实现规则的补充。
+        *   `override`: 完全忽略客户端的系统提示词，强制使用文件中的内容。
+        *   `append`: 在客户端系统提示词的末尾追加文件中的内容，实现规则的补充。
     *   这使得您可以为不同的客户端设置统一的基础指令，同时允许单个应用进行个性化扩展。
 
 *   **🛠️ 作为二次开发基石**:
+    *   **添加新模型**: 只需在 `src` 目录下创建一个新的提供商目录，实现 `ApiServiceAdapter` 接口和相应的策略，然后在 `adapter.js` 和 `common.js` 中注册即可。
     *   **响应缓存**: 对高频重复问题添加缓存逻辑，降低 API 调用，提升响应速度。
     *   **自定义内容过滤**: 在请求发送或返回前增加关键词过滤或内容审查逻辑，满足合规要求。
-    *   **其它**: 您可以根据需要自定义代码，添加更多功能，如动态调整系统提示词、支持更多模型、增加权限验证等。
-
 
 ---
 
