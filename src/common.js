@@ -258,6 +258,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
     }
 
+    //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
     await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
     await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }

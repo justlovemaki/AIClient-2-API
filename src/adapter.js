@@ -1,4 +1,4 @@
-import { GeminiApiService } from './gemini/gemini-core.js'; // 导入GeminiCoreAPI
+import { GeminiApiService } from './gemini/gemini-core.js'; // 导入geminiApiService
 import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiService
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './openai/openai-kiro.js'; // 导入KiroApiService
@@ -48,13 +48,13 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
         super();
         this.geminiApiService = new GeminiApiService(config);
         this.geminiApiService.initialize().catch(error => {
-            console.error("Failed to initialize GeminiCoreAPI:", error);
+            console.error("Failed to initialize geminiApiService:", error);
         });
     }
 
     async generateContent(model, requestBody) {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("GeminiCoreAPI not initialized, attempting to re-initialize...");
+            console.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         return this.geminiApiService.generateContent(model, requestBody);
@@ -62,7 +62,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("GeminiCoreAPI not initialized, attempting to re-initialize...");
+            console.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         yield* this.geminiApiService.generateContentStream(model, requestBody);
@@ -70,7 +70,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 
     async listModels() {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("GeminiCoreAPI not initialized, attempting to re-initialize...");
+            console.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         // Gemini Core API 的 listModels 已经返回符合 Gemini 格式的数据，所以不需要额外转换
@@ -132,8 +132,10 @@ export class ClaudeApiServiceAdapter extends ApiServiceAdapter {
 export class KiroApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
         super();
-        this.config = config; // 保存config
         this.kiroApiService = new KiroApiService(config);
+        this.kiroApiService.initialize().catch(error => {
+            console.error("Failed to initialize kiroApiService:", error);
+        });
     }
 
     async generateContent(model, requestBody) {

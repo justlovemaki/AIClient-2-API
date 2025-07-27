@@ -87,6 +87,8 @@
  * --claude-base-url <url>            Claude API 基础 URL / Claude API base URL (for claude-custom provider)
  * --gemini-oauth-creds-base64 <b64>  Gemini OAuth 凭据的 Base64 字符串 / Gemini OAuth credentials as Base64 string
  * --gemini-oauth-creds-file <path>   Gemini OAuth 凭据 JSON 文件路径 / Path to Gemini OAuth credentials JSON file
+ * --kiro-oauth-creds-base64 <b64>    Kiro OAuth 凭据的 Base64 字符串 / Kiro OAuth credentials as Base64 string
+ * --kiro-oauth-creds-file <path>     Kiro OAuth 凭据 JSON 文件路径 / Path to Kiro OAuth credentials JSON file
  * --project-id <id>                  Google Cloud 项目 ID / Google Cloud Project ID (for gemini-cli provider)
  * --system-prompt-file <path>        系统提示文件路径 / Path to system prompt file (default: input_system_prompt.txt)
  * --system-prompt-mode <mode>        系统提示模式 / System prompt mode: overwrite or append (default: overwrite)
@@ -99,6 +101,7 @@
 
 import * as http from 'http';
 import * as fs from 'fs'; // Import fs module
+import { promises as pfs } from 'fs';
 import 'dotenv/config'; // Import dotenv and configure it
 
 import deepmerge from 'deepmerge';
@@ -114,8 +117,8 @@ import {
     handleError,
 } from './common.js';
 
-export let CONFIG = {}; // Make CONFIG exportable
-export let PROMPT_LOG_FILENAME = ''; // Make PROMPT_LOG_FILENAME exportable
+let CONFIG = {}; // Make CONFIG exportable
+let PROMPT_LOG_FILENAME = ''; // Make PROMPT_LOG_FILENAME exportable
 
 /**
  * Initializes the server configuration from config.json and command-line arguments.
@@ -123,7 +126,7 @@ export let PROMPT_LOG_FILENAME = ''; // Make PROMPT_LOG_FILENAME exportable
  * @param {string} [configFilePath='config.json'] - Path to the configuration file.
  * @returns {Object} The initialized configuration object.
  */
-export function initializeConfig(args = process.argv.slice(2), configFilePath = 'config.json') {
+async function initializeConfig(args = process.argv.slice(2), configFilePath = 'config.json') {
     let currentConfig = {};
 
     try {
@@ -144,6 +147,8 @@ export function initializeConfig(args = process.argv.slice(2), configFilePath = 
             CLAUDE_BASE_URL: null,
             GEMINI_OAUTH_CREDS_BASE64: null,
             GEMINI_OAUTH_CREDS_FILE_PATH: null,
+            KIRO_OAUTH_CREDS_BASE64: null,
+            KIRO_OAUTH_CREDS_FILE_PATH: null,
             PROJECT_ID: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'overwrite',
@@ -274,12 +279,27 @@ export function initializeConfig(args = process.argv.slice(2), configFilePath = 
             } else {
                 console.warn(`[Config Warning] --prompt-log-base-name flag requires a value.`);
             }
+        } else if (args[i] === '--kiro-oauth-creds-base64') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_OAUTH_CREDS_BASE64 = args[i + 1];
+                i++;
+            } else {
+                console.warn(`[Config Warning] --kiro-oauth-creds-base64 flag requires a value.`);
+            }
+        } else if (args[i] === '--kiro-oauth-creds-file') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = args[i + 1];
+                i++;
+            } else {
+                console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
+            }
         }
     }
 
     if (!currentConfig.SYSTEM_PROMPT_FILE_PATH) {
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;
     }
+    currentConfig.SYSTEM_PROMPT_CONTENT = await getSystemPromptFileContent(currentConfig.SYSTEM_PROMPT_FILE_PATH);
 
     // Set PROMPT_LOG_FILENAME based on the determined config
     if (currentConfig.PROMPT_LOG_MODE === 'file') {
@@ -296,7 +316,37 @@ export function initializeConfig(args = process.argv.slice(2), configFilePath = 
     return CONFIG;
 }
 
-export async function initApiService(config) { // Make getApiService exportable and accept config
+/**
+ * Gets system prompt content from the specified file path.
+ * @param {string} filePath - Path to the system prompt file.
+ * @returns {Promise<string|null>} File content, or null if the file does not exist, is empty, or an error occurs.
+ */
+async function getSystemPromptFileContent(filePath) {
+    try {
+        await pfs.access(filePath, pfs.constants.F_OK);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.warn(`[System Prompt] Specified system prompt file not found: ${filePath}`);
+        } else {
+            console.error(`[System Prompt] Error accessing system prompt file ${filePath}: ${error.message}`);
+        }
+        return null;
+    }
+
+    try {
+        const content = await pfs.readFile(filePath, 'utf8');
+        if (!content.trim()) {
+            return null;
+        }
+        console.log(`[System Prompt] Loaded system prompt from ${filePath}`);
+        return content;
+    } catch (error) {
+        console.error(`[System Prompt] Error reading system prompt file ${filePath}: ${error.message}`);
+        return null;
+    }
+}
+
+async function initApiService(config) { // Make getApiService exportable and accept config
     // Initialize all known service adapters at startup
     const providers = [
         MODEL_PROVIDER.OPENAI_CUSTOM,
@@ -313,7 +363,7 @@ export async function initApiService(config) { // Make getApiService exportable 
     }
 }
 
-export async function getApiService(config) {
+async function getApiService(config) {
     return getServiceAdapter(config);
 }
 
@@ -326,7 +376,7 @@ export async function getApiService(config) {
  * @param {string} currentPromptLogFilename The current prompt log filename.
  * @param {Object} apiService The initialized API service instance.
  */
-export function createRequestHandler(config) {
+function createRequestHandler(config) {
     return async function requestHandler(req, res) {
         // Deep copy the config for each request to allow dynamic modification
         const currentConfig = deepmerge({}, config);
@@ -404,8 +454,8 @@ export function createRequestHandler(config) {
 }
 
 // --- Server Initialization ---
-export async function startServer() {
-    initializeConfig(); // Initialize CONFIG globally
+async function startServer() {
+    await initializeConfig(); // Initialize CONFIG globally
     await initApiService(CONFIG); // Get service instance with the initialized CONFIG
     const requestHandlerInstance = createRequestHandler(CONFIG); // Create request handler with CONFIG and service
 
@@ -421,11 +471,13 @@ export async function startServer() {
             console.log(`  Claude API Key: ${CONFIG.CLAUDE_API_KEY ? '******' : 'Not Set'}`);
             console.log(`  Claude Base URL: ${CONFIG.CLAUDE_BASE_URL}`);
         } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.GEMINI_CLI) {
-            console.log(`  OAuth Creds File Path: ${CONFIG.GEMINI_OAUTH_CREDS_FILE_PATH || 'Default'}`);
+            console.log(`  Gemini OAuth Creds File Path: ${CONFIG.GEMINI_OAUTH_CREDS_FILE_PATH || 'Default'}`);
             console.log(`  Project ID: ${CONFIG.PROJECT_ID || 'Auto-discovered'}`);
-            console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
-            console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
+        } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.KIRO_API) {
+            console.log(`  Kiro OAuth Creds File Path: ${CONFIG.KIRO_OAUTH_CREDS_FILE_PATH || 'Default'}`);
         }
+        console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
+        console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
         console.log(`  Host: ${CONFIG.HOST}`);
         console.log(`  Port: ${CONFIG.SERVER_PORT}`);
         console.log(`  Required API Key: ${CONFIG.REQUIRED_API_KEY}`);
@@ -437,7 +489,6 @@ export async function startServer() {
         console.log(`  • Gemini-compatible: /v1beta/models, /v1beta/models/{model}:generateContent`);
         console.log(`  • Claude-compatible: /v1/messages`);
         console.log(`  • Health check: /health`);
-        console.log('Initializing backend service... This may take a moment.');
     });
     return server; // Return the server instance for testing purposes
 }

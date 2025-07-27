@@ -23,9 +23,11 @@
 
 *   ✅ **Unified Access to Multiple Models**: One interface for Gemini, OpenAI, Claude, and other models. Freely switch between different model service providers with simple startup parameters or request headers.
 *   ✅ **Break Through Official Limits**: By supporting authorization via the Gemini CLI's OAuth method, it effectively bypasses the rate and quota limits of the official free API, allowing you to enjoy higher request quotas and usage frequency.
+*   ✅ **Break Through Client Limits**: Kiro API mode supports free use of Claude Sonnet 4 model.
 *   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, allowing your existing toolchains and clients (like LobeChat, NextChat, etc.) to access all supported models at zero cost.
 *   ✅ **Enhanced Controllability**: With powerful logging features, you can capture and record all request prompts, which is convenient for auditing, debugging, and building private datasets.
 *   ✅ **Extremely Easy to Extend**: Thanks to the new modular and strategy pattern design, adding a new model service provider has never been easier.
+*   ✅ **Complete Test Coverage**: Provides comprehensive integration and unit tests to ensure the stability and reliability of all API endpoints and functions.
 
 ---
 
@@ -49,13 +51,17 @@ Leaving behind the simple structure of the past, we have introduced a more profe
     *   Stores shared constants, utility functions, and common handlers for the project, making the code cleaner and more efficient.
 
 *   **`src/gemini/`, `src/openai/`, `src/claude/`**: 📦 **Provider Implementation Directories**
-    *   Each directory contains the core logic, API calls, and strategy implementations for the corresponding service provider, with a clear structure that makes it easy for you to add more new service providers in the future.
+    *   Each directory contains the core logic, API calls, and strategy implementations for the corresponding service provider, with a clear structure that makes it easy for you to add more new service providers in the future. Among them, `src/openai/openai-kiro.js` provides a special implementation for the Kiro API.
+
+*   **`tests/`**: 🧪 **Test Directory**
+    *   Contains a complete integration test suite covering all API endpoints, authentication methods, and error handling scenarios to ensure project stability and reliability.
 
 ---
 
 ### ⚠️ Current Limitations
 
-*   The built-in command functions of the original Gemini CLI are not yet implemented. This can be achieved by integrating with other clients' MCP capabilities.
+*   The built-in command functions of the original Gemini CLI are not available. The same effect can be achieved by combining with other clients' MCP capabilities.
+*   Using Kiro API requires downloading the Kiro client and using authorized login to generate kiro-auth-token.json. [Download Kiro client](https://aibook.ren/archives/kiro-install).
 *   Multimodal capabilities (like image input) are still in the development plan (TODO).
 
 ---
@@ -127,6 +133,8 @@ The following are all the supported parameters in the `config.json` file and the
 | `OPENAI_BASE_URL` | string | When `MODEL_PROVIDER` is `openai-custom`, you can specify an OpenAI-compatible API address. | Defaults to `"https://api.openai.com/v1"` |
 | `CLAUDE_API_KEY` | string | When `MODEL_PROVIDER` is `claude-custom`, you need to provide your Claude API key. | `null` |
 | `CLAUDE_BASE_URL` | string | When `MODEL_PROVIDER` is `claude-custom`, you can specify a Claude-compatible API address. | Defaults to `"https://api.anthropic.com/v1"` |
+| `KIRO_OAUTH_CREDS_BASE64` | string | (Kiro API mode) The Base64 encoded string of your Kiro OAuth credentials. | `null` |
+| `KIRO_OAUTH_CREDS_FILE_PATH` | string | (Kiro API mode) The path to your Kiro OAuth credentials JSON file. | `null` |
 | `GEMINI_OAUTH_CREDS_BASE64` | string | (Gemini-CLI mode) The Base64 encoded string of your Google OAuth credentials. | `null` |
 | `GEMINI_OAUTH_CREDS_FILE_PATH` | string | (Gemini-CLI mode) The path to your Google OAuth credentials JSON file. | `null` |
 | `PROJECT_ID` | string | (Gemini-CLI mode) Your Google Cloud project ID. | `null` |
@@ -151,6 +159,10 @@ The following are all the supported parameters in the `config.json` file and the
     *   **Start Claude proxy**:
         ```bash
         node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx
+        ```
+    *   **Start Kiro API proxy**:
+        ```bash
+        node src/api-server.js --model-provider openai-kiro-oauth
         ```
     *   **Listen on all network interfaces and specify port and key** (for Docker or LAN access)
         ```bash
@@ -178,7 +190,7 @@ All requests use the standard OpenAI format.
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer 123456" \
       -d '{
-        "model": "gemini-1.5-flash-latest",
+        "model": "gemini-2.5-flash",
         "messages": [
           {"role": "system", "content": "You are a cat named Neko."},
           {"role": "user", "content": "Hello, what is your name?"}

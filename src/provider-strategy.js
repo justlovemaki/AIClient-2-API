@@ -53,35 +53,6 @@ export class ProviderStrategy {
     }
 
     /**
-     * Gets system prompt content from the specified file path.
-     * @param {string} filePath - Path to the system prompt file.
-     * @returns {Promise<string|null>} File content, or null if the file does not exist, is empty, or an error occurs.
-     */
-    async _getSystemPromptFileContent(filePath) {
-        try {
-            await fs.access(filePath, fs.constants.F_OK);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                console.warn(`[System Prompt] Specified system prompt file not found: ${filePath}`);
-            } else {
-                console.error(`[System Prompt] Error accessing system prompt file ${filePath}: ${error.message}`);
-            }
-            return null;
-        }
-
-        try {
-            const content = await fs.readFile(filePath, 'utf8');
-            if (!content.trim()) {
-                return null;
-            }
-            return content;
-        } catch (error) {
-            console.error(`[System Prompt] Error reading system prompt file ${filePath}: ${error.message}`);
-            return null;
-        }
-    }
-
-    /**
      * Updates the system prompt file.
      * @param {string} incomingSystemText - Incoming system prompt text.
      * @param {string} providerName - Provider name (for logging).

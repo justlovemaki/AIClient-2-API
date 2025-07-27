@@ -39,20 +39,20 @@ export class GeminiApiService {
 
     async initialize() {
         if (this.isInitialized) return;
-        console.log('[Service] Initializing Gemini API Service...');
+        console.log('[Gemini] Initializing Gemini API Service...');
         await this.initializeAuth();
         if (!this.projectId) {
             this.projectId = await this.discoverProjectAndModels();
         } else {
-            console.log(`[Service] Using provided Project ID: ${this.projectId}`);
+            console.log(`[Gemini] Using provided Project ID: ${this.projectId}`);
             this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
-            console.log(`[Service] Using fixed models: [${this.availableModels.join(', ')}]`);
+            console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         }
         if (this.projectId === 'default') {
             throw new Error("Error: 'default' is not a valid project ID. Please provide a valid Google Cloud Project ID using the --project-id argument.");
         }
         this.isInitialized = true;
-        console.log(`[Service] Initialization complete. Project ID: ${this.projectId}`);
+        console.log(`[Gemini] Initialization complete. Project ID: ${this.projectId}`);
     }
 
     async initializeAuth(forceRefresh = false) {
@@ -63,10 +63,10 @@ export class GeminiApiService {
                 const decoded = Buffer.from(this.oauthCredsBase64, 'base64').toString('utf8');
                 const credentials = JSON.parse(decoded);
                 this.authClient.setCredentials(credentials);
-                console.log('[Auth] Authentication configured successfully from base64 string.');
+                console.log('[Gemini Auth] Authentication configured successfully from base64 string.');
                 return;
             } catch (error) {
-                console.error('[Auth] Failed to parse base64 OAuth credentials:', error);
+                console.error('[Gemini Auth] Failed to parse base64 OAuth credentials:', error);
                 throw new Error(`Failed to load OAuth credentials from base64 string.`);
             }
         }
@@ -76,22 +76,22 @@ export class GeminiApiService {
             const data = await fs.readFile(credPath, "utf8");
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
-            console.log('[Auth] Authentication configured successfully from file.');
+            console.log('[Gemini Auth] Authentication configured successfully from file.');
             if (forceRefresh) {
-                console.log('[Auth] Forcing token refresh...');
+                console.log('[Gemini Auth] Forcing token refresh...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
                 await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log('[Auth] Refreshed token saved.');
+                console.log('[Gemini Auth] Refreshed token saved.');
             }
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.log(`[Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
+                console.log(`[Gemini Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
                 const newTokens = await this.getNewToken(credPath);
                 this.authClient.setCredentials(newTokens);
-                console.log('[Auth] New token obtained and loaded into memory.');
+                console.log('[Gemini Auth] New token obtained and loaded into memory.');
             } else {
-                console.error('[Auth] Failed to initialize authentication from file:', error);
+                console.error('[Gemini Auth] Failed to initialize authentication from file:', error);
                 throw new Error(`Failed to load OAuth credentials.`);
             }
         }
@@ -102,7 +102,7 @@ export class GeminiApiService {
         this.authClient.redirectUri = redirectUri;
         return new Promise((resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
-            console.log('\n[Auth] Please open this URL in your browser to authenticate:');
+            console.log('\n[Gemini Auth] Please open this URL in your browser to authenticate:');
             console.log(authUrl, '\n');
             const server = http.createServer(async (req, res) => {
                 try {
@@ -110,14 +110,14 @@ export class GeminiApiService {
                     const code = url.searchParams.get('code');
                     const errorParam = url.searchParams.get('error');
                     if (code) {
-                        console.log(`[Auth] Received successful callback from Google: ${req.url}`);
+                        console.log(`[Gemini Auth] Received successful callback from Google: ${req.url}`);
                         res.writeHead(200, { 'Content-Type': 'text/plain' });
                         res.end('Authentication successful! You can close this browser tab.');
                         server.close();
                         const { tokens } = await this.authClient.getToken(code);
                         await fs.mkdir(path.dirname(credPath), { recursive: true });
                         await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log('[Auth] New token received and saved to file.');
+                        console.log('[Gemini Auth] New token received and saved to file.');
                         resolve(tokens);
                     } else if (errorParam) {
                         const errorMessage = `Authentication failed. Google returned an error: ${errorParam}.`;
@@ -126,7 +126,7 @@ export class GeminiApiService {
                         server.close();
                         reject(new Error(errorMessage));
                     } else {
-                        console.log(`[Auth] Ignoring irrelevant request: ${req.url}`);
+                        console.log(`[Gemini Auth] Ignoring irrelevant request: ${req.url}`);
                         res.writeHead(204);
                         res.end();
                     }
@@ -137,7 +137,7 @@ export class GeminiApiService {
             });
             server.on('error', (err) => {
                 if (err.code === 'EADDRINUSE') {
-                    const errorMessage = `[Auth] Port ${AUTH_REDIRECT_PORT} on ${this.host} is already in use.`;
+                    const errorMessage = `[Gemini Auth] Port ${AUTH_REDIRECT_PORT} on ${this.host} is already in use.`;
                     console.error(errorMessage);
                     reject(new Error(errorMessage));
                 } else {
@@ -150,13 +150,13 @@ export class GeminiApiService {
 
     async discoverProjectAndModels() {
         if (this.projectId) {
-            console.log(`[Service] Using pre-configured Project ID: ${this.projectId}`);
+            console.log(`[Gemini] Using pre-configured Project ID: ${this.projectId}`);
             return this.projectId;
         }
 
-        console.log('[Service] Discovering Project ID...');
+        console.log('[Gemini] Discovering Project ID...');
         this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
-        console.log(`[Service] Using fixed models: [${this.availableModels.join(', ')}]`);
+        console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
             const loadResponse = await this.callApi('loadCodeAssist', { metadata: { pluginType: 'GEMINI' } });
             if (loadResponse.cloudaicompanionProject) {
@@ -171,7 +171,7 @@ export class GeminiApiService {
             }
             return lro.response?.cloudaicompanionProject?.id;
         } catch (error) {
-            console.error('[Service] Failed to discover Project ID:', error.response?.data || error.message);
+            console.error('[Gemini] Failed to discover Project ID:', error.response?.data || error.message);
             throw new Error('Could not discover a valid Google Cloud Project ID.');
         }
     }

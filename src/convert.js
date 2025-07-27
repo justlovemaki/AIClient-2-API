@@ -141,7 +141,9 @@ export function toOpenAIChatCompletionFromGemini(geminiResponse, model) {
             index: 0,
             message: {
                 role: "assistant",
-                content: geminiResponse,
+                content: geminiResponse.candidates.map(candidate =>
+                    candidate.content.parts.map(part => part.text).join('')
+                ).join('\n'), // Use '\n' to separate content from different candidates if needed
             },
             finish_reason: "stop",
         }],

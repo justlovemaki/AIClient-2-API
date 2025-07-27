@@ -46,7 +46,7 @@ class OpenAIStrategy extends ProviderStrategy {
             return requestBody;
         }
 
-        const filePromptContent = await this._getSystemPromptFileContent(config.SYSTEM_PROMPT_FILE_PATH);
+        const filePromptContent = config.SYSTEM_PROMPT_CONTENT;
         if (filePromptContent === null) {
             return requestBody;
         }
