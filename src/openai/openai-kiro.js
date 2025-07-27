@@ -67,15 +67,15 @@ export class KiroApiService {
         this.config = config;
         this.credPath = config.KIRO_OAUTH_CREDS_DIR_PATH || path.join(os.homedir(), ".aws", "sso", "cache");
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
-        this.accessToken = config.KIRO_ACCESS_TOKEN;
-        this.refreshToken = config.KIRO_REFRESH_TOKEN;
-        this.clientId = config.KIRO_CLIENT_ID;
-        this.clientSecret = config.KIRO_CLIENT_SECRET;
-        this.authMethod = KIRO_CONSTANTS.AUTH_METHOD_SOCIAL;
-        this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL;
-        this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL;
-        this.baseUrl = KIRO_CONSTANTS.BASE_URL;
-        this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL;
+        // this.accessToken = config.KIRO_ACCESS_TOKEN;
+        // this.refreshToken = config.KIRO_REFRESH_TOKEN;
+        // this.clientId = config.KIRO_CLIENT_ID;
+        // this.clientSecret = config.KIRO_CLIENT_SECRET;
+        // this.authMethod = KIRO_CONSTANTS.AUTH_METHOD_SOCIAL;
+        // this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL;
+        // this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL;
+        // this.baseUrl = KIRO_CONSTANTS.BASE_URL;
+        // this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL;
 
         // Add kiro-oauth-creds-base64 and kiro-oauth-creds-file to config
         if (config.KIRO_OAUTH_CREDS_BASE64) {
@@ -186,23 +186,21 @@ async initializeAuth(forceRefresh = false) {
         }
 
         // Priority 3: Load from default directory if no specific file path and no token file credentials
-        if (Object.keys(mergedCredentials).length === 0) {
-            const dirPath = this.credPath;
-            console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
-            const files = await fs.readdir(dirPath);
-
-            for (const file of files) {
-                if (file.endsWith('.json')) {
-                    const filePath = path.join(dirPath, file);
-                    const credentials = await loadCredentialsFromFile(filePath);
-                    if (credentials) {
-                        Object.assign(mergedCredentials, credentials);
-                        console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
-                    }
+        const dirPath = this.credPath;
+        console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+        const files = await fs.readdir(dirPath);
+        for (const file of files) {
+            if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
+                const filePath = path.join(dirPath, file);
+                const credentials = await loadCredentialsFromFile(filePath);
+                if (credentials) {
+                    Object.assign(mergedCredentials, credentials);
+                    console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
                 }
             }
         }
 
+        // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
         // Apply loaded credentials, prioritizing existing values if they are not null/undefined
         this.accessToken = this.accessToken || mergedCredentials.accessToken;
         this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
