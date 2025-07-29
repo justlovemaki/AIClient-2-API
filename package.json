@@ -4,6 +4,7 @@
     "axios": "^1.10.0",
     "dotenv": "^16.4.5",
     "google-auth-library": "^10.1.0",
+    "lodash": "^4.17.21",
     "undici": "^7.12.0",
     "uuid": "^11.1.0"
   },

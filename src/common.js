@@ -22,7 +22,7 @@ export const MODEL_PROVIDER = {
     GEMINI_CLI: 'gemini-cli-oauth',
     OPENAI_CUSTOM: 'openai-custom',
     CLAUDE_CUSTOM: 'claude-custom',
-    KIRO_API: 'openai-kiro-oauth',
+    KIRO_API: 'claude-kiro-oauth',
 }
 
 /**
@@ -222,10 +222,10 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                     continue;
                 }
                 res.write(`data: ${JSON.stringify(clientChunk)}\n\n`);
-                //console.log(`data: ${JSON.stringify(clientChunk)}\n`);
+                // console.log(`data: ${JSON.stringify(clientChunk)}\n`);
             }else{
                 res.write(`data: ${JSON.stringify(nativeChunk)}\n\n`);
-                //console.log(`data-nv: ${JSON.stringify(nativeChunk)}\n`);
+                // console.log(`data-nv: ${JSON.stringify(nativeChunk)}\n`);
             }
             
             

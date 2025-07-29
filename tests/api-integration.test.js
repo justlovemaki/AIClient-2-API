@@ -22,7 +22,7 @@ const MODEL_PROVIDER = {
     GEMINI_CLI: 'gemini-cli-oauth',
     OPENAI_CUSTOM: 'openai-custom',
     CLAUDE_CUSTOM: 'claude-custom',
-    KIRO_API: 'openai-kiro-oauth',
+    KIRO_API: 'claude-kiro-oauth',
 }
 
 // Real test data for different API formats
@@ -62,13 +62,13 @@ const REAL_TEST_DATA = {
     },
     claude: {
         nonStreamRequest: {
-            model: "claude-4-sonnet",
+            model: "claude-opus-4-20250514",
             messages: [
                 { role: "user", content: "Hello, what is 2+2?" }
             ]
         },
         streamRequest: {
-            model: "claude-4-sonnet",
+            model: "claude-opus-4-20250514",
             messages: [
                 { role: "user", content: "Hello, what is 2+2?" }
             ],
@@ -346,6 +346,72 @@ describe('API Integration Tests with HTTP Requests', () => {
             expect(chunks.length).toBeGreaterThan(0);
         });
     });
+
+    // To run all Claude Kiro Endpoints tests:
+    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro Endpoints"
+    describe('Claude Kiro Endpoints', () => {
+        // To run this test:
+        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro /v1/messages non-streaming"
+        test('Claude Kiro /v1/messages non-streaming', async () => {
+            REAL_TEST_DATA.claude.nonStreamRequest.model = "claude-4-sonnet";
+            const response = await makeRequest(
+                `${TEST_SERVER_BASE_URL}/v1/messages`,
+                'POST',
+                'anthropic',
+                { 'model-provider': MODEL_PROVIDER.KIRO_API },
+                REAL_TEST_DATA.claude.nonStreamRequest
+            );
+
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-type')).toContain('application/json');
+            
+            const responseData = await response.json();
+            expect(responseData).toHaveProperty('content');
+            expect(Array.isArray(responseData.content)).toBe(true);
+            expect(responseData.content.length).toBeGreaterThan(0);
+            expect(responseData.content[0]).toHaveProperty('text');
+        });
+
+        // To run this test:
+        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro /v1/messages streaming"
+        test('Claude Kiro /v1/messages streaming', async () => {
+            REAL_TEST_DATA.claude.streamRequest.model = "claude-4-sonnet";
+            const response = await makeRequest(
+                `${TEST_SERVER_BASE_URL}/v1/messages`,
+                'POST',
+                'anthropic',
+                { 'model-provider': MODEL_PROVIDER.KIRO_API },
+                REAL_TEST_DATA.claude.streamRequest
+            );
+
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-type')).toContain('text/event-stream');
+            expect(response.headers.get('cache-control')).toBe('no-cache');
+            expect(response.headers.get('connection')).toBe('keep-alive');
+            
+            // Read some of the streaming response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let chunks = [];
+            let chunkCount = 0;
+            
+            try {
+                while (chunkCount < 3) { // Read first few chunks
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    chunks.push(chunk);
+                    chunkCount++;
+                }
+            } finally {
+                reader.releaseLock();
+            }
+            
+            expect(chunks.length).toBeGreaterThan(0);
+        });
+    });
+
 
     // To run all Gemini Native Endpoints tests:
     // npx jest GeminiCli2API/tests/api-integration.test.js -t "Gemini Native Endpoints"

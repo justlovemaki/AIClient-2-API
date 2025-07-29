@@ -15,13 +15,13 @@
 
 </div>
 
-> `GeminiCli2API` 是一个多功能、轻量化的 API 代理，旨在提供极致的灵活性和易用性。它通过一个 Node.js HTTP 服务器，将 Google Gemini CLI 授权登录、OpenAI、Claude、Kiro 等多种后端 API 统一转换为标准的 OpenAI 格式接口。项目采用现代化的模块化架构，支持策略模式和适配器模式，具备完整的测试覆盖，开箱即用，`npm install` 后即可直接运行。您只需在配置文件中轻松切换模型服务商，就能让任何兼容 OpenAI 的客户端或应用，通过同一个 API 地址，无缝地使用不同的大模型能力，彻底摆脱为不同服务维护多套配置和处理接口不兼容问题的烦恼。
+> `GeminiCli2API` 是一个多功能、轻量化的 API 代理，旨在提供极致的灵活性和易用性。它通过一个 Node.js HTTP 服务器，将 Google Gemini CLI 授权登录、OpenAI、Claude、Kiro 等多种后端 API 统一转换为标准的 OpenAI 格式接口。项目采用现代化的模块化架构，支持策略模式和适配器模式，具备完整的测试覆盖和健康检查机制，开箱即用，`npm install` 后即可直接运行。您只需在配置文件中轻松切换模型服务商，就能让任何兼容 OpenAI 的客户端或应用，通过同一个 API 地址，无缝地使用不同的大模型能力，彻底摆脱为不同服务维护多套配置和处理接口不兼容问题的烦恼。
 
 ---
 
 ## 💡 核心优势
 
-*   ✅ **多模型统一接入**：一个接口，通吃 Gemini、OpenAI、Claude 等多种模型。通过简单的启动参数或请求头，即可在不同模型服务商之间自由切换。
+*   ✅ **多模型统一接入**：一个接口，通吃 Gemini、OpenAI、Claude、Kimi K2、GLM-4.5 等多种最新模型。通过简单的启动参数或请求头，即可在不同模型服务商之间自由切换。
 *   ✅ **突破官方限制**：通过支持 Gemini CLI 的 OAuth 授权方式，有效绕过官方免费 API 的速率和配额限制，让您享受更高的请求额度和使用频率。
 *   ✅ **突破客户端限制**：Kiro API 模式下支持免费使用Claude Sonnet 4 模型。
 *   ✅ **无缝兼容 OpenAI**：提供与 OpenAI API 完全兼容的接口，让您现有的工具链和客户端（如 LobeChat, NextChat 等）可以零成本接入所有支持的模型。
@@ -41,8 +41,11 @@
 *   **`src/adapter.js`**: 🔌 **服务适配器**
     *   采用经典的适配器模式，为每种 AI 服务（Gemini, OpenAI, Claude, Kiro）创建一个统一的接口。无论后端服务如何变化，对主服务来说，调用方式都是一致的。
 
-*   **`src/provider-strategies.js`**: 🎯 **提供商策略模式**
-    *   我们为每种 API 协议（如 OpenAI、Gemini、Claude）都定义了一套策略。这套策略精确地处理了该协议下的请求解析、响应格式化、模型名称提取等所有细节，确保了协议之间的完美转换。
+*   **`src/provider-strategies.js`**: 🎯 **提供商策略工厂**
+    *   实现了策略工厂模式，为每种 API 协议（如 OpenAI、Gemini、Claude）提供统一的策略接口。这些策略精确地处理协议下的请求解析、响应格式化、模型名称提取等所有细节，确保了协议之间的完美转换。
+
+*   **`src/provider-strategy.js`**: 🎯 **策略基类**
+    *   定义了所有提供商策略的基础接口和通用方法，包括系统提示词管理、内容提取等核心功能。
 
 *   **`src/convert.js`**: 🔄 **格式转换中心**
     *   这是实现“万物皆可 OpenAI”魔法的核心。它负责在不同的 API 协议格式之间进行精确、无损的数据转换。
@@ -58,11 +61,12 @@
 
 ---
 
-### ⚠️ 目前的局限
+### 🔧 使用说明
 
-*   原版 Gemini CLI 的内置命令功能不可用。配合其他客户端的mcp能力可实现相同效果。
-*   使用Kiro API 需要下载kiro客户端，并使用授权登录生成kiro-auth-token.json。[下载kiro客户端](https://aibook.ren/archives/kiro-install)。
-*   多模态能力（如图片输入）尚在开发计划中 (TODO)。
+*   **MCP 支持**: 虽然原版 Gemini CLI 的内置命令功能不可用，但本项目完美支持 MCP (Model Context Protocol)，可配合支持 MCP 的客户端实现更强大的功能扩展。
+*   **多模态能力**: 支持图片、文档等多模态输入，为您提供更丰富的交互体验。
+*   **最新模型支持**: 支持最新的 **Kimi K2** 和 **GLM-4.5** 模型，只需在 `config.json` 中配置相应的 OpenAI 或 Claude 兼容接口即可使用。
+*   **Kiro API**: 使用 Kiro API 需要[下载kiro客户端](https://aibook.ren/archives/kiro-install)并完成授权登录生成 kiro-auth-token.json。**推荐配合 Claude Code 使用以获得最佳体验**。
 
 ---
 
@@ -70,9 +74,10 @@
 
 #### 通用功能
 *   🔐 **智能认证与令牌续期**: 针对需要 OAuth 的服务（如 `gemini-cli-oauth`），首次运行将引导您通过浏览器完成授权，并能自动刷新令牌。
-*   🛡️ **统一的 API Key 认证**: 所有服务均通过统一的 `Authorization: Bearer <key>` 方式进行认证，简单方便。
+*   🛡️ **多种认证方式支持**: 支持 `Authorization: Bearer <key>`、`x-goog-api-key`、`x-api-key` 请求头以及 URL 查询参数等多种认证方式。
 *   ⚙️ **高度可配置**: 可通过 `config.json` 文件或命令行参数，灵活配置监听地址、端口、API 密钥、模型提供商以及日志模式。
 *   📜 **全面可控的日志系统**: 可将带时间戳的提示词日志输出到控制台或文件，并显示令牌剩余有效期。
+*   🏥 **健康检查机制**: 提供 `/health` 端点用于服务状态监控，返回服务健康状态和当前配置信息。
 
 #### OpenAI 兼容接口 (`/v1/...`)
 *   🌍 **完美兼容**: 实现了 `/v1/models` 和 `/v1/chat/completions` 核心端点。
@@ -162,7 +167,7 @@
         ```
     *   **启动 Kiro API 代理**:
         ```bash
-        node src/api-server.js --model-provider openai-kiro-oauth
+        node src/api-server.js --model-provider claude-kiro-oauth
         ```
     *   **监听所有网络接口并指定端口和Key** (用于 Docker 或局域网访问)
         ```bash
@@ -179,6 +184,10 @@
 
 所有请求都使用标准的 OpenAI 格式。
 
+*   **健康检查**
+    ```bash
+    curl http://localhost:3000/health
+    ```
 *   **列出模型**
     ```bash
     curl http://localhost:3000/v1/models \

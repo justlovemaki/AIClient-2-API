@@ -11,8 +11,13 @@ class ClaudeStrategy extends ProviderStrategy {
     }
 
     extractResponseText(response) {
-        if (response.type === 'content_block_delta' && response.delta && response.delta.type === 'text_delta') {
-            return response.delta.text;
+        if (response.type === 'content_block_delta' && response.delta ) {
+            if(response.delta.type === 'text_delta' ){
+                return response.delta.text;
+            }
+            if(response.delta.type === 'input_json_delta' ){
+                return response.delta.partial_json;
+            }
         }
         if (response.content && Array.isArray(response.content)) {
             return response.content

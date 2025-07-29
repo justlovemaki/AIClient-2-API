@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { MODEL_PROVIDER, MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
+import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 
 /**
  * Generic data conversion function.
@@ -72,7 +72,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
 
 /**
  * Converts a Gemini API request body to an OpenAI chat completion request body.
- * Handles system instructions and role mapping.
+ * Handles system instructions and role mapping with multimodal support.
  * @param {Object} geminiRequest - The request body from the Gemini API.
  * @returns {Object} The formatted request body for the OpenAI API.
  */
@@ -84,14 +84,11 @@ export function toOpenAIRequestFromGemini(geminiRequest) {
 
     // Process system instruction
     if (geminiRequest.systemInstruction && Array.isArray(geminiRequest.systemInstruction.parts)) {
-        const systemText = geminiRequest.systemInstruction.parts
-            .filter(p => p && typeof p.text === 'string')
-            .map(p => p.text)
-            .join('\n');
-        if (systemText) {
+        const systemContent = processGeminiPartsToOpenAIContent(geminiRequest.systemInstruction.parts);
+        if (systemContent) {
             openaiRequest.messages.push({
                 role: 'system',
-                content: systemText
+                content: systemContent
             });
         }
     }
@@ -100,15 +97,12 @@ export function toOpenAIRequestFromGemini(geminiRequest) {
     if (geminiRequest.contents && Array.isArray(geminiRequest.contents)) {
         geminiRequest.contents.forEach(content => {
             if (content && Array.isArray(content.parts)) {
-                const contentText = content.parts
-                    .filter(part => part && typeof part.text === 'string')
-                    .map(part => part.text)
-                    .join('\n');
-                if (contentText) {
+                const openaiContent = processGeminiPartsToOpenAIContent(content.parts);
+                if (openaiContent && openaiContent.length > 0) {
                     const openaiRole = content.role === 'model' ? 'assistant' : content.role;
                     openaiRequest.messages.push({
                         role: openaiRole,
-                        content: contentText
+                        content: openaiContent
                     });
                 }
             }
@@ -116,6 +110,69 @@ export function toOpenAIRequestFromGemini(geminiRequest) {
     }
 
     return openaiRequest;
+}
+
+/**
+ * Processes Gemini parts to OpenAI content format with multimodal support.
+ * @param {Array} parts - Array of Gemini parts.
+ * @returns {Array|string} OpenAI content format.
+ */
+function processGeminiPartsToOpenAIContent(parts) {
+    if (!parts || !Array.isArray(parts)) return '';
+    
+    const contentArray = [];
+    
+    parts.forEach(part => {
+        if (!part) return;
+        
+        // Handle text content
+        if (typeof part.text === 'string') {
+            contentArray.push({
+                type: 'text',
+                text: part.text
+            });
+        }
+        
+        // Handle inline data (images, audio)
+        if (part.inlineData) {
+            const { mimeType, data } = part.inlineData;
+            if (mimeType && data) {
+                contentArray.push({
+                    type: 'image_url',
+                    image_url: {
+                        url: `data:${mimeType};base64,${data}`
+                    }
+                });
+            }
+        }
+        
+        // Handle file data
+        if (part.fileData) {
+            const { mimeType, fileUri } = part.fileData;
+            if (mimeType && fileUri) {
+                // For file URIs, we need to determine if it's an image or audio
+                if (mimeType.startsWith('image/')) {
+                    contentArray.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: fileUri
+                        }
+                    });
+                } else if (mimeType.startsWith('audio/')) {
+                    // For audio, we'll use a placeholder or handle as text description
+                    contentArray.push({
+                        type: 'text',
+                        text: `[Audio file: ${fileUri}]`
+                    });
+                }
+            }
+        }
+    });
+    
+    // Return as array for multimodal, or string for simple text
+    return contentArray.length === 1 && contentArray[0].type === 'text'
+        ? contentArray[0].text
+        : contentArray;
 }
 
 
@@ -132,8 +189,10 @@ export function toOpenAIModelListFromGemini(geminiModels) {
 }
 
 export function toOpenAIChatCompletionFromGemini(geminiResponse, model) {
+    const content = processGeminiResponseContent(geminiResponse);
+    
     return {
-        id: `chatcmpl-${uuidv4()}`, // uuidv4 needs to be imported or handled
+        id: `chatcmpl-${uuidv4()}`,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
         model: model,
@@ -141,9 +200,7 @@ export function toOpenAIChatCompletionFromGemini(geminiResponse, model) {
             index: 0,
             message: {
                 role: "assistant",
-                content: geminiResponse.candidates.map(candidate =>
-                    candidate.content.parts.map(part => part.text).join('')
-                ).join('\n'), // Use '\n' to separate content from different candidates if needed
+                content: content
             },
             finish_reason: "stop",
         }],
@@ -157,6 +214,31 @@ export function toOpenAIChatCompletionFromGemini(geminiResponse, model) {
             total_tokens: 0,
         },
     };
+}
+
+/**
+ * Processes Gemini response content to OpenAI format with multimodal support.
+ * @param {Object} geminiResponse - The Gemini API response.
+ * @returns {string|Array} Processed content.
+ */
+function processGeminiResponseContent(geminiResponse) {
+    if (!geminiResponse || !geminiResponse.candidates) return '';
+    
+    const contents = [];
+    
+    geminiResponse.candidates.forEach(candidate => {
+        if (candidate.content && candidate.content.parts) {
+            candidate.content.parts.forEach(part => {
+                if (part.text) {
+                    contents.push(part.text);
+                }
+                // Note: Gemini response typically doesn't include multimodal content in responses
+                // but we handle it for completeness
+            });
+        }
+    });
+    
+    return contents.join('\n');
 }
 
 export function toOpenAIStreamChunkFromGemini(geminiChunk, model) {
@@ -211,7 +293,7 @@ export function toOpenAIChatCompletionFromClaude(claudeResponse, model) {
         };
     }
 
-    const textContent = claudeResponse.content.map(block => block.text).join('\n');
+    const content = processClaudeResponseContent(claudeResponse.content);
     const finishReason = claudeResponse.stop_reason === 'end_turn' ? 'stop' : claudeResponse.stop_reason;
 
     return {
@@ -223,7 +305,7 @@ export function toOpenAIChatCompletionFromClaude(claudeResponse, model) {
             index: 0,
             message: {
                 role: "assistant",
-                content: textContent,
+                content: content
             },
             finish_reason: finishReason,
         }],
@@ -233,6 +315,56 @@ export function toOpenAIChatCompletionFromClaude(claudeResponse, model) {
             total_tokens: (claudeResponse.usage?.input_tokens || 0) + (claudeResponse.usage?.output_tokens || 0),
         },
     };
+}
+
+/**
+ * Processes Claude response content to OpenAI format with multimodal support.
+ * @param {Array} content - Array of Claude content blocks.
+ * @returns {string|Array} Processed content.
+ */
+function processClaudeResponseContent(content) {
+    if (!content || !Array.isArray(content)) return '';
+    
+    const contentArray = [];
+    
+    content.forEach(block => {
+        if (!block) return;
+        
+        switch (block.type) {
+            case 'text':
+                contentArray.push({
+                    type: 'text',
+                    text: block.text || ''
+                });
+                break;
+                
+            case 'image':
+                // Handle image blocks from Claude
+                if (block.source && block.source.type === 'base64') {
+                    contentArray.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:${block.source.media_type};base64,${block.source.data}`
+                        }
+                    });
+                }
+                break;
+                
+            default:
+                // Handle other content types as text
+                if (block.text) {
+                    contentArray.push({
+                        type: 'text',
+                        text: block.text
+                    });
+                }
+        }
+    });
+    
+    // Return as array for multimodal, or string for simple text
+    return contentArray.length === 1 && contentArray[0].type === 'text'
+        ? contentArray[0].text
+        : contentArray;
 }
 
 /**
@@ -290,6 +422,7 @@ export function toOpenAIModelListFromClaude(claudeModels) {
 
 /**
  * Converts a Claude API request body to an OpenAI chat completion request body.
+ * Handles system instructions and multimodal content.
  * @param {Object} claudeRequest - The request body from the Claude API.
  * @returns {Object} The formatted request body for the OpenAI API.
  */
@@ -310,10 +443,13 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
             if (typeof content === 'string') {
                 openaiMessages.push({ role: openaiRole, content: content });
             } else if (Array.isArray(content)) {
-                // If Claude message has multimodal content, extract only text for OpenAI chat completion
-                const textParts = content.filter(part => part.type === 'text').map(part => part.text).join('\n');
-                if (textParts) {
-                    openaiMessages.push({ role: openaiRole, content: textParts });
+                // Process multimodal content
+                const processedContent = processClaudeContentToOpenAIContent(content);
+                if (processedContent && processedContent.length > 0) {
+                    openaiMessages.push({
+                        role: openaiRole,
+                        content: processedContent
+                    });
                 }
             }
         });
@@ -336,118 +472,397 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
     return openaiRequest;
 }
 
+/**
+ * Processes Claude content to OpenAI content format with multimodal support.
+ * @param {Array} content - Array of Claude content blocks.
+ * @returns {Array} OpenAI content format.
+ */
+function processClaudeContentToOpenAIContent(content) {
+    if (!content || !Array.isArray(content)) return [];
+    
+    const contentArray = [];
+    
+    content.forEach(block => {
+        if (!block) return;
+        
+        switch (block.type) {
+            case 'text':
+                if (block.text) {
+                    contentArray.push({
+                        type: 'text',
+                        text: block.text
+                    });
+                }
+                break;
+                
+            case 'image':
+                // Handle image blocks from Claude
+                if (block.source && block.source.type === 'base64') {
+                    contentArray.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:${block.source.media_type};base64,${block.source.data}`
+                        }
+                    });
+                }
+                break;
+                
+            case 'tool_use':
+                // Handle tool use as text
+                contentArray.push({
+                    type: 'text',
+                    text: `[Tool use: ${block.name}]`
+                });
+                break;
+                
+            case 'tool_result':
+                // Handle tool results as text
+                contentArray.push({
+                    type: 'text',
+                    text: typeof block.content === 'string' ? block.content : JSON.stringify(block.content)
+                });
+                break;
+                
+            default:
+                // Handle any other content types as text
+                if (block.text) {
+                    contentArray.push({
+                        type: 'text',
+                        text: block.text
+                    });
+                }
+        }
+    });
+    
+    return contentArray;
+}
+
 
 /**
  * Converts an OpenAI chat completion request body to a Gemini API request body.
- * Handles system instructions and merges consecutive messages of the same role.
+ * Handles system instructions and merges consecutive messages of the same role with multimodal support.
  * @param {Object} openaiRequest - The request body from the OpenAI API.
  * @returns {Object} The formatted request body for the Gemini API.
  */
 export function toGeminiRequestFromOpenAI(openaiRequest) {
-    const geminiRequest = {
-        contents: []
-    };
-
     const messages = openaiRequest.messages || [];
-
-    // 1. Extract and process system messages
     const { systemInstruction, nonSystemMessages } = extractAndProcessSystemMessages(messages);
-    if (systemInstruction) {
-        geminiRequest.systemInstruction = systemInstruction;
-    }
-
-    // 2. Process non-system messages, merging consecutive messages of the same role.
-    if (nonSystemMessages.length > 0) {
-        const mergedContents = nonSystemMessages.reduce((acc, message) => {
-            // Map OpenAI 'assistant' role to Gemini 'model' role
-            const geminiRole = message.role === 'assistant' ? 'model' : message.role;
-
-            // Ignore roles that are not 'user' or 'model' (e.g., 'tool' messages)
-            if (geminiRole !== 'user' && geminiRole !== 'model') {
-                return acc;
-            }
-
-            const messageText = extractTextFromMessageContent(message.content);
-
-            if (acc.length > 0 && acc[acc.length - 1].role === geminiRole) {
-                // If the last content block has the same role, append to its text
-                acc[acc.length - 1].parts[0].text += '\n' + messageText;
-            } else {
-                // Otherwise, start a new content block for the new role
-                acc.push({
-                    role: geminiRole,
-                    parts: [{ text: messageText }]
-                });
-            }
-            return acc;
-        }, []);
-        geminiRequest.contents = mergedContents;
-    }
-
-    // 3. Basic validation and logging (the Gemini API will perform final validation)
-    // Log warnings if the conversation does not start or end with a 'user' role,
-    // as this is often required by Gemini for multi-turn conversations.
-    if (geminiRequest.contents.length > 0) {
-        if (geminiRequest.contents[0].role !== 'user') {
-            console.warn("[Request Conversion] Warning: Conversation doesn't start with a 'user' role. The API may reject this request.");
+    
+    // Process messages with role conversion and multimodal support
+    const processedMessages = [];
+    let lastMessage = null;
+    
+    for (const message of nonSystemMessages) {
+        const geminiRole = message.role === 'assistant' ? 'model' : message.role;
+        
+        // Handle tool responses
+        if (geminiRole === 'tool') {
+            if (lastMessage) processedMessages.push(lastMessage);
+            processedMessages.push({
+                role: 'function',
+                parts: [{
+                    functionResponse: {
+                        name: message.name,
+                        response: { content: safeParseJSON(message.content) }
+                    }
+                }]
+            });
+            lastMessage = null;
+            continue;
         }
-        if (geminiRequest.contents[geminiRequest.contents.length - 1].role !== 'user') {
-            console.warn("[Request Conversion] Warning: The last message in the conversation is not from the 'user'. The API may reject this request.");
+        
+        // Process multimodal content
+        const processedContent = processOpenAIContentToGeminiParts(message.content);
+        
+        // Merge consecutive text messages
+        if (lastMessage && lastMessage.role === geminiRole && !message.tool_calls &&
+            Array.isArray(processedContent) && processedContent.every(p => p.text) &&
+            Array.isArray(lastMessage.parts) && lastMessage.parts.every(p => p.text)) {
+            lastMessage.parts.push(...processedContent);
+            continue;
         }
+        
+        if (lastMessage) processedMessages.push(lastMessage);
+        lastMessage = { role: geminiRole, parts: processedContent };
     }
-
+    if (lastMessage) processedMessages.push(lastMessage);
+    
+    // Build Gemini request
+    const geminiRequest = {
+        contents: processedMessages.filter(item => item.parts && item.parts.length > 0)
+    };
+    
+    if (systemInstruction) geminiRequest.systemInstruction = systemInstruction;
+    
+    // Handle tools and tool_choice
+    if (openaiRequest.tools?.length) {
+        geminiRequest.tools = [{
+            functionDeclarations: openaiRequest.tools.map(t => ({
+                name: t.function.name,
+                description: t.function.description,
+                parameters: t.function.parameters
+            }))
+        }];
+    }
+    
+    if (openaiRequest.tool_choice) {
+        geminiRequest.toolConfig = buildToolConfig(openaiRequest.tool_choice);
+    }
+    
+    // Add generation config
+    const config = buildGenerationConfig(openaiRequest);
+    if (Object.keys(config).length) geminiRequest.generationConfig = config;
+    
+    // Validation
+    if (geminiRequest.contents[0]?.role !== 'user') {
+        console.warn(`[Request Conversion] Warning: Conversation does not start with a 'user' role.`);
+    }
+    
     return geminiRequest;
+}
+
+/**
+ * Processes OpenAI content to Gemini parts format with multimodal support.
+ * @param {string|Array} content - OpenAI message content.
+ * @returns {Array} Array of Gemini parts.
+ */
+function processOpenAIContentToGeminiParts(content) {
+    if (!content) return [];
+    
+    // Handle string content
+    if (typeof content === 'string') {
+        return [{ text: content }];
+    }
+    
+    // Handle array content (multimodal)
+    if (Array.isArray(content)) {
+        const parts = [];
+        
+        content.forEach(item => {
+            if (!item) return;
+            
+            switch (item.type) {
+                case 'text':
+                    if (item.text) {
+                        parts.push({ text: item.text });
+                    }
+                    break;
+                    
+                case 'image_url':
+                    if (item.image_url) {
+                        const imageUrl = typeof item.image_url === 'string'
+                            ? item.image_url
+                            : item.image_url.url;
+                            
+                        if (imageUrl.startsWith('data:')) {
+                            // Handle base64 data URL
+                            const [header, data] = imageUrl.split(',');
+                            const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+                            parts.push({
+                                inlineData: {
+                                    mimeType,
+                                    data
+                                }
+                            });
+                        } else {
+                            // Handle regular URL
+                            parts.push({
+                                fileData: {
+                                    mimeType: 'image/jpeg', // Default MIME type
+                                    fileUri: imageUrl
+                                }
+                            });
+                        }
+                    }
+                    break;
+                    
+                case 'audio':
+                    // Handle audio content
+                    if (item.audio_url) {
+                        const audioUrl = typeof item.audio_url === 'string'
+                            ? item.audio_url
+                            : item.audio_url.url;
+                            
+                        if (audioUrl.startsWith('data:')) {
+                            const [header, data] = audioUrl.split(',');
+                            const mimeType = header.match(/data:([^;]+)/)?.[1] || 'audio/wav';
+                            parts.push({
+                                inlineData: {
+                                    mimeType,
+                                    data
+                                }
+                            });
+                        } else {
+                            parts.push({
+                                fileData: {
+                                    mimeType: 'audio/wav', // Default MIME type
+                                    fileUri: audioUrl
+                                }
+                            });
+                        }
+                    }
+                    break;
+            }
+        });
+        
+        return parts;
+    }
+    
+    return [];
+}
+
+function safeParseJSON(str) {
+    try {
+        return JSON.parse(str || '{}');
+    } catch {
+        return str;
+    }
+}
+
+function buildToolConfig(toolChoice) {
+    if (typeof toolChoice === 'string' && ['none', 'auto'].includes(toolChoice)) {
+        return { functionCallingConfig: { mode: toolChoice.toUpperCase() } };
+    }
+    if (typeof toolChoice === 'object' && toolChoice.function) {
+        return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [toolChoice.function.name] } };
+    }
+    return null;
+}
+
+function buildGenerationConfig({ temperature, max_tokens, top_p, stop }) {
+    const config = {};
+    if (temperature !== undefined) config.temperature = temperature;
+    if (max_tokens !== undefined) config.maxOutputTokens = max_tokens;
+    if (top_p !== undefined) config.topP = top_p;
+    if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
+    return config;
 }
 
 
 /**
  * Converts an OpenAI chat completion request body to a Claude API request body.
- * Handles system instructions and merges consecutive messages of the same role.
+ * Handles system instructions, tool calls, and multimodal content.
  * @param {Object} openaiRequest - The request body from the OpenAI API.
  * @returns {Object} The formatted request body for the Claude API.
  */
 export function toClaudeRequestFromOpenAI(openaiRequest) {
-    const claudeMessages = [];
-    let systemMessage = '';
-
     const messages = openaiRequest.messages || [];
-
-    // Extract and process system messages
     const { systemInstruction, nonSystemMessages } = extractAndProcessSystemMessages(messages);
-    if (systemInstruction) {
-        systemMessage = extractTextFromMessageContent(systemInstruction.parts[0].text);
-    }
 
-    // Process non-system messages
-    if (nonSystemMessages.length > 0) {
-        // Claude does not support consecutive messages from the same role.
-        // If there are consecutive messages of the same role, they should be merged.
-        // However, standard OpenAI chat completion messages usually alternate user/assistant.
-        // We'll process them directly, assuming valid alternation or that Claude API will handle.
-        nonSystemMessages.forEach(message => {
-            const role = message.role === 'assistant' ? 'assistant' : 'user';
-            const content = extractTextFromMessageContent(message.content);
-            claudeMessages.push({
-                role: role,
-                content: [{ type: 'text', text: content }]
+    const claudeMessages = [];
+
+    for (const message of nonSystemMessages) {
+        const role = message.role === 'assistant' ? 'assistant' : 'user';
+        let content = [];
+
+        if (message.role === 'tool') {
+            // Claude expects tool_result to be in a 'user' message
+            // The content of a tool message is a single tool_result block
+            content.push({
+                type: 'tool_result',
+                tool_use_id: message.tool_call_id, // Use tool_call_id from OpenAI tool message
+                content: safeParseJSON(message.content) // Parse content as JSON if possible
             });
-        });
+            claudeMessages.push({ role: 'user', content: content });
+        } else if (message.role === 'assistant' && message.tool_calls?.length) {
+            // Assistant message with tool calls - properly format as tool_use blocks
+            // Claude expects tool_use to be in an 'assistant' message
+            const toolUseBlocks = message.tool_calls.map(tc => ({
+                type: 'tool_use',
+                id: tc.id,
+                name: tc.function.name,
+                input: safeParseJSON(tc.function.arguments)
+            }));
+            claudeMessages.push({ role: 'assistant', content: toolUseBlocks });
+        } else {
+            // Regular user or assistant message (text and multimodal)
+            if (typeof message.content === 'string') {
+                if (message.content) {
+                    content.push({ type: 'text', text: message.content });
+                }
+            } else if (Array.isArray(message.content)) {
+                message.content.forEach(item => {
+                    if (!item) return;
+                    switch (item.type) {
+                        case 'text':
+                            if (item.text) {
+                                content.push({ type: 'text', text: item.text });
+                            }
+                            break;
+                        case 'image_url':
+                            if (item.image_url) {
+                                const imageUrl = typeof item.image_url === 'string'
+                                    ? item.image_url
+                                    : item.image_url.url;
+                                if (imageUrl.startsWith('data:')) {
+                                    const [header, data] = imageUrl.split(',');
+                                    const mediaType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+                                    content.push({
+                                        type: 'image',
+                                        source: {
+                                            type: 'base64',
+                                            media_type: mediaType,
+                                            data: data
+                                        }
+                                    });
+                                } else {
+                                    // Claude requires base64 for images, so for URLs, we'll represent as text
+                                    content.push({ type: 'text', text: `[Image: ${imageUrl}]` });
+                                }
+                            }
+                            break;
+                        case 'audio':
+                            // Handle audio content as text placeholder
+                            if (item.audio_url) {
+                                const audioUrl = typeof item.audio_url === 'string'
+                                    ? item.audio_url
+                                    : item.audio_url.url;
+                                content.push({ type: 'text', text: `[Audio: ${audioUrl}]` });
+                            }
+                            break;
+                    }
+                });
+            }
+            // Only add message if content is not empty
+            if (content.length > 0) {
+                claudeMessages.push({ role: role, content: content });
+            }
+        }
     }
 
     const claudeRequest = {
-        model: openaiRequest.model || 'claude-3-opus-20240229', // Default Claude model
+        model: openaiRequest.model || 'claude-3-opus-20240229',
         messages: claudeMessages,
-        max_tokens: openaiRequest.max_tokens || 1024, // Default to 1024 if not specified
+        max_tokens: openaiRequest.max_tokens || 1024,
         temperature: openaiRequest.temperature || 0.7,
         top_p: openaiRequest.top_p || 0.9,
-        // stream: openaiRequest.stream, // Stream mode is handled by different endpoint
     };
 
-    if (systemMessage) {
-        claudeRequest.system = systemMessage;
+    if (systemInstruction) {
+        claudeRequest.system = extractTextFromMessageContent(systemInstruction.parts[0].text);
+    }
+
+    if (openaiRequest.tools?.length) {
+        claudeRequest.tools = openaiRequest.tools.map(t => ({
+            name: t.function.name,
+            description: t.function.description || '',
+            input_schema: t.function.parameters || { type: 'object', properties: {} }
+        }));
+        claudeRequest.tool_choice = buildClaudeToolChoice(openaiRequest.tool_choice);
     }
 
     return claudeRequest;
+}
+
+function buildClaudeToolChoice(toolChoice) {
+    if (typeof toolChoice === 'string') {
+        const mapping = { auto: 'auto', none: 'none', required: 'any' };
+        return { type: mapping[toolChoice] };
+    }
+    if (typeof toolChoice === 'object' && toolChoice.function) {
+        return { type: 'tool', name: toolChoice.function.name };
+    }
+    return undefined;
 }
 
 
@@ -497,4 +912,49 @@ export function extractTextFromMessageContent(content) {
             .join('\n');
     }
     return '';
+}
+
+/**
+ * Utility function to detect MIME type from base64 data URL
+ * @param {string} dataUrl - Data URL string
+ * @returns {string} MIME type
+ */
+function detectMimeType(dataUrl) {
+    const match = dataUrl.match(/^data:([^;]+);base64,/);
+    return match ? match[1] : 'application/octet-stream';
+}
+
+/**
+ * Utility function to extract base64 data from data URL
+ * @param {string} dataUrl - Data URL string
+ * @returns {string} Base64 data
+ */
+function extractBase64Data(dataUrl) {
+    return dataUrl.replace(/^data:[^;]+;base64,/, '');
+}
+
+/**
+ * Utility function to validate image MIME types
+ * @param {string} mimeType - MIME type to validate
+ * @returns {boolean} Whether it's a valid image type
+ */
+function isValidImageType(mimeType) {
+    const validTypes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+        'image/webp', 'image/bmp', 'image/tiff'
+    ];
+    return validTypes.includes(mimeType.toLowerCase());
+}
+
+/**
+ * Utility function to validate audio MIME types
+ * @param {string} mimeType - MIME type to validate
+ * @returns {boolean} Whether it's a valid audio type
+ */
+function isValidAudioType(mimeType) {
+    const validTypes = [
+        'audio/wav', 'audio/wave', 'audio/mp3', 'audio/mpeg',
+        'audio/ogg', 'audio/aac', 'audio/flac', 'audio/m4a'
+    ];
+    return validTypes.includes(mimeType.toLowerCase());
 }

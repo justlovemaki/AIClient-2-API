@@ -76,10 +76,14 @@ class OpenAIStrategy extends ProviderStrategy {
     }
 
     async manageSystemPrompt(requestBody) {
+        //console.log('[System Prompt] Managing system prompt for provider "openai".', requestBody);
         let incomingSystemText = '';
         const systemMessage = requestBody.messages?.find(m => m.role === 'system');
         if (systemMessage?.content) {
             incomingSystemText = systemMessage.content;
+        }
+        if (!incomingSystemText) {
+            incomingSystemText = requestBody.messages.filter(m => m.role === 'user')[0].content;
         }
         await this._updateSystemPromptFile(incomingSystemText, 'openai');
     }

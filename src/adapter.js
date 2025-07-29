@@ -1,7 +1,7 @@
 import { GeminiApiService } from './gemini/gemini-core.js'; // 导入geminiApiService
 import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiService
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
-import { KiroApiService } from './openai/openai-kiro.js'; // 导入KiroApiService
+import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
