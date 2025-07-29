@@ -133,7 +133,7 @@ The following are all the supported parameters in the `config.json` file and the
 | `REQUIRED_API_KEY` | string | The key used to protect your API service. Clients must provide this key when making requests. | Any string, defaults to `"123456"` |
 | `SERVER_PORT` | number | The port number the server listens on. | Any valid port number, defaults to `3000` |
 | `HOST` | string | The host address the server listens on. `localhost` only allows local access, `0.0.0.0` allows LAN or public network access. | Defaults to `"localhost"` |
-| `MODEL_PROVIDER` | string | Specifies the backend model service provider to use. This is a core configuration that determines which platform API requests will be forwarded to. | Optional values: `"gemini-cli-oauth"`, `"openai-custom"`, `"claude-custom"`, `"openai-kiro-oauth"` |
+| `MODEL_PROVIDER` | string | Specifies the backend model service provider to use. This is a core configuration that determines which platform API requests will be forwarded to. | Optional values: `"gemini-cli-oauth"`, `"openai-custom"`, `"claude-custom"`, `"claude-kiro-oauth"` |
 | `OPENAI_API_KEY` | string | When `MODEL_PROVIDER` is `openai-custom`, you need to provide your OpenAI API key. | `null` |
 | `OPENAI_BASE_URL` | string | When `MODEL_PROVIDER` is `openai-custom`, you can specify an OpenAI-compatible API address. | Defaults to `"https://api.openai.com/v1"` |
 | `CLAUDE_API_KEY` | string | When `MODEL_PROVIDER` is `claude-custom`, you need to provide your Claude API key. | `null` |
