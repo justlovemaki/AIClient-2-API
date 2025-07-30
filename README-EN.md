@@ -54,19 +54,36 @@ Leaving behind the simple structure of the past, we have introduced a more profe
     *   Stores shared constants, utility functions, and common handlers for the project, making the code cleaner and more efficient.
 
 *   **`src/gemini/`, `src/openai/`, `src/claude/`**: 📦 **Provider Implementation Directories**
-    *   Each directory contains the core logic, API calls, and strategy implementations for the corresponding service provider, with a clear structure that makes it easy for you to add more new service providers in the future. Among them, `src/openai/openai-kiro.js` provides a special implementation for the Kiro API.
+    *   Each directory contains the core logic, API calls, and strategy implementations for the corresponding service provider, with a clear structure that makes it easy for you to add more new service providers in the future. Among them, `src/claude/claude-kiro.js` provides a special implementation for the Kiro API.
 
 *   **`tests/`**: 🧪 **Test Directory**
     *   Contains a complete integration test suite covering all API endpoints, authentication methods, and error handling scenarios to ensure project stability and reliability.
 
----
+### 🏗️ Architecture Design Patterns
+
+The project adopts multiple modern design patterns to ensure code maintainability and extensibility:
+
+*   **Adapter Pattern**: `src/adapter.js` provides a unified interface for different AI services
+*   **Strategy Pattern**: `src/provider-strategies.js` handles request/response conversion for different protocols
+*   **Factory Pattern**: Dynamically creates and manages service adapter instances
+*   **Singleton Pattern**: Caching and reusing service adapter instances
+
+### 🔄 Data Flow Processing
+
+1. **Request Reception**: HTTP server receives client requests
+2. **Authentication Verification**: Unified verification of multiple authentication methods
+3. **Protocol Recognition**: Identifies client protocol based on endpoint and request headers
+4. **Format Conversion**: Converts requests to target provider format
+5. **Service Call**: Calls specific AI service through adapter
+6. **Response Conversion**: Converts service response back to client expected format
+7. **Streaming Processing**: Supports real-time streaming response transmission
 
 ### 🔧 Usage Instructions
 
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are not available, this project perfectly supports MCP (Model Context Protocol) and can work with MCP-compatible clients for more powerful functionality extensions.
 *   **Multimodal Capabilities**: Supports multimodal inputs such as images and documents, providing you with a richer interactive experience.
 *   **Latest Model Support**: Supports the latest **Kimi K2** and **GLM-4.5** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` to use them.
-*   **Kiro API**: Using Kiro API requires [Download Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate kiro-auth-token.json. **Recommended for use with Claude Code for the best experience**. .
+*   **Kiro API**: Using Kiro API requires [Download Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate kiro-auth-token.json. **Recommended for use with Claude Code for the best experience**.
 
 ---
 
@@ -81,8 +98,18 @@ Leaving behind the simple structure of the past, we have introduced a more profe
 
 #### OpenAI Compatible Interface (`/v1/...`)
 *   🌍 **Perfect Compatibility**: Implements the core `/v1/models` and `/v1/chat/completions` endpoints.
-*   🔄 **Automatic Format Conversion**: Internally and seamlessly converts requests/responses between different model formats and the OpenAI format.
+*   🔄 **Automatic Format Conversion**: Internally and seamlessly converts requests/responses between different model formats and the OpenAI format, supporting multimodal content.
 *   💨 **Streaming Support**: Fully supports OpenAI's streaming responses (`"stream": true`), providing a typewriter-like real-time experience.
+
+#### Gemini Native Interface (`/v1beta/...`)
+*   🎯 **Native Support**: Complete support for Gemini API's native format and features.
+*   🔧 **Advanced Features**: Supports system instructions, tool calls, multimodal input and other advanced features.
+*   📊 **Detailed Statistics**: Provides complete token usage statistics and model information.
+
+#### Claude Native Interface (`/v1/messages`)
+*   🤖 **Claude Dedicated**: Complete support for Claude Messages API format.
+*   🛠️ **Tool Integration**: Supports Claude's tool usage and function calling features.
+*   🎨 **Multimodal**: Supports images, audio and other input formats.
 
 ---
 
@@ -205,6 +232,40 @@ All requests use the standard OpenAI format.
           {"role": "user", "content": "Hello, what is your name?"}
         ]
       }'
+    ```
+
+*   **Multimodal Content Generation**
+    ```bash
+    curl http://localhost:3000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {"type": "text", "text": "Describe this image"},
+              {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+            ]
+          }
+        ]
+      }'
+    ```
+
+*   **Using Different Providers (via Path)**
+    ```bash
+    # Using Gemini
+    curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Hello"}]}'
+    
+    # Using Claude
+    curl http://localhost:3000/claude-custom/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{"model": "claude-3-opus-20240229", "messages": [{"role": "user", "content": "Hello"}]}'
     ```
 *   **Stream Generate Content**
     ```bash

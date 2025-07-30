@@ -475,3 +475,66 @@ export function handleError(res, error) {
     };
     res.end(JSON.stringify(errorPayload));
 }
+
+/**
+ * 从请求体中提取系统提示词。
+ * @param {Object} requestBody - 请求体对象。
+ * @param {string} provider - 提供商类型（'openai', 'gemini', 'claude'）。
+ * @returns {string} 提取到的系统提示词字符串。
+ */
+export function extractSystemPromptFromRequestBody(requestBody, provider) {
+    let incomingSystemText = '';
+    switch (provider) {
+        case MODEL_PROTOCOL_PREFIX.OPENAI:
+            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system');
+            if (openaiSystemMessage?.content) {
+                incomingSystemText = openaiSystemMessage.content;
+            } else if (requestBody.messages?.length > 0) {
+                // Fallback to first user message if no system message
+                const userMessage = requestBody.messages.find(m => m.role === 'user');
+                if (userMessage) {
+                    incomingSystemText = userMessage.content;
+                }
+            }
+            break;
+        case MODEL_PROTOCOL_PREFIX.GEMINI:
+            const geminiSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
+            if (geminiSystemInstruction?.parts) {
+                incomingSystemText = geminiSystemInstruction.parts
+                    .filter(p => p?.text)
+                    .map(p => p.text)
+                    .join('\n');
+            } else if (requestBody.contents?.length > 0) {
+                // Fallback to first user content if no system instruction
+                const userContent = requestBody.contents[0];
+                if (userContent?.parts) {
+                    incomingSystemText = userContent.parts
+                        .filter(p => p?.text)
+                        .map(p => p.text)
+                        .join('\n');
+                }
+            }
+            break;
+        case MODEL_PROTOCOL_PREFIX.CLAUDE:
+            if (typeof requestBody.system === 'string') {
+                incomingSystemText = requestBody.system;
+            } else if (typeof requestBody.system === 'object') {
+                incomingSystemText = JSON.stringify(requestBody.system);
+            } else if (requestBody.messages?.length > 0) {
+                // Fallback to first user message if no system property
+                const userMessage = requestBody.messages.find(m => m.role === 'user');
+                if (userMessage) {
+                    if (Array.isArray(userMessage.content)) {
+                        incomingSystemText = userMessage.content.map(block => block.text).join('');
+                    } else {
+                        incomingSystemText = userMessage.content;
+                    }
+                }
+            }
+            break;
+        default:
+            console.warn(`[System Prompt] Unknown provider: ${provider}`);
+            break;
+    }
+    return incomingSystemText;
+}

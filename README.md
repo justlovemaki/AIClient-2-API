@@ -54,10 +54,29 @@
     *   存放着项目共享的常量、工具函数和通用处理器，让代码更加整洁和高效。
 
 *   **`src/gemini/`, `src/openai/`, `src/claude/`**: 📦 **提供商实现目录**
-    *   每个目录都包含了对应服务商的核心逻辑、API 调用和策略实现，结构清晰，便于您未来添加更多新的服务商。其中 `src/openai/openai-kiro.js` 提供了 Kiro API 的特殊实现。
+    *   每个目录都包含了对应服务商的核心逻辑、API 调用和策略实现，结构清晰，便于您未来添加更多新的服务商。其中 `src/claude/claude-kiro.js` 提供了 Kiro API 的特殊实现。
 
 *   **`tests/`**: 🧪 **测试目录**
-    *   包含完整的集成测试套件，覆盖所有API端点、认证方式和错误处理场景，确保项目的稳定性和可靠性。
+    *   包含完整的集成测试套件，覆盖所有API端点、认证方式和错误处理场景，确保项目的稳定性和可靠性。支持针对不同提供商的独立测试和完整的HTTP集成测试。
+
+### 🏗️ 架构设计模式
+
+项目采用多种现代设计模式，确保代码的可维护性和扩展性：
+
+*   **适配器模式 (Adapter Pattern)**: `src/adapter.js` 为不同的 AI 服务提供统一接口
+*   **策略模式 (Strategy Pattern)**: `src/provider-strategies.js` 处理不同协议的请求/响应转换
+*   **工厂模式 (Factory Pattern)**: 动态创建和管理服务适配器实例
+*   **单例模式 (Singleton Pattern)**: 服务适配器实例的缓存和复用
+
+### 🔄 数据流处理
+
+1. **请求接收**: HTTP 服务器接收客户端请求
+2. **认证验证**: 多种认证方式的统一验证
+3. **协议识别**: 根据端点和请求头识别客户端协议
+4. **格式转换**: 将请求转换为目标提供商格式
+5. **服务调用**: 通过适配器调用具体的 AI 服务
+6. **响应转换**: 将服务响应转换回客户端期望格式
+7. **流式处理**: 支持实时流式响应传输
 
 ---
 
@@ -81,8 +100,18 @@
 
 #### OpenAI 兼容接口 (`/v1/...`)
 *   🌍 **完美兼容**: 实现了 `/v1/models` 和 `/v1/chat/completions` 核心端点。
-*   🔄 **自动格式转换**: 在内部自动将不同模型的请求/响应与 OpenAI 格式进行无缝转换。
+*   🔄 **自动格式转换**: 在内部自动将不同模型的请求/响应与 OpenAI 格式进行无缝转换，支持多模态内容。
 *   💨 **流式传输支持**: 完全支持 OpenAI 的流式响应 (`"stream": true`)，提供打字机般的实时体验。
+
+#### Gemini 原生接口 (`/v1beta/...`)
+*   🎯 **原生支持**: 完整支持 Gemini API 的原生格式和功能。
+*   🔧 **高级功能**: 支持系统指令、工具调用、多模态输入等高级特性。
+*   📊 **详细统计**: 提供完整的 token 使用统计和模型信息。
+
+#### Claude 原生接口 (`/v1/messages`)
+*   🤖 **Claude 专用**: 完整支持 Claude Messages API 格式。
+*   🛠️ **工具集成**: 支持 Claude 的工具使用和函数调用功能。
+*   🎨 **多模态**: 支持图片、音频等多种输入格式。
 
 ---
 
@@ -205,6 +234,40 @@
           {"role": "user", "content": "你好，你叫什么名字？"}
         ]
       }'
+    ```
+
+*   **多模态内容生成**
+    ```bash
+    curl http://localhost:3000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {"type": "text", "text": "描述这张图片"},
+              {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+            ]
+          }
+        ]
+      }'
+    ```
+
+*   **使用不同提供商 (通过路径)**
+    ```bash
+    # 使用 Gemini
+    curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Hello"}]}'
+    
+    # 使用 Claude
+    curl http://localhost:3000/claude-custom/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer 123456" \
+      -d '{"model": "claude-3-opus-20240229", "messages": [{"role": "user", "content": "Hello"}]}'
     ```
 *   **流式生成内容**
     ```bash

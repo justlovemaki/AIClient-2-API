@@ -462,7 +462,7 @@ async initializeAuth(forceRefresh = false) {
                 .map(part => part.text)
                 .join('');
         } 
-        return String(message.content || '');
+        return String(message.content || message);
     }
 
     /**

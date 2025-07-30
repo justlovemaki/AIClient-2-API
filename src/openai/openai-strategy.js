@@ -1,4 +1,5 @@
 import { ProviderStrategy } from '../provider-strategy.js';
+import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../common.js';
 
 /**
  * OpenAI provider strategy implementation.
@@ -51,11 +52,7 @@ class OpenAIStrategy extends ProviderStrategy {
             return requestBody;
         }
 
-        let existingSystemText = '';
-        const systemMessage = requestBody.messages?.find(m => m.role === 'system');
-        if (systemMessage) {
-            existingSystemText = systemMessage.content || '';
-        }
+        const existingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.OPENAI);
 
         const newSystemText = config.SYSTEM_PROMPT_MODE === 'append' && existingSystemText
             ? `${existingSystemText}\n${filePromptContent}`
@@ -77,15 +74,8 @@ class OpenAIStrategy extends ProviderStrategy {
 
     async manageSystemPrompt(requestBody) {
         //console.log('[System Prompt] Managing system prompt for provider "openai".', requestBody);
-        let incomingSystemText = '';
-        const systemMessage = requestBody.messages?.find(m => m.role === 'system');
-        if (systemMessage?.content) {
-            incomingSystemText = systemMessage.content;
-        }
-        if (!incomingSystemText) {
-            incomingSystemText = requestBody.messages.filter(m => m.role === 'user')[0].content;
-        }
-        await this._updateSystemPromptFile(incomingSystemText, 'openai');
+        const incomingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.OPENAI);
+        await this._updateSystemPromptFile(incomingSystemText, MODEL_PROTOCOL_PREFIX.OPENAI);
     }
 }
 

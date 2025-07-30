@@ -348,14 +348,9 @@ async function getSystemPromptFileContent(filePath) {
 
 async function initApiService(config) { // Make getApiService exportable and accept config
     // Initialize all known service adapters at startup
-    const providers = [
-        MODEL_PROVIDER.OPENAI_CUSTOM,
-        MODEL_PROVIDER.GEMINI_CLI,
-        MODEL_PROVIDER.CLAUDE_CUSTOM,
-        MODEL_PROVIDER.KIRO_API
-    ];
-    for (const provider of providers) {
+    for (const provider of Object.values(MODEL_PROVIDER)) {
         try {
+            console.log(`[Initialization] Initializing service adapter for ${provider}...`);
             getServiceAdapter({ ...config, MODEL_PROVIDER: provider });
         } catch (error) {
             console.warn(`[Initialization Warning] Failed to initialize service adapter for ${provider}: ${error.message}`);
@@ -392,11 +387,29 @@ function createRequestHandler(config) {
             delete req.headers['model-provider'];
         }
 
-        const apiService = await getApiService(currentConfig);
         const requestUrl = new URL(req.url, `http://${req.headers.host}`);
-        const path = requestUrl.pathname;
-        const method = req.method;
+        let path = requestUrl.pathname;
+        // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
+        const pathSegments = path.split('/').filter(segment => segment.length > 0);
+        if (pathSegments.length > 0) {
+            const firstSegment = pathSegments[0];
+            // Check if firstSegment is a valid MODEL_PROVIDER value
+            const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
+            if (firstSegment && isValidProvider) {
+                currentConfig.MODEL_PROVIDER = firstSegment;
+                console.log(`[Config] MODEL_PROVIDER overridden by path segment to: ${currentConfig.MODEL_PROVIDER}`);
+                // Remove the first segment from the path to maintain routing consistency
+                pathSegments.shift();
+                path = '/' + pathSegments.join('/');
+                // Update the requestUrl pathname as well
+                requestUrl.pathname = path;
+            } else if (firstSegment && !isValidProvider) {
+                console.log(`[Config] Ignoring invalid MODEL_PROVIDER in path segment: ${firstSegment}`);
+            }
+        }
 
+        const apiService = await getApiService(currentConfig);
+        const method = req.method;
         if (method === 'OPTIONS') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             console.log("OPTIONS REQUEST SUCCESS");

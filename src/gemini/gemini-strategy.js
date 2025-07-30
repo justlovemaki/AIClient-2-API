@@ -1,4 +1,4 @@
-import { API_ACTIONS } from '../common.js';
+import { API_ACTIONS, extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../common.js';
 import { ProviderStrategy } from '../provider-strategy.js';
 
 /**
@@ -46,14 +46,7 @@ class GeminiStrategy extends ProviderStrategy {
             return requestBody;
         }
 
-        let existingSystemText = '';
-        const currentSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
-        if (currentSystemInstruction?.parts) {
-            existingSystemText = currentSystemInstruction.parts
-                .filter(p => p?.text)
-                .map(p => p.text)
-                .join('\n');
-        }
+        const existingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.GEMINI);
 
         const newSystemText = config.SYSTEM_PROMPT_MODE === 'append' && existingSystemText
             ? `${existingSystemText}\n${filePromptContent}`
@@ -69,15 +62,8 @@ class GeminiStrategy extends ProviderStrategy {
     }
 
     async manageSystemPrompt(requestBody) {
-        let incomingSystemText = '';
-        const geminiSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
-        if (geminiSystemInstruction?.parts) {
-            incomingSystemText = geminiSystemInstruction.parts
-                .filter(p => p?.text)
-                .map(p => p.text)
-                .join('\n');
-        }
-        await this._updateSystemPromptFile(incomingSystemText, 'gemini');
+        const incomingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.GEMINI);
+        await this._updateSystemPromptFile(incomingSystemText, MODEL_PROTOCOL_PREFIX.GEMINI);
     }
 }
 
