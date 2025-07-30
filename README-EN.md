@@ -1,6 +1,6 @@
 <div align="center">
 
-# Gemini-CLI-2-API 🚀
+# AIClient-2-API 🚀
 
 **A powerful proxy that unifies multiple large model APIs (Gemini, OpenAI, Claude...) into a local OpenAI-compatible interface.**
 

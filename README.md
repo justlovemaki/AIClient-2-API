@@ -1,6 +1,6 @@
 <div align="center">
 
-# Gemini-CLI-2-API 🚀
+# AIClient-2-API 🚀
 
 **一个能将多种大模型 API（Gemini, OpenAI, Claude...）统一封装为本地 OpenAI 兼容接口的强大代理。**
 
