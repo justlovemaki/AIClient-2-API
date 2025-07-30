@@ -36,7 +36,6 @@ class GeminiStrategy extends ProviderStrategy {
     }
 
     async applySystemPromptFromFile(config, requestBody) {
-        console.log(`[System Prompt] Applying system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'gemini'.`);
         if (!config.SYSTEM_PROMPT_FILE_PATH) {
             return requestBody;
         }

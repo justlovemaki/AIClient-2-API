@@ -207,6 +207,12 @@
 
 ---
 
+## 🐳 Docker 部署
+
+项目支持通过 Docker 进行部署，详细指南请参阅 [Docker部署指南](./README.Docker.md)。
+
+---
+
 ### 4. 调用 API
 
 > **提示**: 如果您在无法直接访问 Google/OpenAI/Claude/Kiro 服务的环境中使用，请先为您的终端设置全局 HTTP/HTTPS 代理。
