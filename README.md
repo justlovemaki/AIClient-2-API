@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/justlovemaki-aiclient-2-api-badge.png)](https://mseep.ai/app/justlovemaki-aiclient-2-api)
+
 <div align="center">
 
 # AIClient-2-API 🚀
