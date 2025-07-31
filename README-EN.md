@@ -78,6 +78,55 @@ The project adopts multiple modern design patterns to ensure code maintainabilit
 6. **Response Conversion**: Converts service response back to client expected format
 7. **Streaming Processing**: Supports real-time streaming response transmission
 
+### 🎨 Model Protocol and Provider Relationship Diagram
+
+
+- OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDER, including openai-custom, gemini-cli-oauth, claude-custom and
+claude-kiro-oauth.
+- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth and gemini-cli-oauth.
+- Gemini Protocol (P_GEMINI): Supports gemini-cli-oauth.
+
+
+  ```mermaid
+  graph TD
+      subgraph Core_Protocols
+          P_OPENAI(OpenAI Protocol)
+          P_GEMINI(Gemini Protocol)
+          P_CLAUDE(Claude Protocol)
+      end
+
+      subgraph Supported_Model_Providers
+          MP_OPENAI[openai-custom]
+          MP_GEMINI[gemini-cli-oauth]
+          MP_CLAUDE_C[claude-custom]
+          MP_CLAUDE_K[claude-kiro-oauth]
+      end
+
+      subgraph Internal_Conversion_Logic
+          direction LR
+          P_OPENAI <-->|Request/Response Conversion| P_GEMINI
+          P_OPENAI <-->|Request/Response Conversion| P_CLAUDE
+          P_GEMINI <-->|Request/Response Conversion| P_CLAUDE
+      end
+
+      P_OPENAI ---|Supports| MP_OPENAI
+      P_OPENAI ---|Supports| MP_GEMINI
+      P_OPENAI ---|Supports| MP_CLAUDE_C
+      P_OPENAI ---|Supports| MP_CLAUDE_K
+
+      P_GEMINI ---|Supports| MP_GEMINI
+
+      P_CLAUDE ---|Supports| MP_CLAUDE_C
+      P_CLAUDE ---|Supports| MP_CLAUDE_K
+      P_CLAUDE ---|Supports| MP_GEMINI
+
+      style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+      style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+      style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
+  ```
+
+---
+
 ### 🔧 Usage Instructions
 
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are not available, this project perfectly supports MCP (Model Context Protocol) and can work with MCP-compatible clients for more powerful functionality extensions.
@@ -310,3 +359,7 @@ This project is licensed under the [**GNU General Public License v3 (GPLv3)**](h
 ## 🙏 Acknowledgements
 
 The development of this project was greatly inspired by the official Google Gemini CLI, and referenced some code implementations from Cline 3.18.0's `gemini-cli.ts`. I would like to express my sincere gratitude to the official Google team and the Cline development team for their excellent work!
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=justlovemaki/AIClient-2-API&type=Timeline)](https://www.star-history.com/#justlovemaki/AIClient-2-API&Timeline)

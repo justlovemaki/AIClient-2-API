@@ -24,6 +24,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
             },
             [MODEL_PROTOCOL_PREFIX.GEMINI]: { // to Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.OPENAI]: toGeminiRequestFromOpenAI, // from OpenAI protocol
+                [MODEL_PROTOCOL_PREFIX.CLAUDE]: toGeminiRequestFromClaude, // from Claude protocol
             },
         },
         response: {
@@ -31,11 +32,17 @@ export function convertData(data, type, fromProvider, toProvider, model) {
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toOpenAIChatCompletionFromGemini, // from Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.CLAUDE]: toOpenAIChatCompletionFromClaude, // from Claude protocol
             },
+            [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
+                [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeChatCompletionFromGemini, // from Gemini protocol
+            },
         },
         streamChunk: {
             [MODEL_PROTOCOL_PREFIX.OPENAI]: { // to OpenAI protocol
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toOpenAIStreamChunkFromGemini, // from Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.CLAUDE]: toOpenAIStreamChunkFromClaude, // from Claude protocol
+            },
+            [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
+                [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeStreamChunkFromGemini, // from Gemini protocol
             },
         },
         modelList: {
@@ -957,4 +964,472 @@ function isValidAudioType(mimeType) {
         'audio/ogg', 'audio/aac', 'audio/flac', 'audio/m4a'
     ];
     return validTypes.includes(mimeType.toLowerCase());
+}
+
+/**
+ * Converts a Claude API request body to a Gemini API request body.
+ * Handles system instructions and multimodal content.
+ * @param {Object} claudeRequest - The request body from the Claude API.
+ * @returns {Object} The formatted request body for the Gemini API.
+ */
+/**
+ * Converts a Claude API request body to a Gemini API request body.
+ * Handles system instructions and multimodal content.
+ * @param {Object} claudeRequest - The request body from the Claude API.
+ * @returns {Object} The formatted request body for the Gemini API.
+ */
+export function toGeminiRequestFromClaude(claudeRequest) {
+    // Ensure claudeRequest is a valid object
+    if (!claudeRequest || typeof claudeRequest !== 'object') {
+        console.warn("Invalid claudeRequest provided to toGeminiRequestFromClaude.");
+        return { contents: [] };
+    }
+
+    const geminiRequest = {
+        contents: []
+    };
+
+    // Handle system instruction
+    if (claudeRequest.system) {
+        let incomingSystemText = null;
+        if (typeof claudeRequest.system === 'string') {
+            incomingSystemText = claudeRequest.system;
+        } else if (typeof claudeRequest.system === 'object') {
+            incomingSystemText = JSON.stringify(claudeRequest.system);
+        } else if (claudeRequest.messages?.length > 0) {
+            // Fallback to first user message if no system property
+            const userMessage = claudeRequest.messages.find(m => m.role === 'user');
+            if (userMessage) {
+                if (Array.isArray(userMessage.content)) {
+                    incomingSystemText = userMessage.content.map(block => block.text).join('');
+                } else {
+                    incomingSystemText = userMessage.content;
+                }
+            }
+        }
+        geminiRequest.systemInstruction = {
+            parts: [{ text: incomingSystemText}] // Ensure system is string
+        };
+    }
+
+    // Process messages
+    if (Array.isArray(claudeRequest.messages)) {
+        claudeRequest.messages.forEach(message => {
+            // Ensure message is a valid object and has a role and content
+            if (!message || typeof message !== 'object' || !message.role || !message.content) {
+                console.warn("Skipping invalid message in claudeRequest.messages.");
+                return;
+            }
+
+            const geminiRole = message.role === 'assistant' ? 'model' : 'user';
+            const processedParts = processClaudeContentToGeminiParts(message.content);
+
+            // If the processed parts contain a function response, it should be a 'function' role message
+            // Claude's tool_result block does not contain the function name, only tool_use_id.
+            // We need to infer the function name from the previous tool_use message.
+            // For simplicity in this conversion, we'll assume the tool_use_id is the function name
+            // or that the tool_result is always preceded by a tool_use with the correct name.
+            // A more robust solution would involve tracking tool_use_ids to function names.
+            const functionResponsePart = processedParts.find(part => part.functionResponse);
+            if (functionResponsePart) {
+                geminiRequest.contents.push({
+                    role: 'function',
+                    parts: [functionResponsePart]
+                });
+            } else if (processedParts.length > 0) { // Only push if there are actual parts
+                geminiRequest.contents.push({
+                    role: geminiRole,
+                    parts: processedParts
+                });
+            }
+        });
+    }
+
+    // Add generation config
+    const generationConfig = {};
+    if (claudeRequest.max_tokens !== undefined) {
+        generationConfig.maxOutputTokens = Number(claudeRequest.max_tokens); // Ensure number type
+    }
+    if (claudeRequest.temperature !== undefined) {
+        generationConfig.temperature = Number(claudeRequest.temperature); // Ensure number type
+    }
+    if (claudeRequest.top_p !== undefined) {
+        generationConfig.topP = Number(claudeRequest.top_p); // Ensure number type
+    }
+    
+    if (Object.keys(generationConfig).length > 0) {
+        geminiRequest.generationConfig = generationConfig;
+    }
+
+    // Handle tools
+    if (Array.isArray(claudeRequest.tools)) {
+        geminiRequest.tools = [{
+            functionDeclarations: claudeRequest.tools.map(tool => {
+                // Ensure tool is a valid object and has a name
+                if (!tool || typeof tool !== 'object' || !tool.name) {
+                    console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
+                    return null; // Return null for invalid tools, filter out later
+                }
+
+                delete tool.input_schema.$schema;
+                return {
+                    name: String(tool.name), // Ensure name is string
+                    description: String(tool.description || ''), // Ensure description is string
+                    parameters: tool.input_schema && typeof tool.input_schema === 'object' ? tool.input_schema : { type: 'object', properties: {} }
+                };
+            }).filter(Boolean) // Filter out any nulls from invalid tool declarations
+        }];
+        // If no valid functionDeclarations, remove the tools array
+        if (geminiRequest.tools[0].functionDeclarations.length === 0) {
+            delete geminiRequest.tools;
+        }
+    }
+
+    // Handle tool_choice
+    if (claudeRequest.tool_choice) {
+        geminiRequest.toolConfig = buildGeminiToolConfigFromClaude(claudeRequest.tool_choice);
+    }
+
+    return geminiRequest;
+}
+
+/**
+ * Builds Gemini toolConfig from Claude tool_choice.
+ * @param {Object} claudeToolChoice - The tool_choice object from Claude API.
+ * @returns {Object|undefined} The formatted toolConfig for Gemini API, or undefined if invalid.
+ */
+function buildGeminiToolConfigFromClaude(claudeToolChoice) {
+    if (!claudeToolChoice || typeof claudeToolChoice !== 'object' || !claudeToolChoice.type) {
+        console.warn("Invalid claudeToolChoice provided to buildGeminiToolConfigFromClaude.");
+        return undefined;
+    }
+
+    switch (claudeToolChoice.type) {
+        case 'auto':
+            return { functionCallingConfig: { mode: 'AUTO' } };
+        case 'none':
+            return { functionCallingConfig: { mode: 'NONE' } };
+        case 'tool':
+            if (claudeToolChoice.name && typeof claudeToolChoice.name === 'string') {
+                return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [claudeToolChoice.name] } };
+            }
+            console.warn("Invalid tool name in claudeToolChoice of type 'tool'.");
+            return undefined;
+        default:
+            console.warn(`Unsupported claudeToolChoice type: ${claudeToolChoice.type}`);
+            return undefined;
+    }
+}
+
+/**
+ * Processes Claude content to Gemini parts format with multimodal support.
+ * @param {string|Array} content - Claude message content.
+ * @returns {Array} Array of Gemini parts.
+ */
+function processClaudeContentToGeminiParts(content) {
+    if (!content) return [];
+
+    // Handle string content
+    if (typeof content === 'string') {
+        return [{ text: content }];
+    }
+
+    // Handle array content (multimodal)
+    if (Array.isArray(content)) {
+        const parts = [];
+
+        content.forEach(block => {
+            // Ensure block is a valid object and has a type
+            if (!block || typeof block !== 'object' || !block.type) {
+                console.warn("Skipping invalid content block in processClaudeContentToGeminiParts.");
+                return;
+            }
+
+            switch (block.type) {
+                case 'text':
+                    if (typeof block.text === 'string') {
+                        parts.push({ text: block.text });
+                    } else {
+                        console.warn("Invalid text content in Claude text block.");
+                    }
+                    break;
+
+                case 'image':
+                    if (block.source && typeof block.source === 'object' && block.source.type === 'base64' &&
+                        typeof block.source.media_type === 'string' && typeof block.source.data === 'string') {
+                        parts.push({
+                            inlineData: {
+                                mimeType: block.source.media_type,
+                                data: block.source.data
+                            }
+                        });
+                    } else {
+                        console.warn("Invalid image source in Claude image block.");
+                    }
+                    break;
+
+                case 'tool_use':
+                    if (typeof block.name === 'string' && block.input && typeof block.input === 'object') {
+                        parts.push({
+                            functionCall: {
+                                name: block.name,
+                                args: block.input
+                            }
+                        });
+                    } else {
+                        console.warn("Invalid tool_use block in Claude content.");
+                    }
+                    break;
+
+                case 'tool_result':
+                    // Claude's tool_result block does not contain the function name, only tool_use_id.
+                    // Gemini's functionResponse requires a function name.
+                    // For now, we'll use the tool_use_id as the name, but this is a potential point of failure
+                    // if the tool_use_id is not the actual function name in Gemini's context.
+                    // A more robust solution would involve tracking the function name from the tool_use block.
+                    if (typeof block.tool_use_id === 'string') {
+                        parts.push({
+                            functionResponse: {
+                                name: block.tool_use_id, // This might need to be the actual function name
+                                response: { content: block.content } // content can be any JSON-serializable value
+                            }
+                        });
+                    } else {
+                        console.warn("Invalid tool_result block in Claude content: missing tool_use_id.");
+                    }
+                    break;
+
+                default:
+                    // Handle any other content types as text if they have a text property
+                    if (typeof block.text === 'string') {
+                        parts.push({ text: block.text });
+                    } else {
+                        console.warn(`Unsupported Claude content block type: ${block.type}. Skipping.`);
+                    }
+            }
+        });
+
+        return parts;
+    }
+
+    return [];
+}
+
+/**
+ * Converts a Gemini API response to a Claude API messages response.
+ * @param {Object} geminiResponse - The Gemini API response object.
+ * @param {string} model - The model name to include in the response.
+ * @returns {Object} The formatted Claude API messages response.
+ */
+export function toClaudeChatCompletionFromGemini(geminiResponse, model) {
+    // Handle cases where geminiResponse or candidates are missing or empty
+    if (!geminiResponse || !geminiResponse.candidates || geminiResponse.candidates.length === 0) {
+        return {
+            id: `msg_${uuidv4()}`,
+            type: "message",
+            role: "assistant",
+            content: [], // Empty content for no candidates
+            model: model,
+            stop_reason: "end_turn", // Default stop reason
+            stop_sequence: null,
+            usage: {
+                input_tokens: geminiResponse?.usageMetadata?.promptTokenCount || 0,
+                output_tokens: geminiResponse?.usageMetadata?.candidatesTokenCount || 0
+            }
+        };
+    }
+
+    const candidate = geminiResponse.candidates[0];
+    const content = processGeminiResponseToClaudeContent(geminiResponse);
+    const finishReason = candidate.finishReason;
+    let stopReason = "end_turn"; // Default stop reason
+
+    if (finishReason) {
+        switch (finishReason) {
+            case 'STOP':
+                stopReason = 'end_turn';
+                break;
+            case 'MAX_TOKENS':
+                stopReason = 'max_tokens';
+                break;
+            case 'SAFETY':
+                stopReason = 'safety';
+                break;
+            case 'RECITATION':
+                stopReason = 'recitation';
+                break;
+            case 'OTHER':
+                stopReason = 'other';
+                break;
+            default:
+                stopReason = 'end_turn';
+        }
+    }
+
+    return {
+        id: `msg_${uuidv4()}`,
+        type: "message",
+        role: "assistant",
+        content: content,
+        model: model,
+        stop_reason: stopReason,
+        stop_sequence: null,
+        usage: {
+            input_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0,
+            output_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0
+        }
+    };
+}
+
+/**
+ * Processes Gemini response content to Claude format.
+ * @param {Object} geminiResponse - The Gemini API response.
+ * @returns {Array} Array of Claude content blocks.
+ */
+function processGeminiResponseToClaudeContent(geminiResponse) {
+    if (!geminiResponse || !geminiResponse.candidates || geminiResponse.candidates.length === 0) return [];
+
+    const content = [];
+
+    geminiResponse.candidates.forEach(candidate => {
+        if (candidate.content && candidate.content.parts) {
+            candidate.content.parts.forEach(part => {
+                if (part.text) {
+                    content.push({
+                        type: 'text',
+                        text: part.text
+                    });
+                } else if (part.inlineData) {
+                    content.push({
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: part.inlineData.mimeType,
+                            data: part.inlineData.data
+                        }
+                    });
+                } else if (part.functionCall) {
+                    // Convert Gemini functionCall to Claude tool_use
+                    content.push({
+                        type: 'tool_use',
+                        id: uuidv4(), // Generate a new ID for the tool use
+                        name: part.functionCall.name,
+                        input: part.functionCall.args || {}
+                    });
+                }
+            });
+        }
+    });
+
+    return content;
+}
+
+/**
+ * Converts a Gemini API stream chunk to a Claude API messages stream chunk.
+ * @param {Object} geminiChunk - The Gemini API stream chunk object.
+ * @param {string} [model] - Optional model name to include in the response.
+ * @returns {Object} The formatted Claude API messages stream chunk.
+ */
+export function toClaudeStreamChunkFromGemini(geminiChunk, model) {
+    if (!geminiChunk) {
+        return null;
+    }
+
+    // Handle different types of Gemini stream events
+    if (geminiChunk.candidates && geminiChunk.candidates.length > 0) {
+        const candidate = geminiChunk.candidates[0];
+
+        if (candidate.content && candidate.content.parts) {
+            const textParts = candidate.content.parts
+                .filter(part => part.text)
+                .map(part => part.text);
+
+            const functionCallPart = candidate.content.parts.find(part => part.functionCall);
+
+            if (functionCallPart) {
+                // Handle tool_use
+                return {
+                    type: "content_block_start",
+                    index: 0,
+                    content_block: {
+                        type: "tool_use",
+                        id: `toolu_${uuidv4()}`, // Claude tool use ID format
+                        name: functionCallPart.functionCall.name,
+                        input: functionCallPart.functionCall.args || {}
+                    }
+                };
+            } else if (textParts.length > 0) {
+                return {
+                    type: "content_block_delta",
+                    index: 0,
+                    delta: {
+                        type: "text_delta",
+                        text: textParts.join('')
+                    }
+                };
+            }
+        }
+
+        // Handle finish reason
+        if (candidate.finishReason) {
+            let stopReason = "end_turn";
+            switch (candidate.finishReason) {
+                case 'STOP':
+                    stopReason = 'end_turn';
+                    break;
+                case 'MAX_TOKENS':
+                    stopReason = 'max_tokens';
+                    break;
+                case 'SAFETY':
+                    stopReason = 'safety';
+                    break;
+                case 'RECITATION':
+                    stopReason = 'recitation';
+                    break;
+                case 'OTHER':
+                    stopReason = 'other';
+                    break;
+                default:
+                    stopReason = 'end_turn';
+            }
+            return {
+                type: "message_delta",
+                delta: {
+                    stop_reason: stopReason,
+                    stop_sequence: null
+                },
+                usage: geminiChunk.usageMetadata ? {
+                    output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0
+                } : undefined
+            };
+        }
+    }
+
+    // Handle usage metadata updates (only if no other content/finish reason)
+    if (geminiChunk.usageMetadata && (!geminiChunk.candidates || geminiChunk.candidates.length === 0)) {
+        return {
+            type: "message_delta",
+            delta: {},
+            usage: {
+                input_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0
+            }
+        };
+    }
+
+    // Default text delta for simple text chunks (should ideally be handled by candidate.content.parts)
+    // This case might occur if the geminiChunk is just a string, which is not typical for Gemini API.
+    // Added for robustness, but main logic should rely on geminiChunk.candidates.
+    if (typeof geminiChunk === 'string') {
+        return {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+                type: "text_delta",
+                text: geminiChunk
+            }
+        };
+    }
+
+    return null;
 }

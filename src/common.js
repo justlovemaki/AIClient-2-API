@@ -206,6 +206,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
     // The service returns a stream in its native format (toProvider).
     const nativeStream = await service.generateContentStream(model, requestBody);
+    const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
+    const isClaude = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE;
 
     try {
         for await (const nativeChunk of nativeStream) {
@@ -215,20 +217,21 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 fullResponseText += chunkText;
             }
 
-            let clientChunk = chunkText;
-            if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-                clientChunk = convertData(chunkText, 'streamChunk', toProvider, fromProvider, model);
-                if(!clientChunk){
-                    continue;
-                }
-                res.write(`data: ${JSON.stringify(clientChunk)}\n\n`);
-                // console.log(`data: ${JSON.stringify(clientChunk)}\n`);
-            }else{
-                res.write(`data: ${JSON.stringify(nativeChunk)}\n\n`);
-                // console.log(`data-nv: ${JSON.stringify(nativeChunk)}\n`);
+            const chunkToSend = needsConversion 
+                ? convertData(chunkText, 'streamChunk', toProvider, fromProvider, model)
+                : nativeChunk;
+
+            if (!chunkToSend) {
+                continue;
             }
-            
-            
+
+            if (isClaude) {
+                res.write(`event: ${chunkToSend.type}\n`);
+                // console.log(`event: ${chunkToSend.type}\n`);
+            }
+
+            res.write(`data: ${JSON.stringify(chunkToSend)}\n\n`);
+            // console.log(`data: ${JSON.stringify(chunkToSend)}\n`);
         }
 
     }  catch (error) {

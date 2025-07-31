@@ -78,6 +78,53 @@
 6. **响应转换**: 将服务响应转换回客户端期望格式
 7. **流式处理**: 支持实时流式响应传输
 
+### 🎨 模型协议与提供商关系图
+
+
+- OpenAI 协议 (P_OPENAI): 支持所有 MODEL_PROVIDER，包括 openai-custom、gemini-cli-oauth、claude-custom 和
+claude-kiro-oauth。
+- Claude 协议 (P_CLAUDE): 支持 claude-custom、claude-kiro-oauth 和 gemini-cli-oauth。
+- Gemini 协议 (P_GEMINI): 支持 gemini-cli-oauth。
+
+
+  ```mermaid
+  graph TD
+      subgraph Core_Protocols
+          P_OPENAI(OpenAI Protocol)
+          P_GEMINI(Gemini Protocol)
+          P_CLAUDE(Claude Protocol)
+      end
+
+      subgraph Supported_Model_Providers
+          MP_OPENAI[openai-custom]
+          MP_GEMINI[gemini-cli-oauth]
+          MP_CLAUDE_C[claude-custom]
+          MP_CLAUDE_K[claude-kiro-oauth]
+      end
+
+      subgraph Internal_Conversion_Logic
+          direction LR
+          P_OPENAI <-->|Request/Response Conversion| P_GEMINI
+          P_OPENAI <-->|Request/Response Conversion| P_CLAUDE
+          P_GEMINI <-->|Request/Response Conversion| P_CLAUDE
+      end
+
+      P_OPENAI ---|Supports| MP_OPENAI
+      P_OPENAI ---|Supports| MP_GEMINI
+      P_OPENAI ---|Supports| MP_CLAUDE_C
+      P_OPENAI ---|Supports| MP_CLAUDE_K
+
+      P_GEMINI ---|Supports| MP_GEMINI
+
+      P_CLAUDE ---|Supports| MP_CLAUDE_C
+      P_CLAUDE ---|Supports| MP_CLAUDE_K
+      P_CLAUDE ---|Supports| MP_GEMINI
+
+      style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+      style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+      style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
+  ```
+
 ---
 
 ### 🔧 使用说明
@@ -318,3 +365,7 @@
 ## 🙏 致谢
 
 本项目的开发受到了官方 Google Gemini CLI 的极大启发，并参考了Cline 3.18.0 版本 `gemini-cli.ts` 的部分代码实现。在此对 Google 官方团队和 Cline 开发团队的卓越工作表示衷心的感谢！
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=justlovemaki/AIClient-2-API&type=Timeline)](https://www.star-history.com/#justlovemaki/AIClient-2-API&Timeline)

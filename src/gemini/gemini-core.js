@@ -14,6 +14,7 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
 
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
@@ -45,7 +46,7 @@ export class GeminiApiService {
             this.projectId = await this.discoverProjectAndModels();
         } else {
             console.log(`[Gemini] Using provided Project ID: ${this.projectId}`);
-            this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+            this.availableModels = GEMINI_MODELS;
             console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         }
         if (this.projectId === 'default') {
@@ -155,7 +156,7 @@ export class GeminiApiService {
         }
 
         console.log('[Gemini] Discovering Project ID...');
-        this.availableModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+        this.availableModels = GEMINI_MODELS;
         console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
             const loadResponse = await this.callApi('loadCodeAssist', { metadata: { pluginType: 'GEMINI' } });
@@ -298,16 +299,26 @@ export class GeminiApiService {
 
     async generateContent(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+        let selectedModel = model;
+        if (!GEMINI_MODELS.includes(model)) {
+            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+            selectedModel = GEMINI_MODELS[0];
+        }
         const processedRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model, project: this.projectId, request: processedRequestBody };
+        const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
         const response = await this.callApi(API_ACTIONS.GENERATE_CONTENT, apiRequest);
         return toGeminiApiResponse(response.response);
     }
 
     async * generateContentStream(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+        let selectedModel = model;
+        if (!GEMINI_MODELS.includes(model)) {
+            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+            selectedModel = GEMINI_MODELS[0];
+        }
         const processedRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model, project: this.projectId, request: processedRequestBody };
+        const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
         const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
         for await (const chunk of stream) {
             yield toGeminiApiResponse(chunk.response);
