@@ -375,15 +375,14 @@ async initializeAuth(forceRefresh = false) {
 
         // Ensure region is set before using it in URLs
         if (!this.region) {
-            console.warn('[Kiro Auth] Region not found in credentials. Using default region for URLs.');
-            // You might want to set a default region here if it's critical
-            // For example: this.region = 'us-east-1';
+            console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
+            this.region = 'us-east-1'; // Set default region
         }
 
-        this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL.replace("{{region}}", this.region || 'us-east-1'); // Fallback to a default region
-        this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL.replace("{{region}}", this.region || 'us-east-1');
-        this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region || 'us-east-1');
-        this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region || 'us-east-1');
+        this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL.replace("{{region}}", this.region);
+        this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL.replace("{{region}}", this.region);
+        this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region);
+        this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region);
     } catch (error) {
         console.warn(`[Kiro Auth] Could not read credential directory ${this.credPath}: ${error.message}`);
     }
@@ -542,7 +541,7 @@ async initializeAuth(forceRefresh = false) {
                                 userInputMessage.userInputMessageContext.toolResults = [];
                             }
                             userInputMessage.userInputMessageContext.toolResults.push({
-                                content: [{ text: part.content }],
+                                content: [{ text: this.getContentText(part.content) }],
                                 status: 'success',
                                 toolUseId: part.tool_use_id
                             });
@@ -596,7 +595,7 @@ async initializeAuth(forceRefresh = false) {
                     currentContent += part.text;
                 } else if (part.type === 'tool_result') {
                     currentToolResults.push({
-                        content: [{ text: part.content }],
+                        content: [{ text: this.getContentText(part.content) }],
                         status: 'success',
                         toolUseId: part.tool_use_id
                     });
