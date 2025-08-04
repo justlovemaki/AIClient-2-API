@@ -2,9 +2,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 
 // 定义默认常量
-const DEFAULT_MAX_TOKENS = 1048576;
-const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_MAX_TOKENS = 8192;
+const DEFAULT_GEMINI_MAX_TOKENS = 65536;
+const DEFAULT_TEMPERATURE = 1;
 const DEFAULT_TOP_P = 0.9;
+
+// 辅助函数：判断值是否为 undefined 或 0，并返回默认值
+function checkAndAssignOrDefault(value, defaultValue) {
+    if (value !== undefined && value !== 0) {
+        return value;
+    }
+    return defaultValue;
+}
 
 /**
  * Generic data conversion function.
@@ -92,9 +101,9 @@ export function toOpenAIRequestFromGemini(geminiRequest) {
     const openaiRequest = {
         messages: [],
         model: geminiRequest.model || "gpt-3.5-turbo", // Default model if not specified in Gemini request
-        max_tokens: geminiRequest.max_tokens || DEFAULT_MAX_TOKENS,
-        temperature: geminiRequest.temperature || DEFAULT_TEMPERATURE,
-        top_p: geminiRequest.top_p || DEFAULT_TOP_P,
+        max_tokens: checkAndAssignOrDefault(geminiRequest.max_tokens, DEFAULT_MAX_TOKENS),
+        temperature: checkAndAssignOrDefault(geminiRequest.temperature, DEFAULT_TEMPERATURE),
+        top_p: checkAndAssignOrDefault(geminiRequest.top_p, DEFAULT_TOP_P),
     };
 
     // Process system instruction
@@ -473,9 +482,9 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
     const openaiRequest = {
         model: claudeRequest.model || 'gpt-3.5-turbo', // Default OpenAI model
         messages: openaiMessages,
-        max_tokens: claudeRequest.max_tokens || DEFAULT_MAX_TOKENS,
-        temperature: claudeRequest.temperature || DEFAULT_TEMPERATURE,
-        top_p: claudeRequest.top_p || DEFAULT_TOP_P,
+        max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, DEFAULT_MAX_TOKENS),
+        temperature: checkAndAssignOrDefault(claudeRequest.temperature, DEFAULT_TEMPERATURE),
+        top_p: checkAndAssignOrDefault(claudeRequest.top_p, DEFAULT_TOP_P),
         // stream: claudeRequest.stream, // Stream mode is handled by different endpoint
     };
 
@@ -746,9 +755,9 @@ function buildToolConfig(toolChoice) {
 
 function buildGenerationConfig({ temperature, max_tokens, top_p, stop }) {
     const config = {};
-    config.temperature = temperature !== undefined ? temperature : DEFAULT_TEMPERATURE;
-    config.maxOutputTokens = max_tokens !== undefined ? max_tokens : DEFAULT_MAX_TOKENS;
-    config.topP = top_p !== undefined ? top_p : DEFAULT_TOP_P;
+    config.temperature = checkAndAssignOrDefault(temperature, DEFAULT_TEMPERATURE);
+    config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, DEFAULT_GEMINI_MAX_TOKENS);
+    config.topP = checkAndAssignOrDefault(top_p, DEFAULT_TOP_P);
     if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
     return config;
 }
@@ -848,9 +857,9 @@ export function toClaudeRequestFromOpenAI(openaiRequest) {
     const claudeRequest = {
         model: openaiRequest.model || 'claude-3-opus-20240229',
         messages: claudeMessages,
-        max_tokens: openaiRequest.max_tokens || DEFAULT_MAX_TOKENS,
-        temperature: openaiRequest.temperature || DEFAULT_TEMPERATURE,
-        top_p: openaiRequest.top_p || DEFAULT_TOP_P,
+        max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, DEFAULT_MAX_TOKENS),
+        temperature: checkAndAssignOrDefault(openaiRequest.temperature, DEFAULT_TEMPERATURE),
+        top_p: checkAndAssignOrDefault(openaiRequest.top_p, DEFAULT_TOP_P),
     };
 
     if (systemInstruction) {
@@ -1055,21 +1064,9 @@ export function toGeminiRequestFromClaude(claudeRequest) {
 
     // Add generation config
     const generationConfig = {};
-    if (claudeRequest.max_tokens !== undefined) {
-        generationConfig.maxOutputTokens = Number(claudeRequest.max_tokens);
-    } else {
-        generationConfig.maxOutputTokens = DEFAULT_MAX_TOKENS;
-    }
-    if (claudeRequest.temperature !== undefined) {
-        generationConfig.temperature = Number(claudeRequest.temperature);
-    } else {
-        generationConfig.temperature = DEFAULT_TEMPERATURE;
-    }
-    if (claudeRequest.top_p !== undefined) {
-        generationConfig.topP = Number(claudeRequest.top_p);
-    } else {
-        generationConfig.topP = DEFAULT_TOP_P;
-    }
+    generationConfig.maxOutputTokens = checkAndAssignOrDefault(claudeRequest.max_tokens, DEFAULT_GEMINI_MAX_TOKENS);
+    generationConfig.temperature = checkAndAssignOrDefault(claudeRequest.temperature, DEFAULT_TEMPERATURE);
+    generationConfig.topP = checkAndAssignOrDefault(claudeRequest.top_p, DEFAULT_TOP_P);
     
     if (Object.keys(generationConfig).length > 0) {
         geminiRequest.generationConfig = generationConfig;

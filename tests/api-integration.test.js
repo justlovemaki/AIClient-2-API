@@ -78,7 +78,7 @@ const REAL_TEST_DATA = {
 };
 
 // To run all integration tests:
-// npx jest GeminiCli2API/tests/api-integration.test.js
+// npx jest ./tests/api-integration.test.js
 describe('API Integration Tests with HTTP Requests', () => {
     beforeAll(async () => {
         // Test server connectivity
@@ -97,10 +97,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all OpenAI Compatible Endpoints tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI Compatible Endpoints"
+    // npx jest ./tests/api-integration.test.js -t "OpenAI Compatible Endpoints"
     describe('OpenAI Compatible Endpoints', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming Gemini"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming Gemini"
         test('OpenAI /v1/chat/completions non-streaming Gemini', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
@@ -122,7 +122,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming Gemini"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming Gemini"
         test('OpenAI /v1/chat/completions streaming Gemini', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
@@ -160,9 +160,9 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming with OpenAI provider"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming with OpenAI provider"
         test('OpenAI /v1/chat/completions non-streaming with OpenAI provider', async () => {
-            REAL_TEST_DATA.openai.nonStreamRequest.model = "deepseek-chat";
+            REAL_TEST_DATA.openai.nonStreamRequest.model = "deepseek-ai/DeepSeek-V3";
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
                 'POST',
@@ -183,9 +183,9 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming with OpenAI provider"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming with OpenAI provider"
         test('OpenAI /v1/chat/completions streaming with OpenAI provider', async () => {
-            REAL_TEST_DATA.openai.streamRequest.model = "deepseek-chat";
+            REAL_TEST_DATA.openai.streamRequest.model = "deepseek-ai/DeepSeek-V3";
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
                 'POST',
@@ -222,7 +222,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming with Claude provider"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming with Claude provider"
         test('OpenAI /v1/chat/completions non-streaming with Claude provider', async () => {
             REAL_TEST_DATA.openai.nonStreamRequest.model = "claude-4-sonnet";
             const response = await makeRequest(
@@ -245,7 +245,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming with Claude provider"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions streaming with Claude provider"
         test('OpenAI /v1/chat/completions streaming with Claude provider', async () => {
             REAL_TEST_DATA.openai.nonStreamRequest.model = "claude-4-sonnet";
             const response = await makeRequest(
@@ -285,10 +285,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all Claude Native Endpoints tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Native Endpoints"
+    // npx jest ./tests/api-integration.test.js -t "Claude Native Endpoints"
     describe('Claude Native Endpoints', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude /v1/messages non-streaming"
+        // npx jest ./tests/api-integration.test.js -t "Claude /v1/messages non-streaming"
         test('Claude /v1/messages non-streaming', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/messages`,
@@ -309,7 +309,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude /v1/messages streaming"
+        // npx jest ./tests/api-integration.test.js -t "Claude /v1/messages streaming"
         test('Claude /v1/messages streaming', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/messages`,
@@ -348,10 +348,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all Claude Kiro Endpoints tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro Endpoints"
+    // npx jest ./tests/api-integration.test.js -t "Claude Kiro Endpoints"
     describe('Claude Kiro Endpoints', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro /v1/messages non-streaming"
+        // npx jest ./tests/api-integration.test.js -t "Claude Kiro /v1/messages non-streaming"
         test('Claude Kiro /v1/messages non-streaming', async () => {
             REAL_TEST_DATA.claude.nonStreamRequest.model = "claude-4-sonnet";
             const response = await makeRequest(
@@ -373,7 +373,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Claude Kiro /v1/messages streaming"
+        // npx jest ./tests/api-integration.test.js -t "Claude Kiro /v1/messages streaming"
         test('Claude Kiro /v1/messages streaming', async () => {
             REAL_TEST_DATA.claude.streamRequest.model = "claude-4-sonnet";
             const response = await makeRequest(
@@ -414,10 +414,10 @@ describe('API Integration Tests with HTTP Requests', () => {
 
 
     // To run all Gemini Native Endpoints tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Gemini Native Endpoints"
+    // npx jest ./tests/api-integration.test.js -t "Gemini Native Endpoints"
     describe('Gemini Native Endpoints', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Gemini /v1beta/models/{model}:generateContent"
+        // npx jest ./tests/api-integration.test.js -t "Gemini /v1beta/models/{model}:generateContent"
         test('Gemini /v1beta/models/{model}:generateContent', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1beta/models/gemini-2.5-flash:generateContent`,
@@ -436,7 +436,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Gemini /v1beta/models/{model}:streamGenerateContent"
+        // npx jest ./tests/api-integration.test.js -t "Gemini /v1beta/models/{model}:streamGenerateContent"
         test('Gemini /v1beta/models/{model}:streamGenerateContent', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1beta/models/gemini-2.5-flash:streamGenerateContent`,
@@ -475,10 +475,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all Model List Endpoints tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Model List Endpoints"
+    // npx jest ./tests/api-integration.test.js -t "Model List Endpoints"
     describe('Model List Endpoints', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/models Gemini"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/models Gemini"
         test('OpenAI /v1/models Gemini', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -495,7 +495,7 @@ describe('API Integration Tests with HTTP Requests', () => {
             expect(Array.isArray(responseData.data)).toBe(true);
         });
 
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/models OpenAI"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/models OpenAI"
         test('OpenAI /v1/models OpenAI', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -512,7 +512,7 @@ describe('API Integration Tests with HTTP Requests', () => {
             expect(Array.isArray(responseData.data)).toBe(true);
         });
 
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "OpenAI /v1/models Claude"
+        // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/models Claude"
         test('OpenAI /v1/models Claude', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -530,7 +530,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Gemini /v1beta/models modelList"
+        // npx jest ./tests/api-integration.test.js -t "Gemini /v1beta/models modelList"
         test('Gemini /v1beta/models modelList', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1beta/models`,
@@ -549,10 +549,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all Authentication Tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Authentication Tests API KEY"
+    // npx jest ./tests/api-integration.test.js -t "Authentication Tests API KEY"
     describe('Authentication Tests API KEY', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Reject requests without API key"
+        // npx jest ./tests/api-integration.test.js -t "Reject requests without API key"
         test('Reject requests without API key', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
@@ -571,7 +571,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Accept query parameter authentication"
+        // npx jest ./tests/api-integration.test.js -t "Accept query parameter authentication"
         test('Accept query parameter authentication', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -584,7 +584,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Accept Bearer token authentication"
+        // npx jest ./tests/api-integration.test.js -t "Accept Bearer token authentication"
         test('Accept Bearer token authentication', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -597,7 +597,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Accept x-goog-api-key authentication"
+        // npx jest ./tests/api-integration.test.js -t "Accept x-goog-api-key authentication"
         test('Accept x-goog-api-key authentication', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -610,7 +610,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Accept x-api-key authentication for Claude"
+        // npx jest ./tests/api-integration.test.js -t "Accept x-api-key authentication for Claude"
         test('Accept x-api-key authentication for Claude', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
@@ -624,10 +624,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all Error Handling Tests:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "Error Handling Tests"
+    // npx jest ./tests/api-integration.test.js -t "Error Handling Tests"
     describe('Error Handling Tests', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Handle invalid JSON in request body"
+        // npx jest ./tests/api-integration.test.js -t "Handle invalid JSON in request body"
         test('Handle invalid JSON in request body', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/chat/completions`,
@@ -645,7 +645,7 @@ describe('API Integration Tests with HTTP Requests', () => {
         });
 
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "Handle unsupported endpoints"
+        // npx jest ./tests/api-integration.test.js -t "Handle unsupported endpoints"
         test('Handle unsupported endpoints', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/unsupported/endpoint`,
@@ -665,10 +665,10 @@ describe('API Integration Tests with HTTP Requests', () => {
     });
 
     // To run all CORS Headers Test:
-    // npx jest GeminiCli2API/tests/api-integration.test.js -t "CORS Headers Test"
+    // npx jest ./tests/api-integration.test.js -t "CORS Headers Test"
     describe('CORS Headers Test', () => {
         // To run this test:
-        // npx jest GeminiCli2API/tests/api-integration.test.js -t "CORS headers support"
+        // npx jest ./tests/api-integration.test.js -t "CORS headers support"
         test('CORS headers support', async () => {
             const response = await makeRequest(
                 `${TEST_SERVER_BASE_URL}/v1/models`,
