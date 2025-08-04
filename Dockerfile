@@ -3,8 +3,8 @@
 FROM node:20-alpine
 
 # 设置标签
-LABEL maintainer="GeminiCli2API Team"
-LABEL description="Docker image for GeminiCli2API server"
+LABEL maintainer="AIClient2API Team"
+LABEL description="Docker image for AIClient2API server"
 
 # 设置工作目录
 WORKDIR /app

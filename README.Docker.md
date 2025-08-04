@@ -1,6 +1,6 @@
 # Docker部署指南
 
-本指南将帮助您使用Docker部署GeminiCli2API服务。
+本指南将帮助您使用Docker部署AIClient2API服务。
 
 ## 构建Docker镜像
 
