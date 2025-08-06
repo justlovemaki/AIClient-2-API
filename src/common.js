@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
 import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
-import { convertData } from './convert.js';
+import { convertData, getOpenAIStreamChunkStop } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 
 export const API_ACTIONS = {
@@ -207,7 +207,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     // The service returns a stream in its native format (toProvider).
     const nativeStream = await service.generateContentStream(model, requestBody);
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
-    const isClaude = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE;
+    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE;
+    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI;
 
     try {
         for await (const nativeChunk of nativeStream) {
@@ -225,13 +226,17 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 continue;
             }
 
-            if (isClaude) {
+            if (addEvent) {
                 res.write(`event: ${chunkToSend.type}\n`);
                 // console.log(`event: ${chunkToSend.type}\n`);
             }
 
             res.write(`data: ${JSON.stringify(chunkToSend)}\n\n`);
             // console.log(`data: ${JSON.stringify(chunkToSend)}\n`);
+        }
+        if (openStop && needsConversion) {
+            res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
+            // console.log(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
         }
 
     }  catch (error) {

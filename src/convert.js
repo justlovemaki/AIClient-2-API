@@ -407,10 +407,18 @@ export function toOpenAIStreamChunkFromClaude(claudeChunk, model) {
         object: "chat.completion.chunk",
         created: Math.floor(Date.now() / 1000),
         model: model,
+        system_fingerprint: "",
         choices: [{
             index: 0,
-            delta: { content: claudeChunk },
-            finish_reason: null,
+            delta: { 
+                content: claudeChunk,
+                reasoning_content: ""
+            },
+            finish_reason: !claudeChunk ? 'stop' : null,
+            message: {
+                content: claudeChunk,
+                reasoning_content: ""
+            }
         }],
         usage:{
             prompt_tokens: 0,
@@ -420,6 +428,32 @@ export function toOpenAIStreamChunkFromClaude(claudeChunk, model) {
     };
 }
 
+export function getOpenAIStreamChunkStop(model) {
+    return {
+        id: `chatcmpl-${uuidv4()}`, // uuidv4 needs to be imported or handled
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model: model,
+        system_fingerprint: "",
+        choices: [{
+            index: 0,
+            delta: { 
+                content: "",
+                reasoning_content: ""
+            },
+            finish_reason: 'stop',
+            message: {
+                content: "",
+                reasoning_content: ""
+            }
+        }],
+        usage:{
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        },
+    };
+}
 
 
 

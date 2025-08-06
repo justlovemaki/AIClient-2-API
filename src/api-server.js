@@ -411,9 +411,15 @@ function createRequestHandler(config) {
         const apiService = await getApiService(currentConfig);
         const method = req.method;
         if (method === 'OPTIONS') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            console.log("OPTIONS REQUEST SUCCESS");
-            return res.end("OPTIONS REQUEST SUCCESS");
+            // 设置 CORS 头部，允许所有来源和方法
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key');
+            
+            // OPTIONS 请求通常返回 204 No Content
+            res.writeHead(204);
+            res.end();
+            return;
         }
 
         // Health check endpoint - no authentication required
