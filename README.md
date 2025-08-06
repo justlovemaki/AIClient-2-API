@@ -92,41 +92,36 @@ claude-kiro-oauth。
 
 
   ```mermaid
-  graph TD
-      subgraph Core_Protocols
-          P_OPENAI(OpenAI Protocol)
-          P_GEMINI(Gemini Protocol)
-          P_CLAUDE(Claude Protocol)
-      end
+  
+   graph TD
+       subgraph Core_Protocols["核心协议"]
+           P_OPENAI[OpenAI Protocol]
+           P_GEMINI[Gemini Protocol]
+           P_CLAUDE[Claude Protocol]
+       end
+   
+       subgraph Supported_Model_Providers["支持的模型提供商"]
+           MP_OPENAI[openai-custom]
+           MP_GEMINI[gemini-cli-oauth]
+           MP_CLAUDE_C[claude-custom]
+           MP_CLAUDE_K[claude-kiro-oauth]
+       end
+   
+       P_OPENAI ---|支持| MP_OPENAI
+       P_OPENAI ---|支持| MP_GEMINI
+       P_OPENAI ---|支持| MP_CLAUDE_C
+       P_OPENAI ---|支持| MP_CLAUDE_K
+   
+       P_GEMINI ---|支持| MP_GEMINI
+   
+       P_CLAUDE ---|支持| MP_CLAUDE_C
+       P_CLAUDE ---|支持| MP_CLAUDE_K
+       P_CLAUDE ---|支持| MP_GEMINI
+   
+       style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+       style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+       style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
 
-      subgraph Supported_Model_Providers
-          MP_OPENAI[openai-custom]
-          MP_GEMINI[gemini-cli-oauth]
-          MP_CLAUDE_C[claude-custom]
-          MP_CLAUDE_K[claude-kiro-oauth]
-      end
-
-      subgraph Internal_Conversion_Logic
-          direction LR
-          P_OPENAI <-->|Request/Response Conversion| P_GEMINI
-          P_OPENAI <-->|Request/Response Conversion| P_CLAUDE
-          P_GEMINI <-->|Request/Response Conversion| P_CLAUDE
-      end
-
-      P_OPENAI ---|Supports| MP_OPENAI
-      P_OPENAI ---|Supports| MP_GEMINI
-      P_OPENAI ---|Supports| MP_CLAUDE_C
-      P_OPENAI ---|Supports| MP_CLAUDE_K
-
-      P_GEMINI ---|Supports| MP_GEMINI
-
-      P_CLAUDE ---|Supports| MP_CLAUDE_C
-      P_CLAUDE ---|Supports| MP_CLAUDE_K
-      P_CLAUDE ---|Supports| MP_GEMINI
-
-      style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
-      style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
-      style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
   ```
 
 ---
