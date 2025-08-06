@@ -92,34 +92,35 @@ The project leverages various modern design patterns to ensure code maintainabil
 
 
   ```mermaid
-graph TD
-    subgraph Core_Protocols["核心协议"]
-        P_OPENAI[OpenAI Protocol]
-        P_GEMINI[Gemini Protocol]
-        P_CLAUDE[Claude Protocol]
-    end
-
-    subgraph Supported_Model_Providers["支持的模型提供商"]
-        MP_OPENAI[openai-custom]
-        MP_GEMINI[gemini-cli-oauth]
-        MP_CLAUDE_C[claude-custom]
-        MP_CLAUDE_K[claude-kiro-oauth]
-    end
-
-    P_OPENAI ---|支持| MP_OPENAI
-    P_OPENAI ---|支持| MP_GEMINI
-    P_OPENAI ---|支持| MP_CLAUDE_C
-    P_OPENAI ---|支持| MP_CLAUDE_K
-
-    P_GEMINI ---|支持| MP_GEMINI
-
-    P_CLAUDE ---|支持| MP_CLAUDE_C
-    P_CLAUDE ---|支持| MP_CLAUDE_K
-    P_CLAUDE ---|支持| MP_GEMINI
-
-    style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
-    style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
-    style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
+  
+   graph TD
+       subgraph Core_Protocols["核心协议"]
+           P_OPENAI[OpenAI Protocol]
+           P_GEMINI[Gemini Protocol]
+           P_CLAUDE[Claude Protocol]
+       end
+   
+       subgraph Supported_Model_Providers["支持的模型提供商"]
+           MP_OPENAI[openai-custom]
+           MP_GEMINI[gemini-cli-oauth]
+           MP_CLAUDE_C[claude-custom]
+           MP_CLAUDE_K[claude-kiro-oauth]
+       end
+   
+       P_OPENAI ---|支持| MP_OPENAI
+       P_OPENAI ---|支持| MP_GEMINI
+       P_OPENAI ---|支持| MP_CLAUDE_C
+       P_OPENAI ---|支持| MP_CLAUDE_K
+   
+       P_GEMINI ---|支持| MP_GEMINI
+   
+       P_CLAUDE ---|支持| MP_CLAUDE_C
+       P_CLAUDE ---|支持| MP_CLAUDE_K
+       P_CLAUDE ---|支持| MP_GEMINI
+   
+       style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+       style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+       style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
 
   ```
 
