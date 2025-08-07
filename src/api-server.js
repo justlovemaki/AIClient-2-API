@@ -94,6 +94,10 @@
  * --system-prompt-mode <mode>        系统提示模式 / System prompt mode: overwrite or append (default: overwrite)
  * --log-prompts <mode>               提示日志模式 / Prompt logging mode: console, file, or none (default: none)
  * --prompt-log-base-name <name>      提示日志文件基础名称 / Base name for prompt log files (default: prompt_log)
+ * --request-max-retries <number>     API 请求失败时，自动重试的最大次数。 / Max retries for API requests on failure (default: 3)
+ * --request-base-delay <number>      自动重试之间的基础延迟时间（毫秒）。每次重试后延迟会增加。 / Base delay in milliseconds between retries, increases with each retry (default: 1000)
+ * --cron-near-minutes <number>       OAuth 令牌刷新任务计划的间隔时间（分钟）。 / Interval for OAuth token refresh task in minutes (default: 15)
+ * --cron-refresh-token <boolean>     是否开启 OAuth 令牌自动刷新任务 / Whether to enable automatic OAuth token refresh task (default: true)
  *
  */
 
@@ -105,7 +109,7 @@ import { promises as pfs } from 'fs';
 import 'dotenv/config'; // Import dotenv and configure it
 
 import deepmerge from 'deepmerge';
-import { getServiceAdapter } from './adapter.js';
+import { getServiceAdapter, serviceInstances} from './adapter.js';
 import {
     INPUT_SYSTEM_PROMPT_FILE,
     API_ACTIONS,
@@ -155,7 +159,9 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             PROMPT_LOG_BASE_NAME: "prompt_log",
             PROMPT_LOG_MODE: "none",
             REQUEST_MAX_RETRIES: 3,
-            REQUEST_BASE_DELAY: 1000
+            REQUEST_BASE_DELAY: 1000,
+            CRON_NEAR_MINUTES: 15,
+            CRON_REFRESH_TOKEN: true
         };
         console.log('[Config] Using default configuration.');
     }
@@ -293,6 +299,20 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             } else {
                 console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
             }
+        } else if (args[i] === '--cron-near-minutes') {
+            if (i + 1 < args.length) {
+                currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                console.warn(`[Config Warning] --cron-near-minutes flag requires a value.`);
+            }
+        } else if (args[i] === '--cron-refresh-token') {
+            if (i + 1 < args.length) {
+                currentConfig.CRON_REFRESH_TOKEN = args[i + 1].toLowerCase() === 'true';
+                i++;
+            } else {
+                console.warn(`[Config Warning] --cron-refresh-token flag requires a value.`);
+            }
         }
     }
 
@@ -346,16 +366,17 @@ async function getSystemPromptFileContent(filePath) {
     }
 }
 
-async function initApiService(config) { // Make getApiService exportable and accept config
+async function initApiService(config) {
     // Initialize all known service adapters at startup
     for (const provider of Object.values(MODEL_PROVIDER)) {
         try {
             console.log(`[Initialization] Initializing service adapter for ${provider}...`);
-            getServiceAdapter({ ...config, MODEL_PROVIDER: provider });
+            getServiceAdapter({ ...config, MODEL_PROVIDER: provider }); // This call populates serviceInstances
         } catch (error) {
             console.warn(`[Initialization Warning] Failed to initialize service adapter for ${provider}: ${error.message}`);
         }
     }
+    return serviceInstances; // Return the collection of initialized service instances
 }
 
 async function getApiService(config) {
@@ -475,11 +496,25 @@ function createRequestHandler(config) {
 // --- Server Initialization ---
 async function startServer() {
     await initializeConfig(); // Initialize CONFIG globally
-    await initApiService(CONFIG); // Get service instance with the initialized CONFIG
+    const services = await initApiService(CONFIG); // Get service instance with the initialized CONFIG
     const requestHandlerInstance = createRequestHandler(CONFIG); // Create request handler with CONFIG and service
 
-    const server = http.createServer(requestHandlerInstance);
+    // 定义心跳和令牌刷新函数
+    const heartbeatAndRefreshToken = async () => {
+        console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`);
+        // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
+        for (const providerKey in services) {
+            const serviceAdapter = services[providerKey];
+            try {
+                await serviceAdapter.refreshToken();
+                console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
+            } catch (error) {
+                console.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);
+            }
+        }
+    };
 
+    const server = http.createServer(requestHandlerInstance);
     server.listen(CONFIG.SERVER_PORT, CONFIG.HOST, () => {
         console.log(`--- Unified API Server Configuration ---`);
         console.log(`  Model Provider: ${CONFIG.MODEL_PROVIDER}`);
@@ -508,6 +543,13 @@ async function startServer() {
         console.log(`  • Gemini-compatible: /v1beta/models, /v1beta/models/{model}:generateContent`);
         console.log(`  • Claude-compatible: /v1/messages`);
         console.log(`  • Health check: /health`);
+
+        if (CONFIG.CRON_REFRESH_TOKEN) {
+            console.log(`  • Cron Near Minutes: ${CONFIG.CRON_NEAR_MINUTES}`);
+            console.log(`  • Cron Refresh Token: ${CONFIG.CRON_REFRESH_TOKEN}`);
+            // 每 CRON_NEAR_MINUTES 分钟执行一次心跳日志和令牌刷新
+            setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
+        }
     });
     return server; // Return the server instance for testing purposes
 }

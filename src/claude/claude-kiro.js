@@ -356,6 +356,7 @@ async initializeAuth(forceRefresh = false) {
                 const filePath = path.join(dirPath, file);
                 const credentials = await loadCredentialsFromFile(filePath);
                 if (credentials) {
+                    credentials.expiresAt = mergedCredentials.expiresAt;
                     Object.assign(mergedCredentials, credentials);
                     console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
                 }
@@ -1061,5 +1062,23 @@ async initializeAuth(forceRefresh = false) {
         }));
         
         return { models: models };
+    }
+
+    /**
+     * Checks if the given expiresAt timestamp is within 10 minutes from now.
+     * @returns {boolean} - True if expiresAt is less than 10 minutes from now, false otherwise.
+     */
+    isExpiryDateNear() {
+        try {
+            const expirationTime = new Date(this.expiresAt);
+            const currentTime = new Date();
+            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+            const thresholdTime = new Date(currentTime.getTime() + cronNearMinutesInMillis);
+            console.log(`[Kiro] Expiry date: ${expirationTime.getTime()}, Current time: ${currentTime.getTime()}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${thresholdTime.getTime()}`);
+            return expirationTime.getTime() <= thresholdTime.getTime();
+        } catch (error) {
+            console.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
+            return false; // Treat as expired if parsing fails
+        }
     }
 }

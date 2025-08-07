@@ -40,6 +40,14 @@ export class ApiServiceAdapter {
     async listModels() {
         throw new Error("Method 'listModels()' must be implemented.");
     }
+
+    /**
+     * 刷新认证令牌
+     * @returns {Promise<void>}
+     */
+    async refreshToken() {
+        throw new Error("Method 'refreshToken()' must be implemented.");
+    }
 }
 
 // Gemini API 服务适配器
@@ -76,6 +84,14 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
         // Gemini Core API 的 listModels 已经返回符合 Gemini 格式的数据，所以不需要额外转换
         return this.geminiApiService.listModels();
     }
+
+    async refreshToken() {
+        if(this.geminiApiService.isExpiryDateNear()===true){
+            console.log(`[Gemini] Expiry date is near, refreshing token...`);
+            return this.geminiApiService.initializeAuth(true);
+        }
+        return Promise.resolve();
+    }
 }
 
 // OpenAI API 服务适配器
@@ -102,6 +118,11 @@ export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
         // The adapter now returns the native model list from the underlying service.
         return this.openAIApiService.listModels();
     }
+
+    async refreshToken() {
+        // OpenAI API keys are typically static and do not require refreshing.
+        return Promise.resolve();
+    }
 }
 
 // Claude API 服务适配器
@@ -125,6 +146,10 @@ export class ClaudeApiServiceAdapter extends ApiServiceAdapter {
     async listModels() {
         // The adapter now returns the native model list from the underlying service.
         return this.claudeApiService.listModels();
+    }
+
+    async refreshToken() {
+        return Promise.resolve();
     }
 }
 
@@ -153,10 +178,18 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
         // Returns the native model list from the Kiro service
         return this.kiroApiService.listModels();
     }
+
+    async refreshToken() {
+        if(this.kiroApiService.isExpiryDateNear()===true){
+            console.log(`[Kiro] Expiry date is near, refreshing token...`);
+            return this.kiroApiService.initializeAuth(true);
+        }
+        return Promise.resolve();
+    }
 }
 
 // 用于存储服务适配器单例的映射
-const serviceInstances = {};
+export const serviceInstances = {};
 
 // 服务适配器工厂
 export function getServiceAdapter(config) {

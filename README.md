@@ -224,6 +224,8 @@ claude-kiro-oauth。
 | `PROMPT_LOG_BASE_NAME`          | string  | 当 `PROMPT_LOG_MODE` 为 `file` 时，生成的日志文件的基础名称。                                                                   | 默认为 `"prompt_log"`                                                                                     |
 | `REQUEST_MAX_RETRIES`           | number  | 当 API 请求失败时，自动重试的最大次数。                                                                                         | 默认为 `3`                                                                                                |
 | `REQUEST_BASE_DELAY`            | number  | 自动重试之间的基础延迟时间（毫秒）。每次重试后延迟会增加。                                                                      | 默认为 `1000`                                                                                             |
+| `CRON_NEAR_MINUTES`             | number  | (Gemini-CLI 模式) OAuth 令牌刷新任务计划的间隔时间（分钟）。                                                                    | 默认为 `15`                                                                                               |
+| `CRON_REFRESH_TOKEN`            | boolean | (Gemini-CLI 模式) 是否开启 OAuth 令牌自动刷新任务。                                                                             | 默认为 `true`                                                                                             |
 
 ### 3. 启动服务
 

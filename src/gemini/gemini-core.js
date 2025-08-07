@@ -324,4 +324,20 @@ export class GeminiApiService {
             yield toGeminiApiResponse(chunk.response);
         }
     }
+
+     /**
+     * Checks if the given expiry date is within the next 10 minutes from now.
+     * @returns {boolean} True if the expiry date is within the next 10 minutes, false otherwise.
+     */
+    isExpiryDateNear() {
+        try {
+            const currentTime = Date.now();
+            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+            console.log(`[Gemini] Expiry date: ${this.authClient.credentials.expiry_date}, Current time: ${currentTime}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${currentTime + cronNearMinutesInMillis}`);
+            return this.authClient.credentials.expiry_date <= (currentTime + cronNearMinutesInMillis);
+        } catch (error) {
+            console.error(`[Gemini] Error checking expiry date: ${error.message}`);
+            return false;
+        }
+    }
 }

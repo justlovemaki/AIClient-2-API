@@ -224,6 +224,8 @@ The following table details all supported parameters in `config.json`:
 | `PROMPT_LOG_BASE_NAME` | string | Base name for log files when `PROMPT_LOG_MODE` is `file`. | Defaults to `"prompt_log"` |
 | `REQUEST_MAX_RETRIES` | number | Maximum number of automatic retries for failed API requests. | Defaults to `3` |
 | `REQUEST_BASE_DELAY` | number | Base delay (milliseconds) between automatic retries. Delay increases with each retry. | Defaults to `1000` |
+| `CRON_NEAR_MINUTES` | number | (Gemini-CLI Mode) Interval in minutes for the OAuth token refresh task. | Defaults to `15` |
+| `CRON_REFRESH_TOKEN` | boolean | (Gemini-CLI Mode) Whether to enable automatic OAuth token refresh task. | Defaults to `true` |
 
 ### 3. Start the Service
 
