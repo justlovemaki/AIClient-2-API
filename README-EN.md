@@ -14,8 +14,9 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
+[![docker](https://img.shields.io/badge/docker-≥20.0.0-green.svg)](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 
-[**中文**](./README.md) | [**English**](./README-EN.md)
+[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/)
 
 </div>
 
@@ -35,52 +36,6 @@
 
 ---
 
-## 📝 Project Architecture
-
-Moving beyond a simple structure, we've implemented a more professional and extensible design, completely transforming the project:
-
-*   **`src/api-server.js`**: 🚀 **Project Entry Point**
-    *   As the project's central orchestrator, it's responsible for launching and managing the entire HTTP service, parsing command-line arguments, and loading all configurations.
-
-*   **`src/adapter.js`**: 🔌 **Service Adapter**
-    *   Adopts the classic adapter pattern, creating a unified interface for each AI service (Gemini, OpenAI, Claude, Kiro). Regardless of backend service variations, the main service interacts with them consistently.
-
-*   **`src/provider-strategies.js`**: 🎯 **Provider Strategy Factory**
-    *   Implements the strategy factory pattern, offering unified strategy interfaces for each API protocol (e.g., OpenAI, Gemini, Claude). These strategies precisely handle request parsing, response formatting, model name extraction, and all other protocol-specific details, ensuring seamless conversion between protocols.
-
-*   **`src/provider-strategy.js`**: 🎯 **Strategy Base Class**
-    *   Defines the foundational interface and common methods for all provider strategies, including core functionalities like system prompt management and content extraction.
-
-*   **`src/convert.js`**: 🔄 **Format Conversion Hub**
-    *   This is the core magic enabling "everything OpenAI-compatible." It precisely and losslessly converts data between different API protocol formats.
-
-*   **`src/common.js`**: 🛠️ **Common Utility Library**
-    *   Contains shared constants, utility functions, and common handlers for the project, leading to cleaner and more efficient code.
-
-*   **`src/gemini/`, `src/openai/`, `src/claude/`**: 📦 **Provider Implementation Directories**
-    *   Each directory encapsulates the core logic, API calls, and strategy implementations for its respective service provider, offering a clear structure that simplifies adding new service providers in the future. `src/claude/claude-kiro.js` specifically provides the Kiro API implementation.
-
-*   **`tests/`**: 🧪 **Test Directory**
-    *   Comprises a comprehensive integration test suite covering all API endpoints, authentication methods, and error handling scenarios, guaranteeing project stability and reliability. It supports independent testing for different providers and full HTTP integration tests.
-
-### 🏗️ Architecture Design Patterns
-
-The project leverages various modern design patterns to ensure code maintainability and extensibility:
-
-*   **Adapter Pattern**: `src/adapter.js` provides a unified interface for diverse AI services.
-*   **Strategy Pattern**: `src/provider-strategies.js` manages request/response conversion for different protocols.
-*   **Factory Pattern**: Dynamically creates and manages service adapter instances.
-*   **Singleton Pattern**: Caches and reuses service adapter instances.
-
-### 🔄 Data Flow Processing
-
-1.  **Request Reception**: The HTTP server receives client requests.
-2.  **Authentication Validation**: Unified validation for multiple authentication methods.
-3.  **Protocol Identification**: Recognizes the client protocol based on the endpoint and request headers.
-4.  **Format Conversion**: Converts the request to the target provider's format.
-5.  **Service Invocation**: Calls the specific AI service via the adapter.
-6.  **Response Conversion**: Converts the service response back to the client's expected format.
-7.  **Streaming Processing**: Supports real-time streaming response transmission.
 
 ### 🎨 Model Protocol and Provider Relationship Diagram
 
@@ -131,133 +86,13 @@ The project leverages various modern design patterns to ensure code maintainabil
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are unavailable, this project fully supports MCP (Model Context Protocol), enabling powerful functional extensions when paired with MCP-compatible clients.
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
 *   **Latest Model Support**: Supports the latest **Kimi K2** and **GLM-4.5** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
-*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**.
+*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
 
 ---
 
-## 🛠️ Key Features
+## 💻 Proxy Settings
 
-#### General Features
-*   🔐 **Smart Authentication & Token Renewal**: For services requiring OAuth (e.g., `gemini-cli-oauth`), the initial run guides you through browser authorization and automatically refreshes tokens.
-*   🛡️ **Multiple Authentication Methods**: Supports `Authorization: Bearer <key>`, `x-goog-api-key`, `x-api-key` request headers, and URL query parameters for authentication.
-*   ⚙️ **Highly Configurable**: Flexibly configure listening addresses, ports, API keys, model providers, and logging modes via `config.json` or command-line arguments.
-*   📜 **Fully Controllable Logging System**: Can output timestamped prompt logs to the console or a file, and display remaining token validity.
-*   🏥 **Health Check Mechanism**: Provides a `/health` endpoint for service status monitoring, returning service health and current configuration.
-
-#### OpenAI Compatible Interface (`/v1/...`)
-*   🌍 **Perfect Compatibility**: Implements the core `/v1/models` and `/v1/chat/completions` endpoints.
-*   🔄 **Automatic Format Conversion**: Seamlessly converts requests/responses between different model formats and OpenAI format internally, supporting multimodal content.
-*   💨 **Streaming Support**: Fully supports OpenAI's streaming responses (`"stream": true`), delivering a typewriter-like real-time experience.
-
-#### Gemini Native Interface (`/v1beta/...`)
-*   🎯 **Native Support**: Full support for Gemini API's native format and features.
-*   🔧 **Advanced Features**: Supports system instructions, tool calls, multimodal input, and other advanced functionalities.
-*   📊 **Detailed Statistics**: Provides comprehensive token usage statistics and model information.
-
-#### Claude Native Interface (`/v1/messages`)
-*   🤖 **Claude Dedicated**: Full support for Claude Messages API format.
-*   🛠️ **Tool Integration**: Supports Claude's tool usage and function calling features.
-*   🎨 **Multimodal**: Supports images, audio, and other input formats.
-
----
-
-## 📦 Installation Guide
-
-1.  **Environment Preparation**:
-    *   Please ensure [Node.js](https://nodejs.org/) is installed (recommended version >= 20.0.0).
-    *   This project already includes `package.json` and sets `{"type": "module"}`, eliminating manual creation.
-
-2.  **Install Dependencies**:
-    After cloning this repository, execute the following in the project root directory:
-    ```bash
-    npm install
-    ```
-    This will automatically install all necessary dependencies.
-
----
-
-## 🚀 Quick Start
-
-### 1. Configuration File (`config.json`)
-
-We recommend using the `config.json` file for configuration management, offering greater clarity than lengthy command-line arguments.
-
-First, manually create a `config.json` file and populate it with your configuration details.
-
-```json
-{
-    "REQUIRED_API_KEY": "123456",
-    "SERVER_PORT": 3000,
-    "HOST": "localhost",
-    "MODEL_PROVIDER": "gemini-cli-oauth",
-    "OPENAI_API_KEY": "sk-your-openai-key",
-    "OPENAI_BASE_URL": "https://api.openai.com/v1",
-    "CLAUDE_API_KEY": "sk-ant-your-claude-key",
-    "CLAUDE_BASE_URL": "https://api.anthropic.com/v1",
-    "PROJECT_ID": "your-gcp-project-id",
-    "PROMPT_LOG_MODE": "console"
-}
-```
-
-### 2. Configuration Parameter Details
-
-The following table details all supported parameters in `config.json`:
-
-| Parameter Name | Type | Description | Default/Optional Values |
-| --- | --- | --- | --- |
-| `REQUIRED_API_KEY` | string | Key to protect your API service. Clients must provide this key with requests. | Any string, defaults to `"123456"` |
-| `SERVER_PORT` | number | Port number the server listens on. | Any valid port, defaults to `3000` |
-| `HOST` | string | Host address the server listens on. `localhost` for local access, `0.0.0.0` for LAN/public access. | Defaults to `"localhost"` |
-| `MODEL_PROVIDER` | string | Specifies backend model service provider. Core config determining API request forwarding. | Options: `"gemini-cli-oauth"`, `"openai-custom"`, `"claude-custom"`, `"claude-kiro-oauth"` |
-| `OPENAI_API_KEY` | string | Required OpenAI API key when `MODEL_PROVIDER` is `openai-custom`. | `null` |
-| `OPENAI_BASE_URL` | string | Optional OpenAI-compatible API address when `MODEL_PROVIDER` is `openai-custom`. | Defaults to `"https://api.openai.com/v1"` |
-| `CLAUDE_API_KEY` | string | Required Claude API key when `MODEL_PROVIDER` is `claude-custom`. | `null` |
-| `CLAUDE_BASE_URL` | string | Optional Claude-compatible API address when `MODEL_PROVIDER` is `claude-custom`. | Defaults to `"https://api.anthropic.com/v1"` |
-| `KIRO_OAUTH_CREDS_BASE64` | string | (Kiro API Mode) Base64 encoded Kiro OAuth credentials string. | `null` |
-| `KIRO_OAUTH_CREDS_FILE_PATH` | string | (Kiro API Mode) Path to your Kiro OAuth credentials JSON file. | `null` |
-| `GEMINI_OAUTH_CREDS_BASE64` | string | (Gemini-CLI Mode) Base64 encoded Google OAuth credentials string. | `null` |
-| `GEMINI_OAUTH_CREDS_FILE_PATH` | string | (Gemini-CLI Mode) Path to your Google OAuth credentials JSON file. | `null` |
-| `PROJECT_ID` | string | (Gemini-CLI Mode) Your Google Cloud project ID. | `null` |
-| `SYSTEM_PROMPT_FILE_PATH` | string | External file path for loading system prompts. | Defaults to `"input_system_prompt.txt"` |
-| `SYSTEM_PROMPT_MODE` | string | System prompt application mode. `overwrite` overrides client prompt, `append` appends. | Options: `"overwrite"`, `"append"` |
-| `PROMPT_LOG_MODE` | string | Logging mode for requests/responses. `none` (no log), `console` (to console), `file` (to log file). | Options: `"none"`, `"console"`, `"file"` |
-| `PROMPT_LOG_BASE_NAME` | string | Base name for log files when `PROMPT_LOG_MODE` is `file`. | Defaults to `"prompt_log"` |
-| `REQUEST_MAX_RETRIES` | number | Maximum number of automatic retries for failed API requests. | Defaults to `3` |
-| `REQUEST_BASE_DELAY` | number | Base delay (milliseconds) between automatic retries. Delay increases with each retry. | Defaults to `1000` |
-| `CRON_NEAR_MINUTES` | number | (Gemini-CLI Mode) Interval in minutes for the OAuth token refresh task. | Defaults to `15` |
-| `CRON_REFRESH_TOKEN` | boolean | (Gemini-CLI Mode) Whether to enable automatic OAuth token refresh task. | Defaults to `true` |
-
-### 3. Start the Service
-
-*   **Using `config.json`** (Recommended)
-    ```bash
-    node src/api-server.js
-    ```
-*   **Via Command-Line Arguments** (Overrides same-name settings in `config.json`)
-    *   **Start OpenAI Proxy**:
-        ```bash
-        node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx
-        ```
-    *   **Start Claude Proxy**:
-        ```bash
-        node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx
-        ```
-    *   **Start Kiro API Proxy**:
-        ```bash
-        node src/api-server.js --model-provider claude-kiro-oauth
-        ```
-    *   **Listen on all network interfaces, specify port and key** (for Docker or LAN access)
-        ```bash
-        node src/api-server.js --host 0.0.0.0 --port 8000 --api-key your_secret_key
-        ```
-
-*For more startup parameters, refer to the comments at the top of the `src/api-server.js` file.*
-
----
-
-### 4. Call the API
-
-> **Hint**: If you are using this in an environment where direct access to Google/OpenAI/Claude/Kiro services is unavailable, please set up a global HTTP/HTTPS proxy for your terminal first.
+> **Hint**: If you are using this in an environment where direct access to Google/OpenAI/Claude/Kiro services is unavailable, please set up an HTTP proxy for your terminal first, do not set up an HTTPS proxy.
 
 ### HTTP Proxy Setup Commands for Different Terminal Environments
 
@@ -289,90 +124,8 @@ These settings are effective only for the current PowerShell session. For perman
 
 **Please replace `your_proxy_address` and `port` with your actual proxy address and port.**
 
----
-
-### 🐳 Docker Deployment
-
-The project supports Docker deployment. For a detailed guide, please refer to the [Docker Deployment Guide](./README.Docker.md).
-
----
-
-All requests use the standard OpenAI format.
-
-*   **Health Check**
-    ```bash
-    curl http://localhost:3000/health
-    ```
-*   **List Models**
-    ```bash
-    curl http://localhost:3000/v1/models \
-      -H "Authorization: Bearer 123456"
-    ```
-*   **Generate Content (Non-streaming)**
-    ```bash
-    curl http://localhost:3000/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer 123456" \
-      -d '{
-        "model": "gemini-2.5-flash",
-        "messages": [
-          {"role": "system", "content": "You are a cat named Neko."},
-          {"role": "user", "content": "Hello, what is your name?"}
-        ]
-      }'
-    ```
-
-*   **Multimodal Content Generation**
-    ```bash
-    curl http://localhost:3000/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer 123456" \
-      -d '{
-        "model": "gemini-2.5-flash",
-        "messages": [
-          {
-            "role": "user",
-            "content": [
-              {"type": "text", "text": "Describe this image"},
-              {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
-            ]
-          }
-        ]
-      }'
-    ```
-
-*   **Using Different Providers (via Path)**
-    ```bash
-    # Using Gemini
-    curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer 123456" \
-      -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Hello"}]}'
-    
-    # Using Claude
-    curl http://localhost:3000/claude-custom/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer 123456" \
-      -d '{"model": "claude-3-opus-20240229", "messages": [{"role": "user", "content": "Hello"}]}'
-    ```
-*   **Stream Generate Content**
-    ```bash
-    curl http://localhost:3000/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer 123456" \
-      -d '{
-        "model": "claude-3-opus-20240229",
-        "messages": [
-          {"role": "user", "content": "Write a five-line poem about the universe"}
-        ],
-        "stream": true
-      }'
-    ```
-
----
 
 ## 🌟 Special Usage & Advanced Tips
-
 *   **🔌 Connect to Any OpenAI Client**: This is the fundamental feature of this project. Direct the API address of any OpenAI-compatible application (e.g., LobeChat, NextChat, VS Code extensions) to this service (`http://localhost:3000`) to seamlessly leverage all configured models.
 
 *   **🔍 Centralized Request Monitoring & Auditing**: Set `"PROMPT_LOG_MODE": "file"` in `config.json` to capture all requests and responses and save them to a local log file. This is vital for analyzing, debugging, and optimizing prompts, and even for constructing private datasets.
@@ -380,7 +133,7 @@ All requests use the standard OpenAI format.
 *   **💡 Dynamic System Prompts**:
     *   By configuring `SYSTEM_PROMPT_FILE_PATH` and `SYSTEM_PROMPT_MODE` in `config.json`, you gain more flexible control over system prompt behavior.
     *   **Supported Modes**:
-        *   `overwrite`: Completely ignores the client's system prompt, enforcing the content from the file.
+        *   `override`: Completely ignores the client's system prompt, enforcing the content from the file.
         *   `append`: Appends the file's content to the end of the client's system prompt, supplementing existing rules.
     *   This allows you to establish consistent base instructions for various clients while enabling individual applications to personalize extensions.
 
@@ -402,3 +155,19 @@ The development of this project was significantly inspired by the official Googl
 ## 🌟 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=justlovemaki/AIClient-2-API&type=Timeline)](https://www.star-history.com/#justlovemaki/AIClient-2-API&Timeline)
+
+---
+
+## ⚠️ Disclaimer
+
+### Usage Risk Warning
+This project (AIClient-2-API) is for learning and research purposes only. Users assume all risks when using this project. The author is not responsible for any direct, indirect, or consequential losses resulting from the use of this project.
+
+### Third-Party Service Responsibility Statement
+This project is an API proxy tool and does not provide any AI model services. All AI model services are provided by their respective third-party providers (such as Google, OpenAI, Anthropic, etc.). Users should comply with the terms of service and policies of each third-party service when accessing them through this project. The author is not responsible for the availability, quality, security, or legality of third-party services.
+
+### Data Privacy Statement
+This project runs locally and does not collect or upload any user data. However, users should protect their API keys and other sensitive information when using this project. It is recommended that users regularly check and update their API keys and avoid using this project in insecure network environments.
+
+### Legal Compliance Reminder
+Users should comply with the laws and regulations of their country/region when using this project. It is strictly prohibited to use this project for any illegal purposes. Any consequences resulting from users' violation of laws and regulations shall be borne by the users themselves.
