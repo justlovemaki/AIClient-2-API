@@ -347,20 +347,28 @@ async initializeAuth(forceRefresh = false) {
             }
         }
 
-        // Priority 3: Load from default directory if no specific file path and no token file credentials
-        const dirPath = this.credPath;
-        console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
-        const files = await fs.readdir(dirPath);
-        for (const file of files) {
-            if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
-                const filePath = path.join(dirPath, file);
-                const credentials = await loadCredentialsFromFile(filePath);
-                if (credentials) {
-                    credentials.expiresAt = mergedCredentials.expiresAt;
-                    Object.assign(mergedCredentials, credentials);
-                    console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
+        // Priority 3: Load from default directory only if no specific file path is configured
+        if (!this.credsFilePath) {
+            const dirPath = this.credPath;
+            console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+            try {
+                const files = await fs.readdir(dirPath);
+                for (const file of files) {
+                    if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
+                        const filePath = path.join(dirPath, file);
+                        const credentials = await loadCredentialsFromFile(filePath);
+                        if (credentials) {
+                            credentials.expiresAt = mergedCredentials.expiresAt;
+                            Object.assign(mergedCredentials, credentials);
+                            console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
+                        }
+                    }
                 }
+            } catch (error) {
+                console.debug(`[Kiro Auth] Could not read credential directory ${dirPath}: ${error.message}`);
             }
+        } else {
+            console.debug(`[Kiro Auth] Skipping directory scan because specific file path is configured: ${this.credsFilePath}`);
         }
 
         // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
@@ -385,7 +393,7 @@ async initializeAuth(forceRefresh = false) {
         this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region);
         this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region);
     } catch (error) {
-        console.warn(`[Kiro Auth] Could not read credential directory ${this.credPath}: ${error.message}`);
+        console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
 
     // Refresh token if forced or if access token is missing but refresh token is available
@@ -417,8 +425,8 @@ async initializeAuth(forceRefresh = false) {
                 this.expiresAt = expiresAt;
                 console.info('[Kiro Auth] Access token refreshed successfully');
 
-                // Update the token file
-                const tokenFilePath = path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+                // Update the token file - use specified path if configured, otherwise use default
+                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
                 const updatedTokenData = {
                     accessToken: this.accessToken,
                     refreshToken: this.refreshToken,
