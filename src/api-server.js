@@ -80,7 +80,7 @@
  * --host <address>                    服务器监听地址 / Server listening address (default: localhost)
  * --port <number>                     服务器监听端口 / Server listening port (default: 3000)
  * --api-key <key>                     身份验证所需的 API 密钥 / Required API key for authentication (default: 123456)
- * --model-provider <provider>         AI 模型提供商 / AI model provider: openai-custom, claude-custom, gemini-cli, kiro-api
+ * --model-provider <provider>         AI 模型提供商 / AI model provider: openai-custom, claude-custom, gemini-cli, kiro-api, kiro-api-pool
  * --openai-api-key <key>             OpenAI API 密钥 / OpenAI API key (for openai-custom provider)
  * --openai-base-url <url>            OpenAI API 基础 URL / OpenAI API base URL (for openai-custom provider)
  * --claude-api-key <key>             Claude API 密钥 / Claude API key (for claude-custom provider)
@@ -89,6 +89,9 @@
  * --gemini-oauth-creds-file <path>   Gemini OAuth 凭据 JSON 文件路径 / Path to Gemini OAuth credentials JSON file
  * --kiro-oauth-creds-base64 <b64>    Kiro OAuth 凭据的 Base64 字符串 / Kiro OAuth credentials as Base64 string
  * --kiro-oauth-creds-file <path>     Kiro OAuth 凭据 JSON 文件路径 / Path to Kiro OAuth credentials JSON file
+ * --kiro-pool-config <json>          Kiro 多账号池配置 JSON 字符串 / Kiro multi-account pool configuration as JSON string
+ * --kiro-pool-strategy <strategy>    Kiro 池负载均衡策略 / Kiro pool load balancing strategy: round-robin, random, least-used, least-failures
+ * --kiro-pool-max-failures <number>  Kiro 池最大失败次数 / Max failures before marking account as unhealthy (default: 3)
  * --project-id <id>                  Google Cloud 项目 ID / Google Cloud Project ID (for gemini-cli provider)
  * --system-prompt-file <path>        系统提示文件路径 / Path to system prompt file (default: input_system_prompt.txt)
  * --system-prompt-mode <mode>        系统提示模式 / System prompt mode: overwrite or append (default: overwrite)
@@ -153,6 +156,9 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             GEMINI_OAUTH_CREDS_FILE_PATH: null,
             KIRO_OAUTH_CREDS_BASE64: null,
             KIRO_OAUTH_CREDS_FILE_PATH: null,
+            KIRO_POOL_CONFIG: null,
+            KIRO_POOL_STRATEGY: 'round-robin',
+            KIRO_POOL_MAX_FAILURES: 3,
             PROJECT_ID: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'overwrite',
@@ -312,6 +318,36 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
                 i++;
             } else {
                 console.warn(`[Config Warning] --cron-refresh-token flag requires a value.`);
+            }
+        } else if (args[i] === '--kiro-pool-config') {
+            if (i + 1 < args.length) {
+                try {
+                    currentConfig.KIRO_POOL_CONFIG = JSON.parse(args[i + 1]);
+                    i++;
+                } catch (error) {
+                    console.warn(`[Config Warning] Invalid JSON for --kiro-pool-config: ${error.message}`);
+                }
+            } else {
+                console.warn(`[Config Warning] --kiro-pool-config flag requires a value.`);
+            }
+        } else if (args[i] === '--kiro-pool-strategy') {
+            if (i + 1 < args.length) {
+                const strategy = args[i + 1];
+                if (['round-robin', 'random', 'least-used', 'least-failures'].includes(strategy)) {
+                    currentConfig.KIRO_POOL_STRATEGY = strategy;
+                } else {
+                    console.warn(`[Config Warning] Invalid strategy for --kiro-pool-strategy. Expected: round-robin, random, least-used, least-failures`);
+                }
+                i++;
+            } else {
+                console.warn(`[Config Warning] --kiro-pool-strategy flag requires a value.`);
+            }
+        } else if (args[i] === '--kiro-pool-max-failures') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_POOL_MAX_FAILURES = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                console.warn(`[Config Warning] --kiro-pool-max-failures flag requires a value.`);
             }
         }
     }
@@ -529,6 +565,10 @@ async function startServer() {
             console.log(`  Project ID: ${CONFIG.PROJECT_ID || 'Auto-discovered'}`);
         } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.KIRO_API) {
             console.log(`  Kiro OAuth Creds File Path: ${CONFIG.KIRO_OAUTH_CREDS_FILE_PATH || 'Default'}`);
+        } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.KIRO_API_POOL) {
+            console.log(`  Kiro Pool Strategy: ${CONFIG.KIRO_POOL_STRATEGY}`);
+            console.log(`  Kiro Pool Max Failures: ${CONFIG.KIRO_POOL_MAX_FAILURES}`);
+            console.log(`  Kiro Pool Accounts: ${CONFIG.KIRO_POOL_CONFIG ? CONFIG.KIRO_POOL_CONFIG.length : 0}`);
         }
         console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
         console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);

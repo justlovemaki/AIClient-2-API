@@ -2,6 +2,7 @@ import { GeminiApiService } from './gemini/gemini-core.js'; // 导入geminiApiSe
 import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiService
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
+import { KiroApiPoolService } from './claude/claude-kiro-pool.js'; // 导入KiroApiPoolService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -188,6 +189,50 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// Kiro API Pool 服务适配器
+export class KiroApiPoolServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.kiroApiPoolService = new KiroApiPoolService(config);
+        this.kiroApiPoolService.initialize().catch(error => {
+            console.error("Failed to initialize kiroApiPoolService:", error);
+        });
+    }
+
+    async generateContent(model, requestBody) {
+        // The adapter expects the requestBody to be in OpenAI format for Kiro API Pool
+        return this.kiroApiPoolService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        // The adapter expects the requestBody to be in OpenAI format for Kiro API Pool
+        const stream = this.kiroApiPoolService.generateContentStream(model, requestBody);
+        yield* stream;
+    }
+
+    async listModels() {
+        // Returns the native model list from the Kiro Pool service
+        return this.kiroApiPoolService.listModels();
+    }
+
+    async refreshToken() {
+        if(this.kiroApiPoolService.isExpiryDateNear()===true){
+            console.log(`[Kiro Pool] Expiry date is near, refreshing tokens...`);
+            return this.kiroApiPoolService.refreshToken();
+        }
+        return Promise.resolve();
+    }
+
+    // 额外的池管理方法
+    getPoolStatus() {
+        return this.kiroApiPoolService.getPoolStatus();
+    }
+
+    resetStats() {
+        return this.kiroApiPoolService.resetStats();
+    }
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -207,6 +252,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.KIRO_API:
                 serviceInstances[provider] = new KiroApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.KIRO_API_POOL:
+                serviceInstances[provider] = new KiroApiPoolServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);
