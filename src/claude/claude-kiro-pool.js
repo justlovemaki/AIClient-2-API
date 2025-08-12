@@ -14,14 +14,14 @@ export class KiroApiPoolService {
         this.failureCounts = new Map(); // 记录每个账号的失败次数
         this.lastUsedTimes = new Map(); // 记录每个账号的最后使用时间
         this.isInitialized = false;
-        
+
         // 负载均衡策略: 'round-robin', 'random', 'least-used', 'least-failures'
         this.loadBalanceStrategy = config.KIRO_POOL_STRATEGY || 'round-robin';
-        
+
         // 故障转移配置
         this.maxFailures = config.KIRO_POOL_MAX_FAILURES || 3; // 最大失败次数
         this.failureResetTime = config.KIRO_POOL_FAILURE_RESET_TIME || 300000; // 5分钟后重置失败计数
-        
+
         this.initializeAccounts();
     }
 
@@ -36,7 +36,7 @@ export class KiroApiPoolService {
 
         this.accounts = poolConfig.map((accountConfig, index) => {
             const accountId = accountConfig.name || `kiro-account-${index}`;
-            
+
             // 为每个账号创建独立的配置
             const individualConfig = {
                 ...this.config,
@@ -45,7 +45,7 @@ export class KiroApiPoolService {
             };
 
             const service = new KiroApiService(individualConfig);
-            
+
             // 初始化统计信息
             this.requestCounts.set(accountId, 0);
             this.failureCounts.set(accountId, 0);
@@ -68,7 +68,7 @@ export class KiroApiPoolService {
      */
     async initialize() {
         if (this.isInitialized) return;
-        
+
         console.log('[Kiro Pool] Initializing all accounts...');
         const initPromises = this.accounts.map(async (account) => {
             try {
@@ -84,7 +84,7 @@ export class KiroApiPoolService {
 
         await Promise.allSettled(initPromises);
         this.isInitialized = true;
-        
+
         const healthyCount = this.accounts.filter(acc => acc.isHealthy).length;
         console.log(`[Kiro Pool] Initialization complete. ${healthyCount}/${this.accounts.length} accounts healthy`);
     }
@@ -95,7 +95,7 @@ export class KiroApiPoolService {
     isAccountAvailable(account) {
         const failures = this.failureCounts.get(account.id) || 0;
         const lastFailureTime = this.lastUsedTimes.get(account.id) || 0;
-        
+
         // 如果失败次数超过阈值，检查是否已过重置时间
         if (failures >= this.maxFailures) {
             if (Date.now() - lastFailureTime > this.failureResetTime) {
@@ -107,7 +107,7 @@ export class KiroApiPoolService {
             }
             return false;
         }
-        
+
         return account.isHealthy;
     }
 
@@ -123,7 +123,7 @@ export class KiroApiPoolService {
      */
     selectAccount() {
         const availableAccounts = this.getAvailableAccounts();
-        
+
         if (availableAccounts.length === 0) {
             throw new Error('No healthy Kiro accounts available');
         }
@@ -134,7 +134,7 @@ export class KiroApiPoolService {
             case 'random':
                 selectedAccount = availableAccounts[Math.floor(Math.random() * availableAccounts.length)];
                 break;
-                
+
             case 'least-used':
                 selectedAccount = availableAccounts.reduce((least, current) => {
                     const leastCount = this.requestCounts.get(least.id) || 0;
@@ -142,7 +142,7 @@ export class KiroApiPoolService {
                     return currentCount < leastCount ? current : least;
                 });
                 break;
-                
+
             case 'least-failures':
                 selectedAccount = availableAccounts.reduce((least, current) => {
                     const leastFailures = this.failureCounts.get(least.id) || 0;
@@ -150,7 +150,7 @@ export class KiroApiPoolService {
                     return currentFailures < leastFailures ? current : least;
                 });
                 break;
-                
+
             case 'round-robin':
             default:
                 // 优先使用当前索引的账号（粘性策略）
@@ -163,14 +163,14 @@ export class KiroApiPoolService {
                     while (attempts < this.accounts.length) {
                         this.currentIndex = (this.currentIndex + 1) % this.accounts.length;
                         const account = this.accounts[this.currentIndex];
-                        
+
                         if (this.isAccountAvailable(account)) {
                             selectedAccount = account;
                             break;
                         }
                         attempts++;
                     }
-                    
+
                     if (!selectedAccount) {
                         selectedAccount = availableAccounts[0]; // 回退到第一个可用账号
                     }
@@ -197,14 +197,14 @@ export class KiroApiPoolService {
             // 失败时增加失败计数
             const failures = (this.failureCounts.get(accountId) || 0) + 1;
             this.failureCounts.set(accountId, failures);
-            
+
             // 失败时切换到下一个账号（为下次请求做准备）
             const currentAccountIndex = this.accounts.findIndex(acc => acc.id === accountId);
             if (currentAccountIndex !== -1) {
                 this.currentIndex = (currentAccountIndex + 1) % this.accounts.length;
                 console.log(`[Kiro Pool] Account ${accountId} failed, switching to next account for future requests`);
             }
-            
+
             // 如果失败次数达到阈值，标记为不健康
             if (failures >= this.maxFailures) {
                 const account = this.accounts.find(acc => acc.id === accountId);
@@ -219,41 +219,39 @@ export class KiroApiPoolService {
     /**
      * 执行API调用，带有故障转移
      */
-    async executeWithFailover(operation, maxRetries = 3) {
+    async executeWithFailover(operation) {
         if (!this.isInitialized) {
             await this.initialize();
         }
 
         let lastError;
-        let attempts = 0;
 
-        while (attempts < maxRetries) {
+        while (true) {
+            const account = this.selectAccount();
+
             try {
-                const account = this.selectAccount();
                 const result = await operation(account.service);
-                
+
                 // 记录成功
                 this.recordResult(account.id, true);
                 return result;
-                
+
             } catch (error) {
-                attempts++;
                 lastError = error;
-                
+
                 // 记录失败
                 const availableAccounts = this.getAvailableAccounts();
                 if (availableAccounts.length > 0) {
-                    const lastAccount = availableAccounts[availableAccounts.length - 1];
-                    this.recordResult(lastAccount.id, false);
+                    this.recordResult(account.id, false);
                 }
-                
-                console.warn(`[Kiro Pool] Attempt ${attempts} failed:`, error.message);
-                
+
+                console.warn(`[Kiro Pool] Account ${account.id} failed:`, error.message);
+
                 // 如果还有重试机会且有其他可用账号，继续尝试
                 if (attempts < maxRetries && this.getAvailableAccounts().length > 0) {
                     continue;
                 }
-                
+
                 break;
             }
         }
@@ -273,25 +271,50 @@ export class KiroApiPoolService {
     /**
      * 流式生成内容
      */
-    async *generateContentStream(model, requestBody) {
-        const service = await this.executeWithFailover(async (service) => {
-            return service; // 返回选中的服务实例
-        });
+    async * generateContentStream(model, requestBody) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
 
-        try {
-            yield* service.generateContentStream(model, requestBody);
-            // 记录成功
-            const account = this.accounts.find(acc => acc.service === service);
-            if (account) {
+        let lastError;
+
+        while (true) {
+            const account = this.selectAccount();
+            const service = account.service;
+
+            try {
+                // 建立流
+                const stream = service.generateContentStreamNoCatch(model, requestBody);
+
+                // 逐 chunk 消费，抛错就 catch
+                for await (const chunk of stream) {
+                    yield chunk;
+                }
+
                 this.recordResult(account.id, true);
-            }
-        } catch (error) {
-            // 记录失败
-            const account = this.accounts.find(acc => acc.service === service);
-            if (account) {
+
+                return; // 正常结束
+            } catch (error) {
+                lastError = error;
+
+                // 记录失败
                 this.recordResult(account.id, false);
+
+                console.warn(`[Kiro Pool] Account ${account.id} failed during stream:`, error.message || error);
+
+                // 如果还有重试机会且有其他可用账号，继续尝试
+                if (this.getAvailableAccounts().length > 0) {
+                    continue;
+                }
+
+                break;
             }
-            throw error;
+        }
+
+        console.error('[Kiro Pool] All Kiro pool attempts failed. Last error:', lastError);
+
+        for (const chunkJson of KiroApiService.buildClaudeResponse(`Error: ${lastError?.message}`, true, 'assistant', model, null)) {
+            yield chunkJson;
         }
     }
 
@@ -334,7 +357,7 @@ export class KiroApiPoolService {
      * 检查是否有账号的令牌即将过期
      */
     isExpiryDateNear() {
-        return this.accounts.some(account => 
+        return this.accounts.some(account =>
             account.isHealthy && account.service.isExpiryDateNear()
         );
     }
@@ -356,7 +379,7 @@ export class KiroApiPoolService {
                 lastUsed: this.lastUsedTimes.get(account.id) || 0
             }))
         };
-        
+
         return status;
     }
 
@@ -367,14 +390,14 @@ export class KiroApiPoolService {
         this.requestCounts.clear();
         this.failureCounts.clear();
         this.lastUsedTimes.clear();
-        
+
         this.accounts.forEach(account => {
             account.isHealthy = true;
             this.requestCounts.set(account.id, 0);
             this.failureCounts.set(account.id, 0);
             this.lastUsedTimes.set(account.id, 0);
         });
-        
+
         console.log('[Kiro Pool] All statistics reset');
     }
 }

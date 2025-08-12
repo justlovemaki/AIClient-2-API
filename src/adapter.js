@@ -160,7 +160,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
         super();
         this.kiroApiService = new KiroApiService(config);
         this.kiroApiService.initialize().catch(error => {
-            console.error("Failed to initialize kiroApiService:", error);
+            console.error("[Kiro Adapter]Failed to initialize kiroApiService:", error);
         });
     }
 

@@ -198,7 +198,7 @@ function parseBracketToolCalls(responseText) {
                 continue; // Skip this one if no closing bracket found
             }
         }
-        
+
         const parsedCall = parseSingleToolCall(toolCallText);
         if (parsedCall) {
             toolCalls.push(parsedCall);
@@ -257,7 +257,7 @@ export class KiroApiService {
         this.modelName = KIRO_CONSTANTS.DEFAULT_MODEL_NAME;
         this.axiosInstance = null; // Initialize later in async method
     }
- 
+
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Kiro] Initializing Kiro API Service...');
@@ -265,7 +265,7 @@ export class KiroApiService {
         const macSha256 = await getMacAddressSha256();
         this.axiosInstance = axios.create({
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
-             headers: {
+            headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'x-amz-user-agent': `aws-sdk-js/1.0.7 KiroIDE-0.1.25-${macSha256}`,
                 'user-agent': `aws-sdk-js/1.0.7 ua/2.1 os/win32#10.0.26100 lang/js md/nodejs#20.16.0 api/codewhispererstreaming#1.0.7 m/E KiroIDE-0.1.25-${macSha256}`,
@@ -278,198 +278,198 @@ export class KiroApiService {
         this.isInitialized = true;
     }
 
-async initializeAuth(forceRefresh = false) {
-    if (this.accessToken && !forceRefresh) {
-        console.debug('[Kiro Auth] Access token already available and not forced refresh.');
-        return;
-    }
-
-    // Helper to load credentials from a file
-    const loadCredentialsFromFile = async (filePath) => {
-        try {
-            const fileContent = await fs.readFile(filePath, 'utf8');
-            return JSON.parse(fileContent);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
-            } else if (error instanceof SyntaxError) {
-                console.warn(`[Kiro Auth] Failed to parse JSON from ${filePath}: ${error.message}`);
-            } else {
-                console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
-            }
-            return null;
+    async initializeAuth(forceRefresh = false) {
+        if (this.accessToken && !forceRefresh) {
+            console.debug('[Kiro Auth] Access token already available and not forced refresh.');
+            return;
         }
-    };
 
-    // Helper to save credentials to a file
-    const saveCredentialsToFile = async (filePath, newData) => {
-        try {
-            let existingData = {};
+        // Helper to load credentials from a file
+        const loadCredentialsFromFile = async (filePath) => {
             try {
                 const fileContent = await fs.readFile(filePath, 'utf8');
-                existingData = JSON.parse(fileContent);
-            } catch (readError) {
-                if (readError.code === 'ENOENT') {
-                    console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+                return JSON.parse(fileContent);
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
+                } else if (error instanceof SyntaxError) {
+                    console.warn(`[Kiro Auth] Failed to parse JSON from ${filePath}: ${error.message}`);
                 } else {
-                    console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
+                    console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
                 }
+                return null;
             }
-            const mergedData = { ...existingData, ...newData };
-            await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
-            console.info(`[Kiro Auth] Updated token file: ${filePath}`);
-        } catch (error) {
-            console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
-        }
-    };
+        };
 
-    try {
-        let mergedCredentials = {};
-
-        // Priority 1: Load from Base64 credentials if available
-        if (this.base64Creds) {
-            Object.assign(mergedCredentials, this.base64Creds);
-            console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
-            // Clear base64Creds after use to prevent re-processing
-            this.base64Creds = null;
-        }
-
-        // Priority 2: Load from a specific file path if provided and not already loaded from token file
-        const credPath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-        if (credPath) {
-            console.debug(`[Kiro Auth] Attempting to load credentials from specified file: ${credPath}`);
-            const credentialsFromFile = await loadCredentialsFromFile(credPath);
-            if (credentialsFromFile) {
-                Object.assign(mergedCredentials, credentialsFromFile);
-                console.info(`[Kiro Auth] Successfully loaded credentials from ${credPath}.`);
-            } else {
-                console.warn(`[Kiro Auth] Could not load credentials from specified file path: ${credPath}`);
-            }
-        }
-
-        // Priority 3: Load from default directory only if no specific file path is configured
-        if (!this.credsFilePath) {
-            const dirPath = this.credPath;
-            console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+        // Helper to save credentials to a file
+        const saveCredentialsToFile = async (filePath, newData) => {
             try {
-                const files = await fs.readdir(dirPath);
-                for (const file of files) {
-                    if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
-                        const filePath = path.join(dirPath, file);
-                        const credentials = await loadCredentialsFromFile(filePath);
-                        if (credentials) {
-                            credentials.expiresAt = mergedCredentials.expiresAt;
-                            Object.assign(mergedCredentials, credentials);
-                            console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
-                        }
+                let existingData = {};
+                try {
+                    const fileContent = await fs.readFile(filePath, 'utf8');
+                    existingData = JSON.parse(fileContent);
+                } catch (readError) {
+                    if (readError.code === 'ENOENT') {
+                        console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+                    } else {
+                        console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
                     }
                 }
+                const mergedData = { ...existingData, ...newData };
+                await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
+                console.info(`[Kiro Auth] Updated token file: ${filePath}`);
             } catch (error) {
-                console.debug(`[Kiro Auth] Could not read credential directory ${dirPath}: ${error.message}`);
+                console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
             }
-        } else {
-            console.debug(`[Kiro Auth] Skipping directory scan because specific file path is configured: ${this.credsFilePath}`);
-        }
+        };
 
-        // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
-        // Apply loaded credentials, prioritizing existing values if they are not null/undefined
-        this.accessToken = this.accessToken || mergedCredentials.accessToken;
-        this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
-        this.clientId = this.clientId || mergedCredentials.clientId;
-        this.clientSecret = this.clientSecret || mergedCredentials.clientSecret;
-        this.authMethod = this.authMethod || mergedCredentials.authMethod;
-        this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
-        this.profileArn = this.profileArn || mergedCredentials.profileArn;
-        this.region = this.region || mergedCredentials.region;
-
-        // Ensure region is set before using it in URLs
-        if (!this.region) {
-            console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
-            this.region = 'us-east-1'; // Set default region
-        }
-
-        this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL.replace("{{region}}", this.region);
-        this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL.replace("{{region}}", this.region);
-        this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region);
-        this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region);
-    } catch (error) {
-        console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
-    }
-
-    // Refresh token if forced or if access token is missing but refresh token is available
-    if (forceRefresh || (!this.accessToken && this.refreshToken)) {
-        if (!this.refreshToken) {
-            throw new Error('No refresh token available to refresh access token.');
-        }
         try {
-            const requestBody = {
-                refreshToken: this.refreshToken,
-            };
+            let mergedCredentials = {};
 
-            let refreshUrl = this.refreshUrl;
-            if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                refreshUrl = this.refreshIDCUrl;
-                requestBody.clientId = this.clientId;
-                requestBody.clientSecret = this.clientSecret;
-                requestBody.grantType = 'refresh_token';
+            // Priority 1: Load from Base64 credentials if available
+            if (this.base64Creds) {
+                Object.assign(mergedCredentials, this.base64Creds);
+                console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
+                // Clear base64Creds after use to prevent re-processing
+                this.base64Creds = null;
             }
-            const response = await this.axiosInstance.post(refreshUrl, requestBody);
-            console.log('[Kiro Auth] Token refresh response:', response.data);
 
-            if (response.data && response.data.accessToken) {
-                this.accessToken = response.data.accessToken;
-                this.refreshToken = response.data.refreshToken;
-                this.profileArn = response.data.profileArn;
-                const expiresIn = response.data.expiresIn;
-                const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-                this.expiresAt = expiresAt;
-                console.info('[Kiro Auth] Access token refreshed successfully');
-
-                // Update the token file - use specified path if configured, otherwise use default
-                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-                const updatedTokenData = {
-                    accessToken: this.accessToken,
-                    refreshToken: this.refreshToken,
-                    expiresAt: expiresAt,
-                };
-                if(this.profileArn){
-                    updatedTokenData.profileArn = this.profileArn;
+            // Priority 2: Load from a specific file path if provided and not already loaded from token file
+            const credPath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+            if (credPath) {
+                console.debug(`[Kiro Auth] Attempting to load credentials from specified file: ${credPath}`);
+                const credentialsFromFile = await loadCredentialsFromFile(credPath);
+                if (credentialsFromFile) {
+                    Object.assign(mergedCredentials, credentialsFromFile);
+                    console.info(`[Kiro Auth] Successfully loaded credentials from ${credPath}.`);
+                } else {
+                    console.warn(`[Kiro Auth] Could not load credentials from specified file path: ${credPath}`);
                 }
-                await saveCredentialsToFile(tokenFilePath, updatedTokenData);
-            } else {
-                throw new Error('Invalid refresh response: Missing accessToken');
             }
+
+            // Priority 3: Load from default directory only if no specific file path is configured
+            if (!this.credsFilePath) {
+                const dirPath = this.credPath;
+                console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+                try {
+                    const files = await fs.readdir(dirPath);
+                    for (const file of files) {
+                        if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
+                            const filePath = path.join(dirPath, file);
+                            const credentials = await loadCredentialsFromFile(filePath);
+                            if (credentials) {
+                                credentials.expiresAt = mergedCredentials.expiresAt;
+                                Object.assign(mergedCredentials, credentials);
+                                console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.debug(`[Kiro Auth] Could not read credential directory ${dirPath}: ${error.message}`);
+                }
+            } else {
+                console.debug(`[Kiro Auth] Skipping directory scan because specific file path is configured: ${this.credsFilePath}`);
+            }
+
+            // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
+            // Apply loaded credentials, prioritizing existing values if they are not null/undefined
+            this.accessToken = this.accessToken || mergedCredentials.accessToken;
+            this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
+            this.clientId = this.clientId || mergedCredentials.clientId;
+            this.clientSecret = this.clientSecret || mergedCredentials.clientSecret;
+            this.authMethod = this.authMethod || mergedCredentials.authMethod;
+            this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
+            this.profileArn = this.profileArn || mergedCredentials.profileArn;
+            this.region = this.region || mergedCredentials.region;
+
+            // Ensure region is set before using it in URLs
+            if (!this.region) {
+                console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
+                this.region = 'us-east-1'; // Set default region
+            }
+
+            this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL.replace("{{region}}", this.region);
+            this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL.replace("{{region}}", this.region);
+            this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region);
+            this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region);
         } catch (error) {
-            console.error('[Kiro Auth] Token refresh failed:', error.message);
-            throw new Error(`Token refresh failed: ${error.message}`);
+            console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
+        }
+
+        // Refresh token if forced or if access token is missing but refresh token is available
+        if (forceRefresh || (!this.accessToken && this.refreshToken)) {
+            if (!this.refreshToken) {
+                throw new Error('No refresh token available to refresh access token.');
+            }
+            try {
+                const requestBody = {
+                    refreshToken: this.refreshToken,
+                };
+
+                let refreshUrl = this.refreshUrl;
+                if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                    refreshUrl = this.refreshIDCUrl;
+                    requestBody.clientId = this.clientId;
+                    requestBody.clientSecret = this.clientSecret;
+                    requestBody.grantType = 'refresh_token';
+                }
+                const response = await this.axiosInstance.post(refreshUrl, requestBody);
+                console.log('[Kiro Auth] Token refresh response:', response.data);
+
+                if (response.data && response.data.accessToken) {
+                    this.accessToken = response.data.accessToken;
+                    this.refreshToken = response.data.refreshToken;
+                    this.profileArn = response.data.profileArn;
+                    const expiresIn = response.data.expiresIn;
+                    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+                    this.expiresAt = expiresAt;
+                    console.info('[Kiro Auth] Access token refreshed successfully');
+
+                    // Update the token file - use specified path if configured, otherwise use default
+                    const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+                    const updatedTokenData = {
+                        accessToken: this.accessToken,
+                        refreshToken: this.refreshToken,
+                        expiresAt: expiresAt,
+                    };
+                    if (this.profileArn) {
+                        updatedTokenData.profileArn = this.profileArn;
+                    }
+                    await saveCredentialsToFile(tokenFilePath, updatedTokenData);
+                } else {
+                    throw new Error('Invalid refresh response: Missing accessToken');
+                }
+            } catch (error) {
+                console.error('[Kiro Auth] Token refresh failed:', error.message);
+                throw new Error(`Token refresh failed: ${error.message}`);
+            }
+        }
+
+        if (!this.accessToken) {
+            throw new Error('No access token available after initialization and refresh attempts.');
         }
     }
-
-    if (!this.accessToken) {
-        throw new Error('No access token available after initialization and refresh attempts.');
-    }
-}
 
     /**
      * Extract text content from OpenAI message format
      */
     getContentText(message) {
-        if(message==null){
+        if (message == null) {
             return "";
         }
-        if (Array.isArray(message) ) {
+        if (Array.isArray(message)) {
             return message
                 .filter(part => part.type === 'text' && part.text)
                 .map(part => part.text)
                 .join('');
         } else if (typeof message.content === 'string') {
             return message.content;
-        } else if (Array.isArray(message.content) ) {
+        } else if (Array.isArray(message.content)) {
             return message.content
                 .filter(part => part.type === 'text' && part.text)
                 .map(part => part.text)
                 .join('');
-        } 
+        }
         return String(message.content || message);
     }
 
@@ -478,7 +478,7 @@ async initializeAuth(forceRefresh = false) {
      */
     buildCodewhispererRequest(messages, model, tools = null, inSystemPrompt = null) {
         const conversationId = uuidv4();
-        
+
         let systemPrompt = this.getContentText(inSystemPrompt);
         const processedMessages = messages;
 
@@ -487,7 +487,7 @@ async initializeAuth(forceRefresh = false) {
         }
 
         const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
-        
+
         let toolsContext = {};
         if (tools && Array.isArray(tools) && tools.length > 0) {
             toolsContext = {
@@ -661,7 +661,7 @@ async initializeAuth(forceRefresh = false) {
         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
             request.profileArn = this.profileArn;
         }
-        
+
         return request;
     }
 
@@ -716,7 +716,7 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
         }
-        
+
         if (currentToolCallDict) {
             toolCalls.push(currentToolCallDict);
         }
@@ -738,7 +738,6 @@ async initializeAuth(forceRefresh = false) {
         const uniqueToolCalls = deduplicateToolCalls(toolCalls);
         return { content: fullContent || '', toolCalls: uniqueToolCalls };
     }
- 
 
     async callApi(method, model, body, isRetry = false, retryCount = 0) {
         if (!this.isInitialized) await this.initialize();
@@ -827,7 +826,7 @@ async initializeAuth(forceRefresh = false) {
             }
             fullResponseText = fullResponseText.replace(/\s+/g, ' ').trim();
         }
-        
+
         //console.log(`[Kiro] Final response text after tool call cleanup: ${fullResponseText}`);
         //console.log(`[Kiro] Final tool calls after deduplication: ${JSON.stringify(uniqueToolCalls)}`);
         return { responseText: fullResponseText, toolCalls: uniqueToolCalls };
@@ -840,7 +839,7 @@ async initializeAuth(forceRefresh = false) {
 
         try {
             const { responseText, toolCalls } = this._processApiResponse(response);
-            return this.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls);
+            return KiroApiService.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls);
         } catch (error) {
             console.error('[Kiro] Error in generateContent:', error);
             throw new Error(`Error processing response: ${error.message}`);
@@ -853,9 +852,26 @@ async initializeAuth(forceRefresh = false) {
             // 直接调用并返回Promise，最终解析为response
             return await this.callApi(method, model, body, isRetry, retryCount);
         } catch (error) {
-            console.error('[Kiro] Error calling API:', error);
+            console.error('[Kiro] Error calling API:', error.message || error);
             throw error; // 向上抛出错误
         }
+    }
+
+    async * _generateContentStream(model, finalModel, requestBody) {
+        const response = await this.streamApi('', finalModel, requestBody);
+        const { responseText, toolCalls } = this._processApiResponse(response);
+
+        // Pass both responseText and toolCalls to buildClaudeResponse
+        // buildClaudeResponse will handle the logic of combining them into a single stream
+        for (const chunkJson of KiroApiService.buildClaudeResponse(responseText, true, 'assistant', model, toolCalls)) {
+            yield chunkJson;
+        }
+    }
+
+    async * generateContentStreamNoCatch(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
+        const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        yield* this._generateContentStream(model, finalModel, requestBody);
     }
 
     // 重构2: generateContentStream 调用新的普通async函数
@@ -864,19 +880,12 @@ async initializeAuth(forceRefresh = false) {
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
 
         try {
-            const response = await this.streamApi('', finalModel, requestBody);
-            const { responseText, toolCalls } = this._processApiResponse(response);
-
-            // Pass both responseText and toolCalls to buildClaudeResponse
-            // buildClaudeResponse will handle the logic of combining them into a single stream
-            for (const chunkJson of this.buildClaudeResponse(responseText, true, 'assistant', model, toolCalls)) {
-                yield chunkJson;
-            }
+            yield* this._generateContentStream(model, finalModel, requestBody);
         } catch (error) {
             console.error('[Kiro] Error in streaming generation:', error);
             // For Claude, we yield an array of events for streaming error
             // Ensure error message is passed as content, not toolCalls
-            for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
+            for (const chunkJson of KiroApiService.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
                 yield chunkJson;
             }
         }
@@ -885,7 +894,7 @@ async initializeAuth(forceRefresh = false) {
     /**
      * Build Claude compatible response object
      */
-    buildClaudeResponse(content, isStream = false, role = 'assistant', model, toolCalls = null) {
+    static buildClaudeResponse(content, isStream = false, role = 'assistant', model, toolCalls = null) {
         const messageId = `${uuidv4()}`;
         // Helper to estimate tokens (simple heuristic)
         const estimateTokens = (text) => Math.ceil((text || '').length / 4);
@@ -910,7 +919,7 @@ async initializeAuth(forceRefresh = false) {
                     content: [] // Content will be streamed via content_block_delta
                 }
             });
- 
+
             let totalOutputTokens = 0;
             let stopReason = "end_turn";
 
@@ -972,7 +981,7 @@ async initializeAuth(forceRefresh = false) {
                             input: {} // input is streamed via input_json_delta
                         }
                     });
-                    
+
                     // 3. content_block_delta for each tool_use
                     // Since Kiro is not truly streaming, we send the full arguments as one delta.
                     events.push({
@@ -983,7 +992,7 @@ async initializeAuth(forceRefresh = false) {
                             partial_json: inputObject
                         }
                     });
- 
+
                     // 4. content_block_stop for each tool_use
                     events.push({
                         type: "content_block_stop",
@@ -1068,7 +1077,7 @@ async initializeAuth(forceRefresh = false) {
         const models = Object.keys(MODEL_MAPPING).map(id => ({
             name: id
         }));
-        
+
         return { models: models };
     }
 
