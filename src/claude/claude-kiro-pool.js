@@ -93,9 +93,169 @@ export class KiroApiPoolService {
     }
 
     /**
+     * 获取第二天0点的时间戳
+     */
+    getNextDayTimestamp() {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        return tomorrow.getTime();
+    }
+
+    /**
+     * 执行流式操作的重试逻辑
+     */
+    async * executeStreamWithRetry(operation, context = {}) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        let lastError;
+        const triedAccounts = new Set();
+        let hasYieldedContent = false;
+
+        while (true) {
+            const account = this.selectAccount(triedAccounts);
+            
+            if (!account) {
+                lastError = new Error('No healthy Kiro accounts available');
+                break;
+            }
+            
+            try {
+                triedAccounts.add(account.id);
+                
+                // 执行流式操作
+                const stream = await operation(account, context);
+                
+                // 逐 chunk 消费，抛错就 catch
+                for await (const chunk of stream) {
+                    hasYieldedContent = true;
+                    yield chunk;
+                }
+
+                this.recordResult(account.id, true);
+                return; // 正常结束
+            } catch (error) {
+                lastError = error;
+
+                // 如果已经输出了内容，就不能再故障转移了
+                if (hasYieldedContent) {
+                    console.error(`[Kiro Pool] Stream failed after yielding content, cannot failover:`, error.message);
+                    this.recordResult(account.id, false);
+                    return;
+                }
+
+                // 使用公共错误处理逻辑
+                await this.handleAccountError(account, error, triedAccounts);
+            }
+        }
+
+        console.error('[Kiro Pool] All Kiro pool attempts failed. Last error:', lastError);
+
+        // 只有在没有输出任何内容的情况下才输出错误信息
+        if (!hasYieldedContent) {
+            const { KiroApiService } = await import('./claude-kiro.js');
+            for (const chunkJson of KiroApiService.buildClaudeResponse(`Error: ${lastError?.message}`, true, 'assistant', context.model, null)) {
+                yield chunkJson;
+            }
+        }
+    }
+
+    /**
+     * 执行操作的通用重试逻辑
+     */
+    async executeWithRetry(operation, context = {}) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        let lastError;
+        const triedAccounts = new Set();
+
+        while (true) {
+            const account = this.selectAccount(triedAccounts);
+            
+            if (!account) {
+                lastError = new Error('No healthy Kiro accounts available');
+                break;
+            }
+            
+            try {
+                triedAccounts.add(account.id);
+                
+                const result = await operation(account, context);
+                
+                // 记录成功
+                this.recordResult(account.id, true);
+                return result;
+            } catch (error) {
+                lastError = error;
+                // 使用公共错误处理逻辑
+                await this.handleAccountError(account, error, triedAccounts);
+            }
+        }
+
+        throw new Error(`All Kiro pool attempts failed. Last error: ${lastError?.message}`);
+    }
+
+    /**
+     * 处理账号错误的公共逻辑
+     */
+    async handleAccountError(account, error, triedAccounts) {
+        this.recordResult(account.id, false);
+        console.warn(`[Kiro Pool] Account ${account.id} failed:`, error.message);
+
+        // 处理特定错误类型
+        if (error.response?.status === 403) {
+            // 认证错误，尝试刷新token
+            try {
+                console.log(`[Kiro Pool] Attempting to refresh token for account ${account.id}`);
+                await account.service.initializeAuth(true);
+                account.isHealthy = true;
+                // 刷新成功后，从已尝试列表中移除，允许重试
+                triedAccounts.delete(account.id);
+                return true; // 表示可以重试
+            } catch (refreshError) {
+                console.error(`[Kiro Pool] Token refresh failed for account ${account.id}:`, refreshError.message);
+                account.isHealthy = false;
+                return false;
+            }
+        } else if (error.response?.status === 429) {
+            // 429错误，说明账号当天配额已用完，标记为不健康直到第二天
+            console.warn(`[Kiro Pool] Account ${account.id} hit daily rate limit (429), marking as unhealthy until tomorrow`);
+            account.isHealthy = false;
+            
+            // 记录429错误时间，用于第二天恢复
+            account.rateLimitResetTime = this.getNextDayTimestamp();
+            
+            // 429不计入失败次数，因为这不是账号问题而是配额问题
+            this.failureCounts.set(account.id, Math.max(0, (this.failureCounts.get(account.id) || 0) - 1));
+            return false;
+        } else if (error.code === 'CERT_HAS_EXPIRED' || error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || error.message?.includes('certificate')) {
+            // 证书错误，标记为不健康但不增加失败计数
+            console.warn(`[Kiro Pool] Account ${account.id} has certificate verification error, marking as unhealthy`);
+            account.isHealthy = false;
+            // 不记录为失败，因为这是环境问题
+            this.failureCounts.set(account.id, Math.max(0, (this.failureCounts.get(account.id) || 0) - 1));
+            return false;
+        }
+        
+        return false; // 其他错误不重试
+    }
+
+    /**
      * 检查账号是否可用
      */
     isAccountAvailable(account) {
+        // 检查429限流是否已经过期
+        if (account.rateLimitResetTime && Date.now() >= account.rateLimitResetTime) {
+            // 429限流已过期，恢复账号健康状态
+            account.isHealthy = true;
+            account.rateLimitResetTime = null;
+            console.log(`[Kiro Pool] Account ${account.id} daily rate limit reset, marked as healthy`);
+        }
+
         const failures = this.failureCounts.get(account.id) || 0;
         const lastFailureTime = this.lastUsedTimes.get(account.id) || 0;
 
@@ -124,8 +284,8 @@ export class KiroApiPoolService {
     /**
      * 根据负载均衡策略选择账号
      */
-    selectAccount() {
-        const availableAccounts = this.getAvailableAccounts();
+    selectAccount(excludeAccountIds = new Set()) {
+        const availableAccounts = this.getAvailableAccounts().filter(acc => !excludeAccountIds.has(acc.id));
 
         if (availableAccounts.length === 0) {
             throw new Error('No healthy Kiro accounts available');
@@ -156,27 +316,21 @@ export class KiroApiPoolService {
 
             case 'round-robin':
             default:
-                // 优先使用当前索引的账号（粘性策略）
-                const currentAccount = this.accounts[this.currentIndex];
-                if (this.isAccountAvailable(currentAccount)) {
-                    selectedAccount = currentAccount;
-                } else {
-                    // 当前账号不可用，寻找下一个可用账号
-                    let attempts = 0;
-                    while (attempts < this.accounts.length) {
-                        this.currentIndex = (this.currentIndex + 1) % this.accounts.length;
-                        const account = this.accounts[this.currentIndex];
+                // 真正的轮询策略：每次选择下一个可用账号
+                let attempts = 0;
+                while (attempts < this.accounts.length) {
+                    this.currentIndex = (this.currentIndex + 1) % this.accounts.length;
+                    const account = this.accounts[this.currentIndex];
 
-                        if (this.isAccountAvailable(account)) {
-                            selectedAccount = account;
-                            break;
-                        }
-                        attempts++;
+                    if (this.isAccountAvailable(account) && !excludeAccountIds.has(account.id)) {
+                        selectedAccount = account;
+                        break;
                     }
+                    attempts++;
+                }
 
-                    if (!selectedAccount) {
-                        selectedAccount = availableAccounts[0]; // 回退到第一个可用账号
-                    }
+                if (!selectedAccount) {
+                    selectedAccount = availableAccounts[0]; // 回退到第一个可用账号
                 }
                 break;
         }
@@ -185,7 +339,7 @@ export class KiroApiPoolService {
         this.requestCounts.set(selectedAccount.id, (this.requestCounts.get(selectedAccount.id) || 0) + 1);
         this.lastUsedTimes.set(selectedAccount.id, Date.now());
 
-        console.log(`[Kiro Pool] Selected account ${selectedAccount.id} (strategy: ${this.loadBalanceStrategy})`);
+        console.debug(`[Kiro Pool] Selected account ${selectedAccount.id} (strategy: ${this.loadBalanceStrategy})`);
         return selectedAccount;
     }
 
@@ -200,13 +354,6 @@ export class KiroApiPoolService {
             // 失败时增加失败计数
             const failures = (this.failureCounts.get(accountId) || 0) + 1;
             this.failureCounts.set(accountId, failures);
-
-            // 失败时切换到下一个账号（为下次请求做准备）
-            const currentAccountIndex = this.accounts.findIndex(acc => acc.id === accountId);
-            if (currentAccountIndex !== -1) {
-                this.currentIndex = (currentAccountIndex + 1) % this.accounts.length;
-                console.log(`[Kiro Pool] Account ${accountId} failed, switching to next account for future requests`);
-            }
 
             // 如果失败次数达到阈值，标记为不健康
             if (failures >= this.maxFailures) {
@@ -223,55 +370,9 @@ export class KiroApiPoolService {
      * 执行API调用，带有故障转移
      */
     async executeWithFailover(operation) {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
-
-        let lastError;
-        const triedAccounts = new Set();
-
-        while (true) {
-            const availableAccounts = this.getAvailableAccounts().filter(acc => !triedAccounts.has(acc.id));
-
-            if (availableAccounts.length === 0) {
-                break;
-            }
-
-            const account = this.selectAccount();
-            triedAccounts.add(account.id);
-
-            try {
-                const result = await operation(account.service);
-
-                // 记录成功
-                this.recordResult(account.id, true);
-                return result;
-
-            } catch (error) {
-                lastError = error;
-
-                // 记录失败
-                this.recordResult(account.id, false);
-
-                console.warn(`[Kiro Pool] Account ${account.id} failed:`, error.message);
-
-                // 如果是认证错误，尝试刷新该账号的token
-                if (error.response?.status === 403) {
-                    try {
-                        console.log(`[Kiro Pool] Attempting to refresh token for account ${account.id}`);
-                        await account.service.initializeAuth(true);
-                        account.isHealthy = true;
-                        // 刷新成功后，从已尝试列表中移除，允许重试
-                        triedAccounts.delete(account.id);
-                    } catch (refreshError) {
-                        console.error(`[Kiro Pool] Token refresh failed for account ${account.id}:`, refreshError.message);
-                        account.isHealthy = false;
-                    }
-                }
-            }
-        }
-
-        throw new Error(`All Kiro pool attempts failed. Last error: ${lastError?.message}`);
+        return this.executeWithRetry(async (account) => {
+            return await operation(account.service);
+        });
     }
 
     /**
@@ -287,77 +388,9 @@ export class KiroApiPoolService {
      * 流式生成内容
      */
     async * generateContentStream(model, requestBody) {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
-
-        let lastError;
-        const triedAccounts = new Set();
-        let hasYieldedContent = false;
-
-        while (true) {
-            const availableAccounts = this.getAvailableAccounts().filter(acc => !triedAccounts.has(acc.id));
-
-            if (availableAccounts.length === 0) {
-                break;
-            }
-
-            const account = this.selectAccount();
-            triedAccounts.add(account.id);
-            const service = account.service;
-
-            try {
-                // 建立流
-                const stream = service.generateContentStreamNoCatch(model, requestBody);
-
-                // 逐 chunk 消费，抛错就 catch
-                for await (const chunk of stream) {
-                    hasYieldedContent = true;
-                    yield chunk;
-                }
-
-                this.recordResult(account.id, true);
-                return; // 正常结束
-
-            } catch (error) {
-                lastError = error;
-
-                // 如果已经输出了内容，就不能再故障转移了
-                if (hasYieldedContent) {
-                    console.error(`[Kiro Pool] Stream failed after yielding content, cannot failover:`, error.message);
-                    this.recordResult(account.id, false);
-                    return;
-                }
-
-                // 记录失败
-                this.recordResult(account.id, false);
-
-                console.warn(`[Kiro Pool] Account ${account.id} failed during stream:`, error.message || error);
-
-                // 如果是认证错误，尝试刷新该账号的token
-                if (error.response?.status === 403) {
-                    try {
-                        console.log(`[Kiro Pool] Attempting to refresh token for account ${account.id}`);
-                        await account.service.initializeAuth(true);
-                        account.isHealthy = true;
-                        // 刷新成功后，从已尝试列表中移除，允许重试
-                        triedAccounts.delete(account.id);
-                    } catch (refreshError) {
-                        console.error(`[Kiro Pool] Token refresh failed for account ${account.id}:`, refreshError.message);
-                        account.isHealthy = false;
-                    }
-                }
-            }
-        }
-
-        console.error('[Kiro Pool] All Kiro pool attempts failed. Last error:', lastError);
-
-        // 只有在没有输出任何内容的情况下才输出错误信息
-        if (!hasYieldedContent) {
-            for (const chunkJson of KiroApiService.buildClaudeResponse(`Error: ${lastError?.message}`, true, 'assistant', model, null)) {
-                yield chunkJson;
-            }
-        }
+        yield* this.executeStreamWithRetry(async (account, context) => {
+            return account.service.generateContentStreamNoCatch(context.model, context.requestBody);
+        }, { model, requestBody });
     }
 
     /**
@@ -423,7 +456,9 @@ export class KiroApiPoolService {
                 isHealthy: account.isHealthy,
                 requestCount: this.requestCounts.get(account.id) || 0,
                 failureCount: this.failureCounts.get(account.id) || 0,
-                lastUsed: this.lastUsedTimes.get(account.id) || 0
+                lastUsed: this.lastUsedTimes.get(account.id) || 0,
+                rateLimitResetTime: account.rateLimitResetTime || null,
+                isRateLimited: account.rateLimitResetTime && Date.now() < account.rateLimitResetTime
             }))
         };
 
