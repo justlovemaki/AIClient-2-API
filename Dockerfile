@@ -17,16 +17,10 @@ COPY package*.json ./
 # 使用--omit=dev来排除开发依赖
 RUN npm install 
 
-# 添加非root用户以提高安全性
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-
 # 复制源代码
 COPY . .
 
-# 更改文件所有者为非root用户
-RUN chown -R nextjs:nodejs /app
-USER nextjs
+USER root
 
 # 创建目录用于存储日志和系统提示文件
 RUN mkdir -p /app/logs

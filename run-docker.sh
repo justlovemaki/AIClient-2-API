@@ -26,12 +26,15 @@ fi
 
 # 构建Docker运行命令，使用HOME环境变量构建的路径
 DOCKER_CMD="docker run -d \\
+  -u "$(id -u):$(id -g)" \\
+  --restart=always \\
+  --privileged=true \\
   -p 3000:3000 \\
    -e ARGS=\"--api-key 123456 --host 0.0.0.0\" \\
-  -v $AWS_SSO_CACHE_PATH:/home/nextjs/.aws/sso/cache \\
-  -v $GEMINI_CONFIG_PATH:/home/nextjs/.gemini/oauth_creds.json \\
-  --name gemini-cli2api \\
-  gemini-cli2api"
+  -v $AWS_SSO_CACHE_PATH:/root/.aws/sso/cache \\
+  -v $GEMINI_CONFIG_PATH:/root/.gemini/oauth_creds.json \\
+  --name aiclient2api \\
+  aiclient2api"
 
 # 显示将要执行的命令
 echo
