@@ -739,7 +739,7 @@ export class KiroApiService {
         return { content: fullContent || '', toolCalls: uniqueToolCalls };
     }
 
-    async callApi(method, model, body, isRetry = false, retryCount = 0) {
+    async callApi(method, model, body, isRetry = false, retryCount = 0, disableRetry = false) {
         if (!this.isInitialized) await this.initialize();
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
@@ -758,11 +758,16 @@ export class KiroApiService {
             const response = await this.axiosInstance.post(requestUrl, requestData, { headers });
             return response;
         } catch (error) {
+            // 如果禁用重试，直接抛出错误
+            if (disableRetry) {
+                throw error;
+            }
+
             if (error.response?.status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403. Attempting token refresh and retrying...');
                 try {
                     await this.initializeAuth(true); // Force refresh token
-                    return this.callApi(method, model, body, true, retryCount);
+                    return this.callApi(method, model, body, true, retryCount, disableRetry);
                 } catch (refreshError) {
                     console.error('[Kiro] Token refresh failed during 403 retry:', refreshError.message);
                     throw refreshError;
@@ -774,7 +779,7 @@ export class KiroApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+                return this.callApi(method, model, body, isRetry, retryCount + 1, disableRetry);
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -782,12 +787,19 @@ export class KiroApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received ${error.response.status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+                return this.callApi(method, model, body, isRetry, retryCount + 1, disableRetry);
             }
 
             console.error('[Kiro] API call failed:', error.message);
             throw error;
         }
+    }
+
+    /**
+     * 不带重试的API调用，供池服务使用
+     */
+    async callApiNoRetry(method, model, body) {
+        return this.callApi(method, model, body, false, 0, true);
     }
 
     _processApiResponse(response) {
@@ -842,6 +854,23 @@ export class KiroApiService {
             return KiroApiService.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls);
         } catch (error) {
             console.error('[Kiro] Error in generateContent:', error);
+            throw new Error(`Error processing response: ${error.message}`);
+        }
+    }
+
+    /**
+     * 不带重试的内容生成，供池服务使用
+     */
+    async generateContentNoRetry(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
+        const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        const response = await this.callApiNoRetry('', finalModel, requestBody);
+
+        try {
+            const { responseText, toolCalls } = this._processApiResponse(response);
+            return KiroApiService.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls);
+        } catch (error) {
+            console.error('[Kiro] Error in generateContentNoRetry:', error);
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
