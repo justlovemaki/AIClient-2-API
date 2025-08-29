@@ -26,7 +26,7 @@
 > [!NOTE]
 > 感谢阮一峰老师在[周刊359期](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html)的推荐。
 >
-> 新增账号池模式，可支持所有provider配置多个账号，自带轮询，故障转移（需要客户端重试）和配置降级。需要在 config 新增配置 PROVIDER_POOLS_FILE_PATH ， 详见配置文件：provider_pools.json
+> 8.29 新增账号池模式，可支持所有provider配置多个账号，自带轮询，故障转移（需要客户端重试）和配置降级。需要在 config 新增配置 PROVIDER_POOLS_FILE_PATH ， 详见配置文件：provider_pools.json
 
 ---
 
