@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
+import * as crypto from 'crypto'; // Import crypto for MD5 hashing
 import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
 import { convertData, getOpenAIStreamChunkStop } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
@@ -198,7 +199,7 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
     }
 }
 
-export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
+export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     let fullResponseText = '';
     let responseClosed = false;
 
@@ -241,11 +242,20 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
     }  catch (error) {
         console.error('\n[Server] Error during stream processing:', error.stack);
+        if (providerPoolManager) {
+            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
+            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
+            providerPoolManager.markProviderUnhealthy(toProvider, {
+                uuid: pooluuid
+            });
+        }
+
         if (!res.writableEnded) {
             const errorPayload = { error: { message: "An error occurred during streaming.", details: error.message } };
             res.end(JSON.stringify(errorPayload));
             responseClosed = true;
         }
+    
     } finally {
         if (!responseClosed) {
             res.end();
@@ -254,21 +264,31 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     }
 }
 
-export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
-    // The service returns the response in its native format (toProvider).
-    const nativeResponse = await service.generateContent(model, requestBody);
-    const responseText = extractResponseText(nativeResponse, toProvider);
+export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+    try{
+        // The service returns the response in its native format (toProvider).
+        const nativeResponse = await service.generateContent(model, requestBody);
+        const responseText = extractResponseText(nativeResponse, toProvider);
 
-    // Convert the response back to the client's format (fromProvider), if necessary.
-    let clientResponse = nativeResponse;
-    if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-        console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
-        clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
+        // Convert the response back to the client's format (fromProvider), if necessary.
+        let clientResponse = nativeResponse;
+        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+            console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
+            clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
+        }
+
+        //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
+        await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
+        await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+    } catch (error) {
+        console.error('\n[Server] Error during unary processing:', error.stack);
+        if (providerPoolManager) {
+            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
+            providerPoolManager.markProviderUnhealthy(toProvider, {
+                uuid: pooluuid
+            });
+        }
     }
-
-    //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
-    await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
-    await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 }
 
 /**
@@ -281,35 +301,45 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
  * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_MODEL_LIST).
  * @param {Object} CONFIG - The server configuration object.
  */
-export async function handleModelListRequest(req, res, service, endpointType, CONFIG) {
-    const clientProviderMap = {
-        [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
-        [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
-    };
+export async function handleModelListRequest(req, res, service, endpointType, CONFIG, providerPoolManager, pooluuid) {
+    try{
+        const clientProviderMap = {
+            [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
+            [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
+        };
 
 
-    const fromProvider = clientProviderMap[endpointType];
-    const toProvider = CONFIG.MODEL_PROVIDER;
+        const fromProvider = clientProviderMap[endpointType];
+        const toProvider = CONFIG.MODEL_PROVIDER;
 
-    if (!fromProvider) {
-        throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
+        if (!fromProvider) {
+            throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
+        }
+
+        // 1. Get the model list in the backend's native format.
+        const nativeModelList = await service.listModels();
+
+        // 2. Convert the model list to the client's expected format, if necessary.
+        let clientModelList = nativeModelList;
+        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+            console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
+            clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
+        } else {
+            console.log(`[ModelList Convert] Model list format matches. No conversion needed.`);
+        }
+
+        console.log(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(clientModelList));
+    } catch (error) {
+        console.error('\n[Server] Error during model list processing:', error.stack);
+        if (providerPoolManager) {
+            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
+            providerPoolManager.markProviderUnhealthy(toProvider, {
+                uuid: pooluuid
+            });
+        }
     }
-
-    // 1. Get the model list in the backend's native format.
-    const nativeModelList = await service.listModels();
-
-    // 2. Convert the model list to the client's expected format, if necessary.
-    let clientModelList = nativeModelList;
-    if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-        console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
-        clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
-    } else {
-        console.log(`[ModelList Convert] Model list format matches. No conversion needed.`);
-    }
-
-    console.log(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(clientModelList));
 }
 
 /**
@@ -323,7 +353,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
  * @param {Object} CONFIG - The server configuration object.
  * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
  */
-export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME) {
+export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     const originalRequestBody = await getRequestBody(req);
     if (!originalRequestBody) {
         throw new Error("Request body is missing for content generation.");
@@ -369,9 +399,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     // 5. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
-        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
     } else {
-        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
     }
 }
 
@@ -545,4 +575,14 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
             break;
     }
     return incomingSystemText;
+}
+
+/**
+ * Generates an MD5 hash for a given object by first converting it to a JSON string.
+ * @param {object} obj - The object to hash.
+ * @returns {string} The MD5 hash of the object's JSON string representation.
+ */
+export function getMD5Hash(obj) {
+    const jsonString = JSON.stringify(obj);
+    return crypto.createHash('md5').update(jsonString).digest('hex');
 }

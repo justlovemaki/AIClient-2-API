@@ -3,7 +3,7 @@
  * 用于检查API服务器是否正常运行
  */
 
-const http = require('http');
+import http from 'http';
 
 // 从环境变量获取主机和端口，如果没有设置则使用默认值
 const HOST = process.env.HOST || 'localhost';

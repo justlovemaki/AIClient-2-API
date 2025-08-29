@@ -55,9 +55,9 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
         super();
         this.geminiApiService = new GeminiApiService(config);
-        this.geminiApiService.initialize().catch(error => {
-            console.error("Failed to initialize geminiApiService:", error);
-        });
+        // this.geminiApiService.initialize().catch(error => {
+        //     console.error("Failed to initialize geminiApiService:", error);
+        // });
     }
 
     async generateContent(model, requestBody) {
@@ -158,24 +158,36 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
         super();
         this.kiroApiService = new KiroApiService(config);
-        this.kiroApiService.initialize().catch(error => {
-            console.error("Failed to initialize kiroApiService:", error);
-        });
+        // this.kiroApiService.initialize().catch(error => {
+        //     console.error("Failed to initialize kiroApiService:", error);
+        // });
     }
 
     async generateContent(model, requestBody) {
         // The adapter expects the requestBody to be in OpenAI format for Kiro API
+        if (!this.kiroApiService.isInitialized) {
+            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            await this.kiroApiService.initialize();
+        }
         return this.kiroApiService.generateContent(model, requestBody);
     }
 
     async *generateContentStream(model, requestBody) {
         // The adapter expects the requestBody to be in OpenAI format for Kiro API
+        if (!this.kiroApiService.isInitialized) {
+            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            await this.kiroApiService.initialize();
+        }
         const stream = this.kiroApiService.generateContentStream(model, requestBody);
         yield* stream;
     }
 
     async listModels() {
         // Returns the native model list from the Kiro service
+        if (!this.kiroApiService.isInitialized) {
+            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            await this.kiroApiService.initialize();
+        }
         return this.kiroApiService.listModels();
     }
 
@@ -193,24 +205,26 @@ export const serviceInstances = {};
 
 // 服务适配器工厂
 export function getServiceAdapter(config) {
+    console.log(`[Adapter] getServiceAdapter, provider: ${config.MODEL_PROVIDER}, uuid: ${config.uuid}`);
     const provider = config.MODEL_PROVIDER;
-    if (!serviceInstances[provider]) {
+    const providerKey = config.uuid ? provider + config.uuid : provider;
+    if (!serviceInstances[providerKey]) {
         switch (provider) {
             case MODEL_PROVIDER.OPENAI_CUSTOM:
-                serviceInstances[provider] = new OpenAIApiServiceAdapter(config);
+                serviceInstances[providerKey] = new OpenAIApiServiceAdapter(config);
                 break;
             case MODEL_PROVIDER.GEMINI_CLI:
-                serviceInstances[provider] = new GeminiApiServiceAdapter(config);
+                serviceInstances[providerKey] = new GeminiApiServiceAdapter(config);
                 break;
             case MODEL_PROVIDER.CLAUDE_CUSTOM:
-                serviceInstances[provider] = new ClaudeApiServiceAdapter(config);
+                serviceInstances[providerKey] = new ClaudeApiServiceAdapter(config);
                 break;
             case MODEL_PROVIDER.KIRO_API:
-                serviceInstances[provider] = new KiroApiServiceAdapter(config);
+                serviceInstances[providerKey] = new KiroApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);
         }
     }
-    return serviceInstances[provider];
+    return serviceInstances[providerKey];
 }

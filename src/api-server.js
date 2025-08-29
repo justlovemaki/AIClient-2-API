@@ -98,6 +98,7 @@
  * --request-base-delay <number>      自动重试之间的基础延迟时间（毫秒）。每次重试后延迟会增加。 / Base delay in milliseconds between retries, increases with each retry (default: 1000)
  * --cron-near-minutes <number>       OAuth 令牌刷新任务计划的间隔时间（分钟）。 / Interval for OAuth token refresh task in minutes (default: 15)
  * --cron-refresh-token <boolean>     是否开启 OAuth 令牌自动刷新任务 / Whether to enable automatic OAuth token refresh task (default: true)
+ * --provider-pools-file <path>       提供商号池配置文件路径 / Path to provider pools configuration file (default: null)
  *
  */
 
@@ -109,7 +110,8 @@ import { promises as pfs } from 'fs';
 import 'dotenv/config'; // Import dotenv and configure it
 
 import deepmerge from 'deepmerge';
-import { getServiceAdapter, serviceInstances} from './adapter.js';
+import { getServiceAdapter, serviceInstances } from './adapter.js';
+import { ProviderPoolManager } from './provider-pool-manager.js';
 import {
     INPUT_SYSTEM_PROMPT_FILE,
     API_ACTIONS,
@@ -161,7 +163,8 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             REQUEST_MAX_RETRIES: 3,
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
-            CRON_REFRESH_TOKEN: true
+            CRON_REFRESH_TOKEN: true,
+            PROVIDER_POOLS_FILE_PATH: null // 新增号池配置文件路径
         };
         console.log('[Config] Using default configuration.');
     }
@@ -313,6 +316,13 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             } else {
                 console.warn(`[Config Warning] --cron-refresh-token flag requires a value.`);
             }
+        } else if (args[i] === '--provider-pools-file') {
+            if (i + 1 < args.length) {
+                currentConfig.PROVIDER_POOLS_FILE_PATH = args[i + 1];
+                i++;
+            } else {
+                console.warn(`[Config Warning] --provider-pools-file flag requires a value.`);
+            }
         }
     }
 
@@ -320,6 +330,20 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;
     }
     currentConfig.SYSTEM_PROMPT_CONTENT = await getSystemPromptFileContent(currentConfig.SYSTEM_PROMPT_FILE_PATH);
+
+    // 加载号池配置
+    if (currentConfig.PROVIDER_POOLS_FILE_PATH) {
+        try {
+            const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');
+            currentConfig.providerPools = JSON.parse(poolsData);
+            console.log(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}`);
+        } catch (error) {
+            console.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}: ${error.message}`);
+            currentConfig.providerPools = {};
+        }
+    } else {
+        currentConfig.providerPools = {};
+    }
 
     // Set PROMPT_LOG_FILENAME based on the determined config
     if (currentConfig.PROMPT_LOG_MODE === 'file') {
@@ -366,21 +390,52 @@ async function getSystemPromptFileContent(filePath) {
     }
 }
 
+// 存储 ProviderPoolManager 实例
+let providerPoolManager = null;
+
 async function initApiService(config) {
+    if (config.providerPools && Object.keys(config.providerPools).length > 0) {
+        providerPoolManager = new ProviderPoolManager(config.providerPools);
+        console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
+        // 可以选择在这里触发一次健康检查
+        providerPoolManager.performHealthChecks();
+    } else {
+        console.log('[Initialization] No provider pools configured. Using single provider mode.');
+    }
+
     // Initialize all known service adapters at startup
+    // 当存在号池时，这里不再提前初始化所有 provider 的实例，而是按需从号池中选择和初始化
+    // 而是通过 providerPoolManager.selectProvider 来动态选择配置并初始化服务
     for (const provider of Object.values(MODEL_PROVIDER)) {
-        try {
-            console.log(`[Initialization] Initializing service adapter for ${provider}...`);
-            getServiceAdapter({ ...config, MODEL_PROVIDER: provider }); // This call populates serviceInstances
-        } catch (error) {
-            console.warn(`[Initialization Warning] Failed to initialize service adapter for ${provider}: ${error.message}`);
+        if (!config.providerPools || !config.providerPools[provider] || config.providerPools[provider].length === 0) {
+            try {
+                // 对于没有配置号池的提供者，仍然按原来的方式初始化一个单例
+                console.log(`[Initialization] Initializing single service adapter for ${provider}...`);
+                getServiceAdapter({ ...config, MODEL_PROVIDER: provider }); // This call populates serviceInstances
+            } catch (error) {
+                console.warn(`[Initialization Warning] Failed to initialize single service adapter for ${provider}: ${error.message}`);
+            }
         }
     }
     return serviceInstances; // Return the collection of initialized service instances
 }
 
 async function getApiService(config) {
-    return getServiceAdapter(config);
+    let serviceConfig = config;
+    if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
+        // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
+        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER);
+        if (selectedProviderConfig) {
+            // 合并选中的提供者配置到当前请求的 config 中
+            serviceConfig = deepmerge(config, selectedProviderConfig);
+            delete serviceConfig.providerPools; // 移除 providerPools 属性
+            config.uuid = serviceConfig.uuid;
+            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}`);
+        } else {
+            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}. Falling back to main config.`);
+        }
+    }
+    return getServiceAdapter(serviceConfig);
 }
 
 /**
@@ -405,7 +460,7 @@ function createRequestHandler(config) {
         if (modelProviderHeader) {
             currentConfig.MODEL_PROVIDER = modelProviderHeader;
             console.log(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
-            delete req.headers['model-provider'];
+            //delete req.headers['model-provider']; // 保持不变，以便后端可以继续处理原始头
         }
 
         const requestUrl = new URL(req.url, `http://${req.headers.host}`);
@@ -429,13 +484,29 @@ function createRequestHandler(config) {
             }
         }
 
-        const apiService = await getApiService(currentConfig);
+        // 获取或选择 API Service 实例
+        let apiService;
+        try {
+            apiService = await getApiService(currentConfig);
+        } catch (error) {
+            handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
+            if (providerPoolManager) {
+                // 如果是号池模式，并且获取服务失败，则标记当前使用的提供者为不健康
+                // 这里需要一种机制来知道是哪个具体的号池成员导致了失败。
+                // 暂时简单的假设是 currentConfig 中包含的凭据就是来自号池选择的。
+                providerPoolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
+                    uuid: currentConfig.uuid
+                });
+            }
+            return;
+        }
+
         const method = req.method;
         if (method === 'OPTIONS') {
             // 设置 CORS 头部，允许所有来源和方法
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider'); // 添加 Model-Provider
             
             // OPTIONS 请求通常返回 204 No Content
             res.writeHead(204);
@@ -462,24 +533,24 @@ function createRequestHandler(config) {
             // Route model list requests
             if (method === 'GET') {
                 if (path === '/v1/models') {
-                    return await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_MODEL_LIST, currentConfig);
+                    return await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_MODEL_LIST, currentConfig, providerPoolManager, currentConfig.uuid);
                 }
                 if (path === '/v1beta/models') {
-                    return await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_MODEL_LIST, currentConfig);
+                    return await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_MODEL_LIST, currentConfig, providerPoolManager, currentConfig.uuid);
                 }
             }
 
             // Route content generation requests
             if (method === 'POST') {
                 if (path === '/v1/chat/completions') {
-                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_CHAT, currentConfig, PROMPT_LOG_FILENAME);
+                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_CHAT, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
                 }
                 const geminiUrlPattern = new RegExp(`/v1beta/models/(.+?):(${API_ACTIONS.GENERATE_CONTENT}|${API_ACTIONS.STREAM_GENERATE_CONTENT})`);
                 if (geminiUrlPattern.test(path)) {
-                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_CONTENT, currentConfig, PROMPT_LOG_FILENAME);
+                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_CONTENT, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
                 }
                 if (path === '/v1/messages') {
-                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.CLAUDE_MESSAGE, currentConfig, PROMPT_LOG_FILENAME);
+                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.CLAUDE_MESSAGE, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
                 }
             }
 
@@ -503,13 +574,22 @@ async function startServer() {
     const heartbeatAndRefreshToken = async () => {
         console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`);
         // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
+        if (providerPoolManager) {
+            await providerPoolManager.performHealthChecks(); // 定期执行健康检查
+        }
         for (const providerKey in services) {
             const serviceAdapter = services[providerKey];
             try {
+                // For pooled providers, refreshToken should be handled by individual instances
+                // For single instances, this remains relevant
                 await serviceAdapter.refreshToken();
                 console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
             } catch (error) {
                 console.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);
+                // 如果是号池中的某个实例刷新失败，这里需要捕获并更新其状态
+                // 现有的 serviceInstances 存储的是每个配置对应的单例，而非池中的成员
+                // 这意味着如果一个池成员的 token 刷新失败，需要找到它并更新其在 poolManager 中的状态
+                // 暂时通过捕获错误日志来发现问题，更精细的控制需要在 refreshToken 中抛出更多信息
             }
         }
     };
