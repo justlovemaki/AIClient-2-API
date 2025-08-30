@@ -1,4 +1,6 @@
 import * as fs from 'fs'; // Import fs module
+import { getServiceAdapter } from './adapter.js';
+import { MODEL_PROVIDER } from './common.js';
 
 /**
  * Manages a pool of API service providers, handling their health and selection.
@@ -146,17 +148,22 @@ export class ProviderPoolManager {
                 }
 
                 try {
-                    // TODO: Implement actual health check logic for each provider type
-                    // For now, if a provider was unhealthy and enough time has passed,
-                    // we optimistically mark it healthy and reset error count.
-                    // A more robust system would involve actual API calls or pings here.
-                    if (!providerStatus.config.isHealthy) {
-                         // Only reset and mark healthy if it was unhealthy and we are attempting a check after interval
-                        this.markProviderHealthy(providerType, providerConfig);
-                        console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Marked Healthy (re-evaluation)`);
+                    // Perform actual health check based on provider type
+                    const isHealthy = await this._checkProviderHealth(providerType, providerConfig);
+                    
+                    if (isHealthy) {
+                        if (!providerStatus.config.isHealthy) {
+                            // Provider was unhealthy but is now healthy
+                            this.markProviderHealthy(providerType, providerConfig);
+                            console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Marked Healthy (actual check)`);
+                        } else {
+                            // Provider was already healthy and still is
+                            console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Still Healthy`);
+                        }
                     } else {
-                        // For already healthy providers, just log or perform a lighter check if needed
-                        console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Still Healthy`);
+                        // Provider is not healthy
+                        console.warn(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}) failed: Provider is not responding correctly.`);
+                        this.markProviderUnhealthy(providerType, providerConfig);
                     }
 
                 } catch (error) {
@@ -167,6 +174,68 @@ export class ProviderPoolManager {
             }
         }
     }
+
+    /**
+     * Performs an actual health check for a specific provider.
+     * @param {string} providerType - The type of the provider.
+     * @param {object} providerConfig - The configuration of the provider to check.
+     * @returns {Promise<boolean>} - True if the provider is healthy, false otherwise.
+     */
+    async _checkProviderHealth(providerType, providerConfig) {
+        try {
+            // Create a temporary service adapter for health check
+            const tempConfig = { ...providerConfig, MODEL_PROVIDER: providerType };
+            const serviceAdapter = getServiceAdapter(tempConfig);
+            
+            // Determine a suitable model name for health check
+            // First, try to get it from the provider configuration
+            let modelName = providerConfig.checkModelName;
+            
+            // If not specified in config, use default model names based on provider type
+            if (!modelName) {
+                switch (providerType) {
+                    case MODEL_PROVIDER.GEMINI_CLI:
+                        modelName = 'gemini-2.5-flash'; // Example model name for Gemini
+                        break;
+                    case MODEL_PROVIDER.OPENAI_CUSTOM:
+                        modelName = 'gpt-3.5-turbo'; // Example model name for OpenAI
+                        break;
+                    case MODEL_PROVIDER.CLAUDE_CUSTOM:
+                        modelName = 'claude-3-7-sonnet-20250219'; // Example model name for Claude
+                        break;
+                    case MODEL_PROVIDER.KIRO_API:
+                        modelName = 'claude-3-7-sonnet-20250219'; // Example model name for Kiro API
+                        break;
+                    default:
+                        console.warn(`[ProviderPoolManager] Unknown provider type for health check: ${providerType}`);
+                        return false;
+                }
+            }
+            
+            // Perform a lightweight API call to check health
+            const healthCheckRequest = {
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: 'Hello, are you ok?' }]
+                }]
+            };
+            
+            // For OpenAI and Claude providers, we need a different request format
+            if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM || providerType === MODEL_PROVIDER.CLAUDE_CUSTOM || providerType === MODEL_PROVIDER.KIRO_API) {
+                healthCheckRequest.messages = [{ role: 'user', content: 'Hello, are you ok?' }];
+                healthCheckRequest.model = modelName;
+                delete healthCheckRequest.contents;
+            }
+            
+            // console.log(`[ProviderPoolManager] Health check request for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
+            await serviceAdapter.generateContent(modelName, healthCheckRequest);
+            return true;
+        } catch (error) {
+            console.error(`[ProviderPoolManager] Health check failed for ${providerType}: ${error.message}`);
+            return false;
+        }
+    }
+
     /**
      * Saves the current provider pools configuration to the JSON file.
      * @private
