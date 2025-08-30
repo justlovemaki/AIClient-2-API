@@ -1,3 +1,5 @@
+import * as fs from 'fs'; // Import fs module
+
 /**
  * Manages a pool of API service providers, handling their health and selection.
  */
@@ -19,15 +21,21 @@ export class ProviderPoolManager {
         for (const providerType in this.providerPools) {
             this.providerStatus[providerType] = [];
             this.roundRobinIndex[providerType] = 0; // Initialize round-robin index for each type
-            this.providerPools[providerType].forEach((providerConfig, index) => {
+            this.providerPools[providerType].forEach((providerConfig) => {
+                // Ensure initial health and usage stats are present in the config
+                providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
+                providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
+                providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
+                providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
+                if (providerConfig.lastErrorTime && typeof providerConfig.lastErrorTime === 'string') {
+                    providerConfig.lastErrorTime = new Date(providerConfig.lastErrorTime);
+                } else if (providerConfig.lastErrorTime === undefined) {
+                    providerConfig.lastErrorTime = null;
+                }
+
                 this.providerStatus[providerType].push({
                     config: providerConfig,
-                    uuid: providerConfig.uuid,
-                    isHealthy: true,
-                    lastUsed: null,
-                    usageCount: 0,
-                    errorCount: 0,
-                    lastErrorTime: null, // New: Timestamp of the last error
+                    uuid: providerConfig.uuid, // Still keep uuid at the top level for easy access
                 });
             });
         }
@@ -42,7 +50,7 @@ export class ProviderPoolManager {
      */
     selectProvider(providerType) {
         const availableProviders = this.providerStatus[providerType] || [];
-        const healthyProviders = availableProviders.filter(p => p.isHealthy);
+        const healthyProviders = availableProviders.filter(p => p.config.isHealthy);
 
         if (healthyProviders.length === 0) {
             console.warn(`[ProviderPoolManager] No healthy providers available for type: ${providerType}`);
@@ -65,9 +73,11 @@ export class ProviderPoolManager {
         }
         
         if (selected) {
-            selected.lastUsed = new Date();
-            selected.usageCount++; // Increment usage count
+            selected.config.lastUsed = new Date();
+            selected.config.usageCount++; // Increment usage count
+
             console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
+            this._saveProviderPoolsToJson(providerType); // Persist changes
             return selected.config;
         }
 
@@ -84,15 +94,16 @@ export class ProviderPoolManager {
         if (pool) {
             const provider = pool.find(p => p.uuid === providerConfig.uuid);
             if (provider) {
-                provider.errorCount++;
-                provider.lastErrorTime = new Date(); // Update last error time
+                provider.config.errorCount++;
+                provider.config.lastErrorTime = new Date(); // Update last error time in config
 
-                if (provider.errorCount >= this.maxErrorCount) {
-                    provider.isHealthy = false;
-                    console.warn(`[ProviderPoolManager] Marked provider as unhealthy: ${JSON.stringify(providerConfig)} for type ${providerType}. Total errors: ${provider.errorCount}`);
+                if (provider.config.errorCount >= this.maxErrorCount) {
+                    provider.config.isHealthy = false;
+                    console.warn(`[ProviderPoolManager] Marked provider as unhealthy: ${JSON.stringify(providerConfig)} for type ${providerType}. Total errors: ${provider.config.errorCount}`);
                 } else {
-                    console.warn(`[ProviderPoolManager] Provider ${JSON.stringify(providerConfig)} for type ${providerType} error count: ${provider.errorCount}/${this.maxErrorCount}. Still healthy.`);
+                    console.warn(`[ProviderPoolManager] Provider ${JSON.stringify(providerConfig)} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
                 }
+                this._saveProviderPoolsToJson(providerType); // Persist changes
             }
         }
     }
@@ -105,11 +116,13 @@ export class ProviderPoolManager {
     markProviderHealthy(providerType, providerConfig) {
         const pool = this.providerStatus[providerType];
         if (pool) {
-            const provider = pool.find(p => p.uuid === providerConfig.uuid);a
+            const provider = pool.find(p => p.uuid === providerConfig.uuid);
             if (provider) {
-                provider.isHealthy = true;
-                provider.errorCount = 0; // Reset error count on health recovery
+                provider.config.isHealthy = true;
+                provider.config.errorCount = 0; // Reset error count on health recovery
+                provider.config.lastErrorTime = null; // Reset lastErrorTime when healthy
                 console.log(`[ProviderPoolManager] Marked provider as healthy: ${JSON.stringify(providerConfig)} for type ${providerType}`);
+                this._saveProviderPoolsToJson(providerType); // Persist changes
             }
         }
     }
@@ -126,8 +139,8 @@ export class ProviderPoolManager {
                 const providerConfig = providerStatus.config;
 
                 // Only attempt to health check unhealthy providers after a certain interval
-                if (!providerStatus.isHealthy && providerStatus.lastErrorTime &&
-                    (now.getTime() - providerStatus.lastErrorTime.getTime() < this.healthCheckInterval)) {
+                if (!providerStatus.config.isHealthy && providerStatus.config.lastErrorTime &&
+                    (now.getTime() - providerStatus.config.lastErrorTime.getTime() < this.healthCheckInterval)) {
                     console.log(`[ProviderPoolManager] Skipping health check for ${JSON.stringify(providerConfig)} (${providerType}). Last error too recent.`);
                     continue;
                 }
@@ -137,7 +150,7 @@ export class ProviderPoolManager {
                     // For now, if a provider was unhealthy and enough time has passed,
                     // we optimistically mark it healthy and reset error count.
                     // A more robust system would involve actual API calls or pings here.
-                    if (!providerStatus.isHealthy) {
+                    if (!providerStatus.config.isHealthy) {
                          // Only reset and mark healthy if it was unhealthy and we are attempting a check after interval
                         this.markProviderHealthy(providerType, providerConfig);
                         console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Marked Healthy (re-evaluation)`);
@@ -154,4 +167,44 @@ export class ProviderPoolManager {
             }
         }
     }
+    /**
+     * Saves the current provider pools configuration to the JSON file.
+     * @private
+     */
+    async _saveProviderPoolsToJson(providerTypeToUpdate) {
+        try {
+            const filePath = 'provider_pools.json';
+            let currentPools = {};
+            try {
+                const fileContent = await fs.promises.readFile(filePath, 'utf8');
+                currentPools = JSON.parse(fileContent);
+            } catch (readError) {
+                if (readError.code === 'ENOENT') {
+                    console.log('[ProviderPoolManager] provider_pools.json does not exist, creating new file.');
+                } else {
+                    throw readError;
+                }
+            }
+
+            if (this.providerStatus[providerTypeToUpdate]) {
+                currentPools[providerTypeToUpdate] = this.providerStatus[providerTypeToUpdate].map(p => {
+                    if (p.config.lastUsed instanceof Date) {
+                        p.config.lastUsed = p.config.lastUsed.toISOString();
+                    }
+                    if (p.config.lastErrorTime instanceof Date) {
+                        p.config.lastErrorTime = p.config.lastErrorTime.toISOString();
+                    }
+                    return p.config;
+                });
+            } else {
+                console.warn(`[ProviderPoolManager] Attempted to save unknown providerType: ${providerTypeToUpdate}`);
+            }
+            
+            await fs.promises.writeFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
+            console.log(`[ProviderPoolManager] provider_pools.json for ${providerTypeToUpdate} updated successfully.`);
+        } catch (error) {
+            console.error('[ProviderPoolManager] Failed to write provider_pools.json:', error);
+        }
+    }
+
 }
