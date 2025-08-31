@@ -36,3 +36,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # 使用默认配置启动服务器，支持通过环境变量配置
 # 通过环境变量传递参数，例如：docker run -e ARGS="--api-key mykey --port 8080" ...
 CMD ["sh", "-c", "node src/api-server.js $ARGS"]
+
+ENV HOST=0.0.0.0
+CMD ["node", "src/index.js"]
