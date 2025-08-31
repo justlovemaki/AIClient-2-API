@@ -2,7 +2,7 @@ name: Build & Push to GHCR (rsv51)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 env:
