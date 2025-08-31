@@ -1,20 +1,20 @@
-name: Build & Push to GHCR
+name: Build & Push to GHCR (rsv51)
 
 on:
   push:
-    branches: [ master ]
-  workflow_dispatch:    # 允许手动触发
+    branches: [ main ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}   # 自动生成 <owner>/<repo>
+  IMAGE_NAME: rsv51/aiclient-2-api   # 固定为 rsv51 命名空间
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # 关键权限
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -25,23 +25,12 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}   # 无需手动 PAT
+          username: rsv51               # 必须是 rsv51
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix={{branch}}-
-
-      - name: Build & push
+      - name: Build & push latest
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
