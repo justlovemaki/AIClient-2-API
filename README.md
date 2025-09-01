@@ -99,6 +99,16 @@ claude-kiro-oauth。
 
 *   **Kiro API**: 使用 Kiro API 需要[下载kiro客户端](https://aibook.ren/archives/kiro-install)并完成授权登录生成 kiro-auth-token.json。**推荐配合 Claude Code 使用以获得最佳体验**。注意：新注册的用户，如果使用时报**429**，表示**已不可使用** Kiro 的服务，可能需要等Kiro完全开放注册后，才能使用。
 
+### 授权文件默认路径
+
+以下是各服务授权文件的默认存储路径：
+
+*   **Gemini**: `~/.gemini/oauth_creds.json`
+*   **Kiro**: `~/.aws/sso/cache/kiro-auth-token.json`
+*   **Qwen**: `~/.qwen/oauth_creds.json`
+
+其中 `~` 代表用户主目录。如果需要自定义路径，可以通过配置文件或环境变量进行设置。
+
 ---
 
 

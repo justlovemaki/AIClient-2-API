@@ -98,6 +98,16 @@
 *   **Qwen Code Support**: Using Qwen Code requires configuring the `QWEN_OAUTH_CREDS_FILE_PATH` environment variable, pointing to a JSON file containing Qwen OAuth credentials.
 *   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
 
+### Default Authorization File Paths
+
+The following are the default storage paths for authorization files for each service:
+
+*   **Gemini**: `~/.gemini/oauth_creds.json`
+*   **Kiro**: `~/.aws/sso/cache/kiro-auth-token.json`
+*   **Qwen**: `~/.qwen/oauth_creds.json`
+
+Where `~` represents the user's home directory. If you need to customize the paths, you can set them through configuration files or environment variables.
+
 ---
 
 ## 💻 Proxy Settings
