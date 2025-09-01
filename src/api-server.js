@@ -89,6 +89,7 @@
  * --gemini-oauth-creds-file <path>   Gemini OAuth 凭据 JSON 文件路径 / Path to Gemini OAuth credentials JSON file
  * --kiro-oauth-creds-base64 <b64>    Kiro OAuth 凭据的 Base64 字符串 / Kiro OAuth credentials as Base64 string
  * --kiro-oauth-creds-file <path>     Kiro OAuth 凭据 JSON 文件路径 / Path to Kiro OAuth credentials JSON file
+ * --qwen-oauth-creds-file <path>     Qwen OAuth 凭据 JSON 文件路径 / Path to Qwen OAuth credentials JSON file
  * --project-id <id>                  Google Cloud 项目 ID / Google Cloud Project ID (for gemini-cli provider)
  * --system-prompt-file <path>        系统提示文件路径 / Path to system prompt file (default: input_system_prompt.txt)
  * --system-prompt-mode <mode>        系统提示模式 / System prompt mode: overwrite or append (default: overwrite)
@@ -155,6 +156,7 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
             GEMINI_OAUTH_CREDS_FILE_PATH: null,
             KIRO_OAUTH_CREDS_BASE64: null,
             KIRO_OAUTH_CREDS_FILE_PATH: null,
+            QWEN_OAUTH_CREDS_FILE_PATH: null,
             PROJECT_ID: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'overwrite',
@@ -300,9 +302,16 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
                 currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
-            }
-        } else if (args[i] === '--cron-near-minutes') {
+               console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
+           }
+       } else if (args[i] === '--qwen-oauth-creds-file') {
+           if (i + 1 < args.length) {
+               currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = args[i + 1];
+               i++;
+           } else {
+               console.warn(`[Config Warning] --qwen-oauth-creds-file flag requires a value.`);
+           }
+       } else if (args[i] === '--cron-near-minutes') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
                 i++;
@@ -608,8 +617,10 @@ async function startServer() {
             console.log(`  Gemini OAuth Creds File Path: ${CONFIG.GEMINI_OAUTH_CREDS_FILE_PATH || 'Default'}`);
             console.log(`  Project ID: ${CONFIG.PROJECT_ID || 'Auto-discovered'}`);
         } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.KIRO_API) {
-            console.log(`  Kiro OAuth Creds File Path: ${CONFIG.KIRO_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-        }
+           console.log(`  Kiro OAuth Creds File Path: ${CONFIG.KIRO_OAUTH_CREDS_FILE_PATH || 'Default'}`);
+       } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.QWEN_API) {
+           console.log(`  Qwen OAuth Creds File Path: ${CONFIG.QWEN_OAUTH_CREDS_FILE_PATH || 'Default'}`);
+       }
         console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
         console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
         console.log(`  Host: ${CONFIG.HOST}`);

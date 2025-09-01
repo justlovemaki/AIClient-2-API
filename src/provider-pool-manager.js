@@ -206,6 +206,9 @@ export class ProviderPoolManager {
                     case MODEL_PROVIDER.KIRO_API:
                         modelName = 'claude-3-7-sonnet-20250219'; // Example model name for Kiro API
                         break;
+                    case MODEL_PROVIDER.QWEN_API:
+                        modelName = 'qwen3-coder-flash'; // Example model name for Qwen
+                        break;
                     default:
                         console.warn(`[ProviderPoolManager] Unknown provider type for health check: ${providerType}`);
                         return false;
@@ -221,7 +224,7 @@ export class ProviderPoolManager {
             };
             
             // For OpenAI and Claude providers, we need a different request format
-            if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM || providerType === MODEL_PROVIDER.CLAUDE_CUSTOM || providerType === MODEL_PROVIDER.KIRO_API) {
+            if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM || providerType === MODEL_PROVIDER.CLAUDE_CUSTOM || providerType === MODEL_PROVIDER.KIRO_API || providerType === MODEL_PROVIDER.QWEN_API) {
                 healthCheckRequest.messages = [{ role: 'user', content: 'Hello, are you ok?' }];
                 healthCheckRequest.model = modelName;
                 delete healthCheckRequest.contents;

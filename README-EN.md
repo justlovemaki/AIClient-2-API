@@ -23,13 +23,19 @@
 `AIClient2API` is a versatile and lightweight API proxy designed for ultimate flexibility and ease of use. It transforms various backend APIs, such as Google Gemini CLI OAuth, OpenAI, Claude, and Kiro, into a standard OpenAI format interface via a Node.js HTTP server. The project features a modern, modular architecture, supporting strategy and adapter patterns, complete with comprehensive test coverage and health check mechanisms. It's ready to use out-of-the-box: simply `npm install` and run. You can easily switch between model providers in the configuration file, allowing any OpenAI-compatible client or application to seamlessly use different large model capabilities through the same API address, eliminating the hassle of maintaining multiple configurations and dealing with incompatible interfaces for different services.
 
 > [!NOTE]
+> Thanks to Ruan Yifeng for the recommendation in [Weekly Issue 359](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html).
+>
 > 8.29 Added account pool mode, which supports multiple accounts for all providers, with built-in polling, failover (requires client retry), and configuration degradation. Requires adding PROVIDER_POOLS_FILE_PATH to config, see the configuration file: provider_pools.json for details.
+>
+> 8.30 Latest news, Kiro can be used for free until 9.15
+>
+> 9.1 Added Qwen Code CLI support, can use qwen3-coder-plus model
 
 ---
 
 ## 💡 Core Advantages
 
-*   ✅ **Unified Access to Multiple Models**: One interface to access Gemini, OpenAI, Claude, Kimi K2, GLM-4.5, and other cutting-edge models. Freely switch between different model providers using simple startup parameters or request headers.
+*   ✅ **Unified Access to Multiple Models**: One interface to access Gemini, OpenAI, Claude, Kimi K2, GLM-4.5, Qwen Code, and other cutting-edge models. Freely switch between different model providers using simple startup parameters or request headers.
 *   ✅ **Bypass Official Restrictions**: By supporting Gemini CLI's OAuth authorization method, it effectively circumvents the rate and quota limits of official free APIs, granting you higher request quotas and usage frequency.
 *   ✅ **Bypass Client Restrictions**: Kiro API mode supports free usage of the Claude Sonnet 4 model.
 *   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, enabling your existing toolchains and clients (e.g., LobeChat, NextChat) to integrate all supported models at zero cost.
@@ -88,7 +94,8 @@
 
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are unavailable, this project fully supports MCP (Model Context Protocol), enabling powerful functional extensions when paired with MCP-compatible clients.
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
-*   **Latest Model Support**: Supports the latest **Kimi K2** and **GLM-4.5** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
+*   **Latest Model Support**: Supports the latest **Kimi K2**, **GLM-4.5** and **Qwen Code** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
+*   **Qwen Code Support**: Using Qwen Code requires configuring the `QWEN_OAUTH_CREDS_FILE_PATH` environment variable, pointing to a JSON file containing Qwen OAuth credentials.
 *   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
 
 ---

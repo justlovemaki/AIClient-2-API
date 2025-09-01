@@ -83,7 +83,7 @@ export class GeminiApiService {
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
                 await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log('[Gemini Auth] Refreshed token saved.');
+                console.log('[Gemini Auth] Token refresh response: ok');
             }
         } catch (error) {
             if (error.code === 'ENOENT') {

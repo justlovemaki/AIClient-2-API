@@ -29,12 +29,14 @@
 > 8.29 新增账号池模式，可支持所有provider配置多个账号，自带轮询，故障转移（需要客户端重试）和配置降级。需要在 config 新增配置 PROVIDER_POOLS_FILE_PATH ， 详见配置文件：provider_pools.json
 >
 > 8.30 最新消息，kiro可免费使用至9.15
+>
+> 9.1  偷摸的新增 Qwen Code CLI 支持，可使用 qwen3-coder-plus 模型
 
 ---
 
 ## 💡 核心优势
 
-*   ✅ **多模型统一接入**：一个接口，通吃 Gemini、OpenAI、Claude、Kimi K2、GLM-4.5 等多种最新模型。通过简单的启动参数或请求头，即可在不同模型服务商之间自由切换。
+*   ✅ **多模型统一接入**：一个接口，通吃 Gemini、OpenAI、Claude、Kimi K2、GLM-4.5、Qwen Code 等多种最新模型。通过简单的启动参数或请求头，即可在不同模型服务商之间自由切换。
 *   ✅ **突破官方限制**：通过支持 Gemini CLI 的 OAuth 授权方式，有效绕过官方免费 API 的速率和配额限制，让您享受更高的请求额度和使用频率。
 *   ✅ **突破客户端限制**：Kiro API 模式下支持免费使用Claude Sonnet 4 模型。
 *   ✅ **无缝兼容 OpenAI**：提供与 OpenAI API 完全兼容的接口，让您现有的工具链和客户端（如 LobeChat, NextChat 等）可以零成本接入所有支持的模型。
@@ -92,7 +94,9 @@ claude-kiro-oauth。
 
 *   **MCP 支持**: 虽然原版 Gemini CLI 的内置命令功能不可用，但本项目完美支持 MCP (Model Context Protocol)，可配合支持 MCP 的客户端实现更强大的功能扩展。
 *   **多模态能力**: 支持图片、文档等多模态输入，为您提供更丰富的交互体验。
-*   **最新模型支持**: 支持最新的 **Kimi K2** 和 **GLM-4.5** 模型，只需在 `config.json` 中配置相应的 OpenAI 或 Claude 兼容接口即可使用。
+*   **最新模型支持**: 支持最新的 **Kimi K2**、**GLM-4.5** 和 **Qwen Code** 模型，只需在 `config.json` 中配置相应的 OpenAI 或 Claude 兼容接口即可使用。
+*   **Qwen Code 支持**: 使用 Qwen Code 需要配置 `QWEN_OAUTH_CREDS_FILE_PATH` 环境变量，指向包含 Qwen OAuth 凭据的 JSON 文件。
+
 *   **Kiro API**: 使用 Kiro API 需要[下载kiro客户端](https://aibook.ren/archives/kiro-install)并完成授权登录生成 kiro-auth-token.json。**推荐配合 Claude Code 使用以获得最佳体验**。注意：新注册的用户，如果使用时报**429**，表示**已不可使用** Kiro 的服务，可能需要等Kiro完全开放注册后，才能使用。
 
 ---
