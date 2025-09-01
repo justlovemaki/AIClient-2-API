@@ -16,7 +16,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
 [![docker](https://img.shields.io/badge/docker-≥20.0.0-green.svg)](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 
-[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/)
+[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
 
@@ -58,33 +58,33 @@
   ```mermaid
   
    graph TD
-       subgraph Core_Protocols["核心协议"]
-           P_OPENAI[OpenAI Protocol]
-           P_GEMINI[Gemini Protocol]
-           P_CLAUDE[Claude Protocol]
-       end
-   
-       subgraph Supported_Model_Providers["支持的模型提供商"]
-           MP_OPENAI[openai-custom]
-           MP_GEMINI[gemini-cli-oauth]
-           MP_CLAUDE_C[claude-custom]
-           MP_CLAUDE_K[claude-kiro-oauth]
-       end
-   
-       P_OPENAI ---|支持| MP_OPENAI
-       P_OPENAI ---|支持| MP_GEMINI
-       P_OPENAI ---|支持| MP_CLAUDE_C
-       P_OPENAI ---|支持| MP_CLAUDE_K
-   
-       P_GEMINI ---|支持| MP_GEMINI
-   
-       P_CLAUDE ---|支持| MP_CLAUDE_C
-       P_CLAUDE ---|支持| MP_CLAUDE_K
-       P_CLAUDE ---|支持| MP_GEMINI
-   
-       style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
-       style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
-       style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
+        subgraph Core_Protocols["Core Protocols"]
+            P_OPENAI[OpenAI Protocol]
+            P_GEMINI[Gemini Protocol]
+            P_CLAUDE[Claude Protocol]
+        end
+    
+        subgraph Supported_Model_Providers["Supported Model Providers"]
+            MP_OPENAI[openai-custom]
+            MP_GEMINI[gemini-cli-oauth]
+            MP_CLAUDE_C[claude-custom]
+            MP_CLAUDE_K[claude-kiro-oauth]
+        end
+    
+        P_OPENAI ---|Support| MP_OPENAI
+        P_OPENAI ---|Support| MP_GEMINI
+        P_OPENAI ---|Support| MP_CLAUDE_C
+        P_OPENAI ---|Support| MP_CLAUDE_K
+    
+        P_GEMINI ---|Support| MP_GEMINI
+    
+        P_CLAUDE ---|Support| MP_CLAUDE_C
+        P_CLAUDE ---|Support| MP_CLAUDE_K
+        P_CLAUDE ---|Support| MP_GEMINI
+    
+        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+        style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
 
   ```
 
@@ -95,7 +95,7 @@
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are unavailable, this project fully supports MCP (Model Context Protocol), enabling powerful functional extensions when paired with MCP-compatible clients.
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
 *   **Latest Model Support**: Supports the latest **Kimi K2**, **GLM-4.5** and **Qwen Code** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
-*   **Qwen Code Support**: Using Qwen Code requires configuring the `QWEN_OAUTH_CREDS_FILE_PATH` environment variable, pointing to a JSON file containing Qwen OAuth credentials.
+*   **Qwen Code Support**: Using Qwen Code will automatically open an authorization page in the browser. After completing authorization, it will generate an `oauth_creds.json` file in the `~/.qwen` directory. Please use the official default parameters temperature=0 and top_p=1.
 *   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
 
 ### Default Authorization File Paths

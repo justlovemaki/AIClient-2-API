@@ -29,6 +29,7 @@ const QWEN_OAUTH_SCOPE = 'openid profile email model.completion';
 const QWEN_OAUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
 const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+// const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
 
 export const QwenOAuth2Event = {
     AuthUri: 'auth-uri',
@@ -114,12 +115,6 @@ export class QwenApiService {
         this.qwenClient = new QwenOAuth2Client();
         this.sharedManager = SharedTokenManager.getInstance();
         this.currentAxiosInstance = null;
-    }
-
-    static async create(config) {
-        const instance = new QwenApiService(config);
-        await instance.initialize();
-        return instance;
     }
 
     async initialize() {
@@ -367,15 +362,31 @@ export class QwenApiService {
         const maxRetries = (this.config && this.config.REQUEST_MAX_RETRIES) || 3;
         const baseDelay = (this.config && this.config.REQUEST_BASE_DELAY) || 1000;
 
+        const version = "0.0.9";
+        const userAgent = `QwenCode/${version} (${process.platform}; ${process.arch})`;
+        console.log(`[QwenApiService] User-Agent: ${userAgent}`);
+
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
 
             this.currentAxiosInstance = axios.create({
                 baseURL: qwenBaseUrl,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` ,
+                    'X-DashScope-CacheControl': 'enable',
+                    'X-DashScope-UserAgent': userAgent,
+                    'X-DashScope-AuthType': 'qwen-oauth',
+                },
             });
 
-            const requestBody = isStream ? { ...body, stream: true } : body;
+            const tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "ext"
+                    }
+                }
+            ];
+            const requestBody = isStream ? { ...body, stream: true, tools: tools } : { ...body, tools: tools };
             const options = isStream ? { responseType: 'stream' } : {};
             const response = await this.currentAxiosInstance.post(endpoint, requestBody, options);
             return response.data;

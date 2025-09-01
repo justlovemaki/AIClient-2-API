@@ -95,8 +95,7 @@ claude-kiro-oauth。
 *   **MCP 支持**: 虽然原版 Gemini CLI 的内置命令功能不可用，但本项目完美支持 MCP (Model Context Protocol)，可配合支持 MCP 的客户端实现更强大的功能扩展。
 *   **多模态能力**: 支持图片、文档等多模态输入，为您提供更丰富的交互体验。
 *   **最新模型支持**: 支持最新的 **Kimi K2**、**GLM-4.5** 和 **Qwen Code** 模型，只需在 `config.json` 中配置相应的 OpenAI 或 Claude 兼容接口即可使用。
-*   **Qwen Code 支持**: 使用 Qwen Code 需要配置 `QWEN_OAUTH_CREDS_FILE_PATH` 环境变量，指向包含 Qwen OAuth 凭据的 JSON 文件。
-
+*   **Qwen Code 支持**: 使用 Qwen Code 会自动在浏览器打开授权页面，完成授权后会在 `~/.qwen` 目录下生成 `oauth_creds.json` 文件。请使用官方默认参数 temperature=0 ， top_p=1。
 *   **Kiro API**: 使用 Kiro API 需要[下载kiro客户端](https://aibook.ren/archives/kiro-install)并完成授权登录生成 kiro-auth-token.json。**推荐配合 Claude Code 使用以获得最佳体验**。注意：新注册的用户，如果使用时报**429**，表示**已不可使用** Kiro 的服务，可能需要等Kiro完全开放注册后，才能使用。
 
 ### 授权文件默认路径

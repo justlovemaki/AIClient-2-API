@@ -10,7 +10,7 @@ export class ProviderPoolManager {
         this.providerPools = providerPools;
         this.providerStatus = {}; // Tracks health and usage for each provider instance
         this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
-        this.maxErrorCount = options.maxErrorCount || 1; // Default to 1 errors before marking unhealthy
+        this.maxErrorCount = options.maxErrorCount || 3; // Default to 1 errors before marking unhealthy
         this.healthCheckInterval = options.healthCheckInterval || 30 * 60 * 1000; // Default to 30 minutes
         this.initializeProviderStatus();
     }
