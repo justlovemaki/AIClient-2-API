@@ -92,5 +92,17 @@
       "errorCount": 0,
       "lastErrorTime": null
     }
+  ],
+  "openai-qwen-oauth": [
+    {
+      "QWEN_OAUTH_CREDS_FILE_PATH": "./qwen_creds.json",
+      "uuid": "658a2114-c4c9-d713-b8d4-ceabf0e0bf18",
+      "checkModelName": null,
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
   ]
 }
