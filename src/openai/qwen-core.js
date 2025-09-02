@@ -378,7 +378,7 @@ export class QwenApiService {
                 },
             });
 
-            const tools = [
+            const defaultTools = [
                 {
                     "type": "function",
                     "function": {
@@ -386,7 +386,11 @@ export class QwenApiService {
                     }
                 }
             ];
-            const requestBody = isStream ? { ...body, stream: true, tools: tools } : { ...body, tools: tools };
+            
+            // Merge tools if requestBody already has tools defined
+            const mergedTools = body.tools ? [...defaultTools, ...body.tools] : defaultTools;
+            
+            const requestBody = isStream ? { ...body, stream: true, tools: mergedTools } : { ...body, tools: mergedTools };
             const options = isStream ? { responseType: 'stream' } : {};
             const response = await this.currentAxiosInstance.post(endpoint, requestBody, options);
             return response.data;
