@@ -97,6 +97,46 @@ claude-kiro-oauth。
 *   **最新模型支持**: 支持最新的 **Kimi K2**、**GLM-4.5** 和 **Qwen Code** 模型，只需在 `config.json` 中配置相应的 OpenAI 或 Claude 兼容接口即可使用。
 *   **Qwen Code 支持**: 使用 Qwen Code 会自动在浏览器打开授权页面，完成授权后会在 `~/.qwen` 目录下生成 `oauth_creds.json` 文件。请使用官方默认参数 temperature=0 ， top_p=1。
 *   **Kiro API**: 使用 Kiro API 需要[下载kiro客户端](https://aibook.ren/archives/kiro-install)并完成授权登录生成 kiro-auth-token.json。**推荐配合 Claude Code 使用以获得最佳体验**。注意：新注册的用户，如果使用时报**429**，表示**已不可使用** Kiro 的服务，可能需要等Kiro完全开放注册后，才能使用。
+*   **Claude Code 中使用不同供应商**: 通过 Path 路由或环境变量，您可以在 Claude 相关的 API 调用中使用不同的供应商：
+    *   `http://localhost:3000/claude-custom` - 使用配置文件中定义的 Claude API 供应商
+    *   `http://localhost:3000/claude-kiro-oauth` - 使用 Kiro OAuth 认证方式访问 Claude API
+    *   `http://localhost:3000/openai-custom` - 使用 OpenAI 自定义供应商处理 Claude 请求
+    *   `http://localhost:3000/gemini-cli-oauth` - 使用 Gemini CLI OAuth 供应商处理 Claude 请求
+    *   `http://localhost:3000/openai-qwen-oauth` - 使用 Qwen OAuth 供应商处理 Claude 请求
+    *   每个供应商可以配置不同的 API 密钥、基础 URL 和其他参数，实现灵活的供应商切换
+
+    这些 Path 路由不仅可以在直接 API 调用中使用，也可以在 Cline、Kilo 等编程 agent 中使用，通过指定不同的路径来调用相应的模型。例如，在编程 agent 中配置 API 端点时，可以使用 `http://localhost:3000/claude-kiro-oauth` 来调用通过 Kiro OAuth 认证的 Claude 模型，或使用 `http://localhost:3000/gemini-cli-oauth` 来调用 Gemini 模型。
+
+    除了通过 Path 路由切换供应商外，您还可以通过设置环境变量来配置 Claude 参数。可以通过以下环境变量进行配置：
+
+    *   `ANTHROPIC_BASE_URL`: 设置 Claude API 的基础 URL 路径
+    *   `ANTHROPIC_AUTH_TOKEN`: 设置 Claude 服务的认证密钥
+    *   `ANTHROPIC_MODEL`: 设置需要使用的 Claude 模型
+
+    #### 不同系统中的环境变量设置方法
+
+    当使用 `http://localhost:3000/claude-custom` 路径时，可以通过以下方式设置环境变量：
+
+    ##### Linux / macOS
+    ```bash
+    export ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
+    export ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    export ANTHROPIC_MODEL="your-model-name"
+    ```
+
+    ##### Windows (CMD)
+    ```cmd
+    set ANTHROPIC_BASE_URL=http://localhost:3000/claude-custom
+    set ANTHROPIC_AUTH_TOKEN=your-auth-token-here
+    set ANTHROPIC_MODEL=your-model-name
+    ```
+
+    ##### Windows (PowerShell)
+    ```powershell
+    $env:ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
+    $env:ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    $env:ANTHROPIC_MODEL="your-model-name"
+    ```
 
 ### 授权文件默认路径
 

@@ -98,6 +98,46 @@
 *   **Qwen Code Support**: Using Qwen Code will automatically open an authorization page in the browser. After completing authorization, it will generate an `oauth_creds.json` file in the `~/.qwen` directory. Please use the official default parameters temperature=0 and top_p=1.
 *   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
 
+*   **Using Different Providers in Claude Code**: Via Path routing, you can use different providers in Claude-related API calls:
+    *   `http://localhost:3000/claude-custom` - Use the Claude API provider defined in the configuration file
+    *   `http://localhost:3000/claude-kiro-oauth` - Access the Claude API using Kiro OAuth authentication
+    *   `http://localhost:3000/openai-custom` - Use the OpenAI custom provider to handle Claude requests
+    *   `http://localhost:3000/gemini-cli-oauth` - Use the Gemini CLI OAuth provider to handle Claude requests
+    *   `http://localhost:3000/openai-qwen-oauth` - Use the Qwen OAuth provider to handle Claude requests
+    *   Each provider can be configured with different API keys, base URLs, and other parameters for flexible provider switching
+
+    These Path routes can not only be used in direct API calls but also in programming agents like Cline and Kilo. By specifying different paths, you can invoke the corresponding models. For example, when configuring API endpoints in a programming agent, you can use `http://localhost:3000/claude-kiro-oauth` to invoke the Claude model authenticated via Kiro OAuth, or use `http://localhost:3000/gemini-cli-oauth` to invoke the Gemini model.
+
+    Besides switching providers via Path routing, you can also configure Claude parameters by setting environment variables. For instance, when using the `http://localhost:3000/claude-custom` path route, you can configure via the following environment variables:
+
+    *   `ANTHROPIC_BASE_URL`: Set the base URL path for the Claude API
+    *   `ANTHROPIC_AUTH_TOKEN`: Set the authentication token for the Claude service
+    *   `ANTHROPIC_MODEL`: Set the Claude model to be used
+
+    #### Environment Variable Setting Methods for Different Systems
+
+    When using the `http://localhost:3000/claude-custom` path, you can set environment variables as follows:
+
+    ##### Linux / macOS
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.anthropic.com"
+    export ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    export ANTHROPIC_MODEL="claude-3-5-sonnet-20240620"
+    ```
+
+    ##### Windows (CMD)
+    ```cmd
+    set ANTHROPIC_BASE_URL=https://api.anthropic.com
+    set ANTHROPIC_AUTH_TOKEN=your-auth-token-here
+    set ANTHROPIC_MODEL=claude-3-5-sonnet-20240620
+    ```
+
+    ##### Windows (PowerShell)
+    ```powershell
+    $env:ANTHROPIC_BASE_URL="https://api.anthropic.com"
+    $env:ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    $env:ANTHROPIC_MODEL="claude-3-5-sonnet-20240620"
+    ```
 ### Default Authorization File Paths
 
 The following are the default storage paths for authorization files for each service:
