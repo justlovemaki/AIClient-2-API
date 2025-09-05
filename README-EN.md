@@ -4,7 +4,7 @@
 
 # AIClient-2-API 🚀
 
-**A powerful proxy that unifies multiple large model APIs (Gemini, OpenAI, Claude...) into a local OpenAI-compatible interface.**
+**A powerful proxy that can unify the requests of various large model APIs (Gemini CLI, Qwen Code Plus, Kiro Claude...) that are only used within the client into a local OpenAI compatible interface.**
 
 </div>
 
