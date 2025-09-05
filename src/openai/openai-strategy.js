@@ -21,6 +21,8 @@ class OpenAIStrategy extends ProviderStrategy {
                 return choice.message.content;
             } else if (choice.delta && choice.delta.content) {
                 return choice.delta.content;
+            } else if (choice.delta && choice.delta.tool_calls && choice.delta.tool_calls.length > 0) {
+                return choice.delta.tool_calls;
             }
         }
         return '';

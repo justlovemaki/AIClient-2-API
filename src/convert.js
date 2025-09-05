@@ -1,6 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 
+// =============================================================================
+// 常量和辅助函数定义
+// =============================================================================
+
 // 定义默认常量
 const DEFAULT_MAX_TOKENS = 8192;
 const DEFAULT_GEMINI_MAX_TOKENS = 65536;
@@ -14,6 +18,162 @@ function checkAndAssignOrDefault(value, defaultValue) {
     }
     return defaultValue;
 }
+
+/**
+ * 映射结束原因
+ * @param {string} reason - 结束原因
+ * @param {string} sourceFormat - 源格式
+ * @param {string} targetFormat - 目标格式
+ * @returns {string} 映射后的结束原因
+ */
+function _mapFinishReason(reason, sourceFormat, targetFormat) {
+    const reasonMappings = {
+        openai: {
+            anthropic: {
+                stop: "end_turn",
+                length: "max_tokens",
+                content_filter: "stop_sequence",
+                tool_calls: "tool_use"
+            }
+        },
+        gemini: {
+            anthropic: {
+                // 旧版本大写格式
+                STOP: "end_turn",
+                MAX_TOKENS: "max_tokens",
+                SAFETY: "stop_sequence",
+                RECITATION: "stop_sequence",
+                // 新版本小写格式（v1beta/v1 API）
+                stop: "end_turn",
+                length: "max_tokens",
+                safety: "stop_sequence",
+                recitation: "stop_sequence",
+                other: "end_turn"
+            }
+        }
+    };
+
+    try {
+        return reasonMappings[sourceFormat][targetFormat][reason] || "end_turn";
+    } catch (e) {
+        return "end_turn";
+    }
+}
+
+/**
+ * 递归清理Gemini不支持的JSON Schema属性
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} 清理后的JSON Schema
+ */
+function _cleanJsonSchemaProperties(schema) {
+    if (!schema || typeof schema !== 'object') {
+        return schema;
+    }
+
+    // 移除所有非标准属性
+    const sanitized = {};
+    for (const [key, value] of Object.entries(schema)) {
+        if (["type", "description", "properties", "required", "enum", "items"].includes(key)) {
+            sanitized[key] = value;
+        }
+    }
+
+    if (sanitized.properties && typeof sanitized.properties === 'object') {
+        const cleanProperties = {};
+        for (const [propName, propSchema] of Object.entries(sanitized.properties)) {
+            cleanProperties[propName] = _cleanJsonSchemaProperties(propSchema);
+        }
+        sanitized.properties = cleanProperties;
+    }
+
+    if (sanitized.items) {
+        sanitized.items = _cleanJsonSchemaProperties(sanitized.items);
+    }
+
+    return sanitized;
+}
+
+/**
+ * 根据budget_tokens智能判断OpenAI reasoning_effort等级
+ * @param {number|null} budgetTokens - Anthropic thinking的budget_tokens值
+ * @returns {string} OpenAI reasoning_effort等级 ("low", "medium", "high")
+ */
+function _determineReasoningEffortFromBudget(budgetTokens) {
+    // 如果没有提供budget_tokens，默认为high
+    if (budgetTokens === null || budgetTokens === undefined) {
+        console.info("No budget_tokens provided, defaulting to reasoning_effort='high'");
+        return "high";
+    }
+
+    // 从环境变量获取阈值配置
+    const lowThresholdStr = process.env.ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD;
+    const highThresholdStr = process.env.ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD;
+
+    // 检查必需的环境变量
+    if (lowThresholdStr === undefined) {
+        throw new Error("ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD environment variable is required for intelligent reasoning_effort determination");
+    }
+
+    if (highThresholdStr === undefined) {
+        throw new Error("ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD environment variable is required for intelligent reasoning_effort determination");
+    }
+
+    try {
+        const lowThreshold = parseInt(lowThresholdStr, 10);
+        const highThreshold = parseInt(highThresholdStr, 10);
+
+        console.debug(`Threshold configuration: low <= ${lowThreshold}, medium <= ${highThreshold}, high > ${highThreshold}`);
+
+        let effort;
+        if (budgetTokens <= lowThreshold) {
+            effort = "low";
+        } else if (budgetTokens <= highThreshold) {
+            effort = "medium";
+        } else {
+            effort = "high";
+        }
+
+        console.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${lowThreshold}, high<=${highThreshold})`);
+        return effort;
+
+    } catch (e) {
+        throw new Error(`Invalid threshold values in environment variables: ${e.message}. ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD and ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD must be integers.`);
+    }
+}
+
+// 全局工具状态管理器
+class ToolStateManager {
+    constructor() {
+        if (ToolStateManager.instance) {
+            return ToolStateManager.instance;
+        }
+        ToolStateManager.instance = this;
+        this._toolMappings = {};
+        return this;
+    }
+
+    // 存储工具名到ID的映射
+    storeToolMapping(funcName, toolId) {
+        this._toolMappings[funcName] = toolId;
+    }
+
+    // 根据工具名获取ID
+    getToolId(funcName) {
+        return this._toolMappings[funcName] || null;
+    }
+
+    // 清除所有映射
+    clearMappings() {
+        this._toolMappings = {};
+    }
+}
+
+// 全局工具状态管理器实例
+const toolStateManager = new ToolStateManager();
+
+// =============================================================================
+// 主转换函数
+// =============================================================================
 
 /**
  * Generic data conversion function.
@@ -48,6 +208,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
             },
             [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeChatCompletionFromGemini, // from Gemini protocol
+                [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeChatCompletionFromOpenAI, // from OpenAI protocol
             },
         },
         streamChunk: {
@@ -57,12 +218,17 @@ export function convertData(data, type, fromProvider, toProvider, model) {
             },
             [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeStreamChunkFromGemini, // from Gemini protocol
+                [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeStreamChunkFromOpenAI, // from OpenAI protocol
             },
         },
         modelList: {
             [MODEL_PROTOCOL_PREFIX.OPENAI]: { // to OpenAI protocol
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toOpenAIModelListFromGemini, // from Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.CLAUDE]: toOpenAIModelListFromClaude, // from Claude protocol
+            },
+            [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
+                [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeModelListFromGemini, // from Gemini protocol
+                [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeModelListFromOpenAI, // from OpenAI protocol
             },
         }
     };
@@ -71,7 +237,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
     if (!targetConversions) {
         throw new Error(`Unsupported conversion type: ${type}`);
     }
-
+    
     const toConversions = targetConversions[getProtocolPrefix(toProvider)];
     if (!toConversions) {
         throw new Error(`No conversions defined for target protocol: ${getProtocolPrefix(toProvider)} for type: ${type}`);
@@ -81,7 +247,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
     if (!conversionFunction) {
         throw new Error(`No conversion function found from ${fromProvider} to ${toProvider} for type: ${type}`);
     }
-
+            
     console.log(conversionFunction);
     if (type === 'response' || type === 'streamChunk' || type === 'modelList') {
         return conversionFunction(data, model);
@@ -90,6 +256,9 @@ export function convertData(data, type, fromProvider, toProvider, model) {
     }
 }
 
+// =============================================================================
+// OpenAI 相关转换函数
+// =============================================================================
 
 /**
  * Converts a Gemini API request body to an OpenAI chat completion request body.
@@ -198,7 +367,6 @@ function processGeminiPartsToOpenAIContent(parts) {
         ? contentArray[0].text
         : contentArray;
 }
-
 
 export function toOpenAIModelListFromGemini(geminiModels) {
     return {
@@ -455,8 +623,6 @@ export function getOpenAIStreamChunkStop(model) {
     };
 }
 
-
-
 /**
  * Converts a Claude API model list response to an OpenAI model list response.
  * @param {Array<Object>} claudeModels - The array of model objects from Claude API.
@@ -476,7 +642,86 @@ export function toOpenAIModelListFromClaude(claudeModels) {
     };
 }
 
+/**
+ * Converts an OpenAI chat completion response to a Claude API messages response.
+ * @param {Object} openaiResponse - The OpenAI API chat completion response object.
+ * @param {string} model - The model name to include in the response.
+ * @returns {Object} The formatted Claude API messages response.
+ */
+export function toClaudeChatCompletionFromOpenAI(openaiResponse, model) {
+    if (!openaiResponse || !openaiResponse.choices || openaiResponse.choices.length === 0) {
+        return {
+            id: `msg_${uuidv4()}`,
+            type: "message",
+            role: "assistant",
+            content: [],
+            model: model,
+            stop_reason: "end_turn",
+            stop_sequence: null,
+            usage: {
+                input_tokens: openaiResponse?.usage?.prompt_tokens || 0,
+                output_tokens: openaiResponse?.usage?.completion_tokens || 0
+            }
+        };
+    }
 
+    const choice = openaiResponse.choices[0];
+    const contentList = [];
+
+    // Handle tool calls
+    const toolCalls = choice.message?.tool_calls || [];
+    for (const toolCall of toolCalls.filter(tc => tc && typeof tc === 'object')) {
+        if (toolCall.function) {
+            const func = toolCall.function;
+            const argStr = func.arguments || "{}";
+            let argObj;
+            try {
+                argObj = typeof argStr === 'string' ? JSON.parse(argStr) : argStr;
+            } catch (e) {
+                argObj = {};
+            }
+            contentList.push({
+                type: "tool_use",
+                id: toolCall.id || "",
+                name: func.name || "",
+                input: argObj,
+            });
+        }
+    }
+
+    // Handle text content
+    const contentText = choice.message?.content || "";
+    if (contentText) {
+        // 使用 _extractThinkingFromOpenAIText 提取 thinking 内容
+        const extractedContent = _extractThinkingFromOpenAIText(contentText);
+        if (Array.isArray(extractedContent)) {
+            contentList.push(...extractedContent);
+        } else {
+            contentList.push({ type: "text", text: extractedContent });
+        }
+    }
+
+    // Map OpenAI finish reason to Claude stop reason
+    const stopReason = _mapFinishReason(
+        choice.finish_reason || "stop",
+        "openai",
+        "anthropic"
+    );
+
+    return {
+        id: `msg_${uuidv4()}`,
+        type: "message",
+        role: "assistant",
+        content: contentList,
+        model: model,
+        stop_reason: stopReason,
+        stop_sequence: null,
+        usage: {
+            input_tokens: openaiResponse.usage?.prompt_tokens || 0,
+            output_tokens: openaiResponse.usage?.completion_tokens || 0
+        }
+    };
+}
 
 /**
  * Converts a Claude API request body to an OpenAI chat completion request body.
@@ -488,29 +733,107 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
     const openaiMessages = [];
     let systemMessageContent = '';
 
-    // Claude system message handling
+    // Add system message if present
     if (claudeRequest.system) {
         systemMessageContent = claudeRequest.system;
     }
 
+    // Process messages
     if (claudeRequest.messages && Array.isArray(claudeRequest.messages)) {
-        claudeRequest.messages.forEach(message => {
-            const openaiRole = message.role === 'assistant' ? 'assistant' : 'user';
-            const content = message.content; // Claude content can be string or array
+        const tempOpenAIMessages = [];
+        for (const msg of claudeRequest.messages) {
+            const role = msg.role;
 
-            if (typeof content === 'string') {
-                openaiMessages.push({ role: openaiRole, content: content });
-            } else if (Array.isArray(content)) {
-                // Process multimodal content
-                const processedContent = processClaudeContentToOpenAIContent(content);
-                if (processedContent && processedContent.length > 0) {
-                    openaiMessages.push({
-                        role: openaiRole,
-                        content: processedContent
-                    });
+            // 处理用户的工具结果消息
+            if (role === "user" && Array.isArray(msg.content)) {
+                const hasToolResult = msg.content.some(
+                    item => item && typeof item === 'object' && item.type === "tool_result"
+                );
+
+                if (hasToolResult) {
+                    for (const item of msg.content) {
+                        if (item && typeof item === 'object' && item.type === "tool_result") {
+                            const toolUseId = item.tool_use_id || item.id || "";
+                            const contentStr = String(item.content || "");
+                            tempOpenAIMessages.push({
+                                role: "tool",
+                                tool_call_id: toolUseId,
+                                content: contentStr,
+                            });
+                        }
+                    }
+                    continue; // 已处理工具结果，跳过后续处理
                 }
             }
-        });
+
+            // 处理 assistant 消息中的工具调用
+            if (role === "assistant" && Array.isArray(msg.content) && msg.content.length > 0) {
+                const firstPart = msg.content[0];
+                if (firstPart.type === "tool_use") {
+                    const funcName = firstPart.name || "";
+                    const funcArgs = firstPart.input || {};
+                    tempOpenAIMessages.push({
+                        role: "assistant",
+                        content: null,
+                        tool_calls: [
+                            {
+                                id: firstPart.id || `call_${funcName}_1`,
+                                type: "function",
+                                function: {
+                                    name: funcName,
+                                    arguments: JSON.stringify(funcArgs)
+                                }
+                            }
+                        ]
+                    });
+                    continue; // 已处理
+                }
+            }
+
+            // 普通文本消息
+            const contentConverted = processClaudeContentToOpenAIContent(msg.content || "");
+            // 跳过空消息，避免在历史中插入空字符串导致模型误判
+            if (contentConverted && (Array.isArray(contentConverted) ? contentConverted.length > 0 : contentConverted.trim().length > 0)) {
+                tempOpenAIMessages.push({
+                    role: role,
+                    content: contentConverted
+                });
+            }
+        }
+        
+        // ---------------- OpenAI 兼容性校验 ----------------
+        // 确保所有 assistant.tool_calls 均有后续 tool 响应消息；否则移除不匹配的 tool_call
+        const validatedMessages = [];
+        for (let idx = 0; idx < tempOpenAIMessages.length; idx++) {
+            const m = tempOpenAIMessages[idx];
+            if (m.role === "assistant" && m.tool_calls) {
+                const callIds = m.tool_calls.map(tc => tc.id).filter(id => id);
+                // 统计后续是否有对应的 tool 消息
+                let unmatched = new Set(callIds);
+                for (let laterIdx = idx + 1; laterIdx < tempOpenAIMessages.length; laterIdx++) {
+                    const later = tempOpenAIMessages[laterIdx];
+                    if (later.role === "tool" && unmatched.has(later.tool_call_id)) {
+                        unmatched.delete(later.tool_call_id);
+                    }
+                    if (unmatched.size === 0) {
+                        break;
+                    }
+                }
+                if (unmatched.size > 0) {
+                    // 移除无匹配的 tool_call
+                    m.tool_calls = m.tool_calls.filter(tc => !unmatched.has(tc.id));
+                    // 如果全部被移除，则降级为普通 assistant 文本消息
+                    if (m.tool_calls.length === 0) {
+                        delete m.tool_calls;
+                        if (m.content === null) {
+                            m.content = "";
+                        }
+                    }
+                }
+            }
+            validatedMessages.push(m);
+        }
+        openaiMessages.push(...validatedMessages);
     }
 
     const openaiRequest = {
@@ -519,12 +842,73 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
         max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, DEFAULT_MAX_TOKENS),
         temperature: checkAndAssignOrDefault(claudeRequest.temperature, DEFAULT_TEMPERATURE),
         top_p: checkAndAssignOrDefault(claudeRequest.top_p, DEFAULT_TOP_P),
-        // stream: claudeRequest.stream, // Stream mode is handled by different endpoint
+        stream: claudeRequest.stream, // Stream mode is handled by different endpoint
     };
 
+    // Process tools
+    if (claudeRequest.tools) {
+        const openaiTools = [];
+        for (const tool of claudeRequest.tools) {
+            openaiTools.push({
+                type: "function",
+                function: {
+                    name: tool.name || "",
+                    description: tool.description || "",
+                    parameters: _cleanJsonSchemaProperties(tool.input_schema || {}) // 使用清理函数
+                }
+            });
+        }
+        openaiRequest.tools = openaiTools;
+        openaiRequest.tool_choice = "auto";
+    }
+
+    // 处理思考预算转换 (Anthropic thinking -> OpenAI reasoning_effort + max_completion_tokens)
+    if (claudeRequest.thinking && claudeRequest.thinking.type === "enabled") {
+        const budgetTokens = claudeRequest.thinking.budget_tokens;
+        // 根据budget_tokens智能判断reasoning_effort等级
+        const reasoningEffort = _determineReasoningEffortFromBudget(budgetTokens);
+        openaiRequest.reasoning_effort = reasoningEffort;
+
+        // 处理max_completion_tokens的优先级逻辑
+        let maxCompletionTokens = null;
+
+        // 优先级1：客户端传入的max_tokens
+        if (claudeRequest.max_tokens !== undefined) {
+            maxCompletionTokens = claudeRequest.max_tokens;
+            delete openaiRequest.max_tokens; // 移除max_tokens，使用max_completion_tokens
+            console.info(`Using client max_tokens as max_completion_tokens: ${maxCompletionTokens}`);
+        } else {
+            // 优先级2：环境变量OPENAI_REASONING_MAX_TOKENS
+            const envMaxTokens = process.env.OPENAI_REASONING_MAX_TOKENS;
+            if (envMaxTokens) {
+                try {
+                    maxCompletionTokens = parseInt(envMaxTokens, 10);
+                    console.info(`Using OPENAI_REASONING_MAX_TOKENS from environment: ${maxCompletionTokens}`);
+                } catch (e) {
+                    console.warn(`Invalid OPENAI_REASONING_MAX_TOKENS value '${envMaxTokens}', must be integer`);
+                }
+            }
+
+            if (!envMaxTokens) {
+                // 优先级3：都没有则报错
+                throw new Error("For OpenAI reasoning models, max_completion_tokens is required. Please specify max_tokens in the request or set OPENAI_REASONING_MAX_TOKENS environment variable.");
+            }
+        }
+        openaiRequest.max_completion_tokens = maxCompletionTokens;
+        console.info(`Anthropic thinking enabled -> OpenAI reasoning_effort='${reasoningEffort}', max_completion_tokens=${maxCompletionTokens}`);
+        if (budgetTokens) {
+            console.info(`Budget tokens: ${budgetTokens} -> reasoning_effort: '${reasoningEffort}'`);
+        }
+    }
+    
     // Add system message at the beginning if present
     if (systemMessageContent) {
-        openaiRequest.messages.unshift({ role: 'system', content: systemMessageContent });
+        let stringifiedSystemMessageContent = systemMessageContent;
+        if(Array.isArray(systemMessageContent)){
+            stringifiedSystemMessageContent = systemMessageContent.map(item =>
+                    typeof item === 'string' ? item : item.text).join('\n');
+        }
+        openaiRequest.messages.unshift({ role: 'system', content: stringifiedSystemMessageContent });
     }
 
     return openaiRequest;
@@ -595,6 +979,9 @@ function processClaudeContentToOpenAIContent(content) {
     return contentArray;
 }
 
+// =============================================================================
+// Gemini 相关转换函数
+// =============================================================================
 
 /**
  * Converts an OpenAI chat completion request body to a Gemini API request body.
@@ -770,9 +1157,24 @@ function processOpenAIContentToGeminiParts(content) {
 }
 
 function safeParseJSON(str) {
+    if (!str) {
+        return str;
+    }
+    let cleanedStr = str;
+
+    // 处理可能被截断的转义序列
+    if (cleanedStr.endsWith('\\') && !cleanedStr.endsWith('\\\\')) {
+        cleanedStr = cleanedStr.substring(0, cleanedStr.length - 1); // 移除悬挂的反斜杠
+    } else if (cleanedStr.endsWith('\\u') || cleanedStr.endsWith('\\u0') || cleanedStr.endsWith('\\u00')) {
+        // 不完整的Unicode转义序列
+        const idx = cleanedStr.lastIndexOf('\\u');
+        cleanedStr = cleanedStr.substring(0, idx);
+    }
+
     try {
-        return JSON.parse(str || '{}');
-    } catch {
+        return JSON.parse(cleanedStr || '{}');
+    } catch (e) {
+        // 如果清理后仍然无法解析，则返回原始字符串或进行其他错误处理
         return str;
     }
 }
@@ -787,6 +1189,246 @@ function buildToolConfig(toolChoice) {
     return null;
 }
 
+/**
+ * 根据 tool_result 字段构造 Gemini functionResponse
+ * @param {Object} item - 工具结果项
+ * @returns {Object|null} functionResponse 对象
+ */
+function _buildFunctionResponse(item) {
+    if (!item || typeof item !== 'object') {
+        return null;
+    }
+
+    // 判定是否为工具结果
+    const isResult = (
+        item.type === "tool_result" ||
+        item.tool_use_id !== undefined ||
+        item.tool_output !== undefined ||
+        item.result !== undefined ||
+        item.content !== undefined
+    );
+    if (!isResult) {
+        return null;
+    }
+
+    // 提取函数名
+    let funcName = null;
+
+    // 方法1：从映射表中获取（Anthropic格式）
+    const toolUseId = item.tool_use_id || item.id;
+    // 这里需要注意，AnthropicConverter内部维护的_toolUseMapping是类的私有属性，在convert.js中无法直接访问
+    // 因此，这里需要依赖全局的toolStateManager
+    // if (toolUseId && this._toolUseMapping) { // 这行代码在convert.js中将无法使用
+    //     funcName = this._toolUseMapping[toolUseId];
+    // }
+
+    // 方法1.5：使用全局工具状态管理器
+    if (!funcName && toolUseId) {
+        // 先尝试从ID中提取可能的函数名
+        let potentialFuncName = null;
+        if (String(toolUseId).startsWith("call_")) {
+            const nameAndHash = toolUseId.substring(4); // 去掉 "call_" 前缀
+            potentialFuncName = nameAndHash.substring(0, nameAndHash.lastIndexOf("_"));
+        }
+
+        // 检查全局管理器中是否有对应的映射
+        if (potentialFuncName) {
+            const storedId = toolStateManager.getToolId(potentialFuncName);
+            if (storedId === toolUseId) {
+                funcName = potentialFuncName;
+            }
+        }
+    }
+
+    // 方法2：从 tool_use_id 中提取（OpenAI格式）
+    if (!funcName && toolUseId && String(toolUseId).startsWith("call_")) {
+        // 格式: call_<function_name>_<hash> ，函数名可能包含多个下划线
+        const nameAndHash = toolUseId.substring(4); // 去掉 "call_" 前缀
+        funcName = nameAndHash.substring(0, nameAndHash.lastIndexOf("_")); // 去掉最后一个 hash 段
+    }
+
+    // 方法3：直接从字段获取
+    if (!funcName) {
+        funcName = (
+            item.tool_name ||
+            item.name ||
+            item.function_name
+        );
+    }
+
+    if (!funcName) {
+        return null;
+    }
+
+    // 提取结果内容
+    let funcResponse = null;
+
+    // 尝试多个可能的结果字段
+    for (const key of ["content", "tool_output", "output", "response", "result"]) {
+        if (item[key] !== undefined) {
+            funcResponse = item[key];
+            break;
+        }
+    }
+
+    // 如果 content 是列表，尝试提取文本
+    if (Array.isArray(funcResponse) && funcResponse.length > 0) {
+        const textParts = funcResponse
+            .filter(p => p && typeof p === 'object' && p.type === "text")
+            .map(p => p.text || "");
+        if (textParts.length > 0) {
+            funcResponse = textParts.join("");
+        }
+    }
+
+    // 确保有响应内容
+    if (funcResponse === null || funcResponse === undefined) {
+        funcResponse = "";
+    }
+
+    // Gemini 要求 response 为 JSON 对象，若为原始字符串则包装
+    if (typeof funcResponse !== 'object') {
+        funcResponse = { content: String(funcResponse) };
+    }
+
+    return {
+        functionResponse: {
+            name: funcName,
+            response: funcResponse
+        }
+    };
+}
+
+/**
+ * Converts a Gemini API model list response to a Claude API model list response.
+ * @param {Object} geminiModels - The Gemini API model list response object.
+ * @returns {Object} The formatted Claude API model list response.
+ */
+export function toClaudeModelListFromGemini(geminiModels) {
+    return {
+        models: geminiModels.models.map(m => ({
+            name: m.name.startsWith('models/') ? m.name.substring(7) : m.name, // 移除 'models/' 前缀作为 name
+            // Claude models 可能包含其他字段，这里使用默认值
+            description: "", // Gemini models 不提供描述
+            // Claude API 可能需要其他字段，根据实际 API 文档调整
+        })),
+    };
+}
+
+/**
+ * Converts an OpenAI API model list response to a Claude API model list response.
+ * @param {Object} openaiModels - The OpenAI API model list response object.
+ * @returns {Object} The formatted Claude API model list response.
+ */
+export function toClaudeModelListFromOpenAI(openaiModels) {
+    return {
+        models: openaiModels.data.map(m => ({
+            name: m.id, // OpenAI 的 id 映射为 Claude 的 name
+            // Claude models 可能包含其他字段，这里使用默认值
+            description: "", // OpenAI models 不提供描述
+            // Claude API 可能需要其他字段，根据实际 API 文档调整
+        })),
+    };
+}
+
+/**
+ * 从OpenAI文本中提取thinking内容，返回Anthropic格式的content blocks
+ * @param {string} text - 文本内容
+ * @returns {string|Array} 提取后的内容
+ */
+function _extractThinkingFromOpenAIText(text) {
+    // 匹配 <thinking>...</thinking> 标签
+    const thinkingPattern = /<thinking>\s*(.*?)\s*<\/thinking>/gs;
+    const matches = [...text.matchAll(thinkingPattern)];
+
+    const contentBlocks = [];
+    let lastEnd = 0;
+
+    for (const match of matches) {
+        // 添加thinking标签之前的文本（如果有）
+        const beforeText = text.substring(lastEnd, match.index).trim();
+        if (beforeText) {
+            contentBlocks.push({
+                type: "text",
+                text: beforeText
+            });
+        }
+
+        // 添加thinking内容
+        const thinkingText = match[1].trim();
+        if (thinkingText) {
+            contentBlocks.push({
+                type: "thinking",
+                thinking: thinkingText
+            });
+        }
+
+        lastEnd = match.index + match[0].length;
+    }
+
+    // 添加最后一个thinking标签之后的文本（如果有）
+    const afterText = text.substring(lastEnd).trim();
+    if (afterText) {
+        contentBlocks.push({
+            type: "text",
+            text: afterText
+        });
+    }
+
+    // 如果没有找到thinking标签，返回原文本
+    if (contentBlocks.length === 0) {
+        return text;
+    }
+
+    // 如果只有一个文本块，返回字符串
+    if (contentBlocks.length === 1 && contentBlocks[0].type === "text") {
+        return contentBlocks[0].text;
+    }
+
+    return contentBlocks;
+}
+
+/**
+ * Converts an OpenAI chat completion stream chunk to a Claude API messages stream chunk.
+ * @param {Object} openaiChunk - The OpenAI API chat completion stream chunk object.
+ * @param {string} [model] - Optional model name to include in the response.
+ * @returns {Object} The formatted Claude API messages stream chunk.
+ */
+export function toClaudeStreamChunkFromOpenAI(openaiChunk, model) {
+    if (!openaiChunk) {
+        return null;
+    }
+
+    // 工具调用
+    if ( Array.isArray(openaiChunk)) {
+        const toolCall = openaiChunk[0]; // 假设每次只处理一个工具调用
+        if (toolCall) {
+            if (toolCall.function && toolCall.function.name) {
+                const toolUseBlock = {
+                    type: "tool_use",
+                    id: toolCall.id || `call_${toolCall.function.name}_${Date.now()}`,
+                    name: toolCall.function.name,
+                    input: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {}
+                };
+                return { type: "content_block_start", index: 1, content_block: toolUseBlock };
+            }
+        }
+    }
+
+    // 文本内容
+    if (typeof openaiChunk === 'string') {
+        return {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+                type: "text_delta",
+                text: openaiChunk
+            }
+        };
+    }
+    return null;
+}
+
 function buildGenerationConfig({ temperature, max_tokens, top_p, stop }) {
     const config = {};
     config.temperature = checkAndAssignOrDefault(temperature, DEFAULT_TEMPERATURE);
@@ -795,7 +1437,6 @@ function buildGenerationConfig({ temperature, max_tokens, top_p, stop }) {
     if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
     return config;
 }
-
 
 /**
  * Converts an OpenAI chat completion request body to a Claude API request body.
@@ -923,7 +1564,6 @@ function buildClaudeToolChoice(toolChoice) {
     return undefined;
 }
 
-
 /**
  * Extracts and combines all 'system' role messages into a single system instruction.
  * Filters out system messages and returns the remaining non-system messages.
@@ -972,57 +1612,6 @@ export function extractTextFromMessageContent(content) {
     return '';
 }
 
-/**
- * Utility function to detect MIME type from base64 data URL
- * @param {string} dataUrl - Data URL string
- * @returns {string} MIME type
- */
-function detectMimeType(dataUrl) {
-    const match = dataUrl.match(/^data:([^;]+);base64,/);
-    return match ? match[1] : 'application/octet-stream';
-}
-
-/**
- * Utility function to extract base64 data from data URL
- * @param {string} dataUrl - Data URL string
- * @returns {string} Base64 data
- */
-function extractBase64Data(dataUrl) {
-    return dataUrl.replace(/^data:[^;]+;base64,/, '');
-}
-
-/**
- * Utility function to validate image MIME types
- * @param {string} mimeType - MIME type to validate
- * @returns {boolean} Whether it's a valid image type
- */
-function isValidImageType(mimeType) {
-    const validTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-        'image/webp', 'image/bmp', 'image/tiff'
-    ];
-    return validTypes.includes(mimeType.toLowerCase());
-}
-
-/**
- * Utility function to validate audio MIME types
- * @param {string} mimeType - MIME type to validate
- * @returns {boolean} Whether it's a valid audio type
- */
-function isValidAudioType(mimeType) {
-    const validTypes = [
-        'audio/wav', 'audio/wave', 'audio/mp3', 'audio/mpeg',
-        'audio/ogg', 'audio/aac', 'audio/flac', 'audio/m4a'
-    ];
-    return validTypes.includes(mimeType.toLowerCase());
-}
-
-/**
- * Converts a Claude API request body to a Gemini API request body.
- * Handles system instructions and multimodal content.
- * @param {Object} claudeRequest - The request body from the Claude API.
- * @returns {Object} The formatted request body for the Gemini API.
- */
 /**
  * Converts a Claude API request body to a Gemini API request body.
  * Handles system instructions and multimodal content.
@@ -1380,91 +1969,6 @@ export function toClaudeStreamChunkFromGemini(geminiChunk, model) {
         return null;
     }
 
-    // Handle different types of Gemini stream events
-    if (geminiChunk.candidates && geminiChunk.candidates.length > 0) {
-        const candidate = geminiChunk.candidates[0];
-
-        if (candidate.content && candidate.content.parts) {
-            const textParts = candidate.content.parts
-                .filter(part => part.text)
-                .map(part => part.text);
-
-            const functionCallPart = candidate.content.parts.find(part => part.functionCall);
-
-            if (functionCallPart) {
-                // Handle tool_use
-                return {
-                    type: "content_block_start",
-                    index: 0,
-                    content_block: {
-                        type: "tool_use",
-                        id: `toolu_${uuidv4()}`, // Claude tool use ID format
-                        name: functionCallPart.functionCall.name,
-                        input: functionCallPart.functionCall.args || {}
-                    }
-                };
-            } else if (textParts.length > 0) {
-                return {
-                    type: "content_block_delta",
-                    index: 0,
-                    delta: {
-                        type: "text_delta",
-                        text: textParts.join('')
-                    }
-                };
-            }
-        }
-
-        // Handle finish reason
-        if (candidate.finishReason) {
-            let stopReason = "end_turn";
-            switch (candidate.finishReason) {
-                case 'STOP':
-                    stopReason = 'end_turn';
-                    break;
-                case 'MAX_TOKENS':
-                    stopReason = 'max_tokens';
-                    break;
-                case 'SAFETY':
-                    stopReason = 'safety';
-                    break;
-                case 'RECITATION':
-                    stopReason = 'recitation';
-                    break;
-                case 'OTHER':
-                    stopReason = 'other';
-                    break;
-                default:
-                    stopReason = 'end_turn';
-            }
-            return {
-                type: "message_delta",
-                delta: {
-                    stop_reason: stopReason,
-                    stop_sequence: null
-                },
-                usage: geminiChunk.usageMetadata ? {
-                    output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0
-                } : undefined
-            };
-        }
-    }
-
-    // Handle usage metadata updates (only if no other content/finish reason)
-    if (geminiChunk.usageMetadata && (!geminiChunk.candidates || geminiChunk.candidates.length === 0)) {
-        return {
-            type: "message_delta",
-            delta: {},
-            usage: {
-                input_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
-                output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0
-            }
-        };
-    }
-
-    // Default text delta for simple text chunks (should ideally be handled by candidate.content.parts)
-    // This case might occur if the geminiChunk is just a string, which is not typical for Gemini API.
-    // Added for robustness, but main logic should rely on geminiChunk.candidates.
     if (typeof geminiChunk === 'string') {
         return {
             type: "content_block_delta",

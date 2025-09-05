@@ -14,7 +14,7 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
 
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
@@ -86,7 +86,8 @@ export class GeminiApiService {
                 console.log('[Gemini Auth] Token refresh response: ok');
             }
         } catch (error) {
-            if (error.code === 'ENOENT') {
+            console.error('[Gemini Auth] Error initializing authentication:', error.code);
+            if (error.code === 'ENOENT' || error.code === 400) {
                 console.log(`[Gemini Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
                 const newTokens = await this.getNewToken(credPath);
                 this.authClient.setCredentials(newTokens);
@@ -99,7 +100,11 @@ export class GeminiApiService {
     }
 
     async getNewToken(credPath) {
-        const redirectUri = `http://${this.host}:${AUTH_REDIRECT_PORT}`;
+        let host = this.host;
+        if (!host || host === 'undefined') {
+            host = '127.0.0.1';
+        }
+        const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
         this.authClient.redirectUri = redirectUri;
         return new Promise((resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -206,7 +211,7 @@ export class GeminiApiService {
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
-            if (error.response?.status === 401 && !isRetry) {
+            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
                 console.log('[API] Received 401. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount);
@@ -253,7 +258,7 @@ export class GeminiApiService {
             }
             yield* this.parseSSEStream(res.data);
         } catch (error) {
-            if (error.response?.status === 401 && !isRetry) {
+            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
                 console.log('[API] Received 401 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount);

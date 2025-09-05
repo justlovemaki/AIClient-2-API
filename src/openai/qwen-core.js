@@ -11,6 +11,10 @@ import { randomUUID } from 'node:crypto';
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
 const QWEN_LOCK_FILENAME = 'oauth_creds.lock';
+const QWEN_MODEL_LIST = [
+    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
+    { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
+];
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 const LOCK_TIMEOUT_MS = 10000;
@@ -193,7 +197,12 @@ export class QwenApiService {
     async _authWithQwenDeviceFlow(client, config) {
         let isCancelled = false;
         const cancelHandler = () => { isCancelled = true; };
+        const sigintHandler = () => {
+            isCancelled = true;
+            qwenOAuth2Events.emit(QwenOAuth2Event.AuthCancel);
+        };
         qwenOAuth2Events.once(QwenOAuth2Event.AuthCancel, cancelHandler);
+        process.once('SIGINT', sigintHandler);
 
         try {
             const { code_verifier, code_challenge } = generatePKCEPair();
@@ -274,7 +283,20 @@ export class QwenApiService {
                 }
                 
                 // Wait for the polling interval before the next attempt
-                await new Promise(resolve => setTimeout(resolve, pollInterval));
+                await new Promise(resolve => {
+                    const timeoutId = setTimeout(resolve, pollInterval);
+                    // If cancelled during wait, clear timeout and resolve immediately
+                    if (isCancelled) {
+                        clearTimeout(timeoutId);
+                        resolve();
+                    }
+                });
+                
+                // Check again after waiting
+                if (isCancelled) {
+                    qwenOAuth2Events.emit(QwenOAuth2Event.AuthProgress, 'error', 'Authentication cancelled by user.');
+                    return { success: false, reason: 'cancelled' };
+                }
             }
             return { success: false, reason: 'timeout' };
         } catch (error) {
@@ -282,6 +304,7 @@ export class QwenApiService {
             return { success: false, reason: 'error' };
         } finally {
             qwenOAuth2Events.off(QwenOAuth2Event.AuthCancel, cancelHandler);
+            process.off('SIGINT', sigintHandler);
         }
     }
 
@@ -358,6 +381,37 @@ export class QwenApiService {
         }
     }
 
+    /**
+     * Processes message content in the request body.
+     * If content is an array, it joins the elements with newlines.
+     * @param {Object} requestBody - The request body to process
+     * @returns {Object} The processed request body
+     */
+    processMessageContent(requestBody) {
+        if (!requestBody || !requestBody.messages || !Array.isArray(requestBody.messages)) {
+            return requestBody;
+        }
+        
+        const processedMessages = requestBody.messages.map(message => {
+            if (message.content && Array.isArray(message.content)) {
+                // Convert each item to JSON string before joining
+                const stringifiedContent = message.content.map(item =>
+                    typeof item === 'string' ? item : item.text
+                );
+                return {
+                    ...message,
+                    content: stringifiedContent.join('\n')
+                };
+            }
+            return message;
+        });
+        
+        return {
+            ...requestBody,
+            messages: processedMessages
+        };
+    }
+
     async callApiWithAuthAndRetry(endpoint, body, isStream = false, retryCount = 0) {
         const maxRetries = (this.config && this.config.REQUEST_MAX_RETRIES) || 3;
         const baseDelay = (this.config && this.config.REQUEST_BASE_DELAY) || 1000;
@@ -378,19 +432,27 @@ export class QwenApiService {
                 },
             });
 
+            // Process message content before sending the request
+            const processedBody = body;//this.processMessageContent(body);
+
+            // Check if model in body is in QWEN_MODEL_LIST, if not, use the first model's id
+            if (processedBody.model && !QWEN_MODEL_LIST.some(model => model.id === processedBody.model)) {
+                processedBody.model = QWEN_MODEL_LIST[0].id;
+            }
+
             const defaultTools = [
                 {
                     "type": "function",
                     "function": {
-                        "name": "ext"
+                    "name": "ext"
                     }
                 }
             ];
             
             // Merge tools if requestBody already has tools defined
-            const mergedTools = body.tools ? [...defaultTools, ...body.tools] : defaultTools;
+            const mergedTools = processedBody.tools ? [...defaultTools, ...processedBody.tools] : defaultTools;
             
-            const requestBody = isStream ? { ...body, stream: true, tools: mergedTools } : { ...body, tools: mergedTools };
+            const requestBody = isStream ? { ...processedBody, stream: true, tools: mergedTools } : { ...processedBody, tools: mergedTools };
             const options = isStream ? { responseType: 'stream' } : {};
             const response = await this.currentAxiosInstance.post(endpoint, requestBody, options);
             return response.data;
@@ -452,11 +514,7 @@ export class QwenApiService {
     async listModels() {
         // Return the predefined models for Qwen
         return {
-            data: [
-                { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
-                { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' }
-            ],
-            default_model: 'qwen3-coder-flash'
+            data: QWEN_MODEL_LIST
         };
     }
 
@@ -503,8 +561,12 @@ class SharedTokenManager {
         this.cleanupFunction = () => {
             try { unlinkSync(this.getLockFilePath()); } catch (_error) { /* Ignore */ }
         };
+        this.sigintHandler = () => {
+            try { unlinkSync(this.getLockFilePath()); } catch (_error) { /* Ignore */ }
+            process.exit(0);
+        };
         process.on('exit', this.cleanupFunction);
-        process.on('SIGINT', this.cleanupFunction);
+        process.on('SIGINT', this.sigintHandler);
         this.cleanupHandlersRegistered = true;
     }
 
