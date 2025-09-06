@@ -12,8 +12,8 @@ const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
 const QWEN_LOCK_FILENAME = 'oauth_creds.lock';
 const QWEN_MODEL_LIST = [
-    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
     { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
+    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
 ];
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
@@ -32,8 +32,8 @@ const QWEN_OAUTH_CLIENT_ID = 'f0304373b74a44d2b584a3fb70ca9e56';
 const QWEN_OAUTH_SCOPE = 'openid profile email model.completion';
 const QWEN_OAUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
-const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-// const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
+// const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
 
 export const QwenOAuth2Event = {
     AuthUri: 'auth-uri',
@@ -578,6 +578,7 @@ class SharedTokenManager {
             }
             if (this.refreshPromise) return this.refreshPromise;
             
+            qwenClient.setCredentials(this.memoryCache.credentials);
             this.refreshPromise = this.performTokenRefresh(qwenClient, forceRefresh);
             const credentials = await this.refreshPromise;
             this.refreshPromise = null;

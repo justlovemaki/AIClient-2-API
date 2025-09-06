@@ -49,9 +49,9 @@
 ## 🎨 模型协议与提供商关系图
 
 
-- OpenAI 协议 (P_OPENAI): 支持所有 MODEL_PROVIDER，包括 openai-custom、gemini-cli-oauth、claude-custom 和
-claude-kiro-oauth。
-- Claude 协议 (P_CLAUDE): 支持 claude-custom、claude-kiro-oauth 和 gemini-cli-oauth。
+- OpenAI 协议 (P_OPENAI): 支持所有 MODEL_PROVIDER，包括 openai-custom、gemini-cli-oauth、claude-custom、
+claude-kiro-oauth 和 openai-qwen-oauth。
+- Claude 协议 (P_CLAUDE): 支持 claude-custom、claude-kiro-oauth、gemini-cli-oauth 和 openai-qwen-oauth。
 - Gemini 协议 (P_GEMINI): 支持 gemini-cli-oauth。
 
 
@@ -69,9 +69,11 @@ claude-kiro-oauth。
            MP_GEMINI[gemini-cli-oauth]
            MP_CLAUDE_C[claude-custom]
            MP_CLAUDE_K[claude-kiro-oauth]
+           MP_QWEN[openai-qwen-oauth]
        end
    
        P_OPENAI ---|支持| MP_OPENAI
+       P_OPENAI ---|支持| MP_QWEN
        P_OPENAI ---|支持| MP_GEMINI
        P_OPENAI ---|支持| MP_CLAUDE_C
        P_OPENAI ---|支持| MP_CLAUDE_K
@@ -81,6 +83,8 @@ claude-kiro-oauth。
        P_CLAUDE ---|支持| MP_CLAUDE_C
        P_CLAUDE ---|支持| MP_CLAUDE_K
        P_CLAUDE ---|支持| MP_GEMINI
+       P_CLAUDE ---|支持| MP_OPENAI
+       P_CLAUDE ---|支持| MP_QWEN
    
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
@@ -205,6 +209,136 @@ $env:HTTP_PROXY="http://your_proxy_address:port"
     *   **响应缓存**: 对高频重复问题添加缓存逻辑，降低 API 调用，提升响应速度。
     *   **自定义内容过滤**: 在请求发送或返回前增加关键词过滤或内容审查逻辑，满足合规要求。
 
+---
+
+## 🚀 项目启动参数
+
+本项目支持丰富的命令行参数配置，可以根据需要灵活调整服务行为。以下是对所有启动参数的详细说明，按功能分组展示：
+
+### 🔧 服务器配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--host` | string | localhost | 服务器监听地址 |
+| `--port` | number | 3000 | 服务器监听端口 |
+| `--api-key` | string | 123456 | 身份验证所需的 API 密钥 |
+
+### 🤖 模型提供商配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+
+### 🧠 OpenAI 兼容提供商参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--openai-api-key` | string | null | OpenAI API 密钥 (用于 openai-custom 提供商) |
+| `--openai-base-url` | string | null | OpenAI API 基础 URL (用于 openai-custom 提供商) |
+
+### 🖥️ Claude 兼容提供商参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--claude-api-key` | string | null | Claude API 密钥 (用于 claude-custom 提供商) |
+| `--claude-base-url` | string | null | Claude API 基础 URL (用于 claude-custom 提供商) |
+
+### 🔐 Gemini OAuth 认证参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--gemini-oauth-creds-base64` | string | null | Gemini OAuth 凭据的 Base64 字符串 |
+| `--gemini-oauth-creds-file` | string | null | Gemini OAuth 凭据 JSON 文件路径 |
+| `--project-id` | string | null | Google Cloud 项目 ID (用于 gemini-cli 提供商) |
+
+### 🎮 Kiro OAuth 认证参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--kiro-oauth-creds-base64` | string | null | Kiro OAuth 凭据的 Base64 字符串 |
+| `--kiro-oauth-creds-file` | string | null | Kiro OAuth 凭据 JSON 文件路径 |
+
+### 🐼 Qwen OAuth 认证参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 |
+
+### 📝 系统提示配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--system-prompt-file` | string | input_system_prompt.txt | 系统提示文件路径 |
+| `--system-prompt-mode` | string | overwrite | 系统提示模式，可选值：overwrite（覆盖）, append（追加） |
+
+### 📊 日志配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--log-prompts` | string | none | 提示日志模式，可选值：console（控制台）, file（文件）, none（无） |
+| `--prompt-log-base-name` | string | prompt_log | 提示日志文件基础名称 |
+
+### 🔄 重试机制参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--request-max-retries` | number | 3 | API 请求失败时，自动重试的最大次数 |
+| `--request-base-delay` | number | 1000 | 自动重试之间的基础延迟时间（毫秒），每次重试后延迟会增加 |
+
+### ⏰ 定时任务参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--cron-near-minutes` | number | 15 | OAuth 令牌刷新任务计划的间隔时间（分钟） |
+| `--cron-refresh-token` | boolean | true | 是否开启 OAuth 令牌自动刷新任务 |
+
+### 🎯 号池配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--provider-pools-file` | string | null | 提供商号池配置文件路径 |
+
+### 使用示例
+
+```bash
+# 基本用法
+node src/api-server.js
+
+# 指定端口和API密钥
+node src/api-server.js --port 8080 --api-key my-secret-key
+
+# 使用OpenAI提供商
+node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
+
+# 使用Claude提供商
+node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
+
+# 使用Gemini提供商（Base64凭据）
+node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
+
+# 使用Gemini提供商（凭据文件）
+node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
+
+# 配置系统提示
+node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append
+
+# 配置日志
+node src/api-server.js --log-prompts console
+node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
+
+# 完整示例
+node src/api-server.js \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --api-key my-secret-key \
+  --model-provider gemini-cli-oauth \
+  --project-id my-gcp-project \
+  --gemini-oauth-creds-file ./credentials.json \
+  --system-prompt-file ./custom-system-prompt.txt \
+  --system-prompt-mode overwrite \
+  --log-prompts file \
+  --prompt-log-base-name api-logs
+```
 ---
 
 ## 📄 开源许可

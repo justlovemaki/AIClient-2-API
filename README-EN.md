@@ -45,59 +45,58 @@
 
 ---
 
+## 🎨 Model Protocol and Provider Relationship Diagram
 
-### 🎨 Model Protocol and Provider Relationship Diagram
-
-
-- OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDERs, including openai-custom, gemini-cli-oauth, claude-custom, and
- claude-kiro-oauth.
-- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, and gemini-cli-oauth.
+- OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDERs, including openai-custom, gemini-cli-oauth, claude-custom, claude-kiro-oauth and openai-qwen-oauth.
+- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, gemini-cli-oauth and openai-qwen-oauth.
 - Gemini Protocol (P_GEMINI): Supports gemini-cli-oauth.
-
 
   ```mermaid
   
    graph TD
-        subgraph Core_Protocols["Core Protocols"]
-            P_OPENAI[OpenAI Protocol]
-            P_GEMINI[Gemini Protocol]
-            P_CLAUDE[Claude Protocol]
-        end
-    
-        subgraph Supported_Model_Providers["Supported Model Providers"]
-            MP_OPENAI[openai-custom]
-            MP_GEMINI[gemini-cli-oauth]
-            MP_CLAUDE_C[claude-custom]
-            MP_CLAUDE_K[claude-kiro-oauth]
-        end
-    
-        P_OPENAI ---|Support| MP_OPENAI
-        P_OPENAI ---|Support| MP_GEMINI
-        P_OPENAI ---|Support| MP_CLAUDE_C
-        P_OPENAI ---|Support| MP_CLAUDE_K
-    
-        P_GEMINI ---|Support| MP_GEMINI
-    
-        P_CLAUDE ---|Support| MP_CLAUDE_C
-        P_CLAUDE ---|Support| MP_CLAUDE_K
-        P_CLAUDE ---|Support| MP_GEMINI
-    
-        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
-        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
-        style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
+       subgraph Core_Protocols["Core Protocols"]
+           P_OPENAI[OpenAI Protocol]
+           P_GEMINI[Gemini Protocol]
+           P_CLAUDE[Claude Protocol]
+       end
+   
+       subgraph Supported_Model_Providers["Supported Model Providers"]
+           MP_OPENAI[openai-custom]
+           MP_GEMINI[gemini-cli-oauth]
+           MP_CLAUDE_C[claude-custom]
+           MP_CLAUDE_K[claude-kiro-oauth]
+           MP_QWEN[openai-qwen-oauth]
+       end
+   
+       P_OPENAI ---|Support| MP_OPENAI
+       P_OPENAI ---|Support| MP_QWEN
+       P_OPENAI ---|Support| MP_GEMINI
+       P_OPENAI ---|Support| MP_CLAUDE_C
+       P_OPENAI ---|Support| MP_CLAUDE_K
+   
+       P_GEMINI ---|Support| MP_GEMINI
+   
+       P_CLAUDE ---|Support| MP_CLAUDE_C
+       P_CLAUDE ---|Support| MP_CLAUDE_K
+       P_CLAUDE ---|Support| MP_GEMINI
+       P_CLAUDE ---|Support| MP_OPENAI
+       P_CLAUDE ---|Support| MP_QWEN
+   
+       style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
+       style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
+       style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
 
   ```
 
 ---
 
-### 🔧 Usage Instructions
+## 🔧 Usage Instructions
 
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are unavailable, this project fully supports MCP (Model Context Protocol), enabling powerful functional extensions when paired with MCP-compatible clients.
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
 *   **Latest Model Support**: Supports the latest **Kimi K2**, **GLM-4.5** and **Qwen Code** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
 *   **Qwen Code Support**: Using Qwen Code will automatically open an authorization page in the browser. After completing authorization, it will generate an `oauth_creds.json` file in the `~/.qwen` directory. Please use the official default parameters temperature=0 and top_p=1.
 *   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
-
 *   **Using Different Providers in Claude Code**: Via Path routing, you can use different providers in Claude-related API calls:
     *   `http://localhost:3000/claude-custom` - Use the Claude API provider defined in the configuration file
     *   `http://localhost:3000/claude-kiro-oauth` - Access the Claude API using Kiro OAuth authentication
@@ -120,24 +119,25 @@
 
     ##### Linux / macOS
     ```bash
-    export ANTHROPIC_BASE_URL="https://api.anthropic.com"
+    export ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
     export ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
-    export ANTHROPIC_MODEL="claude-3-5-sonnet-20240620"
+    export ANTHROPIC_MODEL="your-model-name"
     ```
 
     ##### Windows (CMD)
     ```cmd
-    set ANTHROPIC_BASE_URL=https://api.anthropic.com
+    set ANTHROPIC_BASE_URL=http://localhost:3000/claude-custom
     set ANTHROPIC_AUTH_TOKEN=your-auth-token-here
-    set ANTHROPIC_MODEL=claude-3-5-sonnet-20240620
+    set ANTHROPIC_MODEL=your-model-name
     ```
 
     ##### Windows (PowerShell)
     ```powershell
-    $env:ANTHROPIC_BASE_URL="https://api.anthropic.com"
+    $env:ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
     $env:ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
-    $env:ANTHROPIC_MODEL="claude-3-5-sonnet-20240620"
+    $env:ANTHROPIC_MODEL="your-model-name"
     ```
+
 ### Default Authorization File Paths
 
 The following are the default storage paths for authorization files for each service:
@@ -184,8 +184,10 @@ These settings are effective only for the current PowerShell session. For perman
 
 **Please replace `your_proxy_address` and `port` with your actual proxy address and port.**
 
+---
 
 ## 🌟 Special Usage & Advanced Tips
+
 *   **🔌 Connect to Any OpenAI Client**: This is the fundamental feature of this project. Direct the API address of any OpenAI-compatible application (e.g., LobeChat, NextChat, VS Code extensions) to this service (`http://localhost:3000`) to seamlessly leverage all configured models.
 
 *   **🔍 Centralized Request Monitoring & Auditing**: Set `"PROMPT_LOG_MODE": "file"` in `config.json` to capture all requests and responses and save them to a local log file. This is vital for analyzing, debugging, and optimizing prompts, and even for constructing private datasets.
@@ -202,6 +204,136 @@ These settings are effective only for the current PowerShell session. For perman
     *   **Response Caching**: Implement caching logic for frequently repeated queries to reduce API calls and enhance response speed.
     *   **Custom Content Filtering**: Introduce keyword filtering or content review logic before sending or returning requests to ensure compliance.
 
+---
+
+## 🚀 Project Startup Parameters
+
+This project supports rich command-line parameter configuration, allowing flexible adjustment of service behavior as needed. The following is a detailed explanation of all startup parameters, displayed in functional groups:
+
+### 🔧 Server Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--host` | string | localhost | Server listening address |
+| `--port` | number | 3000 | Server listening port |
+| `--api-key` | string | 123456 | API key required for authentication |
+
+### 🤖 Model Provider Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+
+### 🧠 OpenAI Compatible Provider Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--openai-api-key` | string | null | OpenAI API key (for openai-custom provider) |
+| `--openai-base-url` | string | null | OpenAI API base URL (for openai-custom provider) |
+
+### 🖥️ Claude Compatible Provider Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--claude-api-key` | string | null | Claude API key (for claude-custom provider) |
+| `--claude-base-url` | string | null | Claude API base URL (for claude-custom provider) |
+
+### 🔐 Gemini OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--gemini-oauth-creds-base64` | string | null | Base64 string of Gemini OAuth credentials |
+| `--gemini-oauth-creds-file` | string | null | Gemini OAuth credentials JSON file path |
+| `--project-id` | string | null | Google Cloud project ID (for gemini-cli provider) |
+
+### 🎮 Kiro OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--kiro-oauth-creds-base64` | string | null | Base64 string of Kiro OAuth credentials |
+| `--kiro-oauth-creds-file` | string | null | Kiro OAuth credentials JSON file path |
+
+### 🐼 Qwen OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--qwen-oauth-creds-file` | string | null | Qwen OAuth credentials JSON file path |
+
+### 📝 System Prompt Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--system-prompt-file` | string | input_system_prompt.txt | System prompt file path |
+| `--system-prompt-mode` | string | overwrite | System prompt mode, optional values: overwrite, append |
+
+### 📊 Log Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--log-prompts` | string | none | Prompt log mode, optional values: console, file, none |
+| `--prompt-log-base-name` | string | prompt_log | Prompt log file base name |
+
+### 🔄 Retry Mechanism Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--request-max-retries` | number | 3 | Maximum number of automatic retries when API requests fail |
+| `--request-base-delay` | number | 1000 | Base delay time (milliseconds) between automatic retries, delay increases after each retry |
+
+### ⏰ Scheduled Task Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--cron-near-minutes` | number | 15 | Interval time (minutes) for OAuth token refresh task schedule |
+| `--cron-refresh-token` | boolean | true | Whether to enable automatic OAuth token refresh task |
+
+### 🎯 Account Pool Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--provider-pools-file` | string | null | Provider account pool configuration file path |
+
+### Usage Examples
+
+```bash
+# Basic usage
+node src/api-server.js
+
+# Specify port and API key
+node src/api-server.js --port 8080 --api-key my-secret-key
+
+# Use OpenAI provider
+node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
+
+# Use Claude provider
+node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
+
+# Use Gemini provider (Base64 credentials)
+node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
+
+# Use Gemini provider (credentials file)
+node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
+
+# Configure system prompt
+node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append
+
+# Configure logging
+node src/api-server.js --log-prompts console
+node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
+
+# Complete example
+node src/api-server.js \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --api-key my-secret-key \
+  --model-provider gemini-cli-oauth \
+  --project-id my-gcp-project \
+  --gemini-oauth-creds-file ./credentials.json \
+  --system-prompt-file ./custom-system-prompt.txt \
+  --system-prompt-mode overwrite \
+  --log-prompts file \
+  --prompt-log-base-name api-logs
+```
 ---
 
 ## 📄 Open Source License
