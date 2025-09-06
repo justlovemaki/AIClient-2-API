@@ -51,7 +51,7 @@
 
 - OpenAI 协议 (P_OPENAI): 支持所有 MODEL_PROVIDER，包括 openai-custom、gemini-cli-oauth、claude-custom、
 claude-kiro-oauth 和 openai-qwen-oauth。
-- Claude 协议 (P_CLAUDE): 支持 claude-custom、claude-kiro-oauth、gemini-cli-oauth 和 openai-qwen-oauth。
+- Claude 协议 (P_CLAUDE): 支持 claude-custom、claude-kiro-oauth、gemini-cli-oauth、openai-custom和 openai-qwen-oauth。
 - Gemini 协议 (P_GEMINI): 支持 gemini-cli-oauth。
 
 

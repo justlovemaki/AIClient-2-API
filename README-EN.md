@@ -48,7 +48,7 @@
 ## 🎨 Model Protocol and Provider Relationship Diagram
 
 - OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDERs, including openai-custom, gemini-cli-oauth, claude-custom, claude-kiro-oauth and openai-qwen-oauth.
-- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, gemini-cli-oauth and openai-qwen-oauth.
+- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, gemini-cli-oauth, openai-custom and openai-qwen-oauth.
 - Gemini Protocol (P_GEMINI): Supports gemini-cli-oauth.
 
   ```mermaid
