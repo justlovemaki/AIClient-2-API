@@ -314,10 +314,10 @@ node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --
 node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
 
 # 使用Gemini提供商（Base64凭据）
-node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
+node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
 
 # 使用Gemini提供商（凭据文件）
-node src/api-server.js --model-provider gemini-cli --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
+node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
 
 # 配置系统提示
 node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append
