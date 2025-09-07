@@ -30,9 +30,12 @@ export class ProviderPoolManager {
                 providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
                 providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
                 if (providerConfig.lastErrorTime && typeof providerConfig.lastErrorTime === 'string') {
-                    providerConfig.lastErrorTime = new Date(providerConfig.lastErrorTime);
+                    // Keep as string (ISOString)
+                    providerConfig.lastErrorTime = providerConfig.lastErrorTime;
                 } else if (providerConfig.lastErrorTime === undefined) {
                     providerConfig.lastErrorTime = null;
+                } else if (providerConfig.lastErrorTime instanceof Date) {
+                    providerConfig.lastErrorTime = providerConfig.lastErrorTime.toISOString();
                 }
 
                 this.providerStatus[providerType].push({
@@ -75,7 +78,7 @@ export class ProviderPoolManager {
         }
         
         if (selected) {
-            selected.config.lastUsed = new Date();
+            selected.config.lastUsed = new Date().toISOString();
             selected.config.usageCount++; // Increment usage count
 
             console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
@@ -97,7 +100,7 @@ export class ProviderPoolManager {
             const provider = pool.find(p => p.uuid === providerConfig.uuid);
             if (provider) {
                 provider.config.errorCount++;
-                provider.config.lastErrorTime = new Date(); // Update last error time in config
+                provider.config.lastErrorTime = new Date().toISOString(); // Update last error time in config
 
                 if (provider.config.errorCount >= this.maxErrorCount) {
                     provider.config.isHealthy = false;
@@ -142,7 +145,7 @@ export class ProviderPoolManager {
 
                 // Only attempt to health check unhealthy providers after a certain interval
                 if (!providerStatus.config.isHealthy && providerStatus.config.lastErrorTime &&
-                    (now.getTime() - providerStatus.config.lastErrorTime.getTime() < this.healthCheckInterval)) {
+                    (now.getTime() - new Date(providerStatus.config.lastErrorTime).getTime() < this.healthCheckInterval)) {
                     console.log(`[ProviderPoolManager] Skipping health check for ${JSON.stringify(providerConfig)} (${providerType}). Last error too recent.`);
                     continue;
                 }
@@ -260,6 +263,7 @@ export class ProviderPoolManager {
 
             if (this.providerStatus[providerTypeToUpdate]) {
                 currentPools[providerTypeToUpdate] = this.providerStatus[providerTypeToUpdate].map(p => {
+                    // Convert Date objects to ISOString if they exist
                     if (p.config.lastUsed instanceof Date) {
                         p.config.lastUsed = p.config.lastUsed.toISOString();
                     }
