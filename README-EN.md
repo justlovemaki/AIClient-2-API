@@ -39,9 +39,25 @@
 *   ✅ **Bypass Official Restrictions**: By supporting Gemini CLI's OAuth authorization method, it effectively circumvents the rate and quota limits of official free APIs, granting you higher request quotas and usage frequency.
 *   ✅ **Bypass Client Restrictions**: Kiro API mode supports free usage of the Claude Sonnet 4 model.
 *   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, enabling your existing toolchains and clients (e.g., LobeChat, NextChat) to integrate all supported models at zero cost.
+*   ✅ **Intelligent Account Pool Management**: Supports multi-account polling, failover, and configuration degradation, ensuring high service availability and effectively avoiding single account limitations.
 *   ✅ **Enhanced Controllability**: Powerful logging features allow you to capture and record all request prompts, facilitating auditing, debugging, and building private datasets.
 *   ✅ **Extremely Easy to Extend**: Thanks to the new modular and strategy pattern design, adding a new model provider has never been simpler.
 *   ✅ **Comprehensive Test Coverage**: Provides extensive integration and unit tests, ensuring the stability and reliability of all API endpoints and features.
+*   ✅ **Docker Support**: Provides complete Docker containerization support for rapid deployment and environment isolation.
+
+---
+
+## 📑 Quick Navigation
+
+- [🎨 Model Protocol and Provider Relationship Diagram](#-model-protocol-and-provider-relationship-diagram)
+- [🔧 Usage Instructions](#-usage-instructions)
+- [💻 Proxy Settings](#-proxy-settings)
+- [🌟 Special Usage & Advanced Tips](#-special-usage--advanced-tips)
+- [🐳 Docker Deployment](#-docker-deployment)
+- [🚀 Project Startup Parameters](#-project-startup-parameters)
+- [📄 Open Source License](#-open-source-license)
+- [🙏 Acknowledgements](#-acknowledgements)
+- [⚠️ Disclaimer](#-disclaimer)
 
 ---
 
@@ -96,7 +112,7 @@
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
 *   **Latest Model Support**: Supports the latest **Kimi K2**, **GLM-4.5** and **Qwen Code** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
 *   **Qwen Code Support**: Using Qwen Code will automatically open an authorization page in the browser. After completing authorization, it will generate an `oauth_creds.json` file in the `~/.qwen` directory. Please use the official default parameters temperature=0 and top_p=1.
-*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
+*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: Kiro service policy has been adjusted, please check official announcements for specific usage limitations.
 *   **Using Different Providers in Claude Code**: Via Path routing, you can use different providers in Claude-related API calls:
     *   `http://localhost:3000/claude-custom` - Use the Claude API provider defined in the configuration file
     *   `http://localhost:3000/claude-kiro-oauth` - Access the Claude API using Kiro OAuth authentication
@@ -203,6 +219,12 @@ These settings are effective only for the current PowerShell session. For perman
     *   **Add New Models**: Simply create a new provider directory under `src`, implement the `ApiServiceAdapter` interface and corresponding strategies, and then register them in `adapter.js` and `common.js`.
     *   **Response Caching**: Implement caching logic for frequently repeated queries to reduce API calls and enhance response speed.
     *   **Custom Content Filtering**: Introduce keyword filtering or content review logic before sending or returning requests to ensure compliance.
+
+*   **🎯 Advanced Account Pool Configuration**:
+    *   **Multi-Account Management**: Configure multiple accounts for each provider through the `provider_pools.json` file, enabling intelligent polling.
+    *   **Failover**: When an account becomes unavailable, the system automatically switches to the next available account, ensuring service continuity.
+    *   **Configuration Degradation**: Dynamically adjust configuration parameters based on account status to optimize resource usage efficiency.
+    *   **Usage Example**: Refer to the `provider_pools.json` configuration file in the project to easily set up a multi-account environment.
 
 ---
 

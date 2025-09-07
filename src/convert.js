@@ -774,7 +774,7 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
                     const funcArgs = firstPart.input || {};
                     tempOpenAIMessages.push({
                         role: "assistant",
-                        content: null,
+                        content: '',
                         tool_calls: [
                             {
                                 id: firstPart.id || `call_${funcName}_1`,
@@ -782,7 +782,8 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
                                 function: {
                                     name: funcName,
                                     arguments: JSON.stringify(funcArgs)
-                                }
+                                },
+                                index: firstPart.index || 0
                             }
                         ]
                     });
