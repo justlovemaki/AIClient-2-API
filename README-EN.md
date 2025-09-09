@@ -49,11 +49,11 @@
 
 ## 📑 Quick Navigation
 
+- [🐳 Docker Deployment](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 - [🎨 Model Protocol and Provider Relationship Diagram](#-model-protocol-and-provider-relationship-diagram)
 - [🔧 Usage Instructions](#-usage-instructions)
 - [💻 Proxy Settings](#-proxy-settings)
 - [🌟 Special Usage & Advanced Tips](#-special-usage--advanced-tips)
-- [🐳 Docker Deployment](#-docker-deployment)
 - [🚀 Project Startup Parameters](#-project-startup-parameters)
 - [📄 Open Source License](#-open-source-license)
 - [🙏 Acknowledgements](#-acknowledgements)
