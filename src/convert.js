@@ -1696,20 +1696,24 @@ export function toGeminiRequestFromClaude(claudeRequest) {
 
     // Handle tools
     if (Array.isArray(claudeRequest.tools)) {
-        geminiRequest.tools = claudeRequest.tools.map(tool => {
-            // Ensure tool is a valid object and has a name
-            if (!tool || typeof tool !== 'object' || !tool.name) {
-                console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
-                return null; // Return null for invalid tools, filter out later
-            }
+        geminiRequest.tools = [{
+            functionDeclarations: claudeRequest.tools.map(tool => {
+                // Ensure tool is a valid object and has a name
+                if (!tool || typeof tool !== 'object' || !tool.name) {
+                    console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
+                    return null; // Return null for invalid tools, filter out later
+                }
 
-            const geminiTool = {};
-            geminiTool[tool.name] = tool.input_schema && typeof tool.input_schema === 'object' ? tool.input_schema : {};
-            return geminiTool;
-        }).filter(Boolean); // Filter out any nulls from invalid tool declarations
-        
-        // If no valid tools, remove the tools array
-        if (geminiRequest.tools.length === 0) {
+                delete tool.input_schema.$schema;
+                return {
+                    name: String(tool.name), // Ensure name is string
+                    description: String(tool.description || ''), // Ensure description is string
+                    parameters: tool.input_schema && typeof tool.input_schema === 'object' ? tool.input_schema : { type: 'object', properties: {} }
+                };
+            }).filter(Boolean) // Filter out any nulls from invalid tool declarations
+        }];
+        // If no valid functionDeclarations, remove the tools array
+        if (geminiRequest.tools[0].functionDeclarations.length === 0) {
             delete geminiRequest.tools;
         }
     }
