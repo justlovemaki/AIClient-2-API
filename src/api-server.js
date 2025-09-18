@@ -80,7 +80,7 @@
  * --host <address>                    服务器监听地址 / Server listening address (default: localhost)
  * --port <number>                     服务器监听端口 / Server listening port (default: 3000)
  * --api-key <key>                     身份验证所需的 API 密钥 / Required API key for authentication (default: 123456)
- * --model-provider <provider>         AI 模型提供商 / AI model provider: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth
+ * --model-provider <provider[,provider...]> AI 模型提供商 / AI model provider: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth
  * --openai-api-key <key>             OpenAI API 密钥 / OpenAI API key (for openai-custom provider)
  * --openai-base-url <url>            OpenAI API 基础 URL / OpenAI API base URL (for openai-custom provider)
  * --claude-api-key <key>             Claude API 密钥 / Claude API key (for claude-custom provider)
@@ -126,6 +126,47 @@ import {
 
 let CONFIG = {}; // Make CONFIG exportable
 let PROMPT_LOG_FILENAME = ''; // Make PROMPT_LOG_FILENAME exportable
+
+const ALL_MODEL_PROVIDERS = Object.values(MODEL_PROVIDER);
+
+function normalizeConfiguredProviders(config) {
+    const fallbackProvider = MODEL_PROVIDER.GEMINI_CLI;
+    const dedupedProviders = [];
+
+    const addProvider = (value) => {
+        if (typeof value !== 'string') {
+            return;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return;
+        }
+        const matched = ALL_MODEL_PROVIDERS.find((provider) => provider.toLowerCase() === trimmed.toLowerCase());
+        if (!matched) {
+            console.warn(`[Config Warning] Unknown model provider '${trimmed}'. This entry will be ignored.`);
+            return;
+        }
+        if (!dedupedProviders.includes(matched)) {
+            dedupedProviders.push(matched);
+        }
+    };
+
+    const rawValue = config.MODEL_PROVIDER;
+    if (Array.isArray(rawValue)) {
+        rawValue.forEach((entry) => addProvider(typeof entry === 'string' ? entry : String(entry)));
+    } else if (typeof rawValue === 'string') {
+        rawValue.split(',').forEach(addProvider);
+    } else if (rawValue != null) {
+        addProvider(String(rawValue));
+    }
+
+    if (dedupedProviders.length === 0) {
+        dedupedProviders.push(fallbackProvider);
+    }
+
+    config.DEFAULT_MODEL_PROVIDERS = dedupedProviders;
+    config.MODEL_PROVIDER = dedupedProviders[0];
+}
 
 /**
  * Initializes the server configuration from config.json and command-line arguments.
@@ -335,6 +376,8 @@ async function initializeConfig(args = process.argv.slice(2), configFilePath = '
         }
     }
 
+    normalizeConfiguredProviders(currentConfig);
+
     if (!currentConfig.SYSTEM_PROMPT_FILE_PATH) {
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;
     }
@@ -412,21 +455,73 @@ async function initApiService(config) {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');
     }
 
-    // Initialize all known service adapters at startup
-    // 当存在号池时，这里不再提前初始化所有 provider 的实例，而是按需从号池中选择和初始化
-    // 而是通过 providerPoolManager.selectProvider 来动态选择配置并初始化服务
-    for (const provider of Object.values(MODEL_PROVIDER)) {
-        if (!config.providerPools || !config.providerPools[provider] || config.providerPools[provider].length === 0) {
-            try {
-                // 对于没有配置号池的提供者，仍然按原来的方式初始化一个单例
-                console.log(`[Initialization] Initializing single service adapter for ${provider}...`);
-                getServiceAdapter({ ...config, MODEL_PROVIDER: provider }); // This call populates serviceInstances
-            } catch (error) {
-                console.warn(`[Initialization Warning] Failed to initialize single service adapter for ${provider}: ${error.message}`);
-            }
+    // Initialize configured service adapters at startup
+    // 对于未纳入号池的提供者，提前初始化以避免首个请求的额外延迟
+    const providersToInit = new Set();
+    if (Array.isArray(config.DEFAULT_MODEL_PROVIDERS)) {
+        config.DEFAULT_MODEL_PROVIDERS.forEach((provider) => providersToInit.add(provider));
+    }
+    if (config.providerPools) {
+        Object.keys(config.providerPools).forEach((provider) => providersToInit.add(provider));
+    }
+    if (providersToInit.size === 0) {
+        ALL_MODEL_PROVIDERS.forEach((provider) => providersToInit.add(provider));
+    }
+
+    for (const provider of providersToInit) {
+        if (!ALL_MODEL_PROVIDERS.includes(provider)) {
+            console.warn(`[Initialization Warning] Skipping unknown model provider '${provider}' during adapter initialization.`);
+            continue;
+        }
+        if (config.providerPools && config.providerPools[provider] && config.providerPools[provider].length > 0) {
+            // 由号池管理器负责按需初始化
+            continue;
+        }
+        try {
+            console.log(`[Initialization] Initializing single service adapter for ${provider}...`);
+            getServiceAdapter({ ...config, MODEL_PROVIDER: provider });
+        } catch (error) {
+            console.warn(`[Initialization Warning] Failed to initialize single service adapter for ${provider}: ${error.message}`);
         }
     }
     return serviceInstances; // Return the collection of initialized service instances
+}
+
+function logProviderSpecificDetails(provider, config) {
+    switch (provider) {
+        case MODEL_PROVIDER.OPENAI_CUSTOM:
+            console.log(`  [openai-custom] API Key: ${config.OPENAI_API_KEY ? '******' : 'Not Set'}`);
+            console.log(`  [openai-custom] Base URL: ${config.OPENAI_BASE_URL || 'Default'}`);
+            break;
+        case MODEL_PROVIDER.CLAUDE_CUSTOM:
+            console.log(`  [claude-custom] API Key: ${config.CLAUDE_API_KEY ? '******' : 'Not Set'}`);
+            console.log(`  [claude-custom] Base URL: ${config.CLAUDE_BASE_URL || 'Default'}`);
+            break;
+        case MODEL_PROVIDER.GEMINI_CLI:
+            if (config.GEMINI_OAUTH_CREDS_FILE_PATH) {
+                console.log(`  [gemini-cli-oauth] OAuth Creds File Path: ${config.GEMINI_OAUTH_CREDS_FILE_PATH}`);
+            } else if (config.GEMINI_OAUTH_CREDS_BASE64) {
+                console.log(`  [gemini-cli-oauth] OAuth Creds Source: Provided via Base64 string`);
+            } else {
+                console.log(`  [gemini-cli-oauth] OAuth Creds: Default discovery`);
+            }
+            console.log(`  [gemini-cli-oauth] Project ID: ${config.PROJECT_ID || 'Auto-discovered'}`);
+            break;
+        case MODEL_PROVIDER.KIRO_API:
+            if (config.KIRO_OAUTH_CREDS_FILE_PATH) {
+                console.log(`  [claude-kiro-oauth] OAuth Creds File Path: ${config.KIRO_OAUTH_CREDS_FILE_PATH}`);
+            } else if (config.KIRO_OAUTH_CREDS_BASE64) {
+                console.log(`  [claude-kiro-oauth] OAuth Creds Source: Provided via Base64 string`);
+            } else {
+                console.log(`  [claude-kiro-oauth] OAuth Creds: Default`);
+            }
+            break;
+        case MODEL_PROVIDER.QWEN_API:
+            console.log(`  [openai-qwen-oauth] OAuth Creds File Path: ${config.QWEN_OAUTH_CREDS_FILE_PATH || 'Default'}`);
+            break;
+        default:
+            console.log(`  [${provider}] Provider initialized.`);
+    }
 }
 
 async function getApiService(config) {
@@ -606,21 +701,15 @@ async function startServer() {
     const server = http.createServer(requestHandlerInstance);
     server.listen(CONFIG.SERVER_PORT, CONFIG.HOST, () => {
         console.log(`--- Unified API Server Configuration ---`);
-        console.log(`  Model Provider: ${CONFIG.MODEL_PROVIDER}`);
-        if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.OPENAI_CUSTOM) {
-            console.log(`  OpenAI API Key: ${CONFIG.OPENAI_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  OpenAI Base URL: ${CONFIG.OPENAI_BASE_URL}`);
-        } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.CLAUDE_CUSTOM) {
-            console.log(`  Claude API Key: ${CONFIG.CLAUDE_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  Claude Base URL: ${CONFIG.CLAUDE_BASE_URL}`);
-        } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.GEMINI_CLI) {
-            console.log(`  Gemini OAuth Creds File Path: ${CONFIG.GEMINI_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-            console.log(`  Project ID: ${CONFIG.PROJECT_ID || 'Auto-discovered'}`);
-        } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.KIRO_API) {
-           console.log(`  Kiro OAuth Creds File Path: ${CONFIG.KIRO_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-       } else if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.QWEN_API) {
-           console.log(`  Qwen OAuth Creds File Path: ${CONFIG.QWEN_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-       }
+        const configuredProviders = Array.isArray(CONFIG.DEFAULT_MODEL_PROVIDERS) && CONFIG.DEFAULT_MODEL_PROVIDERS.length > 0
+            ? CONFIG.DEFAULT_MODEL_PROVIDERS
+            : [CONFIG.MODEL_PROVIDER];
+        const uniqueProviders = [...new Set(configuredProviders)];
+        console.log(`  Primary Model Provider: ${CONFIG.MODEL_PROVIDER}`);
+        if (uniqueProviders.length > 1) {
+            console.log(`  Additional Model Providers: ${uniqueProviders.slice(1).join(', ')}`);
+        }
+        uniqueProviders.forEach((provider) => logProviderSpecificDetails(provider, CONFIG));
         console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
         console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
         console.log(`  Host: ${CONFIG.HOST}`);
