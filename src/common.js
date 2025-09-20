@@ -24,6 +24,7 @@ export const MODEL_PROVIDER = {
     OPENAI_CUSTOM: 'openai-custom',
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
+    QWEN_API: 'openai-qwen-oauth',
 }
 
 /**
@@ -201,10 +202,13 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
 
 export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     let fullResponseText = '';
+    let fullResponseJson = '';
+    let fullOldResponseJson = '';
     let responseClosed = false;
 
     await handleUnifiedResponse(res, '', true);
 
+    // fs.writeFile('request'+Date.now()+'.json', JSON.stringify(requestBody));
     // The service returns a stream in its native format (toProvider).
     const nativeStream = await service.generateContentStream(model, requestBody);
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
@@ -215,7 +219,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         for await (const nativeChunk of nativeStream) {
             // Convert chunk to the client's format (fromProvider), if necessary.
             const chunkText = extractResponseText(nativeChunk, toProvider);
-            if (chunkText) {
+            if (chunkText && !Array.isArray(chunkText)) {
                 fullResponseText += chunkText;
             }
 
@@ -232,6 +236,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 // console.log(`event: ${chunkToSend.type}\n`);
             }
 
+            // fullOldResponseJson += JSON.stringify(nativeChunk)+"\n";
+            // fullResponseJson += JSON.stringify(chunkToSend)+"\n";
             res.write(`data: ${JSON.stringify(chunkToSend)}\n\n`);
             // console.log(`data: ${JSON.stringify(chunkToSend)}\n`);
         }
@@ -261,6 +267,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             res.end();
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        // fs.writeFile('oldResponse'+Date.now()+'.json', fullOldResponseJson);
+        // fs.writeFile('response'+Date.now()+'.json', fullResponseJson);
     }
 }
 
@@ -374,6 +382,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     // 1. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
+    // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
         console.log(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);

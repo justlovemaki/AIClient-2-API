@@ -414,7 +414,7 @@ async initializeAuth(forceRefresh = false) {
                 requestBody.grantType = 'refresh_token';
             }
             const response = await this.axiosInstance.post(refreshUrl, requestBody);
-            console.log('[Kiro Auth] Token refresh response:', response.data);
+            console.log('[Kiro Auth] Token refresh response: ok');
 
             if (response.data && response.data.accessToken) {
                 this.accessToken = response.data.accessToken;

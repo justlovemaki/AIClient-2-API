@@ -4,7 +4,7 @@
 
 # AIClient-2-API 🚀
 
-**A powerful proxy that unifies multiple large model APIs (Gemini, OpenAI, Claude...) into a local OpenAI-compatible interface.**
+**A powerful proxy that can unify the requests of various large model APIs (Gemini CLI, Qwen Code Plus, Kiro Claude...) that are only used within the client into a local OpenAI compatible interface.**
 
 </div>
 
@@ -16,65 +16,87 @@
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
 [![docker](https://img.shields.io/badge/docker-≥20.0.0-green.svg)](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 
-[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/)
+[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
 
-`AIClient2API` is a versatile and lightweight API proxy designed for ultimate flexibility and ease of use. It transforms various backend APIs, such as Google Gemini CLI OAuth, OpenAI, Claude, and Kiro, into a standard OpenAI format interface via a Node.js HTTP server. The project features a modern, modular architecture, supporting strategy and adapter patterns, complete with comprehensive test coverage and health check mechanisms. It's ready to use out-of-the-box: simply `npm install` and run. You can easily switch between model providers in the configuration file, allowing any OpenAI-compatible client or application to seamlessly use different large model capabilities through the same API address, eliminating the hassle of maintaining multiple configurations and dealing with incompatible interfaces for different services.
+`AIClient2API` is a versatile and lightweight API proxy designed for developers, providing abundant free API request quotas and comprehensive support for mainstream large models including Google Gemini, Qwen Code, and Claude. It transforms various backend APIs into a standard OpenAI format interface via a Node.js HTTP server. The project features a modern, modular architecture, supporting strategy and adapter patterns, complete with comprehensive test coverage and health check mechanisms. It's ready to use out-of-the-box: simply `npm install` and run. You can easily switch between model providers in the configuration file, allowing any OpenAI-compatible client or application to seamlessly use different large model capabilities through the same API address, eliminating the hassle of maintaining multiple configurations and dealing with incompatible interfaces for different services.
 
 > [!NOTE]
+> Thanks to Ruan Yifeng for the recommendation in [Weekly Issue 359](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html).
+>
 > 8.29 Added account pool mode, which supports multiple accounts for all providers, with built-in polling, failover (requires client retry), and configuration degradation. Requires adding PROVIDER_POOLS_FILE_PATH to config, see the configuration file: provider_pools.json for details.
+>
+> 8.30 Latest news, Kiro can be used for free until 9.15
+>
+> 9.1 Added Qwen Code CLI support, can use qwen3-coder-plus model
 
 ---
 
 ## 💡 Core Advantages
 
-*   ✅ **Unified Access to Multiple Models**: One interface to access Gemini, OpenAI, Claude, Kimi K2, GLM-4.5, and other cutting-edge models. Freely switch between different model providers using simple startup parameters or request headers.
+*   ✅ **Unified Access to Multiple Models**: One interface to access Gemini, OpenAI, Claude, Kimi K2, GLM-4.5, Qwen Code, and other cutting-edge models. Freely switch between different model providers using simple startup parameters or request headers.
 *   ✅ **Bypass Official Restrictions**: By supporting Gemini CLI's OAuth authorization method, it effectively circumvents the rate and quota limits of official free APIs, granting you higher request quotas and usage frequency.
 *   ✅ **Bypass Client Restrictions**: Kiro API mode supports free usage of the Claude Sonnet 4 model.
 *   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, enabling your existing toolchains and clients (e.g., LobeChat, NextChat) to integrate all supported models at zero cost.
+*   ✅ **Intelligent Account Pool Management**: Supports multi-account polling, failover, and configuration degradation, ensuring high service availability and effectively avoiding single account limitations.
 *   ✅ **Enhanced Controllability**: Powerful logging features allow you to capture and record all request prompts, facilitating auditing, debugging, and building private datasets.
 *   ✅ **Extremely Easy to Extend**: Thanks to the new modular and strategy pattern design, adding a new model provider has never been simpler.
 *   ✅ **Comprehensive Test Coverage**: Provides extensive integration and unit tests, ensuring the stability and reliability of all API endpoints and features.
+*   ✅ **Docker Support**: Provides complete Docker containerization support for rapid deployment and environment isolation.
 
 ---
 
+## 📑 Quick Navigation
 
-### 🎨 Model Protocol and Provider Relationship Diagram
+- [🐳 Docker Deployment](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
+- [🎨 Model Protocol and Provider Relationship Diagram](#-model-protocol-and-provider-relationship-diagram)
+- [🔧 Usage Instructions](#-usage-instructions)
+- [💻 Proxy Settings](#-proxy-settings)
+- [🌟 Special Usage & Advanced Tips](#-special-usage--advanced-tips)
+- [🚀 Project Startup Parameters](#-project-startup-parameters)
+- [📄 Open Source License](#-open-source-license)
+- [🙏 Acknowledgements](#-acknowledgements)
+- [⚠️ Disclaimer](#-disclaimer)
 
+---
 
-- OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDERs, including openai-custom, gemini-cli-oauth, claude-custom, and
- claude-kiro-oauth.
-- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, and gemini-cli-oauth.
+## 🎨 Model Protocol and Provider Relationship Diagram
+
+- OpenAI Protocol (P_OPENAI): Supports all MODEL_PROVIDERs, including openai-custom, gemini-cli-oauth, claude-custom, claude-kiro-oauth and openai-qwen-oauth.
+- Claude Protocol (P_CLAUDE): Supports claude-custom, claude-kiro-oauth, gemini-cli-oauth, openai-custom and openai-qwen-oauth.
 - Gemini Protocol (P_GEMINI): Supports gemini-cli-oauth.
-
 
   ```mermaid
   
    graph TD
-       subgraph Core_Protocols["核心协议"]
+       subgraph Core_Protocols["Core Protocols"]
            P_OPENAI[OpenAI Protocol]
            P_GEMINI[Gemini Protocol]
            P_CLAUDE[Claude Protocol]
        end
    
-       subgraph Supported_Model_Providers["支持的模型提供商"]
+       subgraph Supported_Model_Providers["Supported Model Providers"]
            MP_OPENAI[openai-custom]
            MP_GEMINI[gemini-cli-oauth]
            MP_CLAUDE_C[claude-custom]
            MP_CLAUDE_K[claude-kiro-oauth]
+           MP_QWEN[openai-qwen-oauth]
        end
    
-       P_OPENAI ---|支持| MP_OPENAI
-       P_OPENAI ---|支持| MP_GEMINI
-       P_OPENAI ---|支持| MP_CLAUDE_C
-       P_OPENAI ---|支持| MP_CLAUDE_K
+       P_OPENAI ---|Support| MP_OPENAI
+       P_OPENAI ---|Support| MP_QWEN
+       P_OPENAI ---|Support| MP_GEMINI
+       P_OPENAI ---|Support| MP_CLAUDE_C
+       P_OPENAI ---|Support| MP_CLAUDE_K
    
-       P_GEMINI ---|支持| MP_GEMINI
+       P_GEMINI ---|Support| MP_GEMINI
    
-       P_CLAUDE ---|支持| MP_CLAUDE_C
-       P_CLAUDE ---|支持| MP_CLAUDE_K
-       P_CLAUDE ---|支持| MP_GEMINI
+       P_CLAUDE ---|Support| MP_CLAUDE_C
+       P_CLAUDE ---|Support| MP_CLAUDE_K
+       P_CLAUDE ---|Support| MP_GEMINI
+       P_CLAUDE ---|Support| MP_OPENAI
+       P_CLAUDE ---|Support| MP_QWEN
    
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
@@ -84,12 +106,63 @@
 
 ---
 
-### 🔧 Usage Instructions
+## 🔧 Usage Instructions
 
 *   **MCP Support**: While the built-in command functions of the original Gemini CLI are unavailable, this project fully supports MCP (Model Context Protocol), enabling powerful functional extensions when paired with MCP-compatible clients.
 *   **Multimodal Capabilities**: Supports multimodal inputs like images and documents, offering a richer interactive experience.
-*   **Latest Model Support**: Supports the latest **Kimi K2** and **GLM-4.5** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
-*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: New users who encounter **429** errors when using the service indicate that the Kiro service is **no longer available**, and may need to wait until Kiro fully opens registration before being able to use it.
+*   **Latest Model Support**: Supports the latest **Kimi K2**, **GLM-4.5** and **Qwen Code** models. Simply configure the corresponding OpenAI or Claude compatible interfaces in `config.json` for use.
+*   **Qwen Code Support**: Using Qwen Code will automatically open an authorization page in the browser. After completing authorization, it will generate an `oauth_creds.json` file in the `~/.qwen` directory. Please use the official default parameters temperature=0 and top_p=1.
+*   **Kiro API**: Using the Kiro API requires [downloading the Kiro client](https://aibook.ren/archives/kiro-install) and completing authorized login to generate `kiro-auth-token.json`. **Recommended for optimal experience with Claude Code**. Note: Kiro service policy has been adjusted, please check official announcements for specific usage limitations.
+*   **Using Different Providers in Claude Code**: Via Path routing, you can use different providers in Claude-related API calls:
+    *   `http://localhost:3000/claude-custom` - Use the Claude API provider defined in the configuration file
+    *   `http://localhost:3000/claude-kiro-oauth` - Access the Claude API using Kiro OAuth authentication
+    *   `http://localhost:3000/openai-custom` - Use the OpenAI custom provider to handle Claude requests
+    *   `http://localhost:3000/gemini-cli-oauth` - Use the Gemini CLI OAuth provider to handle Claude requests
+    *   `http://localhost:3000/openai-qwen-oauth` - Use the Qwen OAuth provider to handle Claude requests
+    *   Each provider can be configured with different API keys, base URLs, and other parameters for flexible provider switching
+
+    These Path routes can not only be used in direct API calls but also in programming agents like Cline and Kilo. By specifying different paths, you can invoke the corresponding models. For example, when configuring API endpoints in a programming agent, you can use `http://localhost:3000/claude-kiro-oauth` to invoke the Claude model authenticated via Kiro OAuth, or use `http://localhost:3000/gemini-cli-oauth` to invoke the Gemini model.
+
+    Besides switching providers via Path routing, you can also configure Claude parameters by setting environment variables. For instance, when using the `http://localhost:3000/claude-custom` path route, you can configure via the following environment variables:
+
+    *   `ANTHROPIC_BASE_URL`: Set the base URL path for the Claude API
+    *   `ANTHROPIC_AUTH_TOKEN`: Set the authentication token for the Claude service
+    *   `ANTHROPIC_MODEL`: Set the Claude model to be used
+
+    #### Environment Variable Setting Methods for Different Systems
+
+    When using the `http://localhost:3000/claude-custom` path, you can set environment variables as follows:
+
+    ##### Linux / macOS
+    ```bash
+    export ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
+    export ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    export ANTHROPIC_MODEL="your-model-name"
+    ```
+
+    ##### Windows (CMD)
+    ```cmd
+    set ANTHROPIC_BASE_URL=http://localhost:3000/claude-custom
+    set ANTHROPIC_AUTH_TOKEN=your-auth-token-here
+    set ANTHROPIC_MODEL=your-model-name
+    ```
+
+    ##### Windows (PowerShell)
+    ```powershell
+    $env:ANTHROPIC_BASE_URL="http://localhost:3000/claude-custom"
+    $env:ANTHROPIC_AUTH_TOKEN="your-auth-token-here"
+    $env:ANTHROPIC_MODEL="your-model-name"
+    ```
+
+### Default Authorization File Paths
+
+The following are the default storage paths for authorization files for each service:
+
+*   **Gemini**: `~/.gemini/oauth_creds.json`
+*   **Kiro**: `~/.aws/sso/cache/kiro-auth-token.json`
+*   **Qwen**: `~/.qwen/oauth_creds.json`
+
+Where `~` represents the user's home directory. If you need to customize the paths, you can set them through configuration files or environment variables.
 
 ---
 
@@ -127,8 +200,10 @@ These settings are effective only for the current PowerShell session. For perman
 
 **Please replace `your_proxy_address` and `port` with your actual proxy address and port.**
 
+---
 
 ## 🌟 Special Usage & Advanced Tips
+
 *   **🔌 Connect to Any OpenAI Client**: This is the fundamental feature of this project. Direct the API address of any OpenAI-compatible application (e.g., LobeChat, NextChat, VS Code extensions) to this service (`http://localhost:3000`) to seamlessly leverage all configured models.
 
 *   **🔍 Centralized Request Monitoring & Auditing**: Set `"PROMPT_LOG_MODE": "file"` in `config.json` to capture all requests and responses and save them to a local log file. This is vital for analyzing, debugging, and optimizing prompts, and even for constructing private datasets.
@@ -145,6 +220,142 @@ These settings are effective only for the current PowerShell session. For perman
     *   **Response Caching**: Implement caching logic for frequently repeated queries to reduce API calls and enhance response speed.
     *   **Custom Content Filtering**: Introduce keyword filtering or content review logic before sending or returning requests to ensure compliance.
 
+*   **🎯 Advanced Account Pool Configuration**:
+    *   **Multi-Account Management**: Configure multiple accounts for each provider through the `provider_pools.json` file, enabling intelligent polling.
+    *   **Failover**: When an account becomes unavailable, the system automatically switches to the next available account, ensuring service continuity.
+    *   **Configuration Degradation**: Dynamically adjust configuration parameters based on account status to optimize resource usage efficiency.
+    *   **Usage Example**: Refer to the `provider_pools.json` configuration file in the project to easily set up a multi-account environment.
+
+---
+
+## 🚀 Project Startup Parameters
+
+This project supports rich command-line parameter configuration, allowing flexible adjustment of service behavior as needed. The following is a detailed explanation of all startup parameters, displayed in functional groups:
+
+### 🔧 Server Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--host` | string | localhost | Server listening address |
+| `--port` | number | 3000 | Server listening port |
+| `--api-key` | string | 123456 | API key required for authentication |
+
+### 🤖 Model Provider Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+
+### 🧠 OpenAI Compatible Provider Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--openai-api-key` | string | null | OpenAI API key (for openai-custom provider) |
+| `--openai-base-url` | string | null | OpenAI API base URL (for openai-custom provider) |
+
+### 🖥️ Claude Compatible Provider Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--claude-api-key` | string | null | Claude API key (for claude-custom provider) |
+| `--claude-base-url` | string | null | Claude API base URL (for claude-custom provider) |
+
+### 🔐 Gemini OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--gemini-oauth-creds-base64` | string | null | Base64 string of Gemini OAuth credentials |
+| `--gemini-oauth-creds-file` | string | null | Gemini OAuth credentials JSON file path |
+| `--project-id` | string | null | Google Cloud project ID (for gemini-cli provider) |
+
+### 🎮 Kiro OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--kiro-oauth-creds-base64` | string | null | Base64 string of Kiro OAuth credentials |
+| `--kiro-oauth-creds-file` | string | null | Kiro OAuth credentials JSON file path |
+
+### 🐼 Qwen OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--qwen-oauth-creds-file` | string | null | Qwen OAuth credentials JSON file path |
+
+### 📝 System Prompt Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--system-prompt-file` | string | input_system_prompt.txt | System prompt file path |
+| `--system-prompt-mode` | string | overwrite | System prompt mode, optional values: overwrite, append |
+
+### 📊 Log Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--log-prompts` | string | none | Prompt log mode, optional values: console, file, none |
+| `--prompt-log-base-name` | string | prompt_log | Prompt log file base name |
+
+### 🔄 Retry Mechanism Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--request-max-retries` | number | 3 | Maximum number of automatic retries when API requests fail |
+| `--request-base-delay` | number | 1000 | Base delay time (milliseconds) between automatic retries, delay increases after each retry |
+
+### ⏰ Scheduled Task Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--cron-near-minutes` | number | 15 | Interval time (minutes) for OAuth token refresh task schedule |
+| `--cron-refresh-token` | boolean | true | Whether to enable automatic OAuth token refresh task |
+
+### 🎯 Account Pool Configuration Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--provider-pools-file` | string | null | Provider account pool configuration file path |
+
+### Usage Examples
+
+```bash
+# Basic usage
+node src/api-server.js
+
+# Specify port and API key
+node src/api-server.js --port 8080 --api-key my-secret-key
+
+# Use OpenAI provider
+node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
+
+# Use Claude provider
+node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
+
+# Use Gemini provider (Base64 credentials)
+node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
+
+# Use Gemini provider (credentials file)
+node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
+
+# Configure system prompt
+node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append
+
+# Configure logging
+node src/api-server.js --log-prompts console
+node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
+
+# Complete example
+node src/api-server.js \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --api-key my-secret-key \
+  --model-provider gemini-cli-oauth \
+  --project-id my-gcp-project \
+  --gemini-oauth-creds-file ./credentials.json \
+  --system-prompt-file ./custom-system-prompt.txt \
+  --system-prompt-mode overwrite \
+  --log-prompts file \
+  --prompt-log-base-name api-logs
+```
 ---
 
 ## 📄 Open Source License
