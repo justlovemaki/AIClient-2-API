@@ -105,40 +105,23 @@ function _determineReasoningEffortFromBudget(budgetTokens) {
         return "high";
     }
 
-    // 从环境变量获取阈值配置
-    const lowThresholdStr = process.env.ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD;
-    const highThresholdStr = process.env.ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD;
+    // 使用固定阈值替代环境变量
+    const LOW_THRESHOLD = 50;    // 低推理努力的阈值
+    const HIGH_THRESHOLD = 200;  // 高推理努力的阈值
 
-    // 检查必需的环境变量
-    if (lowThresholdStr === undefined) {
-        throw new Error("ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD environment variable is required for intelligent reasoning_effort determination");
+    console.debug(`Threshold configuration: low <= ${LOW_THRESHOLD}, medium <= ${HIGH_THRESHOLD}, high > ${HIGH_THRESHOLD}`);
+
+    let effort;
+    if (budgetTokens <= LOW_THRESHOLD) {
+        effort = "low";
+    } else if (budgetTokens <= HIGH_THRESHOLD) {
+        effort = "medium";
+    } else {
+        effort = "high";
     }
 
-    if (highThresholdStr === undefined) {
-        throw new Error("ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD environment variable is required for intelligent reasoning_effort determination");
-    }
-
-    try {
-        const lowThreshold = parseInt(lowThresholdStr, 10);
-        const highThreshold = parseInt(highThresholdStr, 10);
-
-        console.debug(`Threshold configuration: low <= ${lowThreshold}, medium <= ${highThreshold}, high > ${highThreshold}`);
-
-        let effort;
-        if (budgetTokens <= lowThreshold) {
-            effort = "low";
-        } else if (budgetTokens <= highThreshold) {
-            effort = "medium";
-        } else {
-            effort = "high";
-        }
-
-        console.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${lowThreshold}, high<=${highThreshold})`);
-        return effort;
-
-    } catch (e) {
-        throw new Error(`Invalid threshold values in environment variables: ${e.message}. ANTHROPIC_TO_OPENAI_LOW_REASONING_THRESHOLD and ANTHROPIC_TO_OPENAI_HIGH_REASONING_THRESHOLD must be integers.`);
-    }
+    console.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${LOW_THRESHOLD}, high<=${HIGH_THRESHOLD})`);
+    return effort;
 }
 
 // 全局工具状态管理器
