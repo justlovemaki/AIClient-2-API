@@ -10,7 +10,6 @@ import { randomUUID } from 'node:crypto';
 // --- Constants ---
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
-const QWEN_LOCK_FILENAME = 'oauth_creds.lock';
 const QWEN_MODEL_LIST = [
     { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
     { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
@@ -447,6 +446,7 @@ export class QwenApiService {
 
             // Check if model in body is in QWEN_MODEL_LIST, if not, use the first model's id
             if (processedBody.model && !QWEN_MODEL_LIST.some(model => model.id === processedBody.model)) {
+                console.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${QWEN_MODEL_LIST[0].id}'`);
                 processedBody.model = QWEN_MODEL_LIST[0].id;
             }
 
