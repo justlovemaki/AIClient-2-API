@@ -164,12 +164,21 @@ export class GeminiApiService {
         this.availableModels = GEMINI_MODELS;
         console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
-            const loadResponse = await this.callApi('loadCodeAssist', { metadata: { pluginType: 'GEMINI' } });
+            const initialProjectId = "default"
+            // Prepare client metadata
+            const clientMetadata = {
+                ideType: "IDE_UNSPECIFIED",
+                platform: "PLATFORM_UNSPECIFIED",
+                pluginType: "GEMINI",
+                duetProject: initialProjectId,
+            }
+
+            const loadResponse = await this.callApi('loadCodeAssist', { metadata: clientMetadata });
             if (loadResponse.cloudaicompanionProject) {
                 return loadResponse.cloudaicompanionProject;
             }
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: { pluginType: 'GEMINI' } , cloudaicompanionProject: 'default',};
+            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: clientMetadata , cloudaicompanionProject: initialProjectId,};
             let lro = await this.callApi('onboardUser', onboardRequest);
             while (!lro.done) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
