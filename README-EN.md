@@ -16,7 +16,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
 [![docker](https://img.shields.io/badge/docker-≥20.0.0-green.svg)](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 
-[**中文**](./README.md) | [**English**](./README-EN.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/en/)
+[**中文**](./README.md) | [**English**](./README-EN.md) | [**日本語**](./README-JA.md) | [**More Detailed Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
 
