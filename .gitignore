@@ -2,3 +2,5 @@ node_modules
 .serena/
 .claude/
 CLAUDE.md
+config.json
+provider_pools.json
