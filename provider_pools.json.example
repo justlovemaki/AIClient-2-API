@@ -1,0 +1,108 @@
+{
+  "openai-custom": [
+    {
+      "OPENAI_API_KEY": "sk-openai-key1",
+      "OPENAI_BASE_URL": "https://api.openai.com/v1",
+      "checkModelName": null,
+      "uuid": "2f579c65-d3c5-41b1-9985-9f6e3d7bf39c",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "OPENAI_API_KEY": "sk-openai-key2",
+      "OPENAI_BASE_URL": "https://api.openai.com/v1",
+      "checkModelName": null,
+      "uuid": "e284628d-302f-456d-91f3-6095386fb3b8",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
+  "gemini-cli-oauth": [
+    {
+      "GEMINI_OAUTH_CREDS_FILE_PATH": "./credentials1.json",
+      "PROJECT_ID": "your-project-id-1",
+      "checkModelName": null,
+      "uuid": "ac200154-26b8-4f5f-8650-e8cc738b06e3",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "GEMINI_OAUTH_CREDS_FILE_PATH": "./credentials2.json",
+      "PROJECT_ID": "your-project-id-2",
+      "checkModelName": null,
+      "uuid": "4f8afcc2-a9bb-4b96-bb50-3b9667a71f54",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
+  "claude-custom": [
+    {
+      "CLAUDE_API_KEY": "sk-claude-key1",
+      "CLAUDE_BASE_URL": "https://api.anthropic.com",
+      "checkModelName": null,
+      "uuid": "bb87047a-3b1d-4249-adbb-1087ecd58128",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "CLAUDE_API_KEY": "sk-claude-key2",
+      "CLAUDE_BASE_URL": "https://api.anthropic.com",
+      "checkModelName": null,
+      "uuid": "7c2002c6-122a-4db0-af06-8a0ff433801a",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
+  "claude-kiro-oauth": [
+    {
+      "KIRO_OAUTH_CREDS_FILE_PATH": "./kiro_creds1.json",
+      "uuid": "2c69d0ac-b86f-43d8-9d17-0d300afc5cfd",
+      "checkModelName": null,
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "KIRO_OAUTH_CREDS_FILE_PATH": "./kiro_creds2.json",
+      "uuid": "7482abe6-8083-4288-bb7d-d8ecb7c461e2",
+      "checkModelName": null,
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
+  "openai-qwen-oauth": [
+    {
+      "QWEN_OAUTH_CREDS_FILE_PATH": "./qwen_creds.json",
+      "uuid": "658a2114-c4c9-d713-b8d4-ceabf0e0bf18",
+      "checkModelName": null,
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ]
+}
