@@ -35,7 +35,7 @@
 
 *   ✅ **Unified Access to Multiple Models**: One interface to access Gemini, OpenAI, Claude, Kimi K2, GLM-4.5, Qwen Code, and other cutting-edge models. Freely switch between different model providers using simple startup parameters or request headers.
 *   ✅ **Bypass Official Restrictions**: By supporting Gemini CLI's OAuth authorization method, it effectively circumvents the rate and quota limits of official free APIs, granting you higher request quotas and usage frequency.
-*   ✅ **Bypass Client Restrictions**: Kiro API mode supports free usage of the Claude Sonnet 4 model.
+*   ✅ **Bypass Client Restrictions**: Kiro API mode supports free usage of the Claude Sonnet 4.5 model.
 *   ✅ **Seamless OpenAI Compatibility**: Provides an interface fully compatible with the OpenAI API, enabling your existing toolchains and clients (e.g., LobeChat, NextChat) to integrate all supported models at zero cost.
 *   ✅ **Intelligent Account Pool Management**: Supports multi-account polling, failover, and configuration degradation, ensuring high service availability and effectively avoiding single account limitations.
 *   ✅ **Enhanced Controllability**: Powerful logging features allow you to capture and record all request prompts, facilitating auditing, debugging, and building private datasets.

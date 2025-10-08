@@ -9,7 +9,7 @@ import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 const DEFAULT_MAX_TOKENS = 8192;
 const DEFAULT_GEMINI_MAX_TOKENS = 65536;
 const DEFAULT_TEMPERATURE = 1;
-const DEFAULT_TOP_P = 0.9;
+const DEFAULT_TOP_P = 0.95;
 
 // 辅助函数：判断值是否为 undefined 或 0，并返回默认值
 function checkAndAssignOrDefault(value, defaultValue) {
@@ -252,7 +252,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
 export function toOpenAIRequestFromGemini(geminiRequest) {
     const openaiRequest = {
         messages: [],
-        model: geminiRequest.model || "gpt-3.5-turbo", // Default model if not specified in Gemini request
+        model: geminiRequest.model, // Default model if not specified in Gemini request
         max_tokens: checkAndAssignOrDefault(geminiRequest.max_tokens, DEFAULT_MAX_TOKENS),
         temperature: checkAndAssignOrDefault(geminiRequest.temperature, DEFAULT_TEMPERATURE),
         top_p: checkAndAssignOrDefault(geminiRequest.top_p, DEFAULT_TOP_P),
@@ -821,7 +821,7 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
     }
 
     const openaiRequest = {
-        model: claudeRequest.model || 'gpt-3.5-turbo', // Default OpenAI model
+        model: claudeRequest.model, // Default OpenAI model
         messages: openaiMessages,
         max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, DEFAULT_MAX_TOKENS),
         temperature: checkAndAssignOrDefault(claudeRequest.temperature, DEFAULT_TEMPERATURE),
@@ -1512,7 +1512,7 @@ export function toClaudeRequestFromOpenAI(openaiRequest) {
     }
 
     const claudeRequest = {
-        model: openaiRequest.model || 'claude-3-opus-20240229',
+        model: openaiRequest.model,
         messages: claudeMessages,
         max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, DEFAULT_MAX_TOKENS),
         temperature: checkAndAssignOrDefault(openaiRequest.temperature, DEFAULT_TEMPERATURE),
@@ -1687,6 +1687,12 @@ export function toGeminiRequestFromClaude(claudeRequest) {
                     return null; // Return null for invalid tools, filter out later
                 }
 
+                // Filter out TodoWrite tool
+                // if (tool.name === 'TodoWrite') {
+                //     console.log("Filtering out TodoWrite tool");
+                //     return null;
+                // }
+
                 delete tool.input_schema.$schema;
                 return {
                     name: String(tool.name), // Ensure name is string
@@ -1786,6 +1792,11 @@ function processClaudeContentToGeminiParts(content) {
 
                 case 'tool_use':
                     if (typeof block.name === 'string' && block.input && typeof block.input === 'object') {
+                        // Filter out TodoWrite tool use
+                        // if (block.name === 'TodoWrite') {
+                        //     console.log("Filtering out TodoWrite tool use");
+                        //     break; // Skip adding this tool to parts
+                        // }
                         parts.push({
                             functionCall: {
                                 name: block.name,
@@ -1907,9 +1918,25 @@ function processGeminiResponseToClaudeContent(geminiResponse) {
 
     const content = [];
 
-    geminiResponse.candidates.forEach(candidate => {
+    for (const candidate of geminiResponse.candidates) {
+        // 检查完成原因是否为错误类型
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+            // console.log('Gemini response finishReason:', JSON.stringify(candidate));
+            // console.warn('Gemini response contains malformed function call:', candidate.finishMessage || 'No finish message');
+            
+            // 将错误信息作为文本内容返回
+            if (candidate.finishMessage) {
+                content.push({
+                    type: 'text',
+                    text: `Error: ${candidate.finishMessage}`
+                });
+            }
+            // console.log("Processed content:", content);
+            continue; // 跳过当前候选的进一步处理
+        }
+
         if (candidate.content && candidate.content.parts) {
-            candidate.content.parts.forEach(part => {
+            for (const part of candidate.content.parts) {
                 if (part.text) {
                     content.push({
                         type: 'text',
@@ -1933,9 +1960,9 @@ function processGeminiResponseToClaudeContent(geminiResponse) {
                         input: part.functionCall.args || {}
                     });
                 }
-            });
+            }
         }
-    });
+    }
 
     return content;
 }

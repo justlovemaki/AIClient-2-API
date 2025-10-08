@@ -4,3 +4,5 @@ node_modules
 CLAUDE.md
 config.json
 provider_pools.json
+fetch_system_prompt.txt
+input_system_prompt.txt

@@ -296,6 +296,16 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 uuid: pooluuid
             });
         }
+        
+        // 返回错误响应给客户端
+        const errorResponse = {
+            error: {
+                message: error.message || "An error occurred during processing.",
+                code: error.status || 500,
+                details: error.stack
+            }
+        };
+        await handleUnifiedResponse(res, JSON.stringify(errorResponse), false);
     }
 }
 

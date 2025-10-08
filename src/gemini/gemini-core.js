@@ -15,6 +15,22 @@ const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05'];
+const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
+
+function is_anti_truncation_model(model) {
+    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel) || antiModel.includes(model));
+}
+
+// 从防截断模型名中提取实际模型名
+function extract_model_from_anti_model(model) {
+    if (model.startsWith('anti-')) {
+        const originalModel = model.substring(5); // 移除 'anti-' 前缀
+        if (GEMINI_MODELS.includes(originalModel)) {
+            return originalModel;
+        }
+    }
+    return model; // 如果不是anti-前缀或不在原模型列表中，则返回原模型名
+}
 
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
@@ -23,6 +39,78 @@ function toGeminiApiResponse(codeAssistResponse) {
     if (codeAssistResponse.promptFeedback) compliantResponse.promptFeedback = codeAssistResponse.promptFeedback;
     if (codeAssistResponse.automaticFunctionCallingHistory) compliantResponse.automaticFunctionCallingHistory = codeAssistResponse.automaticFunctionCallingHistory;
     return compliantResponse;
+}
+
+async function* apply_anti_truncation_to_stream(service, model, requestBody) {
+    let currentRequest = { ...requestBody };
+    let allGeneratedText = '';
+
+    while (true) {
+        // 发送请求并处理流式响应
+        const apiRequest = {
+            model: model,
+            project: service.projectId,
+            request: currentRequest
+        };
+        const stream = service.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
+
+        let lastChunk = null;
+        let hasContent = false;
+
+        for await (const chunk of stream) {
+            const response = toGeminiApiResponse(chunk.response);
+            if (response && response.candidates && response.candidates[0]) {
+                yield response;
+                lastChunk = response;
+                hasContent = true;
+            }
+        }
+
+        // 检查是否因为达到token限制而截断
+        if (lastChunk &&
+            lastChunk.candidates &&
+            lastChunk.candidates[0] &&
+            lastChunk.candidates[0].finishReason === 'MAX_TOKENS') {
+
+            // 提取已生成的文本内容
+            if (lastChunk.candidates[0].content && lastChunk.candidates[0].content.parts) {
+                const generatedParts = lastChunk.candidates[0].content.parts
+                    .filter(part => part.text)
+                    .map(part => part.text);
+
+                if (generatedParts.length > 0) {
+                    const currentGeneratedText = generatedParts.join('');
+                    allGeneratedText += currentGeneratedText;
+
+                    // 构建新的请求，包含之前的对话历史和继续指令
+                    const newContents = [...requestBody.contents];
+
+                    // 添加之前生成的内容作为模型响应
+                    newContents.push({
+                        role: 'model',
+                        parts: [{ text: currentGeneratedText }]
+                    });
+
+                    // 添加继续生成的指令
+                    newContents.push({
+                        role: 'user',
+                        parts: [{ text: 'Please continue from where you left off.' }]
+                    });
+
+                    currentRequest = {
+                        ...requestBody,
+                        contents: newContents
+                    };
+
+                    // 继续下一轮请求
+                    continue;
+                }
+            }
+        }
+
+        // 如果没有截断或无法继续，则退出循环
+        break;
+    }
 }
 
 export class GeminiApiService {
@@ -326,16 +414,27 @@ export class GeminiApiService {
 
     async * generateContentStream(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
-        let selectedModel = model;
-        if (!GEMINI_MODELS.includes(model)) {
-            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
-            selectedModel = GEMINI_MODELS[0];
-        }
-        const processedRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
-        const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
-        for await (const chunk of stream) {
-            yield toGeminiApiResponse(chunk.response);
+
+        // 检查是否为防截断模型
+        if (is_anti_truncation_model(model)) {
+            // 从防截断模型名中提取实际模型名
+            const actualModel = extract_model_from_anti_model(model);
+            // 使用防截断流处理
+            const processedRequestBody = ensureRolesInContents(requestBody);
+            yield* apply_anti_truncation_to_stream(this, actualModel, processedRequestBody);
+        } else {
+            // 正常流处理
+            let selectedModel = model;
+            if (!GEMINI_MODELS.includes(model)) {
+                console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+                selectedModel = GEMINI_MODELS[0];
+            }
+            const processedRequestBody = ensureRolesInContents(requestBody);
+            const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
+            const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
+            for await (const chunk of stream) {
+                yield toGeminiApiResponse(chunk.response);
+            }
         }
     }
 
