@@ -7,7 +7,7 @@ import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 
 // 定义默认常量
 const DEFAULT_MAX_TOKENS = 8192;
-const DEFAULT_GEMINI_MAX_TOKENS = 65536;
+const DEFAULT_GEMINI_MAX_TOKENS = 65535;
 const DEFAULT_TEMPERATURE = 1;
 const DEFAULT_TOP_P = 0.95;
 
