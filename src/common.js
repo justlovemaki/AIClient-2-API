@@ -16,6 +16,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     GEMINI: 'gemini',
     OPENAI: 'openai',
     CLAUDE: 'claude',
+    DROID: 'droid',  // Droid uses Claude protocol
 }
 
 export const MODEL_PROVIDER = {
@@ -25,6 +26,7 @@ export const MODEL_PROVIDER = {
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
+    DROID_API: 'droid-factory-oauth',
 }
 
 /**
