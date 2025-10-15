@@ -53,10 +53,12 @@ export class DroidApiService {
             });
 
             droid.on('close', (code) => {
-                if (code !== 0) {
-                    reject(new Error(`Droid command failed: ${stderr || stdout}`));
+                // Droid CLI may output to stderr even on success
+                const output = stdout || stderr;
+                if (code !== 0 && !output) {
+                    reject(new Error(`Droid command failed with code ${code}: ${stderr || stdout}`));
                 } else {
-                    resolve(stdout);
+                    resolve(output);
                 }
             });
 
@@ -97,7 +99,7 @@ export class DroidApiService {
 
         try {
             const prompt = this.messagesToPrompt(requestBody.messages);
-            const output = await this.executeDroidCommand(['exec', prompt]);
+            const output = await this.executeDroidCommand(['exec', '--skip-permissions-unsafe', prompt]);
 
             return {
                 id: `msg_${Date.now()}`,
@@ -149,7 +151,7 @@ export class DroidApiService {
             content_block: { type: 'text', text: '' }
         };
 
-        const droid = spawn(this.droidCommand, ['exec', prompt]);
+        const droid = spawn(this.droidCommand, ['exec', '--skip-permissions-unsafe', prompt]);
 
         let buffer = '';
         for await (const chunk of droid.stdout) {

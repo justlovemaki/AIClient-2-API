@@ -37,10 +37,17 @@ export const MODEL_PROVIDER = {
  */
 export function getProtocolPrefix(provider) {
     const hyphenIndex = provider.indexOf('-');
+    let prefix = provider;
     if (hyphenIndex !== -1) {
-        return provider.substring(0, hyphenIndex);
+        prefix = provider.substring(0, hyphenIndex);
     }
-    return provider; // Return original if no hyphen is found
+
+    // Map droid protocol to claude (since droid uses Claude API)
+    if (prefix === 'droid') {
+        return 'claude';
+    }
+
+    return prefix;
 }
 
 export const ENDPOINT_TYPE = {
