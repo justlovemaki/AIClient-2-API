@@ -13,8 +13,6 @@
     "KIRO_OAUTH_CREDS_BASE64": null,
     "KIRO_OAUTH_CREDS_FILE_PATH": null,
     "QWEN_OAUTH_CREDS_FILE_PATH": null,
-    "DROID_AUTH_FILE": null,
-    "DROID_COMMAND": "droid",
     "SYSTEM_PROMPT_FILE_PATH": "input_system_prompt.txt",
     "SYSTEM_PROMPT_MODE": "overwrite",
     "PROMPT_LOG_BASE_NAME": "prompt_log",

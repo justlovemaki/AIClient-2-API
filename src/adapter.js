@@ -3,7 +3,6 @@ import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiSe
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
-import { DroidApiService } from './droid/droid-core.js'; // 导入DroidApiService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -242,46 +241,6 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
-// Droid (Factory.ai) API 服务适配器
-export class DroidApiServiceAdapter extends ApiServiceAdapter {
-    constructor(config) {
-        super();
-        this.droidApiService = new DroidApiService(config);
-    }
-
-    async generateContent(model, requestBody) {
-        if (!this.droidApiService.isInitialized) {
-            console.warn("droidApiService not initialized, attempting to re-initialize...");
-            await this.droidApiService.initialize();
-        }
-        return this.droidApiService.generateContent(model, requestBody);
-    }
-
-    async *generateContentStream(model, requestBody) {
-        if (!this.droidApiService.isInitialized) {
-            console.warn("droidApiService not initialized, attempting to re-initialize...");
-            await this.droidApiService.initialize();
-        }
-        yield* this.droidApiService.generateContentStream(model, requestBody);
-    }
-
-    async listModels() {
-        if (!this.droidApiService.isInitialized) {
-            console.warn("droidApiService not initialized, attempting to re-initialize...");
-            await this.droidApiService.initialize();
-        }
-        return this.droidApiService.listModels();
-    }
-
-    async refreshToken() {
-        if (this.droidApiService.isExpiryDateNear()) {
-            console.log(`[Droid] Token expiry near, refreshing...`);
-            return this.droidApiService.refreshAccessToken();
-        }
-        return Promise.resolve();
-    }
-}
-
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -306,9 +265,6 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.QWEN_API:
                 serviceInstances[providerKey] = new QwenApiServiceAdapter(config);
-                break;
-            case MODEL_PROVIDER.DROID_API:
-                serviceInstances[providerKey] = new DroidApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

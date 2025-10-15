@@ -2,7 +2,6 @@ import { MODEL_PROTOCOL_PREFIX } from './common.js';
 import { GeminiStrategy } from './gemini/gemini-strategy.js';
 import { OpenAIStrategy } from './openai/openai-strategy.js';
 import { ClaudeStrategy } from './claude/claude-strategy.js';
-import { DroidStrategy } from './droid/droid-strategy.js';
 
 /**
  * Strategy factory that returns the appropriate strategy instance based on the provider protocol.
@@ -16,8 +15,6 @@ class ProviderStrategyFactory {
                 return new OpenAIStrategy();
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
                 return new ClaudeStrategy();
-            case MODEL_PROTOCOL_PREFIX.DROID:
-                return new DroidStrategy();  // Droid uses Claude-compatible protocol
             default:
                 throw new Error(`Unsupported provider protocol: ${providerProtocol}`);
         }
