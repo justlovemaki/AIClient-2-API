@@ -1,4 +1,7 @@
 import { spawn } from 'child_process';
+import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * Droid (Factory.ai) API Service
@@ -13,6 +16,10 @@ export class DroidApiService {
         this.config = config;
         this.isInitialized = false;
         this.droidCommand = config.DROID_COMMAND || 'droid';
+
+        // Create isolated working directory to prevent context leakage
+        this.isolatedWorkDir = mkdtempSync(join(tmpdir(), 'droid-isolated-'));
+        console.log('[Droid] Created isolated working directory:', this.isolatedWorkDir);
     }
 
     /**
@@ -75,14 +82,21 @@ export class DroidApiService {
      */
     messagesToPrompt(messages) {
         return messages.map(msg => {
-            if (msg.role === 'user') {
-                return msg.content;
-            } else if (msg.role === 'assistant') {
-                return `Assistant: ${msg.content}`;
-            } else if (msg.role === 'system') {
-                return `System: ${msg.content}`;
+            // Handle both string and array content formats
+            let content = msg.content;
+            if (Array.isArray(content)) {
+                // Extract text from content blocks
+                content = content.map(block => block.text || '').join('');
             }
-            return msg.content;
+
+            if (msg.role === 'user') {
+                return content;
+            } else if (msg.role === 'assistant') {
+                return `Assistant: ${content}`;
+            } else if (msg.role === 'system') {
+                return `System: ${content}`;
+            }
+            return content;
         }).join('\n\n');
     }
 
@@ -99,7 +113,14 @@ export class DroidApiService {
 
         try {
             const prompt = this.messagesToPrompt(requestBody.messages);
-            const output = await this.executeDroidCommand(['exec', '--skip-permissions-unsafe', prompt]);
+            console.log('[Droid DEBUG] Sending prompt to droid exec:', prompt);
+            console.log('[Droid DEBUG] Isolated working directory:', this.isolatedWorkDir);
+            const output = await this.executeDroidCommand([
+                'exec',
+                '--skip-permissions-unsafe',
+                '--cwd', this.isolatedWorkDir,
+                prompt
+            ]);
 
             return {
                 id: `msg_${Date.now()}`,
@@ -151,7 +172,12 @@ export class DroidApiService {
             content_block: { type: 'text', text: '' }
         };
 
-        const droid = spawn(this.droidCommand, ['exec', '--skip-permissions-unsafe', prompt]);
+        const droid = spawn(this.droidCommand, [
+            'exec',
+            '--skip-permissions-unsafe',
+            '--cwd', this.isolatedWorkDir,
+            prompt
+        ]);
 
         let buffer = '';
         for await (const chunk of droid.stdout) {
