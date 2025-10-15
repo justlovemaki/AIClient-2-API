@@ -104,5 +104,18 @@
       "errorCount": 0,
       "lastErrorTime": null
     }
+  ],
+  "droid-factory-oauth": [
+    {
+      "DROID_AUTH_FILE": "~/.factory/auth.json",
+      "DROID_COMMAND": "droid",
+      "uuid": "9d8e7f6a-5c4b-3a2d-1e0f-9a8b7c6d5e4f",
+      "checkModelName": null,
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
   ]
 }

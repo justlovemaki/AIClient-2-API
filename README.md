@@ -34,7 +34,7 @@
 
 ## 💡 核心优势
 
-*   ✅ **多模型统一接入**：通过统一的 OpenAI 兼容接口，轻松接入 Gemini、OpenAI、Claude、Kimi K2、GLM-4.5、Qwen Code 等多种主流大模型，并通过启动参数或请求头自由切换。
+*   ✅ **多模型统一接入**：通过统一的 OpenAI 兼容接口，轻松接入 Gemini、OpenAI、Claude、Factory Droid、Kimi K2、GLM-4.5、Qwen Code 等多种主流大模型，并通过启动参数或请求头自由切换。
 *   ✅ **突破官方限制**：利用 Gemini CLI 的 OAuth 授权，有效规避官方免费 API 的速率和配额限制，提升请求额度和使用频率。
 *   ✅ **免费使用 Claude Sonnet 4.5**：在 Kiro API 模式下，支持免费使用 Claude Sonnet 4.5 模型。
 *   ✅ **无缝兼容 OpenAI**：提供与 OpenAI API 完全兼容的接口，使 LobeChat, NextChat 等现有工具链和客户端能零成本接入所有支持模型。
@@ -119,6 +119,11 @@
 *   **Qwen Code 支持**：
     *   **授权流程**：首次使用 Qwen Code 时，会自动在浏览器中打开授权页面。完成授权后，`oauth_creds.json` 文件将生成并存储在 `~/.qwen` 目录下。
     *   **模型参数**：请使用官方默认参数 `temperature=0` 和 `top_p=1`。
+*   **Droid (Factory.ai) 支持**：
+    *   **使用前提**：使用 Droid 需要[安装 Factory CLI](https://factory.ai/product/cli) 并完成认证登录，以生成 `~/.factory/auth.json` 文件。
+    *   **认证流程**：运行 `droid` 命令并按提示登录，OAuth tokens 将自动保存。
+    *   **优势**：无需单独的 API key，直接使用 Factory.ai 账号的 Claude 访问权限。
+    *   **详细文档**：查看 [Droid Provider README](src/droid/README.md) 了解完整配置说明。
 *   **Kiro API**：
     *   **使用前提**：使用 Kiro API 需要[下载 Kiro 客户端](https://aibook.ren/archives/kiro-install)并完成授权登录，以生成 `kiro-auth-token.json` 文件。
     *   **最佳体验**：推荐配合 Claude Code 使用以获得最佳体验。
@@ -132,6 +137,7 @@
     *   `http://localhost:3000/openai-custom` - 使用 OpenAI 自定义供应商处理 Claude 请求。
     *   `http://localhost:3000/gemini-cli-oauth` - 使用 Gemini CLI OAuth 供应商处理 Claude 请求。
     *   `http://localhost:3000/openai-qwen-oauth` - 使用 Qwen OAuth 供应商处理 Claude 请求。
+    *   `http://localhost:3000/droid-factory-oauth` - 使用 Factory.ai Droid OAuth 供应商访问 Claude API。
 
     这些 Path 路由不仅适用于直接 API 调用，也可在 Cline、Kilo 等编程 Agent 中配置 API 端点时使用，实现灵活的模型调用。例如，将 Agent 的 API 端点设置为 `http://localhost:3000/claude-kiro-oauth` 即可调用通过 Kiro OAuth 认证的 Claude 模型。
 
@@ -173,6 +179,7 @@
 *   **Gemini**: `~/.gemini/oauth_creds.json`
 *   **Kiro**: `~/.aws/sso/cache/kiro-auth-token.json`
 *   **Qwen**: `~/.qwen/oauth_creds.json`
+*   **Droid (Factory.ai)**: `~/.factory/auth.json`
 
 其中 `~` 代表用户主目录。如果需要自定义路径，可以通过配置文件或环境变量进行设置。
 
@@ -256,7 +263,7 @@ $env:HTTP_PROXY="http://your_proxy_address:port"
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, droid-factory-oauth |
 
 ### 🧠 OpenAI 兼容提供商参数
 
@@ -292,6 +299,13 @@ $env:HTTP_PROXY="http://your_proxy_address:port"
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `openai-qwen-oauth` 时必需) |
+
+### 🤖 Droid (Factory.ai) OAuth 认证参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--droid-auth-file` | string | ~/.factory/auth.json | Factory Droid OAuth 凭据文件路径 (当 `model-provider` 为 `droid-factory-oauth` 时可选) |
+| `--droid-base-url` | string | https://api.anthropic.com | Droid 使用的 Claude API 基础 URL (可选) |
 
 ### 📝 系统提示配置参数
 
@@ -347,6 +361,9 @@ node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-ba
 
 # 使用Gemini提供商（凭据文件）
 node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
+
+# 使用Droid (Factory.ai) 提供商
+node src/api-server.js --model-provider droid-factory-oauth
 
 # 配置系统提示
 node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append

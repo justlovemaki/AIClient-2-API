@@ -16,6 +16,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     GEMINI: 'gemini',
     OPENAI: 'openai',
     CLAUDE: 'claude',
+    DROID: 'droid',  // Droid uses Claude protocol
 }
 
 export const MODEL_PROVIDER = {
@@ -25,6 +26,7 @@ export const MODEL_PROVIDER = {
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
+    DROID_API: 'droid-factory-oauth',
 }
 
 /**
@@ -35,10 +37,17 @@ export const MODEL_PROVIDER = {
  */
 export function getProtocolPrefix(provider) {
     const hyphenIndex = provider.indexOf('-');
+    let prefix = provider;
     if (hyphenIndex !== -1) {
-        return provider.substring(0, hyphenIndex);
+        prefix = provider.substring(0, hyphenIndex);
     }
-    return provider; // Return original if no hyphen is found
+
+    // Map droid protocol to claude (since droid uses Claude API)
+    if (prefix === 'droid') {
+        return 'claude';
+    }
+
+    return prefix;
 }
 
 export const ENDPOINT_TYPE = {
