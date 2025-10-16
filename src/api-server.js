@@ -649,6 +649,9 @@ function createRequestHandler(config) {
                 if (path === '/v1/chat/completions') {
                     return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_CHAT, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
                 }
+                if (path === '/v1/responses') {
+                    return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.OPENAI_RESPONSES, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
+                }
                 const geminiUrlPattern = new RegExp(`/v1beta/models/(.+?):(${API_ACTIONS.GENERATE_CONTENT}|${API_ACTIONS.STREAM_GENERATE_CONTENT})`);
                 if (geminiUrlPattern.test(path)) {
                     return await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_CONTENT, currentConfig, PROMPT_LOG_FILENAME, providerPoolManager, currentConfig.uuid);
@@ -719,7 +722,7 @@ async function startServer() {
         console.log(`------------------------------------------`);
         console.log(`\nUnified API Server running on http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}`);
         console.log(`Supports multiple API formats:`);
-        console.log(`  • OpenAI-compatible: /v1/chat/completions, /v1/models`);
+        console.log(`  • OpenAI-compatible: /v1/chat/completions, /v1/responses, /v1/models`);
         console.log(`  • Gemini-compatible: /v1beta/models, /v1beta/models/{model}:generateContent`);
         console.log(`  • Claude-compatible: /v1/messages`);
         console.log(`  • Health check: /health`);

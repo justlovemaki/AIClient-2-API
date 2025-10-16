@@ -212,6 +212,9 @@ export class ProviderPoolManager {
                     case MODEL_PROVIDER.QWEN_API:
                         modelName = 'qwen3-coder-flash'; // Example model name for Qwen
                         break;
+                    case MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES:
+                        modelName = 'gpt-5-low'; // Example model name for OpenAI Custom Responses
+                        break;
                     default:
                         console.warn(`[ProviderPoolManager] Unknown provider type for health check: ${providerType}`);
                         return false;
@@ -225,6 +228,12 @@ export class ProviderPoolManager {
                     parts: [{ text: 'Hello, are you ok?' }]
                 }]
             };
+            
+            if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
+                healthCheckRequest.input = [{ role: 'user', content: 'Hello, are you ok?' }];
+                healthCheckRequest.model = modelName;
+                delete healthCheckRequest.contents;
+            }
             
             // For OpenAI and Claude providers, we need a different request format
             if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM || providerType === MODEL_PROVIDER.CLAUDE_CUSTOM || providerType === MODEL_PROVIDER.KIRO_API || providerType === MODEL_PROVIDER.QWEN_API) {

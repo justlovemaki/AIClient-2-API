@@ -1,5 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
+import {
+  streamStateManager,
+  generateResponseCreated,
+  generateResponseInProgress,
+  generateOutputItemAdded,
+  generateContentPartAdded,
+  generateOutputTextDelta,
+  generateOutputTextDone,
+  generateContentPartDone,
+  generateOutputItemDone,
+  generateResponseCompleted
+} from './openai/openai-responses-core.mjs';
 
 // =============================================================================
 // 常量和辅助函数定义
@@ -178,10 +190,12 @@ export function convertData(data, type, fromProvider, toProvider, model) {
             },
             [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
                 [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeRequestFromOpenAI, // from OpenAI protocol
+                [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: toClaudeRequestFromOpenAIResponses, // from OpenAI protocol (Responses format)
             },
             [MODEL_PROTOCOL_PREFIX.GEMINI]: { // to Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.OPENAI]: toGeminiRequestFromOpenAI, // from OpenAI protocol
                 [MODEL_PROTOCOL_PREFIX.CLAUDE]: toGeminiRequestFromClaude, // from Claude protocol
+                [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: toGeminiRequestFromOpenAIResponses, // from OpenAI protocol (Responses format)
             },
         },
         response: {
@@ -193,6 +207,10 @@ export function convertData(data, type, fromProvider, toProvider, model) {
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeChatCompletionFromGemini, // from Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeChatCompletionFromOpenAI, // from OpenAI protocol
             },
+            [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: { // to OpenAI protocol (Responses format)
+                [MODEL_PROTOCOL_PREFIX.GEMINI]: toOpenAIResponsesFromGemini, // from Gemini protocol
+                [MODEL_PROTOCOL_PREFIX.CLAUDE]: toOpenAIResponsesFromClaude, // from Claude protocol
+            },
         },
         streamChunk: {
             [MODEL_PROTOCOL_PREFIX.OPENAI]: { // to OpenAI protocol
@@ -202,6 +220,10 @@ export function convertData(data, type, fromProvider, toProvider, model) {
             [MODEL_PROTOCOL_PREFIX.CLAUDE]: { // to Claude protocol
                 [MODEL_PROTOCOL_PREFIX.GEMINI]: toClaudeStreamChunkFromGemini, // from Gemini protocol
                 [MODEL_PROTOCOL_PREFIX.OPENAI]: toClaudeStreamChunkFromOpenAI, // from OpenAI protocol
+            },
+            [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: { // to OpenAI protocol (Responses format)
+                [MODEL_PROTOCOL_PREFIX.GEMINI]: toOpenAIResponsesStreamChunkFromGemini, // from Gemini protocol
+                [MODEL_PROTOCOL_PREFIX.CLAUDE]: toOpenAIResponsesStreamChunkFromClaude, // from Claude protocol
             },
         },
         modelList: {
@@ -220,7 +242,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
     if (!targetConversions) {
         throw new Error(`Unsupported conversion type: ${type}`);
     }
-    
+
     const toConversions = targetConversions[getProtocolPrefix(toProvider)];
     if (!toConversions) {
         throw new Error(`No conversions defined for target protocol: ${getProtocolPrefix(toProvider)} for type: ${type}`);
@@ -228,9 +250,9 @@ export function convertData(data, type, fromProvider, toProvider, model) {
 
     const conversionFunction = toConversions[getProtocolPrefix(fromProvider)];
     if (!conversionFunction) {
-        throw new Error(`No conversion function found from ${fromProvider} to ${toProvider} for type: ${type}`);
+        throw new Error(`No conversion function found from ${getProtocolPrefix(fromProvider)} to ${toProvider} for type: ${type}`);
     }
-            
+
     console.log(conversionFunction);
     if (type === 'response' || type === 'streamChunk' || type === 'modelList') {
         return conversionFunction(data, model);
@@ -287,6 +309,7 @@ export function toOpenAIRequestFromGemini(geminiRequest) {
 
     return openaiRequest;
 }
+
 
 /**
  * Processes Gemini parts to OpenAI content format with multimodal support.
@@ -579,33 +602,6 @@ export function toOpenAIStreamChunkFromClaude(claudeChunk, model) {
     };
 }
 
-export function getOpenAIStreamChunkStop(model) {
-    return {
-        id: `chatcmpl-${uuidv4()}`, // uuidv4 needs to be imported or handled
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
-        model: model,
-        system_fingerprint: "",
-        choices: [{
-            index: 0,
-            delta: { 
-                content: "",
-                reasoning_content: ""
-            },
-            finish_reason: 'stop',
-            message: {
-                content: "",
-                reasoning_content: ""
-            }
-        }],
-        usage:{
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            total_tokens: 0,
-        },
-    };
-}
-
 /**
  * Converts a Claude API model list response to an OpenAI model list response.
  * @param {Array<Object>} claudeModels - The array of model objects from Claude API.
@@ -784,7 +780,7 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
                 });
             }
         }
-        
+
         // ---------------- OpenAI 兼容性校验 ----------------
         // 确保所有 assistant.tool_calls 均有后续 tool 响应消息；否则移除不匹配的 tool_call
         const validatedMessages = [];
@@ -884,7 +880,7 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
             console.info(`Budget tokens: ${budgetTokens} -> reasoning_effort: '${reasoningEffort}'`);
         }
     }
-    
+
     // Add system message at the beginning if present
     if (systemMessageContent) {
         let stringifiedSystemMessageContent = systemMessageContent;
@@ -897,6 +893,7 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
 
     return openaiRequest;
 }
+
 
 /**
  * Processes Claude content to OpenAI content format with multimodal support.
@@ -1023,13 +1020,31 @@ export function toGeminiRequestFromOpenAI(openaiRequest) {
     
     if (systemInstruction) geminiRequest.systemInstruction = systemInstruction;
     
-    // Handle tools and tool_choice
+    // Handle tools
     if (openaiRequest.tools?.length) {
-        geminiRequest.tools = openaiRequest.tools.map(t => {
-            const tool = {};
-            tool[t.function.name] = t.function.parameters || {};
-            return tool;
-        });
+        geminiRequest.tools = [{
+            functionDeclarations: openaiRequest.tools.map(t => {
+                // Ensure tool is a valid object and has function property
+                if (!t || typeof t !== 'object' || !t.function) {
+                    console.warn("Skipping invalid tool declaration in openaiRequest.tools.");
+                    return null; // Return null for invalid tools, filter out later
+                }
+
+                const func = t.function;
+                // Clean parameters schema for Gemini compatibility
+                const parameters = _cleanJsonSchemaProperties(func.parameters || {});
+
+                return {
+                    name: String(func.name || ''), // Ensure name is string
+                    description: String(func.description || ''), // Ensure description is string
+                    parameters: parameters // Use cleaned parameters
+                };
+            }).filter(Boolean) // Filter out any nulls from invalid tool declarations
+        }];
+        // If no valid functionDeclarations, remove the tools array
+        if (geminiRequest.tools[0].functionDeclarations.length === 0) {
+            delete geminiRequest.tools;
+        }
     }
     
     if (openaiRequest.tool_choice) {
@@ -1990,4 +2005,567 @@ export function toClaudeStreamChunkFromGemini(geminiChunk, model) {
     }
 
     return null;
+}
+
+
+/**
+ * Converts a Claude API response to an OpenAI Responses API response.
+ * @param {Object} claudeResponse - The Claude API response object.
+ * @param {string} model - The model name to include in the response.
+ * @returns {Object} The formatted OpenAI Responses API response.
+ */
+export function toOpenAIResponsesFromClaude(claudeResponse, model) {
+    // 根据参考示例重构响应结构
+    const content = processClaudeResponseContent(claudeResponse.content);
+    const textContent = typeof content === 'string' ? content : JSON.stringify(content);
+
+    // 将claude的内容转换为OpenAI Responses输出格式
+    let output = [];
+
+    // 添加文本内容
+    output.push({
+        type: "message",
+        id: `msg_${uuidv4().replace(/-/g, '')}`,
+        summary: [],
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [{
+            annotations: [],
+            logprobs: [],
+            text: textContent,
+            type: "output_text"
+        }]
+    });
+
+    return {
+        background: false,
+        created_at: Math.floor(Date.now() / 1000),
+        error: null,
+        id: `resp_${uuidv4().replace(/-/g, '')}`,
+        incomplete_details: null,
+        max_output_tokens: null,
+        max_tool_calls: null,
+        metadata: {},
+        model: model || claudeResponse.model,
+        object: "response",
+        output: output,
+        parallel_tool_calls: true,
+        previous_response_id: null,
+        prompt_cache_key: null,
+        reasoning: {
+            // effort: "minimal",
+            // summary: "detailed"
+        },
+        safety_identifier: "user-"+uuidv4().replace(/-/g, ''), // 示例值
+        service_tier: "default",
+        status: "completed",
+        store: false,
+        temperature: 1,
+        text: {
+            format: {type: "text"},
+            // verbosity: "medium"
+        },
+        tool_choice: "auto",
+        tools: [],
+        top_logprobs: 0,
+        top_p: 1,
+        truncation: "disabled",
+        usage: {
+            input_tokens: claudeResponse.usage?.input_tokens || 0, // 示例值
+            input_tokens_details: {
+                cached_tokens: claudeResponse.usage?.cache_creation_input_tokens || 0, // 如果有缓存相关数据则使用
+            },
+            output_tokens: claudeResponse.usage?.output_tokens || 0, // 示例值
+            output_tokens_details: {
+                reasoning_tokens: 0
+            },
+            total_tokens: (claudeResponse.usage?.input_tokens || 0) + (claudeResponse.usage?.output_tokens || 0) // 示例值
+        },
+        user: null
+    };
+}
+
+/**
+ * Converts a Gemini API response to an OpenAI Responses API response.
+ * @param {Object} geminiResponse - The Gemini API response object.
+ * @param {string} model - The model name to include in the response.
+ * @returns {Object} The formatted OpenAI Responses API response.
+ */
+export function toOpenAIResponsesFromGemini(geminiResponse, model) {
+    // 根据参考示例重构响应结构
+    const content = processGeminiResponseContent(geminiResponse);
+    const textContent = typeof content === 'string' ? content : JSON.stringify(content);
+
+    // 将gemini的内容转换为OpenAI Responses输出格式
+    let output = [];
+
+    // 添加文本内容
+    output.push({
+        id: `msg_${uuidv4().replace(/-/g, '')}`,
+        summary: [],
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [{
+            annotations: [],
+            logprobs: [],
+            text: textContent,
+            type: "output_text"
+        }]
+    });
+
+    return {
+        background: false,
+        created_at: Math.floor(Date.now() / 1000),
+        error: null,
+        id: `resp_${uuidv4().replace(/-/g, '')}`,
+        incomplete_details: null,
+        max_output_tokens: null,
+        max_tool_calls: null,
+        metadata: {},
+        model: model,
+        object: "response",
+        output: output,
+        parallel_tool_calls: true,
+        previous_response_id: null,
+        prompt_cache_key: null,
+        reasoning: {
+            // effort: "minimal",
+            // summary: "detailed"
+        },
+        safety_identifier: "user-"+uuidv4().replace(/-/g, ''), // 示例值
+        service_tier: "default",
+        status: "completed",
+        store: false,
+        temperature: 1,
+        text: {
+            format: {type: "text"},
+            // verbosity: "medium"
+        },
+        tool_choice: "auto",
+        tools: [],
+        top_logprobs: 0,
+        top_p: 1,
+        truncation: "disabled",
+        usage: {
+            input_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0, // 示例值
+            input_tokens_details: {
+                cached_tokens: geminiResponse.usageMetadata?.cachedTokens || 0, // 使用正确的Gemini缓存字段
+            },
+            output_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0, // 示例值
+            output_tokens_details: {
+                reasoning_tokens: 0
+            },
+            total_tokens: geminiResponse.usageMetadata?.totalTokenCount || 0, // 示例值
+        },
+        user: null
+    };
+}
+
+
+/**
+ * Converts an OpenAI Responses API request body to a Claude API request body.
+ * @param {Object} responsesRequest - The request body from the OpenAI Responses API.
+ * @returns {Object} The formatted request body for the Claude API.
+ */
+export function toClaudeRequestFromOpenAIResponses(responsesRequest) {
+    // The OpenAI Responses API uses input and instructions instead of messages
+    const claudeRequest = {
+        model: responsesRequest.model,
+        max_tokens: checkAndAssignOrDefault(responsesRequest.max_tokens, DEFAULT_MAX_TOKENS),
+        temperature: checkAndAssignOrDefault(responsesRequest.temperature, DEFAULT_TEMPERATURE),
+        top_p: checkAndAssignOrDefault(responsesRequest.top_p, DEFAULT_TOP_P),
+    };
+
+    // Process instructions as system message
+    if (responsesRequest.instructions) {
+        claudeRequest.system = [];
+        claudeRequest.system.push({
+            text: typeof responsesRequest.instructions === 'string' ? responsesRequest.instructions : JSON.stringify(responsesRequest.instructions)
+        });
+        
+    }
+
+    const claudeMessages = [];
+    // Process input as user message content
+    if (responsesRequest.input) {
+        if (typeof responsesRequest.input === 'string') {
+            // Create user message with the string content
+            claudeMessages.push({
+                role: 'user',
+                content: [{
+                    type: 'text',
+                    text: responsesRequest.input
+                }]
+            });
+        } else {
+            // Handle array of messages or items - process the entire array
+            for (const message of responsesRequest.input) {
+                const role = message.role === 'assistant' ? 'assistant' : 'user';
+                let content = [];
+
+                if (message.role === 'tool') {
+                    // Claude expects tool_result to be in a 'user' message
+                    // The content of a tool message is a single tool_result block
+                    content.push({
+                        type: 'tool_result',
+                        tool_use_id: message.tool_call_id, // Use tool_call_id from OpenAI tool message
+                        content: safeParseJSON(message.content) // Parse content as JSON if possible
+                    });
+                    claudeMessages.push({ role: 'user', content: content });
+                } else if (message.role === 'assistant' && message.tool_calls?.length) {
+                    // Assistant message with tool calls - properly format as tool_use blocks
+                    // Claude expects tool_use to be in an 'assistant' message
+                    const toolUseBlocks = message.tool_calls.map(tc => ({
+                        type: 'tool_use',
+                        id: tc.id,
+                        name: tc.function.name,
+                        input: safeParseJSON(tc.function.arguments)
+                    }));
+                    claudeMessages.push({ role: 'assistant', content: toolUseBlocks });
+                } else {
+                    // Regular user or assistant message (text and multimodal)
+                    if (typeof message.content === 'string') {
+                        if (message.content) {
+                            content.push({ type: 'text', text: message.content });
+                        }
+                    } else if (Array.isArray(message.content)) {
+                        message.content.forEach(item => {
+                            if (!item) return;
+                            switch (item.type) {
+                                case 'input_text':
+                                    if (item.text) {
+                                        content.push({ type: 'text', text: item.text });
+                                    }
+                                    break;
+                                case 'output_text':
+                                    if (item.text) {
+                                        content.push({ type: 'text', text: item.text });
+                                    }
+                                    break;
+                                case 'image_url':
+                                    if (item.image_url) {
+                                        const imageUrl = typeof item.image_url === 'string'
+                                            ? item.image_url
+                                            : item.image_url.url;
+                                        if (imageUrl.startsWith('data:')) {
+                                            const [header, data] = imageUrl.split(',');
+                                            const mediaType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+                                            content.push({
+                                                type: 'image',
+                                                source: {
+                                                    type: 'base64',
+                                                    media_type: mediaType,
+                                                    data: data
+                                                }
+                                            });
+                                        } else {
+                                            // Claude requires base64 for images, so for URLs, we'll represent as text
+                                            content.push({ type: 'text', text: `[Image: ${imageUrl}]` });
+                                        }
+                                    }
+                                    break;
+                                case 'audio':
+                                    // Handle audio content as text placeholder
+                                    if (item.audio_url) {
+                                        const audioUrl = typeof item.audio_url === 'string'
+                                            ? item.audio_url
+                                            : item.audio_url.url;
+                                        content.push({ type: 'text', text: `[Audio: ${audioUrl}]` });
+                                    }
+                                    break;
+                            }
+                        });
+                    }
+                    // Only add message if content is not empty
+                    if (content.length > 0) {
+                        claudeMessages.push({ role: role, content: content });
+                    }
+                }
+            }
+        }
+    } 
+
+    // Process tools if present
+    // if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
+    //     claudeRequest.tools = responsesRequest.tools.map(tool => ({
+    //             name: tool.name,
+    //             description: tool.description || '',
+    //             input_schema: tool.parameters || { type: 'object', properties: {} }
+    //         }));
+    //     claudeRequest.tool_choice = buildClaudeToolChoice(responsesRequest.tool_choice);
+    // }
+
+    // Process messages
+    claudeRequest.messages = claudeMessages;
+    claudeRequest.stream = responsesRequest.stream || false;
+    return claudeRequest;
+}
+
+/**
+ * Converts an OpenAI Responses API request body to a Gemini API request body.
+ * @param {Object} responsesRequest - The request body from the OpenAI Responses API.
+ * @returns {Object} The formatted request body for the Gemini API.
+ */
+export function toGeminiRequestFromOpenAIResponses(responsesRequest) {
+    // The OpenAI Responses API uses input and instructions instead of messages
+    const geminiRequest = {
+        contents: []
+    };
+
+    // Process instructions as system instruction
+    if (responsesRequest.instructions) {
+        let instructionsText = '';
+        if (typeof responsesRequest.instructions === 'string') {
+            instructionsText = responsesRequest.instructions;
+        } else {
+            instructionsText = JSON.stringify(responsesRequest.instructions);
+        }
+        geminiRequest.systemInstruction = {
+            parts: [{ text: instructionsText }]
+        };
+    }
+
+    // Process input as user content
+    if (responsesRequest.input) {
+        let inputContent = '';
+        if (typeof responsesRequest.input === 'string') {
+            inputContent = responsesRequest.input;
+        } else if (Array.isArray(responsesRequest.input)) {
+            // Handle array of messages or items
+            if (responsesRequest.input.length > 0) {
+                // For compatibility, take the content of the last item with text content
+                const lastInputItem = [...responsesRequest.input].reverse().find(item =>
+                    item && (
+                        (item.content && typeof item.content === 'string') ||
+                        (item.content && Array.isArray(item.content) && item.content.some(c => c && c.text)) ||
+                        (item.role === 'user' && item.content)
+                    )
+                );
+
+                if (lastInputItem) {
+                    if (typeof lastInputItem.content === 'string') {
+                        inputContent = lastInputItem.content;
+                    } else if (Array.isArray(lastInputItem.content)) {
+                        // Process array of content blocks
+                        inputContent = lastInputItem.content
+                            .filter(block => block && block.text)
+                            .map(block => block.text)
+                            .join(' ');
+                    } else {
+                        // General fallback
+                        inputContent = JSON.stringify(lastInputItem.content || lastInputItem);
+                    }
+                }
+            }
+        }
+
+        if (inputContent) {
+            // Add user message with the input content
+            geminiRequest.contents.push({
+                role: 'user',
+                parts: [{ text: inputContent }]
+            });
+        }
+    } else {
+        // If no input is provided, ensure we have at least one user message for Gemini
+        geminiRequest.contents.push({
+            role: 'user',
+            parts: [{ text: 'Hello' }]  // Default content to satisfy Gemini API requirement
+        });
+    }
+
+    // Add generation config
+    const generationConfig = {};
+    generationConfig.maxOutputTokens = checkAndAssignOrDefault(responsesRequest.max_tokens, DEFAULT_GEMINI_MAX_TOKENS);
+    generationConfig.temperature = checkAndAssignOrDefault(responsesRequest.temperature, DEFAULT_TEMPERATURE);
+    generationConfig.topP = checkAndAssignOrDefault(responsesRequest.top_p, DEFAULT_TOP_P);
+
+    if (Object.keys(generationConfig).length > 0) {
+        geminiRequest.generationConfig = generationConfig;
+    }
+
+    // Process tools if present
+    if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
+        geminiRequest.tools = [{
+            functionDeclarations: responsesRequest.tools
+                .filter(tool => tool && (tool.type === 'function' || tool.function))
+                .map(tool => {
+                    const func = tool.function || tool;
+                    return {
+                        name: String(func.name || tool.name || ''),
+                        description: String(func.description || tool.description || ''),
+                        parameters: func.parameters || tool.parameters || { type: 'object', properties: {} }
+                    };
+                }).filter(Boolean) // Filter out any invalid tools
+        }];
+
+        // If no valid functionDeclarations, remove the tools array
+        if (geminiRequest.tools[0].functionDeclarations.length === 0) {
+            delete geminiRequest.tools;
+        }
+    }
+
+    return geminiRequest;
+}
+
+/**
+ * Converts a Claude API stream chunk to an OpenAI Responses API stream chunk.
+ * @param {Object} claudeChunk - The Claude API stream chunk object.
+ * @param {string} [model] - Optional model name to include in the response.
+ * @param {string} [requestId] - Optional request ID to maintain stream state across chunks.
+ * @returns {Array} The formatted OpenAI Responses API stream chunks as an array of events.
+ */
+export function toOpenAIResponsesStreamChunkFromClaude(claudeChunk, model, requestId = null) {
+    if (!claudeChunk) {
+        return [];
+    }
+
+    // 如果没有提供requestId，则生成一个（首次调用时）
+    const id = requestId || Date.now().toString();
+
+    // 设置模型信息（仅在新请求时设置）
+    if (!requestId) {
+        streamStateManager.setModel(id, model);
+    }
+
+    // Handle text content from Claude stream
+    let content = '';
+    if (typeof claudeChunk === 'string') {
+        content = claudeChunk;
+    } else if (claudeChunk && typeof claudeChunk === 'object' && claudeChunk.delta?.text) {
+        content = claudeChunk.delta.text;
+    } else if (claudeChunk && typeof claudeChunk === 'object') {
+        content = claudeChunk;
+    }
+
+    // 对于第一个数据块（fullText为空），生成开始事件
+    const state = streamStateManager.getOrCreateState(id);
+    if (state.fullText === '' && !requestId) { // 只在首次调用时（未指定requestId时）生成开始事件
+        // 在这种情况下，我们需要先添加内容到状态
+        state.fullText = content;
+        return [
+            // ...getOpenAIResponsesStreamChunkBegin(id, model),
+            generateOutputTextDelta(id, content),
+            // ...getOpenAIResponsesStreamChunkEnd(id)
+        ];
+    } else if (content === '') {
+        // 如果是结束块，生成结束事件
+        const doneEvents = getOpenAIResponsesStreamChunkEnd(id);
+
+        // 清理状态
+        streamStateManager.cleanup(id);
+
+        return doneEvents;
+    } else {
+        // 中间数据块，只返回delta事件，但也要更新状态
+        streamStateManager.updateText(id, content);
+        return [
+            generateOutputTextDelta(id, content)
+        ];
+    }
+}
+
+/**
+ * Converts a Gemini API stream chunk to an OpenAI Responses API stream chunk.
+ * @param {Object} geminiChunk - The Gemini API stream chunk object.
+ * @param {string} [model] - Optional model name to include in the response.
+ * @param {string} [requestId] - Optional request ID to maintain stream state across chunks.
+ * @returns {Array} The formatted OpenAI Responses API stream chunks as an array of events.
+ */
+export function toOpenAIResponsesStreamChunkFromGemini(geminiChunk, model, requestId = null) {
+    if (!geminiChunk) {
+        return [];
+    }
+
+    // 如果没有提供requestId，则生成一个（首次调用时）
+    const id = requestId || Date.now().toString();
+
+    // 设置模型信息（仅在新请求时设置）
+    if (!requestId) {
+        streamStateManager.setModel(id, model);
+    }
+
+    // Handle text content in stream
+    let content = '';
+    if (typeof geminiChunk === 'string') {
+        content = geminiChunk;
+    } else if (geminiChunk && typeof geminiChunk === 'object') {
+        // Extract content from Gemini chunk if it's an object
+        content = geminiChunk.content || geminiChunk.text || geminiChunk;
+    }
+
+    // 对于第一个数据块（fullText为空），生成开始事件
+    const state = streamStateManager.getOrCreateState(id);
+    if (state.fullText === '' && !requestId) { // 只在首次调用时（未指定requestId时）生成开始事件
+        // 在这种情况下，我们需要先添加内容到状态
+        state.fullText = content;
+        return [
+            // ...getOpenAIResponsesStreamChunkBegin(id, model),
+            generateOutputTextDelta(id, content),
+            // ...getOpenAIResponsesStreamChunkEnd(id)
+        ];
+    } else if (content === '') {
+        // 如果是结束块，生成结束事件
+        const doneEvents = getOpenAIResponsesStreamChunkEnd(id);
+
+        // 清理状态
+        streamStateManager.cleanup(id);
+
+        return doneEvents;
+    } else {
+        // 中间数据块，只返回delta事件，但也要更新状态
+        streamStateManager.updateText(id, content);
+        return [
+            generateOutputTextDelta(id, content)
+        ];
+    }
+}
+
+export function getOpenAIStreamChunkStop(model) {
+    return {
+        id: `chatcmpl-${uuidv4()}`, // uuidv4 needs to be imported or handled
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model: model,
+        system_fingerprint: "",
+        choices: [{
+            index: 0,
+            delta: { 
+                content: "",
+                reasoning_content: ""
+            },
+            finish_reason: 'stop',
+            message: {
+                content: "",
+                reasoning_content: ""
+            }
+        }],
+        usage:{
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        },
+    };
+}
+
+export function  getOpenAIResponsesStreamChunkBegin(id, model){
+
+    return [
+        generateResponseCreated(id, model),
+        generateResponseInProgress(id),
+        generateOutputItemAdded(id),
+        generateContentPartAdded(id)
+    ];
+}
+
+export function  getOpenAIResponsesStreamChunkEnd(id){
+
+    return [
+        generateOutputTextDone(id),
+        generateContentPartDone(id),
+        generateOutputItemDone(id),
+        generateResponseCompleted(id)
+    ];
 }

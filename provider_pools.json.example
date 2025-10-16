@@ -23,6 +23,19 @@
       "lastErrorTime": null
     }
   ],
+  "openaiResponses-custom": [
+    {
+      "OPENAI_API_KEY": "sk-openai-key",
+      "OPENAI_BASE_URL": "https://api.openai.com/v1",
+      "checkModelName": null,
+      "uuid": "e284628d-302f-456d-91f3-609538678968",
+      "isHealthy": true,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
   "gemini-cli-oauth": [
     {
       "GEMINI_OAUTH_CREDS_FILE_PATH": "./credentials1.json",

@@ -1,3 +1,4 @@
+import { OpenAIResponsesApiService } from './openai/openai-responses-core.js'; // 导入OpenAIResponsesApiService
 import { GeminiApiService } from './gemini/gemini-core.js'; // 导入geminiApiService
 import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiService
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
@@ -118,6 +119,35 @@ export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
     async listModels() {
         // The adapter now returns the native model list from the underlying service.
         return this.openAIApiService.listModels();
+    }
+
+    async refreshToken() {
+        // OpenAI API keys are typically static and do not require refreshing.
+        return Promise.resolve();
+    }
+}
+
+// OpenAI Responses API 服务适配器
+export class OpenAIResponsesApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.openAIResponsesApiService = new OpenAIResponsesApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        // The adapter expects the requestBody to be in the OpenAI Responses format.
+        return this.openAIResponsesApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        // The adapter expects the requestBody to be in the OpenAI Responses format.
+        const stream = this.openAIResponsesApiService.generateContentStream(model, requestBody);
+        yield* stream;
+    }
+
+    async listModels() {
+        // The adapter returns the native model list from the underlying service.
+        return this.openAIResponsesApiService.listModels();
     }
 
     async refreshToken() {
@@ -253,6 +283,9 @@ export function getServiceAdapter(config) {
         switch (provider) {
             case MODEL_PROVIDER.OPENAI_CUSTOM:
                 serviceInstances[providerKey] = new OpenAIApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES:
+                serviceInstances[providerKey] = new OpenAIResponsesApiServiceAdapter(config);
                 break;
             case MODEL_PROVIDER.GEMINI_CLI:
                 serviceInstances[providerKey] = new GeminiApiServiceAdapter(config);

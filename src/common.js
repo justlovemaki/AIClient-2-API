@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
 import * as crypto from 'crypto'; // Import crypto for MD5 hashing
 import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
-import { convertData, getOpenAIStreamChunkStop } from './convert.js';
+import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 
 export const API_ACTIONS = {
@@ -15,6 +15,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     // Model provider constants
     GEMINI: 'gemini',
     OPENAI: 'openai',
+    OPENAI_RESPONSES: 'openairesp',
     CLAUDE: 'claude',
 }
 
@@ -22,6 +23,7 @@ export const MODEL_PROVIDER = {
     // Model provider constants
     GEMINI_CLI: 'gemini-cli-oauth',
     OPENAI_CUSTOM: 'openai-custom',
+    OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
@@ -43,6 +45,7 @@ export function getProtocolPrefix(provider) {
 
 export const ENDPOINT_TYPE = {
     OPENAI_CHAT: 'openai_chat',
+    OPENAI_RESPONSES: 'openai_responses',
     GEMINI_CONTENT: 'gemini_content',
     CLAUDE_MESSAGE: 'claude_message',
     OPENAI_MODEL_LIST: 'openai_model_list',
@@ -212,10 +215,18 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     // The service returns a stream in its native format (toProvider).
     const nativeStream = await service.generateContentStream(model, requestBody);
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
-    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE;
-    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI;
+    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
+    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI ;
+    const openResponses = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES ;
 
     try {
+        if (openResponses && needsConversion) {
+            const beginChunks = getOpenAIResponsesStreamChunkBegin(model);
+            for (const chunk of beginChunks) {
+                res.write(`event: ${chunk.type}\n`);
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            }
+        }
         for await (const nativeChunk of nativeStream) {
             // Convert chunk to the client's format (fromProvider), if necessary.
             const chunkText = extractResponseText(nativeChunk, toProvider);
@@ -223,7 +234,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 fullResponseText += chunkText;
             }
 
-            const chunkToSend = needsConversion 
+            const chunkToSend = needsConversion
                 ? convertData(chunkText, 'streamChunk', toProvider, fromProvider, model)
                 : nativeChunk;
 
@@ -231,15 +242,28 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 continue;
             }
 
-            if (addEvent) {
-                res.write(`event: ${chunkToSend.type}\n`);
-                // console.log(`event: ${chunkToSend.type}\n`);
-            }
+            // 处理 chunkToSend 可能是数组或对象的情况
+            const chunksToSend = Array.isArray(chunkToSend) ? chunkToSend : [chunkToSend];
 
-            // fullOldResponseJson += JSON.stringify(nativeChunk)+"\n";
-            // fullResponseJson += JSON.stringify(chunkToSend)+"\n";
-            res.write(`data: ${JSON.stringify(chunkToSend)}\n\n`);
-            // console.log(`data: ${JSON.stringify(chunkToSend)}\n`);
+            for (const chunk of chunksToSend) {
+                if (addEvent) {
+                    // fullResponseJson += chunk.type+"\n";
+                    res.write(`event: ${chunk.type}\n`);
+                    // console.log(`event: ${chunk.type}\n`);
+                }
+
+                // fullOldResponseJson += JSON.stringify(chunk)+"\n";
+                // fullResponseJson += JSON.stringify(chunk)+"\n\n";
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                // console.log(`data: ${JSON.stringify(chunk)}\n`);
+            }
+        }
+        if (openResponses && needsConversion) {
+            const endChunks = getOpenAIResponsesStreamChunkEnd(model);
+            for (const chunk of endChunks) {
+                res.write(`event: ${chunk.type}\n`);
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            }
         }
         if (openStop && needsConversion) {
             res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
@@ -261,7 +285,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             res.end(JSON.stringify(errorPayload));
             responseClosed = true;
         }
-    
+
     } finally {
         if (!responseClosed) {
             res.end();
@@ -296,7 +320,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 uuid: pooluuid
             });
         }
-        
+
         // 返回错误响应给客户端
         const errorResponse = {
             error: {
@@ -339,7 +363,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
-        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+        if (getProtocolPrefix(fromProvider).includes(getProtocolPrefix(toProvider))) {
             console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
             clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
         } else {
@@ -379,6 +403,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     const clientProviderMap = {
         [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
+        [ENDPOINT_TYPE.OPENAI_RESPONSES]: MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES,
         [ENDPOINT_TYPE.CLAUDE_MESSAGE]: MODEL_PROTOCOL_PREFIX.CLAUDE,
         [ENDPOINT_TYPE.GEMINI_CONTENT]: MODEL_PROTOCOL_PREFIX.GEMINI,
     };

@@ -123,6 +123,9 @@
     *   **使用前提**：使用 Kiro API 需要[下载 Kiro 客户端](https://aibook.ren/archives/kiro-install)并完成授权登录，以生成 `kiro-auth-token.json` 文件。
     *   **最佳体验**：推荐配合 Claude Code 使用以获得最佳体验。
     *   **注意事项**：Kiro 服务政策已调整，请查阅官方公告了解具体使用限制。
+*   **OpenAI Responses API**:
+    *   **功能说明**: 支持 OpenAI Responses API 端点，提供更结构化的对话响应能力，适用于需要高级对话管理的应用场景。
+    *   **配置方法**: 在 `config.json` 或启动参数中设置 `MODEL_PROVIDER` 为 `openaiResponses-custom`，并提供相应的 API 密钥和基础 URL。
 *   **模型供应商切换**：本项目支持通过 Path 路由和环境变量两种方式，在 API 调用中灵活切换不同的模型供应商。
 
     #### 通过 Path 路由切换
@@ -132,6 +135,7 @@
     *   `http://localhost:3000/openai-custom` - 使用 OpenAI 自定义供应商处理 Claude 请求。
     *   `http://localhost:3000/gemini-cli-oauth` - 使用 Gemini CLI OAuth 供应商处理 Claude 请求。
     *   `http://localhost:3000/openai-qwen-oauth` - 使用 Qwen OAuth 供应商处理 Claude 请求。
+    *   `http://localhost:3000/openaiResponses-custom` - 使用 OpenAI Responses API 供应商处理结构化对话请求。
 
     这些 Path 路由不仅适用于直接 API 调用，也可在 Cline、Kilo 等编程 Agent 中配置 API 端点时使用，实现灵活的模型调用。例如，将 Agent 的 API 端点设置为 `http://localhost:3000/claude-kiro-oauth` 即可调用通过 Kiro OAuth 认证的 Claude 模型。
 
@@ -293,6 +297,14 @@ $env:HTTP_PROXY="http://your_proxy_address:port"
 |------|------|--------|------|
 | `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `openai-qwen-oauth` 时必需) |
 
+### 🔄 OpenAI Responses API 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--model-provider` | string | openaiResponses-custom | 模型提供商，使用OpenAI Responses API时设置为 `openaiResponses-custom` |
+| `--openai-api-key` | string | null | OpenAI API 密钥 (当 `model-provider` 为 `openaiResponses-custom` 时必需) |
+| `--openai-base-url` | string | null | OpenAI API 基础 URL (当 `model-provider` 为 `openaiResponses-custom` 时必需) |
+
 ### 📝 系统提示配置参数
 
 | 参数 | 类型 | 默认值 | 说明 |
@@ -341,6 +353,9 @@ node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --
 
 # 使用Claude提供商
 node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
+
+# 使用OpenAI Responses API提供商
+node src/api-server.js --model-provider openaiResponses-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
 
 # 使用Gemini提供商（Base64凭据）
 node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
