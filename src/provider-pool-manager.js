@@ -189,6 +189,9 @@ export class ProviderPoolManager {
             // Create a temporary service adapter for health check
             const tempConfig = { ...providerConfig, MODEL_PROVIDER: providerType };
             const serviceAdapter = getServiceAdapter(tempConfig);
+            if(!providerConfig.checkHealth){
+                return true;
+            }
             
             // Determine a suitable model name for health check
             // First, try to get it from the provider configuration

@@ -28,6 +28,8 @@
 > 8.29 Added account pool mode, which supports multiple accounts for all providers, with built-in polling, failover (requires client retry), and configuration degradation. Requires adding PROVIDER_POOLS_FILE_PATH to config, see the configuration file: provider_pools.json for details.
 >
 > 9.1 Added Qwen Code CLI support, can use qwen3-coder-plus model
+> 
+> 10.18 Kiro open registration, new accounts get 500 credits, now supports Claude Sonnet4.5
 
 ---
 

@@ -29,6 +29,8 @@
 > 8.29 新增账号池模式，可支持所有provider配置多个账号，自带轮询，故障转移（需要客户端重试）和配置降级。需要在 config 新增配置 PROVIDER_POOLS_FILE_PATH ， 详见配置文件：provider_pools.json
 >
 > 9.1  偷摸的新增 Qwen Code CLI 支持，可使用 qwen3-coder-plus 模型
+> 
+> 10.18 Kiro开放注册，新号送500额度，已支持Claude Sonnet4.5
 
 ---
 
