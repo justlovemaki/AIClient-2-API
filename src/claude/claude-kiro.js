@@ -10,7 +10,7 @@ const KIRO_CONSTANTS = {
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse',
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
-    DEFAULT_MODEL_NAME: 'claude-sonnet-4-20250514',
+    DEFAULT_MODEL_NAME: 'claude-sonnet-4-5',
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout
     USER_AGENT: 'KiroIDE',
     CONTENT_TYPE_JSON: 'application/json',
@@ -838,6 +838,7 @@ async initializeAuth(forceRefresh = false) {
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
         const response = await this.callApi('', finalModel, requestBody);
 
         try {
@@ -864,7 +865,8 @@ async initializeAuth(forceRefresh = false) {
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-
+        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel}`);
+        
         try {
             const response = await this.streamApi('', finalModel, requestBody);
             const { responseText, toolCalls } = this._processApiResponse(response);
