@@ -628,6 +628,16 @@ function createRequestHandler(config) {
             }));
         }
 
+        // Ignore count_tokens requests
+        if (path.includes('/count_tokens')) {
+            console.log(`[Server] Ignoring count_tokens request: ${path}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+                tokens: 0,
+                message: 'Token counting is not supported'
+            }));
+        }
+
         if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));

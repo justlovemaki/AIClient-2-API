@@ -859,6 +859,13 @@ async initializeAuth(forceRefresh = false) {
 
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期,如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, refreshing before generateContent request...');
+            await this.initializeAuth(true);
+        }
+        
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
         const response = await this.callApi('', finalModel, requestBody);
@@ -886,6 +893,13 @@ async initializeAuth(forceRefresh = false) {
     // 重构2: generateContentStream 调用新的普通async函数
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期,如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, refreshing before generateContentStream request...');
+            await this.initializeAuth(true);
+        }
+        
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContentStream with model: ${finalModel}`);
         
