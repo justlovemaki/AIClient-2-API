@@ -12,6 +12,12 @@ export class ProviderPoolManager {
         this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
         this.maxErrorCount = options.maxErrorCount || 3; // Default to 1 errors before marking unhealthy
         this.healthCheckInterval = options.healthCheckInterval || 30 * 60 * 1000; // Default to 30 minutes
+        
+        // 优化1: 添加防抖机制，避免频繁的文件 I/O 操作
+        this.saveDebounceTime = options.saveDebounceTime || 1000; // 默认1秒防抖
+        this.saveTimer = null;
+        this.pendingSaves = new Set(); // 记录待保存的 providerType
+        
         this.initializeProviderStatus();
     }
 
@@ -29,14 +35,11 @@ export class ProviderPoolManager {
                 providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
                 providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
                 providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
-                if (providerConfig.lastErrorTime && typeof providerConfig.lastErrorTime === 'string') {
-                    // Keep as string (ISOString)
-                    providerConfig.lastErrorTime = providerConfig.lastErrorTime;
-                } else if (providerConfig.lastErrorTime === undefined) {
-                    providerConfig.lastErrorTime = null;
-                } else if (providerConfig.lastErrorTime instanceof Date) {
-                    providerConfig.lastErrorTime = providerConfig.lastErrorTime.toISOString();
-                }
+                
+                // 优化2: 简化 lastErrorTime 处理逻辑
+                providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
+                    ? providerConfig.lastErrorTime.toISOString()
+                    : (providerConfig.lastErrorTime || null);
 
                 this.providerStatus[providerType].push({
                     config: providerConfig,
@@ -62,31 +65,24 @@ export class ProviderPoolManager {
             return null;
         }
 
-        let currentIndex = this.roundRobinIndex[providerType] || 0;
-        let selected = null;
-
-        // Iterate through healthy providers starting from the current index
-        for (let i = 0; i < healthyProviders.length; i++) {
-            const providerIndex = (currentIndex + i) % healthyProviders.length;
-            const potentialProvider = healthyProviders[providerIndex];
-
-            // For now, we simply select the next healthy provider in a round-robin fashion.
-            // More advanced logic (e.g., considering usage, recent errors, etc.) can be added here.
-            selected = potentialProvider;
-            this.roundRobinIndex[providerType] = (providerIndex + 1) % healthyProviders.length; // Update the index for the next call
-            break; // Found a provider, break the loop
-        }
+        // 优化3: 简化轮询逻辑，移除不必要的循环
+        const currentIndex = this.roundRobinIndex[providerType] || 0;
+        const providerIndex = currentIndex % healthyProviders.length;
+        const selected = healthyProviders[providerIndex];
         
-        if (selected) {
-            selected.config.lastUsed = new Date().toISOString();
-            selected.config.usageCount++; // Increment usage count
+        // 更新下次轮询的索引
+        this.roundRobinIndex[providerType] = (providerIndex + 1) % healthyProviders.length;
+        
+        // 更新使用信息
+        selected.config.lastUsed = new Date().toISOString();
+        selected.config.usageCount++;
 
-            console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
-            this._saveProviderPoolsToJson(providerType); // Persist changes
-            return selected.config;
-        }
-
-        return null;
+        console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
+        
+        // 优化1: 使用防抖保存
+        this._debouncedSave(providerType);
+        
+        return selected.config;
     }
 
     /**
@@ -108,7 +104,9 @@ export class ProviderPoolManager {
                 } else {
                     console.warn(`[ProviderPoolManager] Provider ${JSON.stringify(providerConfig)} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
                 }
-                this._saveProviderPoolsToJson(providerType); // Persist changes
+                
+                // 优化1: 使用防抖保存
+                this._debouncedSave(providerType);
             }
         }
     }
@@ -127,7 +125,9 @@ export class ProviderPoolManager {
                 provider.config.errorCount = 0; // Reset error count on health recovery
                 provider.config.lastErrorTime = null; // Reset lastErrorTime when healthy
                 console.log(`[ProviderPoolManager] Marked provider as healthy: ${JSON.stringify(providerConfig)} for type ${providerType}`);
-                this._saveProviderPoolsToJson(providerType); // Persist changes
+                
+                // 优化1: 使用防抖保存
+                this._debouncedSave(providerType);
             }
         }
     }
@@ -251,6 +251,40 @@ export class ProviderPoolManager {
         } catch (error) {
             console.error(`[ProviderPoolManager] Health check failed for ${providerType}: ${error.message}`);
             return false;
+        }
+    }
+
+    /**
+     * 优化1: 添加防抖保存方法
+     * 延迟保存操作，避免频繁的文件 I/O
+     * @private
+     */
+    _debouncedSave(providerType) {
+        // 将待保存的 providerType 添加到集合中
+        this.pendingSaves.add(providerType);
+        
+        // 清除之前的定时器
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+        }
+        
+        // 设置新的定时器
+        this.saveTimer = setTimeout(() => {
+            this._flushPendingSaves();
+        }, this.saveDebounceTime);
+    }
+    
+    /**
+     * 优化1: 批量保存所有待保存的 providerType
+     * @private
+     */
+    async _flushPendingSaves() {
+        const typesToSave = Array.from(this.pendingSaves);
+        this.pendingSaves.clear();
+        this.saveTimer = null;
+        
+        for (const providerType of typesToSave) {
+            await this._saveProviderPoolsToJson(providerType);
         }
     }
 

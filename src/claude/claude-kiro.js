@@ -669,14 +669,31 @@ async initializeAuth(forceRefresh = false) {
         let fullContent = '';
         const toolCalls = [];
         let currentToolCallDict = null;
+        // console.log(`rawStr=${rawStr}`);
 
-        const eventBlockRegex = /event({.*?(?=event{|$))/gs;
+        // 改进的 SSE 事件解析：匹配 :message-typeevent 后面的 JSON 数据
+        // 使用更精确的正则来匹配 SSE 格式的事件
+        const sseEventRegex = /:message-typeevent(\{[^]*?(?=:event-type|$))/g;
+        const legacyEventRegex = /event(\{.*?(?=event\{|$))/gs;
+        
+        // 首先尝试使用 SSE 格式解析
+        let matches = [...rawStr.matchAll(sseEventRegex)];
+        
+        // 如果 SSE 格式没有匹配到，回退到旧的格式
+        if (matches.length === 0) {
+            matches = [...rawStr.matchAll(legacyEventRegex)];
+        }
 
-        for (const match of rawStr.matchAll(eventBlockRegex)) {
+        for (const match of matches) {
             const potentialJsonBlock = match[1];
+            if (!potentialJsonBlock || potentialJsonBlock.trim().length === 0) {
+                continue;
+            }
+
+            // 尝试找到完整的 JSON 对象
             let searchPos = 0;
             while ((searchPos = potentialJsonBlock.indexOf('}', searchPos + 1)) !== -1) {
-                const jsonCandidate = potentialJsonBlock.substring(0, searchPos + 1);
+                const jsonCandidate = potentialJsonBlock.substring(0, searchPos + 1).trim();
                 try {
                     const eventData = JSON.parse(jsonCandidate);
 
@@ -700,22 +717,30 @@ async initializeAuth(forceRefresh = false) {
                                 const args = JSON.parse(currentToolCallDict.function.arguments);
                                 currentToolCallDict.function.arguments = JSON.stringify(args);
                             } catch (e) {
-                                console.warn(`Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
+                                console.warn(`[Kiro] Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
                             }
                             toolCalls.push(currentToolCallDict);
                             currentToolCallDict = null;
                         }
                     } else if (!eventData.followupPrompt && eventData.content) {
-                        const decodedContent = eventData.content.replace(/\\n/g, '\n');
+                        // 处理内容，移除转义字符
+                        let decodedContent = eventData.content;
+                        // 处理常见的转义序列
+                        decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
+                        // decodedContent = decodedContent.replace(/(?<!\\)\\t/g, '\t');
+                        // decodedContent = decodedContent.replace(/\\"/g, '"');
+                        // decodedContent = decodedContent.replace(/\\\\/g, '\\');
                         fullContent += decodedContent;
                     }
                     break;
                 } catch (e) {
-                    // 解析失败，说明这个 '}' 是内容的一部分，继续寻找下一个 '}'。
+                    // JSON 解析失败，继续寻找下一个可能的结束位置
+                    continue;
                 }
             }
         }
         
+        // 如果还有未完成的工具调用，添加到列表中
         if (currentToolCallDict) {
             toolCalls.push(currentToolCallDict);
         }
@@ -875,11 +900,12 @@ async initializeAuth(forceRefresh = false) {
             }
         } catch (error) {
             console.error('[Kiro] Error in streaming generation:', error);
+            throw new Error(`Error processing response: ${error.message}`);
             // For Claude, we yield an array of events for streaming error
             // Ensure error message is passed as content, not toolCalls
-            for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
-                yield chunkJson;
-            }
+            // for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
+            //     yield chunkJson;
+            // }
         }
     }
 
