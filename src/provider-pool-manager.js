@@ -8,6 +8,7 @@ import { MODEL_PROVIDER } from './common.js';
 export class ProviderPoolManager {
     constructor(providerPools, options = {}) {
         this.providerPools = providerPools;
+        this.globalConfig = options.globalConfig || {}; // 存储全局配置
         this.providerStatus = {}; // Tracks health and usage for each provider instance
         this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
         this.maxErrorCount = options.maxErrorCount || 3; // Default to 1 errors before marking unhealthy
@@ -187,7 +188,17 @@ export class ProviderPoolManager {
     async _checkProviderHealth(providerType, providerConfig) {
         try {
             // Create a temporary service adapter for health check
-            const tempConfig = { ...providerConfig, MODEL_PROVIDER: providerType };
+            // 合并全局配置和 provider 配置
+            const tempConfig = {
+                // ...this.globalConfig,
+                ...providerConfig,
+                MODEL_PROVIDER: providerType,
+                USE_SYSTEM_PROXY_GEMINI: this.globalConfig.USE_SYSTEM_PROXY_GEMINI,
+                USE_SYSTEM_PROXY_OPENAI: this.globalConfig.USE_SYSTEM_PROXY_OPENAI,
+                USE_SYSTEM_PROXY_CLAUDE: this.globalConfig.USE_SYSTEM_PROXY_CLAUDE,
+                USE_SYSTEM_PROXY_QWEN: this.globalConfig.USE_SYSTEM_PROXY_QWEN,
+                USE_SYSTEM_PROXY_KIRO: this.globalConfig.USE_SYSTEM_PROXY_KIRO,
+            };
             const serviceAdapter = getServiceAdapter(tempConfig);
             if(!providerConfig.checkHealth){
                 return true;

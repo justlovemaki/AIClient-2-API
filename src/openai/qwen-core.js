@@ -44,6 +44,50 @@ export const qwenOAuth2Events = new EventEmitter();
 
 // --- Helper Functions ---
 
+// 封装公共的 await fetch 方法
+async function commonFetch(url, options = {}, useSystemProxy = false) {
+    const defaultOptions = {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+    };
+
+    // 合并默认选项和传入的选项
+    const mergedOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: {
+            ...defaultOptions.headers,
+            ...options.headers,
+        },
+    };
+
+    // 如果不使用系统代理,设置空的代理配置
+    // 注意: Node.js 的 fetch 实现会自动使用环境变量中的代理设置
+    // 这里通过设置 agent 为 null 来尝试禁用代理
+    if (!useSystemProxy && typeof mergedOptions.agent === 'undefined') {
+        // 对于 Node.js fetch,我们可以通过设置 dispatcher 来控制代理
+        // 但这需要 undici 支持,这里我们先记录日志
+        console.debug('[Qwen] System proxy disabled for fetch request');
+    }
+
+    const response = await fetch(url, mergedOptions);
+
+    // 检查响应是否成功
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        error.status = response.status;
+        error.data = errorData;
+        throw error;
+    }
+
+    // 返回 JSON 响应
+    return await response.json();
+}
+
 function generateCodeVerifier() {
     return crypto.randomBytes(32).toString('base64url');
 }
@@ -108,6 +152,18 @@ export class TokenManagerError extends Error {
     }
 }
 
+/**
+ * 自定义错误类,用于指示需要清除凭证
+ * 当令牌刷新时发生 400 错误时抛出,表示刷新令牌已过期或无效
+ */
+export class CredentialsClearRequiredError extends Error {
+    constructor(message, originalError) {
+        super(message);
+        this.name = 'CredentialsClearRequiredError';
+        this.originalError = originalError;
+    }
+}
+
 
 // --- Core Service Class ---
 
@@ -115,10 +171,12 @@ export class QwenApiService {
     constructor(config) {
         this.config = config;
         this.isInitialized = false;
-        this.qwenClient = new QwenOAuth2Client();
         this.sharedManager = SharedTokenManager.getInstance();
         this.currentAxiosInstance = null;
         this.tokenManagerOptions = { credentialFilePath: this._getQwenCachedCredentialPath() };
+        this.useSystemProxy = config?.USE_SYSTEM_PROXY_QWEN ?? false;
+        console.log(`[Qwen] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        this.qwenClient = new QwenOAuth2Client(config, this.useSystemProxy);
     }
 
     async initialize() {
@@ -126,13 +184,21 @@ export class QwenApiService {
         console.log('[Qwen] Initializing Qwen API Service...');
         await this._initializeAuth();
         
-        this.currentAxiosInstance = axios.create({
+        const axiosConfig = {
             baseURL: DEFAULT_QWEN_BASE_URL,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer `,
             },
-        });
+
+        };
+        
+        // 禁用系统代理
+        if (!this.useSystemProxy) {
+            axiosConfig.proxy = false;
+        }
+        
+        this.currentAxiosInstance = axios.create(axiosConfig);
 
         this.isInitialized = true;
         console.log('[Qwen] Initialization complete.');
@@ -432,14 +498,25 @@ export class QwenApiService {
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
 
-            this.currentAxiosInstance = axios.create({
+            const axiosConfig = {
                 baseURL: qwenBaseUrl,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` ,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                     'X-DashScope-CacheControl': 'enable',
                     'X-DashScope-UserAgent': userAgent,
                     'X-DashScope-AuthType': 'qwen-oauth',
                 },
-            });
+                // 添加 HTTPS 代理修复相关配置
+                httpsAgent: undefined, // axios-https-proxy-fix 会自动处理
+            };
+            
+            // 禁用系统代理
+            if (!this.useSystemProxy) {
+                axiosConfig.proxy = false;
+            }
+            
+            this.currentAxiosInstance = axios.create(axiosConfig);
 
             // Process message content before sending the request
             const processedBody = body;//this.processMessageContent(body);
@@ -720,7 +797,17 @@ class SharedTokenManager {
 
         } catch (error) {
             if (error instanceof TokenManagerError) throw error;
-            // If refresh token is invalid/expired, remove the corresponding credential file for this context
+            
+            // 处理 CredentialsClearRequiredError - 清除凭证文件
+            if (error instanceof CredentialsClearRequiredError) {
+                try {
+                    await fs.unlink(context.credentialFilePath);
+                    console.log('[Qwen Auth] Credentials cleared due to refresh token expiry');
+                } catch (_) { /* ignore */ }
+                throw error; // 重新抛出以便上层处理
+            }
+            
+            // 如果刷新令牌无效/过期,删除此上下文对应的凭证文件
             if (error && (error.status === 400 || /expired|invalid/i.test(error.message || ''))) {
                 try { await fs.unlink(context.credentialFilePath); } catch (_) { /* ignore */ }
             }
@@ -790,6 +877,11 @@ class SharedTokenManager {
 class QwenOAuth2Client {
     credentials = {};
 
+    constructor(config, useSystemProxy = false) {
+        this.config = config;
+        this.useSystemProxy = useSystemProxy;
+    }
+
     setCredentials(credentials) { this.credentials = credentials; }
     getCredentials() { return this.credentials; }
 
@@ -800,20 +892,27 @@ class QwenOAuth2Client {
             refresh_token: this.credentials.refresh_token,
             client_id: QWEN_OAUTH_CLIENT_ID,
         };
-        const response = await fetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-            body: objectToUrlEncoded(bodyData),
-        });
-        if (!response.ok) {
-            if (response.status === 400) {
-                const err = new Error("Refresh token expired or invalid.");
-                err.status = 400;
-                throw err;
+        try {
+            const response = await commonFetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+                body: objectToUrlEncoded(bodyData),
+            }, this.useSystemProxy);
+            return response;
+        } catch (error) {
+            const errorData = error.data || {};
+            // 处理 400 错误,可能表示刷新令牌已过期
+            if (error.status === 400) {
+                // 清除凭证将由 SharedTokenManager 处理
+                throw new CredentialsClearRequiredError(
+                    "刷新令牌已过期或无效。请使用 '/auth' 重新认证。",
+                    { status: error.status, response: errorData }
+                );
             }
-            throw new Error(`Token refresh failed: ${response.status}`);
+            throw new Error(
+                `Token refresh failed: ${error.status || 'Unknown'} - ${errorData.error_description || error.message || 'No details'}`
+            );
         }
-        return await response.json();
     }
 
     async requestDeviceAuthorization(options) {
@@ -823,13 +922,16 @@ class QwenOAuth2Client {
             code_challenge: options.code_challenge,
             code_challenge_method: options.code_challenge_method,
         };
-        const response = await fetch(QWEN_OAUTH_DEVICE_CODE_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-            body: objectToUrlEncoded(bodyData),
-        });
-        if (!response.ok) throw new Error(`Device authorization failed: ${response.status}`);
-        return await response.json();
+        try {
+            const response = await commonFetch(QWEN_OAUTH_DEVICE_CODE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+                body: objectToUrlEncoded(bodyData),
+            }, this.useSystemProxy);
+            return response;
+        } catch (error) {
+            throw new Error(`Device authorization failed: ${error.status || error.message}`);
+        }
     }
 
     async pollDeviceToken(options) {
@@ -839,23 +941,36 @@ class QwenOAuth2Client {
             device_code: options.device_code,
             code_verifier: options.code_verifier,
         };
-        const response = await fetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-            body: objectToUrlEncoded(bodyData),
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 400 && errorData.error === 'authorization_pending') {
+        try {
+            const response = await commonFetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+                body: objectToUrlEncoded(bodyData),
+            }, this.useSystemProxy);
+            return response;
+        } catch (error) {
+            // 根据 OAuth RFC 8628,处理标准轮询响应
+            // 尝试解析错误响应为 JSON
+            const errorData = error.data || {};
+            const status = error.status;
+
+            // 用户尚未批准授权请求,继续轮询
+            if (status === 400 && errorData.error === 'authorization_pending') {
                 return { status: 'pending' };
             }
-            if (response.status === 429 && errorData.error === 'slow_down') {
+
+            // 客户端轮询过于频繁,返回 pending 并设置 slowDown 标志
+            if (status === 429 && errorData.error === 'slow_down') {
                 return { status: 'pending', slowDown: true };
             }
-            const error = new Error(`Device token poll failed: ${errorData.error || response.status}`);
-            error.status = response.status;
-            throw error;
+
+            // 处理其他 400 错误(access_denied, expired_token 等)作为真正的错误
+            // 对于其他错误,抛出适当的错误信息
+            const err = new Error(
+                `Device token poll failed: ${errorData.error || 'Unknown error'} - ${errorData.error_description || 'No details provided'}`
+            );
+            err.status = status;
+            throw err;
         }
-        return await response.json();
     }
 }

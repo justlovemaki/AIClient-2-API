@@ -447,7 +447,7 @@ let providerPoolManager = null;
 
 async function initApiService(config) {
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
-        providerPoolManager = new ProviderPoolManager(config.providerPools);
+        providerPoolManager = new ProviderPoolManager(config.providerPools, { globalConfig: config });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
         // 可以选择在这里触发一次健康检查
         providerPoolManager.performHealthChecks();

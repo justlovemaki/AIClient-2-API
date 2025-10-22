@@ -15,7 +15,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     // Model provider constants
     GEMINI: 'gemini',
     OPENAI: 'openai',
-    OPENAI_RESPONSES: 'openairesp',
+    OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
 }
 
