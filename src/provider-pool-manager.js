@@ -305,7 +305,7 @@ export class ProviderPoolManager {
      */
     async _saveProviderPoolsToJson(providerTypeToUpdate) {
         try {
-            const filePath = 'provider_pools.json';
+            const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let currentPools = {};
             try {
                 const fileContent = await fs.promises.readFile(filePath, 'utf8');

@@ -363,7 +363,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
-        if (getProtocolPrefix(fromProvider).includes(getProtocolPrefix(toProvider))) {
+        if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
             console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
             clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
         } else {
