@@ -450,7 +450,7 @@ async function initApiService(config) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, { globalConfig: config });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
         // 可以选择在这里触发一次健康检查
-        providerPoolManager.performHealthChecks();
+        providerPoolManager.performHealthChecks(true);
     } else {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');
     }
@@ -555,9 +555,44 @@ function createRequestHandler(config) {
     return async function requestHandler(req, res) {
         // Deep copy the config for each request to allow dynamic modification
         const currentConfig = deepmerge({}, config);
-
         console.log(`\n${new Date().toLocaleString()}`);
         console.log(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
+
+        const requestUrl = new URL(req.url, `http://${req.headers.host}`);
+        let path = requestUrl.pathname;
+
+        const method = req.method;
+        if (method === 'OPTIONS') {
+            // 设置 CORS 头部，允许所有来源和方法
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider'); // 添加 Model-Provider
+            
+            // OPTIONS 请求通常返回 204 No Content
+            res.writeHead(204);
+            res.end();
+            return;
+        }
+
+        // Health check endpoint - no authentication required
+        if (method === 'GET' && path === '/health') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+                status: 'healthy',
+                timestamp: new Date().toISOString(),
+                provider: currentConfig.MODEL_PROVIDER
+            }));
+        }
+
+        // Ignore count_tokens requests
+        if (path.includes('/count_tokens')) {
+            console.log(`[Server] Ignoring count_tokens request: ${path}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+                tokens: 0,
+                message: 'Token counting is not supported'
+            }));
+        }
 
         // Allow overriding MODEL_PROVIDER via request header
         const modelProviderHeader = req.headers['model-provider'];
@@ -566,9 +601,7 @@ function createRequestHandler(config) {
             console.log(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
             //delete req.headers['model-provider']; // 保持不变，以便后端可以继续处理原始头
         }
-
-        const requestUrl = new URL(req.url, `http://${req.headers.host}`);
-        let path = requestUrl.pathname;
+        
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
         if (pathSegments.length > 0) {
@@ -603,39 +636,6 @@ function createRequestHandler(config) {
                 });
             }
             return;
-        }
-
-        const method = req.method;
-        if (method === 'OPTIONS') {
-            // 设置 CORS 头部，允许所有来源和方法
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider'); // 添加 Model-Provider
-            
-            // OPTIONS 请求通常返回 204 No Content
-            res.writeHead(204);
-            res.end();
-            return;
-        }
-
-        // Health check endpoint - no authentication required
-        if (method === 'GET' && path === '/health') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({
-                status: 'healthy',
-                timestamp: new Date().toISOString(),
-                provider: currentConfig.MODEL_PROVIDER
-            }));
-        }
-
-        // Ignore count_tokens requests
-        if (path.includes('/count_tokens')) {
-            console.log(`[Server] Ignoring count_tokens request: ${path}`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({
-                tokens: 0,
-                message: 'Token counting is not supported'
-            }));
         }
 
         if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {

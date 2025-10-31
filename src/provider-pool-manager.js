@@ -117,7 +117,7 @@ export class ProviderPoolManager {
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
      */
-    markProviderHealthy(providerType, providerConfig) {
+    markProviderHealthy(isInit, providerType, providerConfig) {
         const pool = this.providerStatus[providerType];
         if (pool) {
             const provider = pool.find(p => p.uuid === providerConfig.uuid);
@@ -125,6 +125,9 @@ export class ProviderPoolManager {
                 provider.config.isHealthy = true;
                 provider.config.errorCount = 0; // Reset error count on health recovery
                 provider.config.lastErrorTime = null; // Reset lastErrorTime when healthy
+                if (isInit) {
+                    provider.config.usageCount = 0; // Reset usage count on health recovery
+                }
                 console.log(`[ProviderPoolManager] Marked provider as healthy: ${JSON.stringify(providerConfig)} for type ${providerType}`);
                 
                 // 优化1: 使用防抖保存
@@ -137,7 +140,7 @@ export class ProviderPoolManager {
      * Performs health checks on all providers in the pool.
      * This method would typically be called periodically (e.g., via cron job).
      */
-    async performHealthChecks() {
+    async performHealthChecks(isInit = false) {
         console.log('[ProviderPoolManager] Performing health checks on all providers...');
         const now = new Date();
         for (const providerType in this.providerStatus) {
@@ -158,10 +161,11 @@ export class ProviderPoolManager {
                     if (isHealthy) {
                         if (!providerStatus.config.isHealthy) {
                             // Provider was unhealthy but is now healthy
-                            this.markProviderHealthy(providerType, providerConfig);
+                            this.markProviderHealthy(isInit, providerType, providerConfig);
                             console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Marked Healthy (actual check)`);
                         } else {
                             // Provider was already healthy and still is
+                            this.markProviderHealthy(isInit, providerType, providerConfig);
                             console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Still Healthy`);
                         }
                     } else {
