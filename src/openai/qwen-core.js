@@ -617,6 +617,7 @@ export class QwenApiService {
             }
             const currentTime = Date.now();
             const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+            console.log(`[Qwen] Expiry date: ${credentials.expiry_date}, Current time: ${currentTime}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${currentTime + cronNearMinutesInMillis}`);
             return credentials.expiry_date <= (currentTime + cronNearMinutesInMillis);
         } catch (error) {
             console.error(`[Qwen] Error checking expiry date: ${error.message}`);

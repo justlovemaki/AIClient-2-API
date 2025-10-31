@@ -700,7 +700,7 @@ async function startServer() {
                 // For pooled providers, refreshToken should be handled by individual instances
                 // For single instances, this remains relevant
                 await serviceAdapter.refreshToken();
-                console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
+                // console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
             } catch (error) {
                 console.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);
                 // 如果是号池中的某个实例刷新失败，这里需要捕获并更新其状态
