@@ -4,7 +4,7 @@
 
 # AIClient-2-API 🚀
 
-**一个能将多种仅客户端内使用的大模型 API（Gemini CLI, Qwen Code Plus, Kiro Claude...），模拟请求，统一封装为本地 OpenAI 兼容接口的强大代理。**
+**A powerful proxy that can unify the requests of various large model APIs (Gemini CLI, Qwen Code Plus, Kiro Claude...) that are only used within the client into a local OpenAI compatible interface.**
 
 </div>
 
@@ -14,94 +14,92 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
-[![Docker](https://img.shields.io/badge/docker-≥20.0.0-blue.svg)](https://aiproxy.justlikemaki.vip/zh/docs/installation/docker-deployment.html)
+[![Docker](https://img.shields.io/badge/docker-≥20.0.0-blue.svg)](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
 
 
-[**中文**](./README.md) | [**English**](./README-EN.md) | [**日本語**](./README-JA.md) | [**📚 完整文档**](https://aiproxy.justlikemaki.vip/)
+[**中文**](./README-ZH.md) | [**English**](./README.md) | [**日本語**](./README-JA.md) | [**📚 Complete Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
 
-`AIClient2API` 是一个突破客户端限制的 API 代理服务，将 Gemini CLI、Qwen Code Plus、Kiro Claude 等原本仅限客户端使用的免费大模型，转换为可供任何应用调用的标准 OpenAI 兼容接口。基于 Node.js 构建，支持 OpenAI、Claude、Gemini 三大协议的智能互转，让 Cherry-Studio、NextChat、Cline 等工具能够免费大量使用 Claude Sonnet 4.5、Gemini 2.5 Flash、Qwen3 Coder Plus 等高级模型。项目采用策略模式和适配器模式的模块化架构，内置账号池管理、智能轮询、自动故障转移和健康检查机制，确保 99.9% 的服务可用性。
+`AIClient2API` is an API proxy service that breaks through client limitations, converting free large models originally restricted to client use only (such as Gemini CLI, Qwen Code Plus, Kiro Claude) into standard OpenAI-compatible interfaces that can be called by any application. Built on Node.js, it supports intelligent conversion between three major protocols (OpenAI, Claude, Gemini), enabling tools like Cherry-Studio, NextChat, and Cline to freely use advanced models such as Claude Sonnet 4.5, Gemini 2.5 Flash, and Qwen3 Coder Plus at scale. The project adopts a modular architecture based on strategy and adapter patterns, with built-in account pool management, intelligent polling, automatic failover, and health check mechanisms, ensuring 99.9% service availability.
 
 > [!NOTE]
-> **🎉 重要里程碑**
+> **🎉 Important Milestone**
 >
-> - 感谢阮一峰老师在 [周刊 359 期](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html) 的推荐
+> - Thanks to Ruan Yifeng for the recommendation in [Weekly Issue 359](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html)
 >
-> **📅 版本更新日志**
+> **📅 Version Update Log**
 >
-> - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
-> - **2025.09.01** - 集成 Qwen Code CLI，新增 `qwen3-coder-plus` 模型支持
-> - **2025.08.29** - 发布账号池管理功能，支持多账号轮询、智能故障转移和自动降级策略
->   - 配置方式：在 config.json 中添加 `PROVIDER_POOLS_FILE_PATH` 参数
->   - 参考配置：[provider_pools.json](./provider_pools.json.example)
+> - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
+> - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
+> - **2025.08.29** - Released account pool management feature, supporting multi-account polling, intelligent failover, and automatic degradation strategies
+>   - Configuration: Add `PROVIDER_POOLS_FILE_PATH` parameter in config.json
+>   - Reference configuration: [provider_pools.json](./provider_pools.json.example)
 
 ---
 
-## 💡 核心优势
+## 💡 Core Advantages
 
-### 🎯 统一接入，一站式管理
-*   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、GPT、Qwen Code、Kimi K2、GLM-4.6 等主流大模型
-*   **灵活切换机制**：支持通过启动参数、Path 路由、环境变量三种方式动态切换模型，满足不同场景需求
-*   **零成本迁移**：完全兼容 OpenAI API 规范，Cherry-Studio、NextChat、Cline 等工具无需修改即可使用
-*   **多协议智能转换**：支持 OpenAI、Claude、Gemini 三大协议间的智能转换，实现跨协议模型调用
-    *   使用 OpenAI 协议调用 Claude 模型：可使用 `claude-custom` 或 `claude-kiro-oauth` 提供商
-    *   使用 OpenAI 协议调用 Gemini 模型：可使用 `gemini-cli-oauth` 提供商
-    *   使用 Claude 协议调用 Gemini 模型：可使用 `gemini-cli-oauth` 提供商
-    *   使用 Claude 协议调用 OpenAI 模型：可使用 `openai-custom` 或 `openai-qwen-oauth` 提供商
+### 🎯 Unified Access, One-Stop Management
+*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, GPT, Qwen Code, Kimi K2, GLM-4.6
+*   **Flexible Switching Mechanism**: Support dynamic model switching via startup parameters, Path routing, or environment variables to meet different scenario requirements
+*   **Zero-Cost Migration**: Fully compatible with OpenAI API specifications, tools like Cherry-Studio, NextChat, Cline can be used without modification
+*   **Multi-Protocol Intelligent Conversion**: Support intelligent conversion between OpenAI, Claude, and Gemini protocols for cross-protocol model invocation
+    *   Call Claude models using OpenAI protocol: Use `claude-custom` or `claude-kiro-oauth` providers
+    *   Call Gemini models using OpenAI protocol: Use `gemini-cli-oauth` provider
+    *   Call Gemini models using Claude protocol: Use `gemini-cli-oauth` provider
+    *   Call OpenAI models using Claude protocol: Use `openai-custom` or `openai-qwen-oauth` providers
 
-### 🚀 突破限制，提升效率
-*   **绕过官方限制**：利用 OAuth 授权机制，有效突破 Gemini 等服务的免费 API 速率和配额限制
-*   **免费高级模型**：通过 Kiro API 模式免费使用 Claude Sonnet 4.5，通过 Qwen OAuth 模式使用 Qwen3 Coder Plus，降低使用成本
-*   **账号池智能调度**：支持多账号轮询、自动故障转移和配置降级，确保 99.9% 服务可用性
+### 🚀 Break Through Limitations, Improve Efficiency
+*   **Bypass Official Restrictions**: Utilize OAuth authorization mechanism to effectively break through rate and quota limits of free APIs like Gemini
+*   **Free Advanced Models**: Use Claude Sonnet 4.5 for free via Kiro API mode, use Qwen3 Coder Plus via Qwen OAuth mode, reducing usage costs
+*   **Intelligent Account Pool Scheduling**: Support multi-account polling, automatic failover, and configuration degradation, ensuring 99.9% service availability
 
-### 🛡️ 安全可控，数据透明
-*   **全链路日志记录**：捕获所有请求和响应数据，支持审计、调试
-*   **私有数据集构建**：基于日志数据快速构建专属训练数据集
-*   **系统提示词管理**：支持覆盖和追加两种模式，实现统一基础指令与个性化扩展的完美结合
+### 🛡️ Secure and Controllable, Data Transparent
+*   **Full-Chain Log Recording**: Capture all request and response data, supporting auditing and debugging
+*   **Private Dataset Construction**: Quickly build proprietary training datasets based on log data
+*   **System Prompt Management**: Support override and append modes, achieving perfect combination of unified base instructions and personalized extensions
 
-### 🔧 开发友好，易于扩展
-*   **模块化架构**：基于策略模式和适配器模式，新增模型提供商仅需 3 步
-*   **完整测试保障**：集成测试和单元测试覆盖率 90%+，确保代码质量
-*   **容器化部署**：提供 Docker 支持，一键部署，跨平台运行
-*   **MCP 协议支持**：完美兼容 Model Context Protocol，轻松扩展功能
-
----
-
-## 📑 快速导航
-
-- [🐳 Docker 部署](https://aiproxy.justlikemaki.vip/zh/docs/installation/docker-deployment.html)
-- [🎨 模型协议与提供商关系图](#-模型协议与提供商关系图)
-- [🔧 使用说明](#-使用说明)
-- [🚀 项目启动参数](#-项目启动参数)
-- [📄 开源许可](#-开源许可)
-- [🙏 致谢](#-致谢)
-- [⚠️ 免责声明](#-免责声明)
+### 🔧 Developer-Friendly, Easy to Extend
+*   **Modular Architecture**: Based on strategy and adapter patterns, adding new model providers requires only 3 steps
+*   **Complete Test Coverage**: Integration and unit test coverage 90%+, ensuring code quality
+*   **Containerized Deployment**: Provides Docker support, one-click deployment, cross-platform operation
+*   **MCP Protocol Support**: Perfectly compatible with Model Context Protocol, easily extend functionality
 
 ---
 
-## 🎨 模型协议与提供商关系图
+## 📑 Quick Navigation
 
+- [🐳 Docker Deployment](https://aiproxy.justlikemaki.vip/en/docs/installation/docker-deployment.html)
+- [🎨 Model Protocol and Provider Relationship Diagram](#-model-protocol-and-provider-relationship-diagram)
+- [🔧 Usage Instructions](#-usage-instructions)
+- [🚀 Project Startup Parameters](#-project-startup-parameters)
+- [📄 Open Source License](#-open-source-license)
+- [🙏 Acknowledgements](#-acknowledgements)
+- [⚠️ Disclaimer](#-disclaimer)
 
-本项目通过不同的协议（Protocol）支持多种模型提供商（Model Provider）。以下是它们之间的关系概述：
+---
 
-*   **OpenAI 协议 (P_OPENAI)**：由 `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth` 和 `openai-qwen-oauth` 等模型提供商实现。
-*   **Claude 协议 (P_CLAUDE)**：由 `claude-custom`, `claude-kiro-oauth`, `gemini-cli-oauth`, `openai-custom` 和 `openai-qwen-oauth` 等模型提供商实现。
-*   **Gemini 协议 (P_GEMINI)**：由 `gemini-cli-oauth` 模型提供商实现。
+## 🎨 Model Protocol and Provider Relationship Diagram
 
-详细关系图如下：
+This project supports multiple model providers through different protocols. The following is an overview of their relationships:
 
+*   **OpenAI Protocol (P_OPENAI)**: Implemented by `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth`, and `openai-qwen-oauth` model providers.
+*   **Claude Protocol (P_CLAUDE)**: Implemented by `claude-custom`, `claude-kiro-oauth`, `gemini-cli-oauth`, `openai-custom`, and `openai-qwen-oauth` model providers.
+*   **Gemini Protocol (P_GEMINI)**: Implemented by `gemini-cli-oauth` model provider.
+
+Detailed relationship diagram:
 
   ```mermaid
-  
+   
    graph TD
-       subgraph Core_Protocols["核心协议"]
+       subgraph Core_Protocols["Core Protocols"]
            P_OPENAI[OpenAI Protocol]
            P_GEMINI[Gemini Protocol]
            P_CLAUDE[Claude Protocol]
        end
    
-       subgraph Supported_Model_Providers["支持的模型提供商"]
+       subgraph Supported_Model_Providers["Supported Model Providers"]
            MP_OPENAI[openai-custom]
            MP_GEMINI[gemini-cli-oauth]
            MP_CLAUDE_C[claude-custom]
@@ -109,58 +107,58 @@
            MP_QWEN[openai-qwen-oauth]
        end
    
-       P_OPENAI ---|支持| MP_OPENAI
-       P_OPENAI ---|支持| MP_QWEN
-       P_OPENAI ---|支持| MP_GEMINI
-       P_OPENAI ---|支持| MP_CLAUDE_C
-       P_OPENAI ---|支持| MP_CLAUDE_K
+       P_OPENAI ---|Support| MP_OPENAI
+       P_OPENAI ---|Support| MP_QWEN
+       P_OPENAI ---|Support| MP_GEMINI
+       P_OPENAI ---|Support| MP_CLAUDE_C
+       P_OPENAI ---|Support| MP_CLAUDE_K
    
-       P_GEMINI ---|支持| MP_GEMINI
+       P_GEMINI ---|Support| MP_GEMINI
    
-       P_CLAUDE ---|支持| MP_CLAUDE_C
-       P_CLAUDE ---|支持| MP_CLAUDE_K
-       P_CLAUDE ---|支持| MP_GEMINI
-       P_CLAUDE ---|支持| MP_OPENAI
-       P_CLAUDE ---|支持| MP_QWEN
+       P_CLAUDE ---|Support| MP_CLAUDE_C
+       P_CLAUDE ---|Support| MP_CLAUDE_K
+       P_CLAUDE ---|Support| MP_GEMINI
+       P_CLAUDE ---|Support| MP_OPENAI
+       P_CLAUDE ---|Support| MP_QWEN
    
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
        style P_CLAUDE fill:#cfc,stroke:#333,stroke-width:2px
 
-  ```
+   ```
 
 ---
 
-## 🔧 使用说明
+## 🔧 Usage Instructions
 
-### 📋 核心功能
+### 📋 Core Features
 
-#### MCP 协议支持
-本项目完全兼容 **Model Context Protocol (MCP)**，可与支持 MCP 的客户端无缝集成，实现强大的功能扩展。
+#### MCP Protocol Support
+This project is fully compatible with **Model Context Protocol (MCP)**, enabling seamless integration with MCP-supporting clients for powerful functional extensions.
 
-#### 多模态输入能力
-支持图片、文档等多种类型的输入，为您提供更丰富的交互体验和更强大的应用场景。
+#### Multimodal Input Capabilities
+Supports various input types including images and documents, providing richer interactive experiences and more powerful application scenarios.
 
-#### 最新模型支持
-无缝支持以下最新大模型，仅需在 [`config.json`](./config.json) 中配置相应的 OpenAI 或 Claude 兼容接口：
-*   **Kimi K2** - 月之暗面最新旗舰模型
-*   **GLM-4.5** - 智谱 AI 最新版本
-*   **Qwen Code** - 阿里通义千问代码专用模型
+#### Latest Model Support
+Seamlessly supports the following latest large models, simply configure the corresponding OpenAI or Claude compatible interface in [`config.json`](./config.json):
+*   **Kimi K2** - Moonshot AI's latest flagship model
+*   **GLM-4.5** - Zhipu AI's latest version
+*   **Qwen Code** - Alibaba Tongyi Qianwen code-specific model
 
 ---
 
-### 🔐 授权配置指南
+### 🔐 Authorization Configuration Guide
 
-#### Gemini CLI OAuth 配置
-1. **获取OAuth凭据**：访问 [Google Cloud Console](https://console.cloud.google.com/) 创建项目，启用Gemini API
-2. **首次授权**：使用Gemini服务后，命令行会打印Google授权页面，复制页面到浏览器授权，完成后返回命令行
-3. **凭据存储**：授权成功后，`oauth_creds.json` 文件将自动生成并保存至 `~/.gemini` 目录
-4. **项目配置**：需要提供有效的Google Cloud项目ID，可通过启动参数 `--project-id` 指定
+#### Gemini CLI OAuth Configuration
+1. **Obtain OAuth Credentials**: Visit [Google Cloud Console](https://console.cloud.google.com/) to create a project and enable Gemini API
+2. **First Authorization**: After using Gemini service, the command line will print Google authorization page, copy the page to browser for authorization, then return to command line
+3. **Credential Storage**: After successful authorization, `oauth_creds.json` file will be automatically generated and saved to `~/.gemini` directory
+4. **Project Configuration**: Need to provide a valid Google Cloud project ID, can be specified via startup parameter `--project-id`
 
-#### Qwen Code OAuth 配置
-1. **首次授权**：启动服务后，系统会自动在浏览器中打开授权页面
-2. **凭据存储**：授权成功后，`oauth_creds.json` 文件将自动生成并保存至 `~/.qwen` 目录
-3. **推荐参数**：使用官方默认参数以获得最佳效果
+#### Qwen Code OAuth Configuration
+1. **First Authorization**: After starting the service, the system will automatically open the authorization page in the browser
+2. **Credential Storage**: After successful authorization, `oauth_creds.json` file will be automatically generated and saved to `~/.qwen` directory
+3. **Recommended Parameters**: Use official default parameters for best results
    ```json
    {
      "temperature": 0,
@@ -168,218 +166,217 @@
    }
    ```
 
-#### Kiro API 配置
-1. **环境准备**：[下载并安装 Kiro 客户端](https://aibook.ren/archives/kiro-install)
-2. **完成授权**：在客户端中登录账号，生成 `kiro-auth-token.json` 凭据文件
-3. **最佳实践**：推荐配合 **Claude Code** 使用，可获得最优体验
-4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
+#### Kiro API Configuration
+1. **Environment Preparation**: [Download and install Kiro client](https://aibook.ren/archives/kiro-install)
+2. **Complete Authorization**: Log in to your account in the client to generate `kiro-auth-token.json` credential file
+3. **Best Practice**: Recommended to use with **Claude Code** for optimal experience
+4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
 #### OpenAI Responses API
-*   **应用场景**：适用于需要使用 OpenAI Responses API 进行结构化对话的场景，如Codex
-*   **配置方法**：
-    *   方式一：在 [`config.json`](./config.json) 中设置 `MODEL_PROVIDER` 为 `openaiResponses-custom`
-    *   方式二：使用启动参数 `--model-provider openaiResponses-custom`
-    *   方式三：使用路径路由 `/openaiResponses-custom`
-*   **必需参数**：提供有效的 API 密钥和基础 URL
+*   **Application Scenario**: Suitable for scenarios requiring structured dialogue using OpenAI Responses API, such as Codex
+*   **Configuration Method**:
+    *   Method 1: Set `MODEL_PROVIDER` to `openaiResponses-custom` in [`config.json`](./config.json)
+    *   Method 2: Use startup parameter `--model-provider openaiResponses-custom`
+    *   Method 3: Use path routing `/openaiResponses-custom`
+*   **Required Parameters**: Provide valid API key and base URL
 
 ---
 
-### 🔄 模型供应商切换
+### 🔄 Model Provider Switching
 
-本项目提供两种灵活的模型切换方式，满足不同使用场景的需求。
+This project provides two flexible model switching methods to meet different usage scenario requirements.
 
-#### 方式一：启动参数切换
+#### Method 1: Startup Parameter Switching
 
-通过命令行参数指定默认使用的模型提供商：
+Specify the default model provider via command line parameters:
 
 ```bash
-# 使用Gemini提供商
+# Use Gemini provider
 node src/api-server.js --model-provider gemini-cli-oauth --project-id your-project-id
 
-# 使用Claude Kiro提供商
+# Use Claude Kiro provider
 node src/api-server.js --model-provider claude-kiro-oauth
 
-# 使用Qwen提供商
+# Use Qwen provider
 node src/api-server.js --model-provider openai-qwen-oauth
 ```
 
-**可用的模型提供商标识**：
-- `openai-custom` - 标准OpenAI API
-- `claude-custom` - 官方Claude API
+**Available Model Provider Identifiers**:
+- `openai-custom` - Standard OpenAI API
+- `claude-custom` - Official Claude API
 - `gemini-cli-oauth` - Gemini CLI OAuth
 - `claude-kiro-oauth` - Kiro Claude OAuth
 - `openai-qwen-oauth` - Qwen Code OAuth
 - `openaiResponses-custom` - OpenAI Responses API
 
-#### 方式二：Path 路由切换（推荐）
+#### Method 2: Path Routing Switching (Recommended)
 
-通过在 API 请求路径中指定供应商标识，实现即时切换：
+Achieve instant switching by specifying provider identifier in API request path:
 
-| 路由路径 | 说明 | 适用场景 |
+| Route Path | Description | Use Case |
 |---------|------|---------|
-| `/claude-custom` | 使用配置文件中的 Claude API | 官方 Claude API 调用 |
-| `/claude-kiro-oauth` | 通过 Kiro OAuth 访问 Claude | 免费使用 Claude Sonnet 4.5 |
-| `/openai-custom` | 使用 OpenAI 供应商处理请求 | 标准 OpenAI API 调用 |
-| `/gemini-cli-oauth` | 通过 Gemini CLI OAuth 访问 | 突破 Gemini 免费限制 |
-| `/openai-qwen-oauth` | 通过 Qwen OAuth 访问 | 使用 Qwen Code Plus |
-| `/openaiResponses-custom` | OpenAI Responses API | 结构化对话场景 |
+| `/claude-custom` | Use Claude API from config file | Official Claude API calls |
+| `/claude-kiro-oauth` | Access Claude via Kiro OAuth | Free use of Claude Sonnet 4.5 |
+| `/openai-custom` | Use OpenAI provider to handle requests | Standard OpenAI API calls |
+| `/gemini-cli-oauth` | Access via Gemini CLI OAuth | Break through Gemini free limits |
+| `/openai-qwen-oauth` | Access via Qwen OAuth | Use Qwen Code Plus |
+| `/openaiResponses-custom` | OpenAI Responses API | Structured dialogue scenarios |
 
-**使用示例**：
+**Usage Examples**:
 ```bash
-# 在 Cline、Kilo 等编程 Agent 中配置
+# Configure in programming agents like Cline, Kilo
 API_ENDPOINT=http://localhost:3000/claude-kiro-oauth
 
-# 直接 API 调用
+# Direct API call
 curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'
-```
+  -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'```
 
 ---
 
-### 📁 授权文件存储路径
+### 📁 Authorization File Storage Paths
 
-各服务的授权凭据文件默认存储位置：
+Default storage locations for authorization credential files of each service:
 
-| 服务 | 默认路径 | 说明 |
+| Service | Default Path | Description |
 |------|---------|------|
-| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth 认证凭据 |
-| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro 认证令牌 |
-| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth 凭据 |
+| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth authentication credentials |
+| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
+| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
 
-> **说明**：`~` 表示用户主目录（Windows: `C:\Users\用户名`，Linux/macOS: `/home/用户名` 或 `/Users/用户名`）
+> **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
 >
-> **自定义路径**：可通过配置文件中的相关参数或环境变量指定自定义存储位置
+> **Custom Path**: Can specify custom storage location via relevant parameters in configuration file or environment variables
 
 ---
 
-## 🚀 项目启动参数
+## 🚀 Project Startup Parameters
 
-本项目支持丰富的命令行参数配置，可以根据需要灵活调整服务行为。以下是对所有启动参数的详细说明，按功能分组展示：
+This project supports rich command-line parameter configuration, allowing flexible adjustment of service behavior as needed. The following is a detailed explanation of all startup parameters, displayed in functional groups:
 
-### 🔧 服务器配置参数
+### 🔧 Server Configuration Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--host` | string | localhost | 服务器监听地址 |
-| `--port` | number | 3000 | 服务器监听端口 |
-| `--api-key` | string | 123456 | 用于 API 身份验证的密钥 |
+| `--host` | string | localhost | Server listening address |
+| `--port` | number | 3000 | Server listening port |
+| `--api-key` | string | 123456 | API key for authentication |
 
-### 🤖 模型提供商配置参数
+### 🤖 Model Provider Configuration Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
 
-### 🧠 OpenAI 兼容提供商参数
+### 🧠 OpenAI Compatible Provider Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--openai-api-key` | string | null | OpenAI API 密钥 (当 `model-provider` 为 `openai-custom` 时必需) |
-| `--openai-base-url` | string | null | OpenAI API 基础 URL (当 `model-provider` 为 `openai-custom` 时必需) |
+| `--openai-api-key` | string | null | OpenAI API key (required when `model-provider` is `openai-custom`) |
+| `--openai-base-url` | string | null | OpenAI API base URL (required when `model-provider` is `openai-custom`) |
 
-### 🖥️ Claude 兼容提供商参数
+### 🖥️ Claude Compatible Provider Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--claude-api-key` | string | null | Claude API 密钥 (当 `model-provider` 为 `claude-custom` 时必需) |
-| `--claude-base-url` | string | null | Claude API 基础 URL (当 `model-provider` 为 `claude-custom` 时必需) |
+| `--claude-api-key` | string | null | Claude API key (required when `model-provider` is `claude-custom`) |
+| `--claude-base-url` | string | null | Claude API base URL (required when `model-provider` is `claude-custom`) |
 
-### 🔐 Gemini OAuth 认证参数
+### 🔐 Gemini OAuth Authentication Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--gemini-oauth-creds-base64` | string | null | Gemini OAuth 凭据的 Base64 字符串 (当 `model-provider` 为 `gemini-cli-oauth` 时可选，与 `--gemini-oauth-creds-file` 二选一) |
-| `--gemini-oauth-creds-file` | string | null | Gemini OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `gemini-cli-oauth` 时可选，与 `--gemini-oauth-creds-base64` 二选一) |
-| `--project-id` | string | null | Google Cloud 项目 ID (当 `model-provider` 为 `gemini-cli-oauth` 时必需) |
+| `--gemini-oauth-creds-base64` | string | null | Base64 string of Gemini OAuth credentials (optional when `model-provider` is `gemini-cli-oauth`, choose one with `--gemini-oauth-creds-file`) |
+| `--gemini-oauth-creds-file` | string | null | Gemini OAuth credentials JSON file path (optional when `model-provider` is `gemini-cli-oauth`, choose one with `--gemini-oauth-creds-base64`) |
+| `--project-id` | string | null | Google Cloud project ID (required when `model-provider` is `gemini-cli-oauth`) |
 
-### 🎮 Kiro OAuth 认证参数
+### 🎮 Kiro OAuth Authentication Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--kiro-oauth-creds-base64` | string | null | Kiro OAuth 凭据的 Base64 字符串 (当 `model-provider` 为 `claude-kiro-oauth` 时可选，与 `--kiro-oauth-creds-file` 二选一) |
-| `--kiro-oauth-creds-file` | string | null | Kiro OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `claude-kiro-oauth` 时可选，与 `--kiro-oauth-creds-base64` 二选一) |
+| `--kiro-oauth-creds-base64` | string | null | Base64 string of Kiro OAuth credentials (optional when `model-provider` is `claude-kiro-oauth`, choose one with `--kiro-oauth-creds-file`) |
+| `--kiro-oauth-creds-file` | string | null | Kiro OAuth credentials JSON file path (optional when `model-provider` is `claude-kiro-oauth`, choose one with `--kiro-oauth-creds-base64`) |
 
-### 🐼 Qwen OAuth 认证参数
+### 🐼 Qwen OAuth Authentication Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `openai-qwen-oauth` 时必需) |
+| `--qwen-oauth-creds-file` | string | null | Qwen OAuth credentials JSON file path (required when `model-provider` is `openai-qwen-oauth`) |
 
-### 🔄 OpenAI Responses API 参数
+### 🔄 OpenAI Responses API Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--model-provider` | string | openaiResponses-custom | 模型提供商，使用OpenAI Responses API时设置为 `openaiResponses-custom` |
-| `--openai-api-key` | string | null | OpenAI API 密钥 (当 `model-provider` 为 `openaiResponses-custom` 时必需) |
-| `--openai-base-url` | string | null | OpenAI API 基础 URL (当 `model-provider` 为 `openaiResponses-custom` 时必需) |
+| `--model-provider` | string | openaiResponses-custom | Model provider, set to `openaiResponses-custom` when using OpenAI Responses API |
+| `--openai-api-key` | string | null | OpenAI API key (required when `model-provider` is `openaiResponses-custom`) |
+| `--openai-base-url` | string | null | OpenAI API base URL (required when `model-provider` is `openaiResponses-custom`) |
 
-### 📝 系统提示配置参数
+### 📝 System Prompt Configuration Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--system-prompt-file` | string | input_system_prompt.txt | 系统提示文件路径 |
-| `--system-prompt-mode` | string | overwrite | 系统提示模式，可选值：overwrite（覆盖）, append（追加） |
+| `--system-prompt-file` | string | input_system_prompt.txt | System prompt file path |
+| `--system-prompt-mode` | string | overwrite | System prompt mode, optional values: overwrite (override), append (append) |
 
-### 📊 日志配置参数
+### 📊 Log Configuration Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--log-prompts` | string | none | 提示日志模式，可选值：console（控制台）, file（文件）, none（无） |
-| `--prompt-log-base-name` | string | prompt_log | 提示日志文件基础名称 |
+| `--log-prompts` | string | none | Prompt log mode, optional values: console (console), file (file), none (none) |
+| `--prompt-log-base-name` | string | prompt_log | Prompt log file base name |
 
-### 🔄 重试机制参数
+### 🔄 Retry Mechanism Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--request-max-retries` | number | 3 | API 请求失败时，自动重试的最大次数 |
-| `--request-base-delay` | number | 1000 | 自动重试之间的基础延迟时间（毫秒），每次重试后延迟会增加 |
+| `--request-max-retries` | number | 3 | Maximum number of automatic retries when API requests fail |
+| `--request-base-delay` | number | 1000 | Base delay time (milliseconds) between automatic retries, delay increases after each retry |
 
-### ⏰ 定时任务参数
+### ⏰ Scheduled Task Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--cron-near-minutes` | number | 15 | OAuth 令牌刷新任务计划的间隔时间（分钟） |
-| `--cron-refresh-token` | boolean | true | 是否开启 OAuth 令牌自动刷新任务 |
+| `--cron-near-minutes` | number | 15 | Interval time (minutes) for OAuth token refresh task schedule |
+| `--cron-refresh-token` | boolean | true | Whether to enable automatic OAuth token refresh task |
 
-### 🎯 号池配置参数
+### 🎯 Account Pool Configuration Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--provider-pools-file` | string | null | 提供商号池配置文件路径 |
+| `--provider-pools-file` | string | null | Provider account pool configuration file path |
 
-### 使用示例
+### Usage Examples
 
 ```bash
-# 基本用法
+# Basic usage
 node src/api-server.js
 
-# 指定端口和API密钥
+# Specify port and API key
 node src/api-server.js --port 8080 --api-key my-secret-key
 
-# 使用OpenAI提供商
+# Use OpenAI provider
 node src/api-server.js --model-provider openai-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
 
-# 使用Claude提供商
+# Use Claude provider
 node src/api-server.js --model-provider claude-custom --claude-api-key sk-ant-xxx --claude-base-url https://api.anthropic.com
 
-# 使用OpenAI Responses API提供商
+# Use OpenAI Responses API provider
 node src/api-server.js --model-provider openaiResponses-custom --openai-api-key sk-xxx --openai-base-url https://api.openai.com/v1
 
-# 使用Gemini提供商（Base64凭据）
+# Use Gemini provider (Base64 credentials)
 node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-base64 eyJ0eXBlIjoi... --project-id your-project-id
 
-# 使用Gemini提供商（凭据文件）
+# Use Gemini provider (credentials file)
 node src/api-server.js --model-provider gemini-cli-oauth --gemini-oauth-creds-file /path/to/credentials.json --project-id your-project-id
 
-# 配置系统提示
+# Configure system prompt
 node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mode append
 
-# 配置日志
+# Configure logging
 node src/api-server.js --log-prompts console
 node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
 
-# 完整示例
+# Complete example
 node src/api-server.js \
   --host 0.0.0.0 \
   --port 3000 \
@@ -392,15 +389,16 @@ node src/api-server.js \
   --log-prompts file \
   --prompt-log-base-name api-logs
 ```
+
 ---
 
-## 📄 开源许可
+## 📄 Open Source License
 
-本项目遵循 [**GNU General Public License v3 (GPLv3)**](https://www.gnu.org/licenses/gpl-3.0) 开源许可。详情请查看根目录下的 `LICENSE` 文件。
+This project operates under the [**GNU General Public License v3 (GPLv3)**](https://www.gnu.org/licenses/gpl-3.0). For complete details, please refer to the `LICENSE` file located in the root directory.
 
-## 🙏 致谢
+## 🙏 Acknowledgements
 
-本项目的开发受到了官方 Google Gemini CLI 的极大启发，并参考了Cline 3.18.0 版本 `gemini-cli.ts` 的部分代码实现。在此对 Google 官方团队和 Cline 开发团队的卓越工作表示衷心的感谢！
+The development of this project was significantly inspired by the official Google Gemini CLI and incorporated some code implementations from Cline 3.18.0's `gemini-cli.ts`. We extend our sincere gratitude to the official Google team and the Cline development team for their exceptional work!
 
 ## 🌟 Star History
 
@@ -408,16 +406,16 @@ node src/api-server.js \
 
 ---
 
-## ⚠️ 免责声明
+## ⚠️ Disclaimer
 
-### 使用风险提示
-本项目（AIClient-2-API）仅供学习和研究使用。用户在使用本项目时，应自行承担所有风险。作者不对因使用本项目而导致的任何直接、间接或 consequential 损失承担责任。
+### Usage Risk Warning
+This project (AIClient-2-API) is for learning and research purposes only. Users assume all risks when using this project. The author is not responsible for any direct, indirect, or consequential losses resulting from the use of this project.
 
-### 第三方服务责任说明
-本项目是一个API代理工具，不提供任何AI模型服务。所有AI模型服务由相应的第三方提供商（如Google、OpenAI、Anthropic等）提供。用户在使用本项目访问这些第三方服务时，应遵守各第三方服务的使用条款和政策。作者不对第三方服务的可用性、质量、安全性或合法性承担责任。
+### Third-Party Service Responsibility Statement
+This project is an API proxy tool and does not provide any AI model services. All AI model services are provided by their respective third-party providers (such as Google, OpenAI, Anthropic, etc.). Users should comply with the terms of service and policies of each third-party service when accessing them through this project. The author is not responsible for the availability, quality, security, or legality of third-party services.
 
-### 数据隐私说明
-本项目在本地运行，不会收集或上传用户的任何数据。但用户在使用本项目时，应注意保护自己的API密钥和其他敏感信息。建议用户定期检查和更新自己的API密钥，并避免在不安全的网络环境中使用本项目。
+### Data Privacy Statement
+This project runs locally and does not collect or upload any user data. However, users should protect their API keys and other sensitive information when using this project. It is recommended that users regularly check and update their API keys and avoid using this project in insecure network environments.
 
-### 法律合规提醒
-用户在使用本项目时，应遵守所在国家/地区的法律法规。严禁将本项目用于任何非法用途。如因用户违反法律法规而导致的任何后果，由用户自行承担全部责任。
+### Legal Compliance Reminder
+Users should comply with the laws and regulations of their country/region when using this project. It is strictly prohibited to use this project for any illegal purposes. Any consequences resulting from users' violation of laws and regulations shall be borne by the users themselves.

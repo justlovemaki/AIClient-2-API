@@ -17,7 +17,7 @@
 [![Docker](https://img.shields.io/badge/docker-≥20.0.0-blue.svg)](https://aiproxy.justlikemaki.vip/ja/docs/installation/docker-deployment.html)
 
 
-[**中文**](./README.md) | [**English**](./README-EN.md) | [**日本語**](./README-JA.md) | [**📚 完全ドキュメント**](https://aiproxy.justlikemaki.vip/ja/)
+[**中文**](./README-ZH.md) | [**English**](./README.md) | [**日本語**](./README-JA.md) | [**📚 完全ドキュメント**](https://aiproxy.justlikemaki.vip/ja/)
 
 </div>
 

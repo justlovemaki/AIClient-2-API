@@ -2,8 +2,6 @@ node_modules
 npm-debug.log
 .git
 .gitignore
-README.md
-README-EN.md
 Dockerfile
 .dockerignore
 .nyc_output
