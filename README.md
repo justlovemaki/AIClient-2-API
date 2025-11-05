@@ -230,7 +230,8 @@ API_ENDPOINT=http://localhost:3000/claude-kiro-oauth
 # Direct API call
 curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'```
+  -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'
+```
 
 ---
 
