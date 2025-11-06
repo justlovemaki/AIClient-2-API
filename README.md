@@ -30,6 +30,7 @@
 >
 > **📅 Version Update Log**
 >
+> - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
 > - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
 > - **2025.08.29** - Released account pool management feature, supporting multi-account polling, intelligent failover, and automatic degradation strategies
