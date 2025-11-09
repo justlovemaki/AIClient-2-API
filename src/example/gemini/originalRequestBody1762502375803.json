@@ -1,0 +1,1 @@
+{"generationConfig":{"temperature":1,"topP":1,"thinkingConfig":{"includeThoughts":true}},"contents":[{"role":"user","parts":[{"text":"更新readme，写入一行随机数"}]}],"systemInstruction":{"parts":[{"text":"整理优化为可读性强的markdown 文档， 不需要按照时间顺序整理， 自行调整内容的段落位置， 可以读取图片内的文案，辅助理解文档，需要对文字进行润色，用简体中文输出。输出格式参考历史输出内容的格式，需要结合历史数据写新的文档，输出时不要遗漏消息内容。文案口吻不要夸张，有技术范且平易近人，符合istj人格"}]}}

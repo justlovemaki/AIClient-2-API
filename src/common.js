@@ -69,33 +69,6 @@ export function formatExpiryTime(expiryTimestamp) {
 }
 
 /**
- * Ensures that all content parts in a request body have a 'role' property.
- * If 'systemInstruction' is present and lacks a role, it defaults to 'user'.
- * If any 'contents' entry lacks a role, it defaults to 'user'.
- * @param {Object} requestBody - The request body object.
- * @returns {Object} The modified request body with roles ensured.
- */
-export function ensureRolesInContents(requestBody) {
-    if (requestBody.system_instruction) {
-        requestBody.systemInstruction = requestBody.system_instruction;
-        delete requestBody.system_instruction;
-    }
-
-    if (requestBody.systemInstruction && !requestBody.systemInstruction.role) {
-        requestBody.systemInstruction.role = 'user';
-    }
-
-    if (requestBody.contents && Array.isArray(requestBody.contents)) {
-        requestBody.contents.forEach(content => {
-            if (!content.role) {
-                content.role = 'user';
-            }
-        });
-    }
-    return requestBody;
-}
-
-/**
  * Reads the entire request body from an HTTP request.
  * @param {http.IncomingMessage} req - The HTTP request object.
  * @returns {Promise<Object>} A promise that resolves with the parsed JSON request body.
@@ -213,29 +186,23 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
     // fs.writeFile('request'+Date.now()+'.json', JSON.stringify(requestBody));
     // The service returns a stream in its native format (toProvider).
-    const nativeStream = await service.generateContentStream(model, requestBody);
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
+    requestBody.model = model;
+    const nativeStream = await service.generateContentStream(model, requestBody);
     const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
     const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI ;
-    const openResponses = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES ;
 
     try {
-        if (openResponses && needsConversion) {
-            const beginChunks = getOpenAIResponsesStreamChunkBegin(model);
-            for (const chunk of beginChunks) {
-                res.write(`event: ${chunk.type}\n`);
-                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-            }
-        }
         for await (const nativeChunk of nativeStream) {
-            // Convert chunk to the client's format (fromProvider), if necessary.
+            // Extract text for logging purposes
             const chunkText = extractResponseText(nativeChunk, toProvider);
             if (chunkText && !Array.isArray(chunkText)) {
                 fullResponseText += chunkText;
             }
 
+            // Convert the complete chunk object to the client's format (fromProvider), if necessary.
             const chunkToSend = needsConversion
-                ? convertData(chunkText, 'streamChunk', toProvider, fromProvider, model)
+                ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model)
                 : nativeChunk;
 
             if (!chunkToSend) {
@@ -247,6 +214,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
             for (const chunk of chunksToSend) {
                 if (addEvent) {
+                    // fullOldResponseJson += chunk.type+"\n";
                     // fullResponseJson += chunk.type+"\n";
                     res.write(`event: ${chunk.type}\n`);
                     // console.log(`event: ${chunk.type}\n`);
@@ -256,13 +224,6 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 // fullResponseJson += JSON.stringify(chunk)+"\n\n";
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
                 // console.log(`data: ${JSON.stringify(chunk)}\n`);
-            }
-        }
-        if (openResponses && needsConversion) {
-            const endChunks = getOpenAIResponsesStreamChunkEnd(model);
-            for (const chunk of endChunks) {
-                res.write(`event: ${chunk.type}\n`);
-                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
             }
         }
         if (openStop && needsConversion) {
@@ -291,20 +252,23 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             res.end();
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-        // fs.writeFile('oldResponse'+Date.now()+'.json', fullOldResponseJson);
-        // fs.writeFile('response'+Date.now()+'.json', fullResponseJson);
+        // fs.writeFile('oldResponseChunk'+Date.now()+'.json', fullOldResponseJson);
+        // fs.writeFile('responseChunk'+Date.now()+'.json', fullResponseJson);
     }
 }
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     try{
         // The service returns the response in its native format (toProvider).
+        const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
+        requestBody.model = model;
+        // fs.writeFile('oldRequest'+Date.now()+'.json', JSON.stringify(requestBody));
         const nativeResponse = await service.generateContent(model, requestBody);
         const responseText = extractResponseText(nativeResponse, toProvider);
 
         // Convert the response back to the client's format (fromProvider), if necessary.
         let clientResponse = nativeResponse;
-        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+        if (needsConversion) {
             console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
@@ -312,6 +276,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
         console.error('\n[Server] Error during unary processing:', error.stack);
         if (providerPoolManager) {

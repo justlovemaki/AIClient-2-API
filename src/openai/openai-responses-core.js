@@ -9,7 +9,7 @@ export class OpenAIResponsesApiService {
         this.config = config;
         this.apiKey = config.OPENAI_API_KEY;
         this.baseUrl = config.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-        console.log(`[OpenAIResponsesApiService] Base URL: ${JSON.stringify(config)}`);
+        // console.log(`[OpenAIResponsesApiService] Base URL: ${JSON.stringify(config)}`);
         this.axiosInstance = axios.create({
             baseURL: this.baseUrl,
             headers: {

@@ -101,9 +101,9 @@ export class ProviderPoolManager {
 
                 if (provider.config.errorCount >= this.maxErrorCount) {
                     provider.config.isHealthy = false;
-                    console.warn(`[ProviderPoolManager] Marked provider as unhealthy: ${JSON.stringify(providerConfig)} for type ${providerType}. Total errors: ${provider.config.errorCount}`);
+                    console.warn(`[ProviderPoolManager] Marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Total errors: ${provider.config.errorCount}`);
                 } else {
-                    console.warn(`[ProviderPoolManager] Provider ${JSON.stringify(providerConfig)} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
+                    console.warn(`[ProviderPoolManager] Provider ${providerConfig.uuid} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
                 }
                 
                 // 优化1: 使用防抖保存
@@ -128,7 +128,7 @@ export class ProviderPoolManager {
                 if (isInit) {
                     provider.config.usageCount = 0; // Reset usage count on health recovery
                 }
-                console.log(`[ProviderPoolManager] Marked provider as healthy: ${JSON.stringify(providerConfig)} for type ${providerType}`);
+                console.log(`[ProviderPoolManager] Marked provider as healthy: ${provider.config.uuid} for type ${providerType}`);
                 
                 // 优化1: 使用防抖保存
                 this._debouncedSave(providerType);
@@ -150,7 +150,7 @@ export class ProviderPoolManager {
                 // Only attempt to health check unhealthy providers after a certain interval
                 if (!providerStatus.config.isHealthy && providerStatus.config.lastErrorTime &&
                     (now.getTime() - new Date(providerStatus.config.lastErrorTime).getTime() < this.healthCheckInterval)) {
-                    console.log(`[ProviderPoolManager] Skipping health check for ${JSON.stringify(providerConfig)} (${providerType}). Last error too recent.`);
+                    console.log(`[ProviderPoolManager] Skipping health check for ${providerConfig.uuid} (${providerType}). Last error too recent.`);
                     continue;
                 }
 
@@ -162,20 +162,20 @@ export class ProviderPoolManager {
                         if (!providerStatus.config.isHealthy) {
                             // Provider was unhealthy but is now healthy
                             this.markProviderHealthy(isInit, providerType, providerConfig);
-                            console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Marked Healthy (actual check)`);
+                            console.log(`[ProviderPoolManager] Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
                         } else {
                             // Provider was already healthy and still is
                             this.markProviderHealthy(isInit, providerType, providerConfig);
-                            console.log(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}): Still Healthy`);
+                            console.log(`[ProviderPoolManager] Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
                         }
                     } else {
                         // Provider is not healthy
-                        console.warn(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}) failed: Provider is not responding correctly.`);
+                        console.warn(`[ProviderPoolManager] Health check for ${providerConfig.uuid} (${providerType}) failed: Provider is not responding correctly.`);
                         this.markProviderUnhealthy(providerType, providerConfig);
                     }
 
                 } catch (error) {
-                    console.error(`[ProviderPoolManager] Health check for ${JSON.stringify(providerConfig)} (${providerType}) failed: ${error.message}`);
+                    console.error(`[ProviderPoolManager] Health check for ${providerConfig.uuid} (${providerType}) failed: ${error.message}`);
                     // If a health check fails, mark it unhealthy, which will update error count and lastErrorTime
                     this.markProviderUnhealthy(providerType, providerConfig);
                 }

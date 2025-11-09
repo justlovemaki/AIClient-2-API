@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
-import { API_ACTIONS, ensureRolesInContents, formatExpiryTime } from '../common.js';
+import { API_ACTIONS, formatExpiryTime } from '../common.js';
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -18,7 +18,7 @@ const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-
 const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
 function is_anti_truncation_model(model) {
-    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel) || antiModel.includes(model));
+    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel));
 }
 
 // 从防截断模型名中提取实际模型名
@@ -39,6 +39,66 @@ function toGeminiApiResponse(codeAssistResponse) {
     if (codeAssistResponse.promptFeedback) compliantResponse.promptFeedback = codeAssistResponse.promptFeedback;
     if (codeAssistResponse.automaticFunctionCallingHistory) compliantResponse.automaticFunctionCallingHistory = codeAssistResponse.automaticFunctionCallingHistory;
     return compliantResponse;
+}
+
+/**
+ * Ensures that all content parts in a request body have a 'role' property.
+ * If 'systemInstruction' is present and lacks a role, it defaults to 'user'.
+ * If any 'contents' entry lacks a role, it defaults to 'user'.
+ * @param {Object} requestBody - The request body object.
+ * @returns {Object} The modified request body with roles ensured.
+ */
+function ensureRolesInContents(requestBody) {
+    delete requestBody.model;
+    // delete requestBody.system_instruction;
+    // delete requestBody.systemInstruction;
+    if (requestBody.system_instruction) {
+        requestBody.systemInstruction = requestBody.system_instruction;
+        delete requestBody.system_instruction;
+    }
+
+    if (requestBody.systemInstruction && !requestBody.systemInstruction.role) {
+        requestBody.systemInstruction.role = 'user';
+    }
+
+    if (requestBody.contents && Array.isArray(requestBody.contents)) {
+        requestBody.contents.forEach(content => {
+            if (!content.role) {
+                content.role = 'user';
+            }
+        });
+
+        // 如果存在 systemInstruction，将其放在 contents 索引 0 的位置
+        // if (requestBody.systemInstruction) {
+        //     // 检查 contents[0] 是否与 systemInstruction 内容相同
+        //     const firstContent = requestBody.contents[0];
+        //     let isSame = false;
+
+        //     if (firstContent && firstContent.parts && requestBody.systemInstruction.parts) {
+        //         // 比较 parts 数组的内容
+        //         const firstContentText = firstContent.parts
+        //             .filter(p => p?.text)
+        //             .map(p => p.text)
+        //             .join('\n');
+        //         const systemInstructionText = requestBody.systemInstruction.parts
+        //             .filter(p => p?.text)
+        //             .map(p => p.text)
+        //             .join('\n');
+                
+        //         isSame = firstContentText === systemInstructionText;
+        //     }
+
+        //     // 如果内容不同，则将 systemInstruction 插入到索引 0 的位置
+        //     if (!isSame) {
+        //         requestBody.contents.unshift({
+        //             role: requestBody.systemInstruction.role || 'user',
+        //             parts: requestBody.systemInstruction.parts
+        //         });
+        //     }
+        //     delete requestBody.systemInstruction;
+        // }
+    }
+    return requestBody;
 }
 
 async function* apply_anti_truncation_to_stream(service, model, requestBody) {
@@ -166,12 +226,14 @@ export class GeminiApiService {
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
             console.log('[Gemini Auth] Authentication configured successfully from file.');
+            
             if (forceRefresh) {
                 console.log('[Gemini Auth] Forcing token refresh...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
+                // Save refreshed credentials back to file
                 await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log('[Gemini Auth] Token refresh response: ok');
+                console.log('[Gemini Auth] Token refreshed and saved successfully.');
             }
         } catch (error) {
             console.error('[Gemini Auth] Error initializing authentication:', error.code);
@@ -252,7 +314,7 @@ export class GeminiApiService {
         this.availableModels = GEMINI_MODELS;
         console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
-            const initialProjectId = "default"
+            const initialProjectId = ""
             // Prepare client metadata
             const clientMetadata = {
                 ideType: "IDE_UNSPECIFIED",
@@ -261,18 +323,47 @@ export class GeminiApiService {
                 duetProject: initialProjectId,
             }
 
-            const loadResponse = await this.callApi('loadCodeAssist', { metadata: clientMetadata });
+            // Call loadCodeAssist to discover the actual project ID
+            const loadRequest = {
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            }
+
+            const loadResponse = await this.callApi('loadCodeAssist', loadRequest);
+
+            // Check if we already have a project ID from the response
             if (loadResponse.cloudaicompanionProject) {
                 return loadResponse.cloudaicompanionProject;
             }
+
+            // If no existing project, we need to onboard
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: clientMetadata , cloudaicompanionProject: initialProjectId,};
-            let lro = await this.callApi('onboardUser', onboardRequest);
-            while (!lro.done) {
+            const tierId = defaultTier?.id || 'free-tier';
+
+            const onboardRequest = {
+                tierId: tierId,
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            };
+
+            let lroResponse = await this.callApi('onboardUser', onboardRequest);
+
+            // Poll until operation is complete with timeout protection
+            const MAX_RETRIES = 30; // Maximum number of retries (60 seconds total)
+            let retryCount = 0;
+
+            while (!lroResponse.done && retryCount < MAX_RETRIES) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                lro = await this.callApi('onboardUser', onboardRequest);
+                lroResponse = await this.callApi('onboardUser', onboardRequest);
+                retryCount++;
             }
-            return lro.response?.cloudaicompanionProject?.id;
+
+            if (!lroResponse.done) {
+                throw new Error('Onboarding timeout: Operation did not complete within expected time.');
+            }
+
+            const discoveredProjectId = lroResponse.response?.cloudaicompanionProject?.id || initialProjectId;
+            return discoveredProjectId;
         } catch (error) {
             console.error('[Gemini] Failed to discover Project ID:', error.response?.data || error.message);
             throw new Error('Could not discover a valid Google Cloud Project ID.');
@@ -294,8 +385,8 @@ export class GeminiApiService {
     }
 
     async callApi(method, body, isRetry = false, retryCount = 0) {
-        const maxRetries = this.config.REQUEST_MAX_RETRIES;
-        const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
         try {
             const requestOptions = {
@@ -308,8 +399,11 @@ export class GeminiApiService {
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
+            console.error(`[API] Error calling ${method}:`, error.response?.status, error.message);
+
+            // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401. Refreshing auth and retrying...');
+                console.log('[API] Received 401/400. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount);
             }
@@ -335,8 +429,8 @@ export class GeminiApiService {
     }
 
     async * streamApi(method, body, isRetry = false, retryCount = 0) {
-        const maxRetries = this.config.REQUEST_MAX_RETRIES;
-        const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
         try {
             const requestOptions = {
@@ -355,8 +449,11 @@ export class GeminiApiService {
             }
             yield* this.parseSSEStream(res.data);
         } catch (error) {
+            console.error(`[API] Error during stream ${method}:`, error.response?.status, error.message);
+
+            // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401 during stream. Refreshing auth and retrying...');
+                console.log('[API] Received 401/400 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount);
                 return;

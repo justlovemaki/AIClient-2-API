@@ -111,6 +111,7 @@ import { promises as pfs } from 'fs';
 import 'dotenv/config'; // Import dotenv and configure it
 
 import deepmerge from 'deepmerge';
+import './converters/register-converters.js'; // 注册所有转换器
 import { getServiceAdapter, serviceInstances } from './adapter.js';
 import { ProviderPoolManager } from './provider-pool-manager.js';
 import {
@@ -449,8 +450,7 @@ async function initApiService(config) {
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, { globalConfig: config });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
-        // 可以选择在这里触发一次健康检查
-        providerPoolManager.performHealthChecks(true);
+        // 健康检查将在服务器完全启动后执行
     } else {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');
     }
@@ -505,7 +505,7 @@ function logProviderSpecificDetails(provider, config) {
             } else {
                 console.log(`  [gemini-cli-oauth] OAuth Creds: Default discovery`);
             }
-            console.log(`  [gemini-cli-oauth] Project ID: ${config.PROJECT_ID || 'Auto-discovered'}`);
+            // console.log(`  [gemini-cli-oauth] Project ID: ${config.PROJECT_ID || 'Auto-discovered'}`);
             break;
         case MODEL_PROVIDER.KIRO_API:
             if (config.KIRO_OAUTH_CREDS_FILE_PATH) {
@@ -742,6 +742,11 @@ async function startServer() {
             console.log(`  • Cron Refresh Token: ${CONFIG.CRON_REFRESH_TOKEN}`);
             // 每 CRON_NEAR_MINUTES 分钟执行一次心跳日志和令牌刷新
             setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
+        }
+        // 服务器完全启动后,执行初始健康检查
+        if (providerPoolManager) {
+            console.log('[Initialization] Performing initial health checks for provider pools...');
+            providerPoolManager.performHealthChecks(true);
         }
     });
     return server; // Return the server instance for testing purposes
