@@ -156,13 +156,20 @@ function closeProviderModal(button) {
 function renderProviderList(providers) {
     return providers.map(provider => {
         const isHealthy = provider.isHealthy;
+        const isDisabled = provider.isDisabled || false;
         const lastUsed = provider.lastUsed ? new Date(provider.lastUsed).toLocaleString() : '从未使用';
         const healthClass = isHealthy ? 'healthy' : 'unhealthy';
+        const disabledClass = isDisabled ? 'disabled' : '';
         const healthIcon = isHealthy ? 'fas fa-check-circle text-success' : 'fas fa-exclamation-triangle text-warning';
         const healthText = isHealthy ? '正常' : '异常';
+        const disabledText = isDisabled ? '已禁用' : '已启用';
+        const disabledIcon = isDisabled ? 'fas fa-ban text-muted' : 'fas fa-play text-success';
+        const toggleButtonText = isDisabled ? '启用' : '禁用';
+        const toggleButtonIcon = isDisabled ? 'fas fa-play' : 'fas fa-ban';
+        const toggleButtonClass = isDisabled ? 'btn-success' : 'btn-warning';
         
         return `
-            <div class="provider-item-detail ${healthClass}" data-uuid="${provider.uuid}">
+            <div class="provider-item-detail ${healthClass} ${disabledClass}" data-uuid="${provider.uuid}">
                 <div class="provider-item-header" onclick="window.toggleProviderDetails('${provider.uuid}')">
                     <div class="provider-info">
                         <div class="provider-name">${provider.uuid}</div>
@@ -171,11 +178,19 @@ function renderProviderList(providers) {
                                 <i class="${healthIcon}"></i>
                                 健康状态: ${healthText}
                             </span> |
+                            <span class="disabled-status">
+                                <i class="${disabledIcon}"></i>
+                                状态: ${disabledText}
+                            </span> |
                             使用次数: ${provider.usageCount || 0} |
+                            失败次数: ${provider.errorCount || 0} |
                             最后使用: ${lastUsed}
                         </div>
                     </div>
                     <div class="provider-actions-group">
+                        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${provider.uuid}', event)" title="${toggleButtonText}此供应商">
+                            <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
+                        </button>
                         <button class="btn-small btn-edit" onclick="window.editProvider('${provider.uuid}', event)">
                             <i class="fas fa-edit"></i> 编辑
                         </button>
@@ -380,7 +395,7 @@ function getFieldOrder(provider) {
     const otherFields = Object.keys(provider).filter(key =>
         key !== 'isHealthy' && key !== 'lastUsed' && key !== 'usageCount' &&
         key !== 'errorCount' && key !== 'lastErrorTime' && key !== 'uuid' &&
-        !orderedFields.includes(key)
+        key !== 'isDisabled' && !orderedFields.includes(key)
     );
     
     // 按字母顺序排序其他字段
@@ -440,9 +455,19 @@ function editProvider(uuid, event) {
             select.disabled = false;
         });
         
-        // 替换编辑按钮为保存和取消按钮
+        // 替换编辑按钮为保存和取消按钮，但保留禁用/启用按钮
         const actionsGroup = providerDetail.querySelector('.provider-actions-group');
+        const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
+        const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
+        const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
+        const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
+        const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
+        const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
+        
         actionsGroup.innerHTML = `
+            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此供应商">
+                <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
+            </button>
             <button class="btn-small btn-save" onclick="window.saveProvider('${uuid}', event)">
                 <i class="fas fa-save"></i> 保存
             </button>
@@ -489,9 +514,18 @@ function cancelEdit(uuid, event) {
         select.value = originalValue || '';
     });
     
-    // 恢复原来的编辑和删除按钮
+    // 恢复原来的编辑和删除按钮，但保留禁用/启用按钮
     const actionsGroup = providerDetail.querySelector('.provider-actions-group');
+    const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
+    const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
+    const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
+    const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
+    const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
+    
     actionsGroup.innerHTML = `
+        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此供应商">
+            <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
+        </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
             <i class="fas fa-edit"></i> 编辑
         </button>
@@ -529,22 +563,10 @@ async function saveProvider(uuid, event) {
     });
     
     try {
-        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${uuid}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ providerConfig }),
-        });
-        
-        if (response.ok) {
-            showToast('供应商配置更新成功', 'success');
-            // 重新获取该供应商类型的最新配置
-            await refreshProviderConfig(providerType);
-        } else {
-            const error = await response.json();
-            showToast('更新失败: ' + error.error.message, 'error');
-        }
+        await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
+        showToast('供应商配置更新成功', 'success');
+        // 重新获取该供应商类型的最新配置
+        await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to update provider:', error);
         showToast('更新失败: ' + error.message, 'error');
@@ -567,18 +589,10 @@ async function deleteProvider(uuid, event) {
     const providerType = providerDetail.closest('.provider-modal').getAttribute('data-provider-type');
     
     try {
-        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${uuid}`, {
-            method: 'DELETE',
-        });
-        
-        if (response.ok) {
-            showToast('供应商配置删除成功', 'success');
-            // 重新获取最新配置
-            await refreshProviderConfig(providerType);
-        } else {
-            const error = await response.json();
-            showToast('删除失败: ' + error.error.message, 'error');
-        }
+        await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${uuid}`);
+        showToast('供应商配置删除成功', 'success');
+        // 重新获取最新配置
+        await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to delete provider:', error);
         showToast('删除失败: ' + error.message, 'error');
@@ -592,29 +606,26 @@ async function deleteProvider(uuid, event) {
 async function refreshProviderConfig(providerType) {
     try {
         // 重新获取该供应商类型的最新数据
-        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}`);
-        if (response.ok) {
-            const data = await response.json();
+        const data = await window.apiClient.get(`/providers/${encodeURIComponent(providerType)}`);
+        
+        // 如果当前显示的是该供应商类型的模态框，则更新模态框
+        const modal = document.querySelector('.provider-modal');
+        if (modal && modal.getAttribute('data-provider-type') === providerType) {
+            // 更新统计信息
+            const totalCountElement = modal.querySelector('.provider-summary-item .value');
+            if (totalCountElement) {
+                totalCountElement.textContent = data.totalCount;
+            }
             
-            // 如果当前显示的是该供应商类型的模态框，则更新模态框
-            const modal = document.querySelector('.provider-modal');
-            if (modal && modal.getAttribute('data-provider-type') === providerType) {
-                // 更新统计信息
-                const totalCountElement = modal.querySelector('.provider-summary-item .value');
-                if (totalCountElement) {
-                    totalCountElement.textContent = data.totalCount;
-                }
-                
-                const healthyCountElement = modal.querySelectorAll('.provider-summary-item .value')[1];
-                if (healthyCountElement) {
-                    healthyCountElement.textContent = data.healthyCount;
-                }
-                
-                // 重新渲染供应商列表
-                const providerList = modal.querySelector('.provider-list');
-                if (providerList) {
-                    providerList.innerHTML = renderProviderList(data.providers);
-                }
+            const healthyCountElement = modal.querySelectorAll('.provider-summary-item .value')[1];
+            if (healthyCountElement) {
+                healthyCountElement.textContent = data.healthyCount;
+            }
+            
+            // 重新渲染供应商列表
+            const providerList = modal.querySelector('.provider-list');
+            if (providerList) {
+                providerList.innerHTML = renderProviderList(data.providers);
             }
         }
         
@@ -647,7 +658,7 @@ function showAddProviderForm(providerType) {
         <h4><i class="fas fa-plus"></i> 添加新供应商配置</h4>
         <div class="form-grid">
             <div class="form-group">
-                <label>检查模型名称</label>
+                <label>检查模型名称 <span class="optional-mark">(选填)</span></label>
                 <input type="text" id="newCheckModelName" placeholder="例如: gpt-3.5-turbo">
             </div>
             <div class="form-group">
@@ -823,13 +834,8 @@ async function addProvider(providerType) {
     const checkModelName = document.getElementById('newCheckModelName')?.value;
     const checkHealth = document.getElementById('newCheckHealth')?.value === 'true';
     
-    if (!checkModelName) {
-        showToast('请输入检查模型名称', 'error');
-        return;
-    }
-    
     const providerConfig = {
-        checkModelName,
+        checkModelName: checkModelName || '', // 允许为空
         checkHealth
     };
     
@@ -860,33 +866,55 @@ async function addProvider(providerType) {
     }
     
     try {
-        const response = await fetch('/api/providers', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                providerType,
-                providerConfig
-            }),
+        await window.apiClient.post('/providers', {
+            providerType,
+            providerConfig
         });
-        
-        if (response.ok) {
-            showToast('供应商配置添加成功', 'success');
-            // 移除添加表单
-            const form = document.querySelector('.add-provider-form');
-            if (form) {
-                form.remove();
-            }
-            // 重新获取最新配置数据
-            await refreshProviderConfig(providerType);
-        } else {
-            const error = await response.json();
-            showToast('添加失败: ' + error.error.message, 'error');
+        showToast('供应商配置添加成功', 'success');
+        // 移除添加表单
+        const form = document.querySelector('.add-provider-form');
+        if (form) {
+            form.remove();
         }
+        // 重新获取最新配置数据
+        await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to add provider:', error);
         showToast('添加失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 切换供应商禁用/启用状态
+ * @param {string} uuid - 供应商UUID
+ * @param {Event} event - 事件对象
+ */
+async function toggleProviderStatus(uuid, event) {
+    event.stopPropagation();
+    
+    const providerDetail = event.target.closest('.provider-item-detail');
+    const providerType = providerDetail.closest('.provider-modal').getAttribute('data-provider-type');
+    const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
+    
+    // 获取当前供应商信息
+    const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
+    const action = isCurrentlyDisabled ? 'enable' : 'disable';
+    const confirmMessage = isCurrentlyDisabled ?
+        `确定要启用这个供应商配置吗？` :
+        `确定要禁用这个供应商配置吗？禁用后该供应商将不会被选中使用。`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${uuid}/${action}`, { action });
+        showToast(`供应商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
+        // 重新获取该供应商类型的最新配置
+        await refreshProviderConfig(providerType);
+    } catch (error) {
+        console.error('Failed to toggle provider status:', error);
+        showToast(`操作失败: ${error.message}`, 'error');
     }
 }
 
@@ -901,7 +929,8 @@ export {
     deleteProvider,
     refreshProviderConfig,
     showAddProviderForm,
-    addProvider
+    addProvider,
+    toggleProviderStatus
 };
 
 // 将函数挂载到window对象
@@ -913,3 +942,4 @@ window.saveProvider = saveProvider;
 window.deleteProvider = deleteProvider;
 window.showAddProviderForm = showAddProviderForm;
 window.addProvider = addProvider;
+window.toggleProviderStatus = toggleProviderStatus;

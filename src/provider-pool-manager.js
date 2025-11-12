@@ -33,6 +33,7 @@ export class ProviderPoolManager {
             this.providerPools[providerType].forEach((providerConfig) => {
                 // Ensure initial health and usage stats are present in the config
                 providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
+                providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
                 providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
                 providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
                 providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
@@ -59,20 +60,22 @@ export class ProviderPoolManager {
      */
     selectProvider(providerType) {
         const availableProviders = this.providerStatus[providerType] || [];
-        const healthyProviders = availableProviders.filter(p => p.config.isHealthy);
+        const availableAndHealthyProviders = availableProviders.filter(p =>
+            p.config.isHealthy && !p.config.isDisabled
+        );
 
-        if (healthyProviders.length === 0) {
-            console.warn(`[ProviderPoolManager] No healthy providers available for type: ${providerType}`);
+        if (availableAndHealthyProviders.length === 0) {
+            console.warn(`[ProviderPoolManager] No available and healthy providers for type: ${providerType}`);
             return null;
         }
 
         // 优化3: 简化轮询逻辑，移除不必要的循环
         const currentIndex = this.roundRobinIndex[providerType] || 0;
-        const providerIndex = currentIndex % healthyProviders.length;
-        const selected = healthyProviders[providerIndex];
+        const providerIndex = currentIndex % availableAndHealthyProviders.length;
+        const selected = availableAndHealthyProviders[providerIndex];
         
         // 更新下次轮询的索引
-        this.roundRobinIndex[providerType] = (providerIndex + 1) % healthyProviders.length;
+        this.roundRobinIndex[providerType] = (providerIndex + 1) % availableAndHealthyProviders.length;
         
         // 更新使用信息
         selected.config.lastUsed = new Date().toISOString();
@@ -131,6 +134,44 @@ export class ProviderPoolManager {
                 console.log(`[ProviderPoolManager] Marked provider as healthy: ${provider.config.uuid} for type ${providerType}`);
                 
                 // 优化1: 使用防抖保存
+                this._debouncedSave(providerType);
+            }
+        }
+    }
+
+    /**
+     * 禁用指定供应商
+     * @param {string} providerType - 供应商类型
+     * @param {object} providerConfig - 供应商配置
+     */
+    disableProvider(providerType, providerConfig) {
+        const pool = this.providerStatus[providerType];
+        if (pool) {
+            const provider = pool.find(p => p.uuid === providerConfig.uuid);
+            if (provider) {
+                provider.config.isDisabled = true;
+                console.log(`[ProviderPoolManager] Disabled provider: ${providerConfig.uuid} for type ${providerType}`);
+                
+                // 使用防抖保存
+                this._debouncedSave(providerType);
+            }
+        }
+    }
+
+    /**
+     * 启用指定供应商
+     * @param {string} providerType - 供应商类型
+     * @param {object} providerConfig - 供应商配置
+     */
+    enableProvider(providerType, providerConfig) {
+        const pool = this.providerStatus[providerType];
+        if (pool) {
+            const provider = pool.find(p => p.uuid === providerConfig.uuid);
+            if (provider) {
+                provider.config.isDisabled = false;
+                console.log(`[ProviderPoolManager] Enabled provider: ${providerConfig.uuid} for type ${providerType}`);
+                
+                // 使用防抖保存
                 this._debouncedSave(providerType);
             }
         }

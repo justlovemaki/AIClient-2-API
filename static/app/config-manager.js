@@ -2,14 +2,14 @@
 
 import { showToast, formatUptime } from './utils.js';
 import { handleProviderChange, handleGeminiCredsTypeChange, handleKiroCredsTypeChange } from './event-handlers.js';
+import { loadProviders } from './provider-manager.js';
 
 /**
  * 加载配置
  */
 async function loadConfiguration() {
     try {
-        const response = await fetch('/api/config');
-        const data = await response.json();
+        const data = await window.apiClient.get('/config');
 
         // 基础配置
         const apiKeyEl = document.getElementById('apiKey');
@@ -77,14 +77,14 @@ async function loadConfiguration() {
         const providerPoolsFilePathEl = document.getElementById('providerPoolsFilePath');
 
         if (systemPromptFilePathEl) systemPromptFilePathEl.value = data.SYSTEM_PROMPT_FILE_PATH || 'input_system_prompt.txt';
-        if (systemPromptModeEl) systemPromptModeEl.value = data.SYSTEM_PROMPT_MODE || 'overwrite';
+        if (systemPromptModeEl) systemPromptModeEl.value = data.SYSTEM_PROMPT_MODE || 'append';
         if (promptLogBaseNameEl) promptLogBaseNameEl.value = data.PROMPT_LOG_BASE_NAME || 'prompt_log';
         if (promptLogModeEl) promptLogModeEl.value = data.PROMPT_LOG_MODE || 'none';
         if (requestMaxRetriesEl) requestMaxRetriesEl.value = data.REQUEST_MAX_RETRIES || 3;
         if (requestBaseDelayEl) requestBaseDelayEl.value = data.REQUEST_BASE_DELAY || 1000;
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
-        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
 
         // 触发供应商配置显示
         handleProviderChange();
@@ -106,7 +106,7 @@ async function loadConfiguration() {
         }
         
         // 检查并设置供应商池菜单显示状态
-        const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH;
         const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
         if (providerPoolsFilePath && providerPoolsFilePath.trim() !== '') {
             if (providersMenuItem) providersMenuItem.style.display = 'flex';
@@ -179,8 +179,8 @@ async function saveConfiguration() {
     }
 
     // 保存高级配置参数
-    config.SYSTEM_PROMPT_FILE_PATH = document.getElementById('systemPromptFilePath')?.value || '';
-    config.SYSTEM_PROMPT_MODE = document.getElementById('systemPromptMode')?.value || '';
+    config.SYSTEM_PROMPT_FILE_PATH = document.getElementById('systemPromptFilePath')?.value || 'input_system_prompt.txt';
+    config.SYSTEM_PROMPT_MODE = document.getElementById('systemPromptMode')?.value || 'append';
     config.PROMPT_LOG_BASE_NAME = document.getElementById('promptLogBaseName')?.value || '';
     config.PROMPT_LOG_MODE = document.getElementById('promptLogMode')?.value || '';
     config.REQUEST_MAX_RETRIES = parseInt(document.getElementById('requestMaxRetries')?.value || 3);
@@ -190,18 +190,16 @@ async function saveConfiguration() {
     config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
 
     try {
-        const response = await fetch('/api/config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(config),
-        });
+        await window.apiClient.post('/config', config);
 
-        if (response.ok) {
-            showToast('配置已保存', 'success');
-        } else {
-            showToast('保存配置失败', 'error');
+        showToast('配置已保存', 'success');
+        
+        // 检查当前是否在供应商池管理页面，如果是则刷新数据
+        const providersSection = document.getElementById('providers');
+        if (providersSection && providersSection.classList.contains('active')) {
+            // 当前在供应商池页面，刷新数据
+            await loadProviders();
+            showToast('供应商池数据已刷新', 'success');
         }
     } catch (error) {
         console.error('Failed to save configuration:', error);

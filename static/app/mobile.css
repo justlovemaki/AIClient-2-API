@@ -80,6 +80,10 @@
     .config-form {
         max-width: 100%;
     }
+
+    .logout-btn {
+        line-height: 0;
+    }
 }
 
 /* ========================================
@@ -592,6 +596,10 @@
     .system-prompt-section textarea {
         min-height: 120px;
     }
+
+    .logout-btn {
+        line-height: 0;
+    }
 }
 
 /* ========================================
@@ -704,6 +712,10 @@
         font-size: 0.8125rem;
         padding: 0.625rem 0.875rem;
     }
+
+    .logout-btn {
+        line-height: 0;
+    }
 }
 
 /* ========================================
@@ -734,6 +746,10 @@
 
     .provider-modal-body {
         max-height: calc(85vh - 120px);
+    }
+
+    .logout-btn {
+        line-height: 0;
     }
 }
 
@@ -778,6 +794,10 @@
     .logs-container,
     .provider-modal-body {
         -webkit-overflow-scrolling: touch;
+    }
+
+    .logout-btn {
+        line-height: 0;
     }
 }
 

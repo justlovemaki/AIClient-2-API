@@ -30,6 +30,7 @@
 >
 > **📅 Version Update Log**
 >
+> - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
 > - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
 > - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
@@ -85,8 +86,8 @@
 
 This project supports multiple model providers through different protocols. The following is an overview of their relationships:
 
-*   **OpenAI Protocol (P_OPENAI)**: Implemented by `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth`, and `openai-qwen-oauth` model providers.
-*   **Claude Protocol (P_CLAUDE)**: Implemented by `claude-custom`, `claude-kiro-oauth`, `gemini-cli-oauth`, `openai-custom`, and `openai-qwen-oauth` model providers.
+*   **OpenAI Protocol (P_OPENAI)**: Implemented by `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth`, `openai-qwen-oauth`, and `openaiResponses-custom` model providers.
+*   **Claude Protocol (P_CLAUDE)**: Implemented by `claude-custom`, `claude-kiro-oauth`, `gemini-cli-oauth`, `openai-custom`, `openai-qwen-oauth`, and `openaiResponses-custom` model providers.
 *   **Gemini Protocol (P_GEMINI)**: Implemented by `gemini-cli-oauth` model provider.
 
 Detailed relationship diagram:
@@ -106,6 +107,7 @@ Detailed relationship diagram:
            MP_CLAUDE_C[claude-custom]
            MP_CLAUDE_K[claude-kiro-oauth]
            MP_QWEN[openai-qwen-oauth]
+           MP_OPENAI_RESP[openaiResponses-custom]
        end
    
        P_OPENAI ---|Support| MP_OPENAI
@@ -113,6 +115,7 @@ Detailed relationship diagram:
        P_OPENAI ---|Support| MP_GEMINI
        P_OPENAI ---|Support| MP_CLAUDE_C
        P_OPENAI ---|Support| MP_CLAUDE_K
+       P_OPENAI ---|Support| MP_OPENAI_RESP
    
        P_GEMINI ---|Support| MP_GEMINI
    
@@ -121,6 +124,7 @@ Detailed relationship diagram:
        P_CLAUDE ---|Support| MP_GEMINI
        P_CLAUDE ---|Support| MP_OPENAI
        P_CLAUDE ---|Support| MP_QWEN
+       P_CLAUDE ---|Support| MP_OPENAI_RESP
    
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
@@ -132,7 +136,78 @@ Detailed relationship diagram:
 
 ## 🔧 Usage Instructions
 
+### 🚀 Quick Start with install-and-run Script
+
+The easiest way to get started with AIClient-2-API is to use our automated installation and startup scripts. We provide both Linux/macOS and Windows versions:
+
+#### For Linux/macOS Users
+```bash
+# Make the script executable and run it
+chmod +x install-and-run.sh
+./install-and-run.sh
+```
+
+#### For Windows Users
+```cmd
+# Run the batch file
+install-and-run.bat
+```
+
+#### What the Script Does
+
+The `install-and-run` script automatically:
+1. **Checks Node.js Installation**: Verifies Node.js is installed and provides download link if missing
+2. **Dependency Management**: Automatically installs npm dependencies if `node_modules` doesn't exist
+3. **File Validation**: Ensures all required project files are present
+4. **Server Startup**: Launches the API server on `http://localhost:3000`
+5. **Web UI Access**: Provides direct access to the management console
+
+#### Script Output Example
+```
+========================================
+  AI Client 2 API Quick Install Script
+========================================
+
+[Check] Checking if Node.js is installed...
+✅ Node.js is installed, version: v20.10.0
+✅ Found package.json file
+✅ node_modules directory already exists
+✅ Project file check completed
+
+========================================
+  Starting AI Client 2 API Server...
+========================================
+
+🌐 Server will start on http://localhost:3000
+📖 Visit http://localhost:3000 to view management interface
+⏹️  Press Ctrl+C to stop server
+```
+
+> **💡 Tip**: The script will automatically install dependencies and start the server. If you encounter any issues, the script provides clear error messages and suggested solutions.
+
+---
+
 ### 📋 Core Features
+
+#### Web UI Management Console
+
+![Web UI](src/img/web.png)
+
+A comprehensive web-based management interface offering:
+
+**📊 Dashboard**: System overview, interactive routing examples, and client configuration guides
+
+**⚙️ Configuration**: Real-time parameter modification for all providers (Gemini, OpenAI, Claude, Kiro, Qwen) with advanced settings and file upload support
+
+**🔗 Provider Pools**: Monitor active connections, provider health statistics, and enable/disable providers
+
+**📁 Config Files**: Centralized OAuth credential management with search, filtering, and file operations
+
+**📜 Logs**: Real-time system and request logs with management controls
+
+**🔐 Login**: Authentication required (default: `admin123`, modify via `pwd` file)
+
+Access: `http://localhost:3000` → Login → Sidebar navigation → Immediate effect changes
 
 #### MCP Protocol Support
 This project is fully compatible with **Model Context Protocol (MCP)**, enabling seamless integration with MCP-supporting clients for powerful functional extensions.
@@ -145,6 +220,8 @@ Seamlessly supports the following latest large models, simply configure the corr
 *   **Kimi K2** - Moonshot AI's latest flagship model
 *   **GLM-4.5** - Zhipu AI's latest version
 *   **Qwen Code** - Alibaba Tongyi Qianwen code-specific model
+*   **Gemini 3** - Google's latest preview model
+*   **Claude Sonnet 4.5** - Anthropic's latest flagship model
 
 ---
 
@@ -186,31 +263,6 @@ Seamlessly supports the following latest large models, simply configure the corr
 ### 🔄 Model Provider Switching
 
 This project provides two flexible model switching methods to meet different usage scenario requirements.
-
-#### Method 1: Startup Parameter Switching
-
-Specify the default model provider via command line parameters:
-
-```bash
-# Use Gemini provider
-node src/api-server.js --model-provider gemini-cli-oauth --project-id your-project-id
-
-# Use Claude Kiro provider
-node src/api-server.js --model-provider claude-kiro-oauth
-
-# Use Qwen provider
-node src/api-server.js --model-provider openai-qwen-oauth
-```
-
-**Available Model Provider Identifiers**:
-- `openai-custom` - Standard OpenAI API
-- `claude-custom` - Official Claude API
-- `gemini-cli-oauth` - Gemini CLI OAuth
-- `claude-kiro-oauth` - Kiro Claude OAuth
-- `openai-qwen-oauth` - Qwen Code OAuth
-- `openaiResponses-custom` - OpenAI Responses API
-
-#### Method 2: Path Routing Switching (Recommended)
 
 Achieve instant switching by specifying provider identifier in API request path:
 
@@ -268,7 +320,7 @@ This project supports rich command-line parameter configuration, allowing flexib
 
 | Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
 
 ### 🧠 OpenAI Compatible Provider Parameters
 

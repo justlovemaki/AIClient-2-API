@@ -13,8 +13,7 @@ let initialLoadTime = null;
  */
 async function loadSystemInfo() {
     try {
-        const response = await fetch('/api/system');
-        const data = await response.json();
+        const data = await window.apiClient.get('/system');
 
         const nodeVersionEl = document.getElementById('nodeVersion');
         const serverTimeEl = document.getElementById('serverTime');
@@ -80,8 +79,7 @@ function updateTimeDisplay() {
  */
 async function loadProviders() {
     try {
-        const response = await fetch('/api/providers');
-        const data = await response.json();
+        const data = await window.apiClient.get('/providers');
         renderProviders(data);
     } catch (error) {
         console.error('Failed to load providers:', error);
@@ -102,112 +100,123 @@ function renderProviders(providers) {
     const hasProviders = Object.keys(providers).length > 0;
     const statsGrid = document.querySelector('#providers .stats-grid');
     
+    // 始终显示统计卡片
+    if (statsGrid) statsGrid.style.display = 'grid';
+    
+    // 定义所有支持的提供商显示顺序
+    const providerDisplayOrder = [
+        'gemini-cli-oauth',
+        'openai-custom',
+        'claude-custom',
+        'claude-kiro-oauth',
+        'openai-qwen-oauth',
+        'openaiResponses-custom'
+    ];
+    
+    // 获取所有提供商类型并按指定顺序排序
+    // 优先显示预定义的所有供应商类型，即使某些供应商没有数据也要显示
+    let allProviderTypes;
     if (hasProviders) {
-        // 显示统计卡片
-        if (statsGrid) statsGrid.style.display = 'grid';
-        
-        // 计算总统计
-        let totalAccounts = 0;
-        let totalHealthy = 0;
-        
-        // 定义提供商显示顺序
-        const providerDisplayOrder = [
-            'gemini-cli-oauth',
-            'openai-custom',
-            'claude-custom',
-            'claude-kiro-oauth',
-            'openai-qwen-oauth',
-            'openaiResponses-custom'
-        ];
-        
-        // 获取所有提供商类型并按指定顺序排序
-        const allProviderTypes = Object.keys(providers);
-        const sortedProviderTypes = providerDisplayOrder.filter(type => allProviderTypes.includes(type))
-            .concat(allProviderTypes.filter(type => !providerDisplayOrder.includes(type)));
-        
-        // 按照排序后的提供商类型渲染
-        sortedProviderTypes.forEach((providerType) => {
-            const accounts = providers[providerType];
-            const providerDiv = document.createElement('div');
-            providerDiv.className = 'provider-item';
-            providerDiv.dataset.providerType = providerType;
-            providerDiv.style.cursor = 'pointer';
-
-            const healthyCount = accounts.filter(acc => acc.isHealthy).length;
-            const totalCount = accounts.length;
-            const usageCount = accounts.reduce((sum, acc) => sum + (acc.usageCount || 0), 0);
-            const errorCount = accounts.reduce((sum, acc) => sum + (acc.errorCount || 0), 0);
-            
-            totalAccounts += totalCount;
-            totalHealthy += healthyCount;
-
-            // 更新全局统计变量
-            if (!providerStats.providerTypeStats[providerType]) {
-                providerStats.providerTypeStats[providerType] = {
-                    totalAccounts: 0,
-                    healthyAccounts: 0,
-                    totalUsage: 0,
-                    totalErrors: 0,
-                    lastUpdate: null
-                };
-            }
-            
-            const typeStats = providerStats.providerTypeStats[providerType];
-            typeStats.totalAccounts = totalCount;
-            typeStats.healthyAccounts = healthyCount;
-            typeStats.totalUsage = usageCount;
-            typeStats.totalErrors = errorCount;
-            typeStats.lastUpdate = new Date().toISOString();
-
-            providerDiv.innerHTML = `
-                <div class="provider-header">
-                    <div class="provider-name">
-                        <span class="provider-type-text">${providerType}</span>
-                    </div>
-                    <div class="provider-status status-${healthyCount === totalCount ? 'healthy' : 'unhealthy'}">
-                        <i class="fas fa-${healthyCount === totalCount ? 'check-circle' : 'exclamation-triangle'}"></i>
-                        <span>${healthyCount}/${totalCount} 健康</span>
-                    </div>
-                </div>
-                <div class="provider-stats">
-                    <div class="provider-stat">
-                        <span class="provider-stat-label">总账户</span>
-                        <span class="provider-stat-value">${totalCount}</span>
-                    </div>
-                    <div class="provider-stat">
-                        <span class="provider-stat-label">健康账户</span>
-                        <span class="provider-stat-value">${healthyCount}</span>
-                    </div>
-                    <div class="provider-stat">
-                        <span class="provider-stat-label">使用次数</span>
-                        <span class="provider-stat-value">${usageCount}</span>
-                    </div>
-                    <div class="provider-stat">
-                        <span class="provider-stat-label">错误次数</span>
-                        <span class="provider-stat-value">${errorCount}</span>
-                    </div>
-                </div>
-            `;
-
-            // 添加点击事件 - 整个供应商组都可以点击
-            providerDiv.addEventListener('click', (e) => {
-                e.preventDefault();
-                openProviderManager(providerType);
-            });
-
-            container.appendChild(providerDiv);
-        });
-        
-        // 更新统计卡片数据
-        const activeProviders = Object.keys(providers).length;
-        updateProviderStatsDisplay(activeProviders, totalHealthy, totalAccounts);
+        // 合并预定义类型和实际存在的类型，确保显示所有预定义供应商
+        const actualProviderTypes = Object.keys(providers);
+        allProviderTypes = [...new Set([...providerDisplayOrder, ...actualProviderTypes])];
     } else {
-        // 隐藏统计卡片
-        if (statsGrid) statsGrid.style.display = 'none';
-        
-        // 显示无数据提示
-        container.innerHTML = '<div class="no-providers"><p>暂无供应商池配置</p></div>';
+        allProviderTypes = providerDisplayOrder;
     }
+    const sortedProviderTypes = providerDisplayOrder.filter(type => allProviderTypes.includes(type))
+        .concat(allProviderTypes.filter(type => !providerDisplayOrder.includes(type)));
+    
+    // 计算总统计
+    let totalAccounts = 0;
+    let totalHealthy = 0;
+    
+    // 按照排序后的提供商类型渲染
+    sortedProviderTypes.forEach((providerType) => {
+        const accounts = hasProviders ? providers[providerType] || [] : [];
+        const providerDiv = document.createElement('div');
+        providerDiv.className = 'provider-item';
+        providerDiv.dataset.providerType = providerType;
+        providerDiv.style.cursor = 'pointer';
+
+        const healthyCount = accounts.filter(acc => acc.isHealthy).length;
+        const totalCount = accounts.length;
+        const usageCount = accounts.reduce((sum, acc) => sum + (acc.usageCount || 0), 0);
+        const errorCount = accounts.reduce((sum, acc) => sum + (acc.errorCount || 0), 0);
+        
+        totalAccounts += totalCount;
+        totalHealthy += healthyCount;
+
+        // 更新全局统计变量
+        if (!providerStats.providerTypeStats[providerType]) {
+            providerStats.providerTypeStats[providerType] = {
+                totalAccounts: 0,
+                healthyAccounts: 0,
+                totalUsage: 0,
+                totalErrors: 0,
+                lastUpdate: null
+            };
+        }
+        
+        const typeStats = providerStats.providerTypeStats[providerType];
+        typeStats.totalAccounts = totalCount;
+        typeStats.healthyAccounts = healthyCount;
+        typeStats.totalUsage = usageCount;
+        typeStats.totalErrors = errorCount;
+        typeStats.lastUpdate = new Date().toISOString();
+
+        // 为无数据状态设置特殊样式
+        const isEmptyState = !hasProviders || totalCount === 0;
+        const statusClass = isEmptyState ? 'status-empty' : (healthyCount === totalCount ? 'status-healthy' : 'status-unhealthy');
+        const statusIcon = isEmptyState ? 'fa-info-circle' : (healthyCount === totalCount ? 'fa-check-circle' : 'fa-exclamation-triangle');
+        const statusText = isEmptyState ? '0/0 节点' : `${healthyCount}/${totalCount} 健康`;
+
+        providerDiv.innerHTML = `
+            <div class="provider-header">
+                <div class="provider-name">
+                    <span class="provider-type-text">${providerType}</span>
+                </div>
+                <div class="provider-status ${statusClass}">
+                    <i class="fas fa-${statusIcon}"></i>
+                    <span>${statusText}</span>
+                </div>
+            </div>
+            <div class="provider-stats">
+                <div class="provider-stat">
+                    <span class="provider-stat-label">总账户</span>
+                    <span class="provider-stat-value">${totalCount}</span>
+                </div>
+                <div class="provider-stat">
+                    <span class="provider-stat-label">健康账户</span>
+                    <span class="provider-stat-value">${healthyCount}</span>
+                </div>
+                <div class="provider-stat">
+                    <span class="provider-stat-label">使用次数</span>
+                    <span class="provider-stat-value">${usageCount}</span>
+                </div>
+                <div class="provider-stat">
+                    <span class="provider-stat-label">错误次数</span>
+                    <span class="provider-stat-value">${errorCount}</span>
+                </div>
+            </div>
+        `;
+
+        // 如果是空状态，添加特殊样式
+        if (isEmptyState) {
+            providerDiv.classList.add('empty-provider');
+        }
+
+        // 添加点击事件 - 整个供应商组都可以点击
+        providerDiv.addEventListener('click', (e) => {
+            e.preventDefault();
+            openProviderManager(providerType);
+        });
+
+        container.appendChild(providerDiv);
+    });
+    
+    // 更新统计卡片数据
+    const activeProviders = hasProviders ? Object.keys(providers).length : 0;
+    updateProviderStatsDisplay(activeProviders, totalHealthy, totalAccounts);
 }
 
 /**
@@ -282,8 +291,7 @@ function updateProviderStatsDisplay(activeProviders, healthyProviders, totalAcco
  */
 async function openProviderManager(providerType) {
     try {
-        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}`);
-        const data = await response.json();
+        const data = await window.apiClient.get(`/providers/${encodeURIComponent(providerType)}`);
         
         showProviderManagerModal(data);
     } catch (error) {

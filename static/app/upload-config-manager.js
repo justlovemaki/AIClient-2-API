@@ -4,6 +4,7 @@ import { showToast } from './utils.js';
 
 let allConfigs = []; // 存储所有配置数据
 let filteredConfigs = []; // 存储过滤后的配置数据
+let isLoadingConfigs = false; // 防止重复加载配置
 
 /**
  * 搜索配置
@@ -64,7 +65,7 @@ function createConfigItemElement(config, index) {
     // 从布尔值 isUsed 转换为状态字符串用于显示
     const configStatus = config.isUsed ? 'used' : 'unused';
     const item = document.createElement('div');
-    item.className = `config-item ${configStatus}`;
+    item.className = `config-item-manager ${configStatus}`;
     item.dataset.index = index;
 
     const statusIcon = config.isUsed ? 'fa-check-circle' : 'fa-circle';
@@ -250,17 +251,23 @@ function updateStats() {
  * 加载配置文件列表
  */
 async function loadConfigList() {
+    // 防止重复加载
+    if (isLoadingConfigs) {
+        console.log('正在加载配置列表，跳过重复调用');
+        return;
+    }
+
+    isLoadingConfigs = true;
+    console.log('开始加载配置列表...');
+    
     try {
-        const response = await fetch('/api/upload-configs');
-        if (response.ok) {
-            allConfigs = await response.json();
-            filteredConfigs = [...allConfigs];
-            renderConfigList();
-            updateStats();
-            // showToast('配置文件列表已刷新', 'success');
-        } else {
-            throw new Error('获取配置文件列表失败');
-        }
+        const result = await window.apiClient.get('/upload-configs');
+        allConfigs = result;
+        filteredConfigs = [...allConfigs];
+        renderConfigList();
+        updateStats();
+        console.log('配置列表加载成功，共', allConfigs.length, '个项目');
+        // showToast('配置文件列表已刷新', 'success');
     } catch (error) {
         console.error('加载配置列表失败:', error);
         showToast('加载配置列表失败: ' + error.message, 'error');
@@ -270,6 +277,9 @@ async function loadConfigList() {
         filteredConfigs = [...allConfigs];
         renderConfigList();
         updateStats();
+    } finally {
+        isLoadingConfigs = false;
+        console.log('配置列表加载完成');
     }
 }
 
@@ -343,14 +353,8 @@ function generateMockConfigData() {
  */
 async function viewConfig(path) {
     try {
-        const response = await fetch(`/api/upload-configs/view/${encodeURIComponent(path)}`);
-        if (response.ok) {
-            const fileData = await response.json();
-            showConfigModal(fileData);
-        } else {
-            const error = await response.json();
-            showToast('查看配置失败: ' + error.error.message, 'error');
-        }
+        const fileData = await window.apiClient.get(`/upload-configs/view/${encodeURIComponent(path)}`);
+        showConfigModal(fileData);
     } catch (error) {
         console.error('查看配置失败:', error);
         showToast('查看配置失败: ' + error.message, 'error');
@@ -450,39 +454,34 @@ function closeConfigModal() {
  */
 async function copyConfigContent(path) {
     try {
-        const response = await fetch(`/api/upload-configs/view/${encodeURIComponent(path)}`);
-        if (response.ok) {
-            const fileData = await response.json();
-            
-            // 尝试使用现代 Clipboard API
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(fileData.content);
-                showToast('内容已复制到剪贴板', 'success');
-            } else {
-                // 降级方案：使用传统的 document.execCommand
-                const textarea = document.createElement('textarea');
-                textarea.value = fileData.content;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                
-                try {
-                    const successful = document.execCommand('copy');
-                    if (successful) {
-                        showToast('内容已复制到剪贴板', 'success');
-                    } else {
-                        showToast('复制失败，请手动复制', 'error');
-                    }
-                } catch (err) {
-                    console.error('复制失败:', err);
-                    showToast('复制失败，请手动复制', 'error');
-                } finally {
-                    document.body.removeChild(textarea);
-                }
-            }
+        const fileData = await window.apiClient.get(`/upload-configs/view/${encodeURIComponent(path)}`);
+        
+        // 尝试使用现代 Clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(fileData.content);
+            showToast('内容已复制到剪贴板', 'success');
         } else {
-            showToast('获取配置内容失败', 'error');
+            // 降级方案：使用传统的 document.execCommand
+            const textarea = document.createElement('textarea');
+            textarea.value = fileData.content;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast('内容已复制到剪贴板', 'success');
+                } else {
+                    showToast('复制失败，请手动复制', 'error');
+                }
+            } catch (err) {
+                console.error('复制失败:', err);
+                showToast('复制失败，请手动复制', 'error');
+            } finally {
+                document.body.removeChild(textarea);
+            }
         }
     } catch (error) {
         console.error('复制失败:', error);
@@ -640,23 +639,14 @@ function showDeleteConfirmModal(config) {
  */
 async function performDelete(path) {
     try {
-        const response = await fetch(`/api/upload-configs/delete/${encodeURIComponent(path)}`, {
-            method: 'DELETE'
-        });
+        const result = await window.apiClient.delete(`/upload-configs/delete/${encodeURIComponent(path)}`);
+        showToast(result.message, 'success');
         
-        if (response.ok) {
-            const result = await response.json();
-            showToast(result.message, 'success');
-            
-            // 从本地列表中移除
-            allConfigs = allConfigs.filter(c => c.path !== path);
-            filteredConfigs = filteredConfigs.filter(c => c.path !== path);
-            renderConfigList();
-            updateStats();
-        } else {
-            const error = await response.json();
-            showToast('删除失败: ' + error.error.message, 'error');
-        }
+        // 从本地列表中移除
+        allConfigs = allConfigs.filter(c => c.path !== path);
+        filteredConfigs = filteredConfigs.filter(c => c.path !== path);
+        renderConfigList();
+        updateStats();
     } catch (error) {
         console.error('删除配置失败:', error);
         showToast('删除配置失败: ' + error.message, 'error');
@@ -724,30 +714,24 @@ function initUploadConfigManager() {
  * 重新加载配置文件
  */
 async function reloadConfig() {
-    try {
-        const response = await fetch('/api/reload-config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+    // 防止重复重载
+    if (isLoadingConfigs) {
+        console.log('正在重载配置，跳过重复调用');
+        return;
+    }
 
-        if (response.ok) {
-            const result = await response.json();
-            showToast(result.message, 'success');
-            
-            // 重新加载配置列表以反映最新的关联状态
-            await loadConfigList();
-            
-            // 发送自定义事件通知其他组件配置已重新加载
-            window.dispatchEvent(new CustomEvent('configReloaded', {
-                detail: result.details
-            }));
-            
-        } else {
-            const error = await response.json();
-            throw new Error(error.error?.message || '重载配置失败');
-        }
+    try {
+        const result = await window.apiClient.post('/reload-config');
+        showToast(result.message, 'success');
+        
+        // 重新加载配置列表以反映最新的关联状态
+        await loadConfigList();
+        
+        // 注意：不再发送 configReloaded 事件，避免重复调用
+        // window.dispatchEvent(new CustomEvent('configReloaded', {
+        //     detail: result.details
+        // }));
+        
     } catch (error) {
         console.error('重载配置失败:', error);
         showToast('重载配置失败: ' + error.message, 'error');

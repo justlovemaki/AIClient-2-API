@@ -2,8 +2,181 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import path from 'path';
 import multer from 'multer';
+import crypto from 'crypto';
 import { getRequestBody } from './common.js';
 import { CONFIG } from './config-manager.js';
+
+// Token存储在内存中（生产环境建议使用Redis）
+const tokenStore = new Map();
+
+/**
+ * 生成简单的token
+ */
+function generateToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * 生成token过期时间
+ */
+function getExpiryTime() {
+    const now = Date.now();
+    const expiry = 60 * 60 * 1000; // 1小时
+    return now + expiry;
+}
+
+/**
+ * 验证简单token
+ */
+function verifyToken(token) {
+    const tokenInfo = tokenStore.get(token);
+    if (!tokenInfo) {
+        return null;
+    }
+    
+    // 检查是否过期
+    if (Date.now() > tokenInfo.expiryTime) {
+        tokenStore.delete(token);
+        return null;
+    }
+    
+    return tokenInfo;
+}
+
+/**
+ * 清理过期的token
+ */
+function cleanupExpiredTokens() {
+    const now = Date.now();
+    for (const [token, info] of tokenStore.entries()) {
+        if (now > info.expiryTime) {
+            tokenStore.delete(token);
+        }
+    }
+}
+
+/**
+ * 读取密码文件内容
+ */
+async function readPasswordFile() {
+    try {
+        const password = await fs.readFile('./pwd', 'utf8');
+        return password.trim();
+    } catch (error) {
+        console.error('读取密码文件失败:', error);
+        return null;
+    }
+}
+
+/**
+ * 验证登录凭据
+ */
+async function validateCredentials(password) {
+    const storedPassword = await readPasswordFile();
+    return storedPassword && password === storedPassword;
+}
+
+/**
+ * 解析请求体JSON
+ */
+function parseRequestBody(req) {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                if (!body.trim()) {
+                    resolve({});
+                } else {
+                    resolve(JSON.parse(body));
+                }
+            } catch (error) {
+                reject(new Error('无效的JSON格式'));
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+/**
+ * 检查token验证
+ */
+function checkAuth(req) {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return false;
+    }
+
+    const token = authHeader.substring(7);
+    const tokenInfo = verifyToken(token);
+    
+    return tokenInfo !== null;
+}
+
+/**
+ * 处理登录请求
+ */
+async function handleLoginRequest(req, res) {
+    if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: '仅支持POST请求' }));
+        return true;
+    }
+
+    try {
+        const requestData = await parseRequestBody(req);
+        const { password } = requestData;
+        
+        if (!password) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: '密码不能为空' }));
+            return true;
+        }
+
+        const isValid = await validateCredentials(password);
+        
+        if (isValid) {
+            // 生成简单token
+            const token = generateToken();
+            const expiryTime = getExpiryTime();
+            
+            // 存储token信息
+            tokenStore.set(token, {
+                username: 'admin',
+                loginTime: Date.now(),
+                expiryTime
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: '登录成功',
+                token,
+                expiresIn: '1小时'
+            }));
+        } else {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: '密码错误，请重试'
+            }));
+        }
+    } catch (error) {
+        console.error('登录处理错误:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: false,
+            message: error.message || '服务器错误'
+        }));
+    }
+    return true;
+}
+
+// 定时清理过期token
+setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
 
 // 配置multer中间件
 const storage = multer.diskStorage({
@@ -80,6 +253,38 @@ export async function serveStaticFiles(pathParam, res) {
  * @returns {Promise<boolean>} - True if the request was handled by UI API
  */
 export async function handleUIApiRequests(method, pathParam, req, res, currentConfig, providerPoolManager) {
+    // 处理登录接口
+    if (method === 'POST' && pathParam === '/api/login') {
+        const handled = await handleLoginRequest(req, res);
+        if (handled) return true;
+    }
+
+    // 健康检查接口（用于前端token验证）
+    if (method === 'GET' && pathParam === '/api/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+        return true;
+    }
+    
+    // Handle UI management API requests (需要token验证，除了登录接口、健康检查和Events接口)
+    if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events') {
+        // 检查token验证
+        if (!checkAuth(req)) {
+            res.writeHead(401, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            });
+            res.end(JSON.stringify({
+                error: {
+                    message: '未授权访问，请先登录',
+                    code: 'UNAUTHORIZED'
+                }
+            }));
+            return true;
+        }
+    }
+
     // 文件上传API
     if (method === 'POST' && pathParam === '/api/upload-oauth-credentials') {
         const uploadMiddleware = upload.single('file');
@@ -612,6 +817,85 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Disable/Enable specific provider configuration
+    const disableEnableProviderMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/(disable|enable)$/);
+    if (disableEnableProviderMatch) {
+        const providerType = decodeURIComponent(disableEnableProviderMatch[1]);
+        const providerUuid = disableEnableProviderMatch[2];
+        const action = disableEnableProviderMatch[3];
+
+        try {
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            let providerPools = {};
+            
+            // Load existing pools
+            if (existsSync(filePath)) {
+                try {
+                    const fileContent = readFileSync(filePath, 'utf8');
+                    providerPools = JSON.parse(fileContent);
+                } catch (readError) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
+                    return true;
+                }
+            }
+
+            // Find and update the provider
+            const providers = providerPools[providerType] || [];
+            const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
+            
+            if (providerIndex === -1) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+                return true;
+            }
+
+            // Update isDisabled field
+            const provider = providers[providerIndex];
+            provider.isDisabled = action === 'disable';
+            
+            // Save to file
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] ${action === 'disable' ? 'Disabled' : 'Enabled'} provider ${providerUuid} in ${providerType}`);
+
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                
+                // Call the appropriate method
+                if (action === 'disable') {
+                    providerPoolManager.disableProvider(providerType, provider);
+                } else {
+                    providerPoolManager.enableProvider(providerType, provider);
+                }
+            }
+
+            // Update CONFIG cache to maintain consistency
+            CONFIG.providerPools = providerPools;
+
+            // 广播更新事件
+            broadcastEvent('config_update', {
+                action: action,
+                filePath: filePath,
+                providerType,
+                providerConfig: provider,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `Provider ${action}d successfully`,
+                provider: provider
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Server-Sent Events for real-time updates
     if (method === 'GET' && pathParam === '/api/events') {
         res.writeHead(200, {
@@ -900,7 +1184,7 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     const configsPath = path.join(process.cwd(), 'configs');
     
     if (!existsSync(configsPath)) {
-        console.log('[Config Scanner] configs directory not found, creating empty result');
+        // console.log('[Config Scanner] configs directory not found, creating empty result');
         return configFiles;
     }
 

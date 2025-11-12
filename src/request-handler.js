@@ -6,7 +6,6 @@ import { getApiService } from './service-manager.js';
 import { getProviderPoolManager } from './service-manager.js';
 import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
-
 /**
  * Main request handler. It authenticates the request, determines the endpoint type,
  * and delegates to the appropriate specialized handler function.
@@ -32,13 +31,12 @@ export function createRequestHandler(config, providerPoolManager) {
             return;
         }
 
-        // Serve static files for UI
-        if (path.startsWith('/static/') || path === '/' || path === '/index.html' || path.startsWith('/app/')) {
+        // Serve static files for UI (除了登录页面需要认证)
+        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html') {
             const served = await serveStaticFiles(path, res);
             if (served) return;
         }
 
-        // Handle UI management API requests
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
 
@@ -51,7 +49,7 @@ export function createRequestHandler(config, providerPoolManager) {
             currentConfig.MODEL_PROVIDER = modelProviderHeader;
             console.log(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
         }
-         
+          
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
         if (pathSegments.length > 0) {

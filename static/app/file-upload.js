@@ -125,18 +125,8 @@ class FileUploadHandler {
             formData.append('provider', this.currentProvider);
             formData.append('targetInputId', targetInputId);
 
-            // 发送上传请求
-            const response = await fetch('/api/upload-oauth-credentials', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || '上传失败');
-            }
-
-            const result = await response.json();
+            // 使用封装接口发送上传请求
+            const result = await window.apiClient.upload('/upload-oauth-credentials', formData);
             
             // 成功上传，设置文件路径到输入框
             this.setFilePathToInput(targetInputId, result.filePath);

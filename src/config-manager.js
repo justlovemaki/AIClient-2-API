@@ -78,14 +78,14 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             QWEN_OAUTH_CREDS_FILE_PATH: null,
             PROJECT_ID: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
-            SYSTEM_PROMPT_MODE: 'overwrite',
+            SYSTEM_PROMPT_MODE: 'append',
             PROMPT_LOG_BASE_NAME: "prompt_log",
             PROMPT_LOG_MODE: "none",
             REQUEST_MAX_RETRIES: 3,
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
-            CRON_REFRESH_TOKEN: true,
-            PROVIDER_POOLS_FILE_PATH: null // 新增号池配置文件路径
+            CRON_REFRESH_TOKEN: false,
+            PROVIDER_POOLS_FILE_PATH: '' // 新增号池配置文件路径
         };
         console.log('[Config] Using default configuration.');
     }

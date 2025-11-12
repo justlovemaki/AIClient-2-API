@@ -1,7 +1,7 @@
 /* CSS变量 */
 :root {
-    --primary-color: #4f46e5;
-    --secondary-color: #818cf8;
+    --primary-color: #059669;
+    --secondary-color: #10b981;
     --success-color: #10b981;
     --danger-color: #ef4444;
     --warning-color: #f59e0b;
@@ -91,6 +91,33 @@ body {
 
 .status-badge.error i {
     color: var(--danger-color);
+}
+.logout-btn {
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.logout-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+
+.logout-btn:active {
+    transform: translateY(0);
+}
+
+.logout-btn i {
+    font-size: 14px;
 }
 
 @keyframes pulse {
@@ -255,6 +282,13 @@ body {
     color: var(--text-primary);
 }
 
+.form-group label .optional-mark {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-left: 0.25rem;
+}
+
 .form-control {
     width: 100%;
     padding: 0.75rem;
@@ -268,7 +302,7 @@ body {
 .form-control:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
 textarea.form-control {
@@ -504,13 +538,33 @@ textarea.form-control {
 }
 
 .btn-primary {
-    background: var(--primary-color);
-    color: white;
-    line-height: 0;
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .btn-primary:hover {
-    background: #4338ca;
+    transform: translateY(-2px);
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary i {
+    font-size: 14px;
 }
 
 .btn-success {
@@ -537,7 +591,7 @@ textarea.form-control {
 }
 
 .btn-danger:hover {
-    background: #dc2626;
+    background: #ef4444;
 }
 
 /* 提供商列表 */
@@ -1341,14 +1395,14 @@ input:checked + .toggle-slider:before {
 }
 
 .btn-edit {
-    background: linear-gradient(135deg, #007bff 0%, #6f42c1 100%);
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
     color: white;
-    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
 }
 
 .btn-edit:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
 }
 
 .btn-delete {
@@ -1417,8 +1471,8 @@ input:checked + .toggle-slider:before {
 
 .config-item input:focus, .config-item textarea:focus, .config-item select:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
 .config-item input[readonly], .config-item select[disabled] {
@@ -1486,8 +1540,8 @@ input:checked + .toggle-slider:before {
 
 .form-group input:focus, .form-group select:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
 /* 无提供商提示 */
@@ -1704,7 +1758,7 @@ input:checked + .toggle-slider:before {
 }
 
 .search-input-group .btn:hover {
-    background: #4338ca;
+    background: #047857;
     transform: translateY(-1px);
 }
 
@@ -1763,18 +1817,18 @@ input:checked + .toggle-slider:before {
     overflow-y: auto;
 }
 
-.config-item {
+.config-item-manager {
     padding: 1.5rem;
     border-bottom: 1px solid var(--border-color);
     transition: var(--transition);
     cursor: pointer;
 }
 
-.config-item:hover {
+.config-item-manager:hover {
     background: var(--bg-secondary);
 }
 
-.config-item:last-child {
+.config-item-manager:last-child {
     border-bottom: none;
 }
 
@@ -1843,17 +1897,17 @@ input:checked + .toggle-slider:before {
     font-weight: 500;
 }
 
-.config-item.used .config-item-status {
+.config-item-manager.used .config-item-status {
     background: #d1fae5;
     color: #065f46;
 }
 
-.config-item.unused .config-item-status {
+.config-item-manager.unused .config-item-status {
     background: #fef3c7;
     color: #92400e;
 }
 
-.config-item.invalid .config-item-status {
+.config-item-manager.invalid .config-item-status {
     background: #fee2e2;
     color: #991b1b;
 }
@@ -1865,7 +1919,7 @@ input:checked + .toggle-slider:before {
     display: none;
 }
 
-.config-item.expanded .config-item-details {
+.config-item-manager.expanded .config-item-details {
     display: block;
 }
 
@@ -1923,7 +1977,7 @@ input:checked + .toggle-slider:before {
 }
 
 .btn-view:hover {
-    background: #4338ca;
+    background: #047857;
 }
 
 .btn-delete-small {
@@ -1932,14 +1986,14 @@ input:checked + .toggle-slider:before {
 }
 
 .btn-delete-small:hover {
-    background: #dc2626;
+    background: #ef4444;
 }
 
-.config-item.expanded {
+.config-item-manager.expanded {
     background: var(--bg-secondary);
 }
 
-.config-item.expanded:hover {
+.config-item-manager.expanded:hover {
     background: #e5e7eb;
 }
 
@@ -2218,19 +2272,19 @@ input:checked + .toggle-slider:before {
 }
 
 /* 针对不同使用类型的特殊样式 */
-.config-item.used .config-usage-info {
+.config-item-manager.used .config-usage-info {
     border-left-color: var(--success-color);
 }
 
-.config-item.used .config-usage-info .usage-info-header i {
+.config-item-manager.used .config-usage-info .usage-info-header i {
     color: var(--success-color);
 }
 
-.config-item.used .usage-detail-item i {
+.config-item-manager.used .usage-detail-item i {
     color: var(--success-color);
 }
 
-.config-item.used .usage-detail-type {
+.config-item-manager.used .usage-detail-type {
     background: var(--success-color);
 }
 
@@ -2363,7 +2417,7 @@ input:checked + .toggle-slider:before {
 }
 
 .delete-confirm-modal.used .delete-modal-header h3 {
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .delete-confirm-modal.unused .delete-modal-header h3 {
@@ -2390,7 +2444,7 @@ input:checked + .toggle-slider:before {
 .delete-warning.warning-used {
     background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
     border-color: #fca5a5;
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .delete-warning.warning-unused {
@@ -2486,7 +2540,7 @@ input:checked + .toggle-slider:before {
 
 .alert-icon {
     font-size: 1.25rem;
-    color: #dc2626;
+    color: #ef4444;
     margin-top: 0.125rem;
     flex-shrink: 0;
 }
@@ -2495,7 +2549,7 @@ input:checked + .toggle-slider:before {
     margin: 0 0 0.75rem 0;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .alert-content p {
@@ -2517,7 +2571,7 @@ input:checked + .toggle-slider:before {
 }
 
 .alert-content strong {
-    color: #dc2626;
+    color: #ef4444;
     font-weight: 600;
 }
 
@@ -2557,9 +2611,9 @@ input:checked + .toggle-slider:before {
 }
 
 .delete-confirm-modal.used .btn-confirm-delete {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
-    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
     animation: pulseDanger 2s infinite;
 }
 
@@ -2570,9 +2624,9 @@ input:checked + .toggle-slider:before {
 }
 
 .delete-confirm-modal.used .btn-confirm-delete:hover {
-    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
 }
 
 .delete-confirm-modal.unused .btn-confirm-delete:hover {
@@ -2583,10 +2637,10 @@ input:checked + .toggle-slider:before {
 
 @keyframes pulseDanger {
     0%, 100% {
-        box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+        box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
     }
     50% {
-        box-shadow: 0 4px 15px rgba(220, 38, 38, 0.7);
+        box-shadow: 0 4px 15px rgba(239, 68, 68, 0.7);
     }
 }
 
@@ -2643,5 +2697,146 @@ input:checked + .toggle-slider:before {
     .usage-alert {
         flex-direction: column;
         gap: 0.75rem;
+    }
+}
+
+/* 禁用供应商状态样式 */
+.provider-item-detail.disabled {
+    opacity: 0.6;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 1px solid #dee2e6;
+    position: relative;
+}
+
+.provider-item-detail.disabled::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    border-radius: 0 2px 2px 0;
+    z-index: 1;
+}
+
+.provider-item-detail.disabled:hover {
+    opacity: 0.8;
+    border-color: #adb5bd;
+    box-shadow: 0 2px 8px rgba(108, 117, 125, 0.15);
+    transform: none;
+}
+
+.provider-item-detail.disabled .provider-item-header {
+    background: linear-gradient(135deg, #f1f3f4 0%, #ffffff 100%);
+}
+
+.provider-item-detail.disabled .provider-name {
+    color: #6c757d;
+    text-decoration: line-through;
+}
+
+.provider-item-detail.disabled .provider-meta {
+    color: #9ca3af;
+}
+
+.disabled-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    transition: var(--transition);
+}
+
+.provider-item-detail.disabled .disabled-status {
+    color: #6c757d;
+    background: rgba(108, 117, 125, 0.1);
+}
+
+.provider-item-detail:not(.disabled) .disabled-status {
+    color: #059669;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+/* 禁用/启用按钮特殊样式 */
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.btn-warning:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.btn-warning:active {
+    transform: translateY(0);
+}
+
+/* 供应商状态指示器 */
+.provider-status .disabled-indicator {
+    position: relative;
+}
+
+.provider-status .disabled-indicator::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #6c757d;
+    border: 2px solid white;
+    border-radius: 50%;
+}
+
+.provider-status .enabled-indicator::after {
+    background: var(--success-color);
+}
+
+/* 禁用状态下的交互效果 */
+.provider-item-detail.disabled .provider-actions-group .btn-edit,
+.provider-item-detail.disabled .provider-actions-group .btn-delete {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.provider-item-detail.disabled .provider-actions-group .btn-toggle {
+    opacity: 1;
+}
+
+/* 统计信息中的禁用状态显示 */
+.provider-stat .disabled-count {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.provider-stat .enabled-count {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .provider-item-detail.disabled {
+        opacity: 0.5;
+    }
+    
+    .disabled-status {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    .provider-actions-group {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .btn-small {
+        font-size: 0.7rem;
+        padding: 0.4rem 0.6rem;
     }
 }

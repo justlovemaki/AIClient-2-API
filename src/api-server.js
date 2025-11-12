@@ -166,16 +166,16 @@ async function startServer() {
             try {
                 const open = (await import('open')).default;
                 setTimeout(() => {
-                    open(`http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/`)
+                    open(`http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`)
                         .then(() => {
-                            console.log('[UI] Opened management console in default browser');
+                            console.log('[UI] Opened login page in default browser');
                         })
                         .catch(err => {
-                            console.log('[UI] Please open manually: http://' + CONFIG.HOST + ':' + CONFIG.SERVER_PORT + '/');
+                            console.log('[UI] Please open manually: http://' + CONFIG.HOST + ':' + CONFIG.SERVER_PORT + '/login.html');
                         });
                 }, 1000);
             } catch (err) {
-                console.log(`[UI] Management console available at: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/`);
+                console.log(`[UI] Login page available at: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`);
             }
         // }
 

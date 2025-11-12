@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - AIClient2API</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin-bottom: 15px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .logo p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #aaa;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 8px;
+            display: none;
+            animation: shake 0.3s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(5, 150, 105, 0.4);
+        }
+
+        .login-button:active {
+            transform: translateY(0);
+        }
+
+        .login-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e8ed;
+        }
+
+        .footer p {
+            font-size: 13px;
+            color: #999;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 30px 20px;
+            }
+
+            .logo h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <img src="/favicon.ico" alt="Logo" onerror="this.style.display='none'">
+            <h1>AIClient2API</h1>
+            <p>请登录以继续</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    placeholder="请输入密码"
+                    autocomplete="current-password"
+                    required
+                >
+                <div class="error-message" id="errorMessage">密码错误，请重试</div>
+            </div>
+
+            <button type="submit" class="login-button" id="loginButton">
+                登录
+            </button>
+        </form>
+
+        <div class="footer">
+            <p>&copy; 2025 AIClient2API. All rights reserved.</p>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const passwordInput = document.getElementById('password');
+        const errorMessage = document.getElementById('errorMessage');
+        const loginButton = document.getElementById('loginButton');
+
+        // 检查是否已经登录
+        checkLoginStatus();
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const password = passwordInput.value.trim();
+            
+            if (!password) {
+                showError('请输入密码');
+                return;
+            }
+
+            // 禁用按钮并显示加载状态
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<span class="loading"></span>登录中...';
+            errorMessage.classList.remove('show');
+
+            try {
+                // 直接使用fetch进行登录请求（登录页面不需要token）
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // 登录成功，保存token
+                    localStorage.setItem('authToken', data.token);
+                    
+                    // 跳转到主页
+                    window.location.href = '/';
+                } else {
+                    showError(data.message || '密码错误，请重试');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = '登录';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                showError('登录失败，请检查网络连接');
+                loginButton.disabled = false;
+                loginButton.innerHTML = '登录';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            passwordInput.classList.add('error');
+            
+            setTimeout(() => {
+                passwordInput.classList.remove('error');
+            }, 300);
+        }
+
+        function checkLoginStatus() {
+            const token = localStorage.getItem('authToken');
+            
+            if (token) {
+                // Token存在，跳转到主页
+                window.location.href = '/';
+            }
+        }
+
+        // 监听输入，清除错误提示
+        passwordInput.addEventListener('input', () => {
+            errorMessage.classList.remove('show');
+        });
+
+        // 页面加载时聚焦到密码输入框
+        passwordInput.focus();
+    </script>
+    </body>
+</html>

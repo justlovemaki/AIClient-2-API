@@ -54,7 +54,7 @@ function showToast(message, type = 'info') {
  */
 function getFieldLabel(key) {
     const labelMap = {
-        'checkModelName': '检查模型名称',
+        'checkModelName': '检查模型名称 (选填)',
         'checkHealth': '健康检查',
         'OPENAI_API_KEY': 'OpenAI API Key',
         'OPENAI_BASE_URL': 'OpenAI Base URL',

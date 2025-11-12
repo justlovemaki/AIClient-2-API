@@ -30,6 +30,7 @@
 >
 > **📅 版本更新日志**
 >
+> - **2025.11.11** - 新增 Web UI 管理控制台，支持实时配置管理和健康状态监控
 > - **2025.11.06** - 新增对 Gemini 3 预览版的支持，增强模型兼容性和性能优化
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
 > - **2025.09.01** - 集成 Qwen Code CLI，新增 `qwen3-coder-plus` 模型支持
@@ -62,6 +63,7 @@
 *   **系统提示词管理**：支持覆盖和追加两种模式，实现统一基础指令与个性化扩展的完美结合
 
 ### 🔧 开发友好，易于扩展
+*   **Web UI 管理控制台**：实时配置管理、健康状态监控、API 测试和日志查看
 *   **模块化架构**：基于策略模式和适配器模式，新增模型提供商仅需 3 步
 *   **完整测试保障**：集成测试和单元测试覆盖率 90%+，确保代码质量
 *   **容器化部署**：提供 Docker 支持，一键部署，跨平台运行
@@ -83,7 +85,6 @@
 
 ## 🎨 模型协议与提供商关系图
 
-
 本项目通过不同的协议（Protocol）支持多种模型提供商（Model Provider）。以下是它们之间的关系概述：
 
 *   **OpenAI 协议 (P_OPENAI)**：由 `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth` 和 `openai-qwen-oauth` 等模型提供商实现。
@@ -94,7 +95,7 @@
 
 
   ```mermaid
-  
+   
    graph TD
        subgraph Core_Protocols["核心协议"]
            P_OPENAI[OpenAI Protocol]
@@ -108,6 +109,7 @@
            MP_CLAUDE_C[claude-custom]
            MP_CLAUDE_K[claude-kiro-oauth]
            MP_QWEN[openai-qwen-oauth]
+           MP_OPENAI_RESP[openaiResponses-custom]
        end
    
        P_OPENAI ---|支持| MP_OPENAI
@@ -115,6 +117,7 @@
        P_OPENAI ---|支持| MP_GEMINI
        P_OPENAI ---|支持| MP_CLAUDE_C
        P_OPENAI ---|支持| MP_CLAUDE_K
+       P_OPENAI ---|支持| MP_OPENAI_RESP
    
        P_GEMINI ---|支持| MP_GEMINI
    
@@ -123,6 +126,7 @@
        P_CLAUDE ---|支持| MP_GEMINI
        P_CLAUDE ---|支持| MP_OPENAI
        P_CLAUDE ---|支持| MP_QWEN
+       P_CLAUDE ---|支持| MP_OPENAI_RESP
    
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
@@ -134,7 +138,79 @@
 
 ## 🔧 使用说明
 
+### 🚀 install-and-run 脚本快速启动
+
+使用 AIClient-2-API 最简单的方式是使用我们的自动化安装启动脚本。我们提供了 Linux/macOS 和 Windows 两个版本：
+
+#### Linux/macOS 用户
+```bash
+# 给脚本添加执行权限并运行
+chmod +x install-and-run.sh
+./install-and-run.sh
+```
+
+#### Windows 用户
+```cmd
+# 运行批处理文件
+install-and-run.bat
+```
+
+#### 脚本功能说明
+
+`install-and-run` 脚本会自动执行以下操作：
+
+1. **检查 Node.js 安装**：验证 Node.js 是否已安装，如缺失则提供下载链接
+2. **依赖管理**：如果 `node_modules` 不存在，自动安装 npm 依赖包
+3. **文件验证**：确保所有必需的项目文件都存在
+4. **服务器启动**：在 `http://localhost:3000` 启动 API 服务器
+5. **Web UI 访问**：直接提供管理控制台的访问地址
+
+#### 脚本执行示例
+```
+========================================
+  AI Client 2 API 快速安装启动脚本
+========================================
+
+[检查] 正在检查Node.js是否已安装...
+✅ Node.js已安装，版本: v20.10.0
+✅ 找到package.json文件
+✅ node_modules目录已存在
+✅ 项目文件检查完成
+
+========================================
+  启动AI Client 2 API服务器...
+========================================
+
+🌐 服务器将在 http://localhost:3000 启动
+📖 访问 http://localhost:3000 查看管理界面
+⏹️  按 Ctrl+C 停止服务器
+```
+
+> **💡 提示**：脚本会自动安装依赖并启动服务器。如果遇到任何问题，脚本会提供清晰的错误信息和解决建议。
+
+---
+
 ### 📋 核心功能
+
+#### Web UI 管理控制台
+
+![Web UI](src/img/web.png)
+
+功能完善的 Web 管理界面，包含：
+
+**📊 仪表盘**：系统概览、交互式路由示例、客户端配置指南
+
+**⚙️ 配置管理**：实时参数修改，支持所有提供商（Gemini、OpenAI、Claude、Kiro、Qwen），包含高级设置和文件上传
+
+**🔗 供应商池**：监控活动连接、提供商健康统计、启用/禁用管理
+
+**📁 配置文件**：OAuth 凭据集中管理，支持搜索过滤和文件操作
+
+**📜 实时日志**：系统日志和请求日志实时显示，带管理控制
+
+**🔐 登录验证**：默认密码 `admin123`，可通过 `pwd` 文件修改
+
+访问：`http://localhost:3000` → 登录 → 侧边栏导航 → 立即生效
 
 #### MCP 协议支持
 本项目完全兼容 **Model Context Protocol (MCP)**，可与支持 MCP 的客户端无缝集成，实现强大的功能扩展。
@@ -147,6 +223,8 @@
 *   **Kimi K2** - 月之暗面最新旗舰模型
 *   **GLM-4.5** - 智谱 AI 最新版本
 *   **Qwen Code** - 阿里通义千问代码专用模型
+*   **Gemini 3** - Google 最新预览版模型
+*   **Claude Sonnet 4.5** - Anthropic 最新旗舰模型
 
 ---
 
@@ -175,44 +253,17 @@
 3. **最佳实践**：推荐配合 **Claude Code** 使用，可获得最优体验
 4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
 
-#### OpenAI Responses API
-*   **应用场景**：适用于需要使用 OpenAI Responses API 进行结构化对话的场景，如Codex
-*   **配置方法**：
-    *   方式一：在 [`config.json`](./config.json) 中设置 `MODEL_PROVIDER` 为 `openaiResponses-custom`
-    *   方式二：使用启动参数 `--model-provider openaiResponses-custom`
-    *   方式三：使用路径路由 `/openaiResponses-custom`
-*   **必需参数**：提供有效的 API 密钥和基础 URL
+#### 账号池管理配置
+1. **创建号池配置文件**：参考 [provider_pools.json.example](./provider_pools.json.example) 创建配置文件
+2. **配置号池参数**：在 config.json 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
+3. **启动参数配置**：使用 `--provider-pools-file <path>` 参数指定号池配置文件路径
+4. **健康检查**：系统会定期自动执行健康检查，移除不健康的提供商
 
 ---
 
 ### 🔄 模型供应商切换
 
 本项目提供两种灵活的模型切换方式，满足不同使用场景的需求。
-
-#### 方式一：启动参数切换
-
-通过命令行参数指定默认使用的模型提供商：
-
-```bash
-# 使用Gemini提供商
-node src/api-server.js --model-provider gemini-cli-oauth --project-id your-project-id
-
-# 使用Claude Kiro提供商
-node src/api-server.js --model-provider claude-kiro-oauth
-
-# 使用Qwen提供商
-node src/api-server.js --model-provider openai-qwen-oauth
-```
-
-**可用的模型提供商标识**：
-- `openai-custom` - 标准OpenAI API
-- `claude-custom` - 官方Claude API
-- `gemini-cli-oauth` - Gemini CLI OAuth
-- `claude-kiro-oauth` - Kiro Claude OAuth
-- `openai-qwen-oauth` - Qwen Code OAuth
-- `openaiResponses-custom` - OpenAI Responses API
-
-#### 方式二：Path 路由切换（推荐）
 
 通过在 API 请求路径中指定供应商标识，实现即时切换：
 
@@ -270,7 +321,7 @@ curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
 
 ### 🧠 OpenAI 兼容提供商参数
 
@@ -380,6 +431,9 @@ node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mo
 node src/api-server.js --log-prompts console
 node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
 
+# 配置号池
+node src/api-server.js --provider-pools-file ./provider_pools.json
+
 # 完整示例
 node src/api-server.js \
   --host 0.0.0.0 \
@@ -391,8 +445,10 @@ node src/api-server.js \
   --system-prompt-file ./custom-system-prompt.txt \
   --system-prompt-mode overwrite \
   --log-prompts file \
-  --prompt-log-base-name api-logs
+  --prompt-log-base-name api-logs \
+  --provider-pools-file ./provider_pools.json
 ```
+
 ---
 
 ## 📄 开源许可

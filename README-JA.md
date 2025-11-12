@@ -30,10 +30,11 @@
 >
 > **📅 バージョン更新ログ**
 >
+> - **2025.11.11** - Web UI管理コントロールコンソールの追加、リアルタイム設定管理与健康状態モニタリングをサポート
 > - **2025.11.06** - Gemini 3 プレビュー版のサポートを追加、モデル互換性とパフォーマンス最適化を向上
 > - **2025.10.18** - Kiroオープン登録、新規アカウントに500クレジット付与、Claude Sonnet 4.5を完全サポート
 > - **2025.09.01** - Qwen Code CLIを統合、`qwen3-coder-plus`モデルサポートを追加
-> - **2025.08.29** - アカウントプール管理機能をリリース、マルチアカウントポーリング、インテリジェントフェイルオーバー、自動ダウングレード戦略をサポート
+> - **2025.08.29** - アカウントプール管理機能をリリース、マルチアカウントポーリング、自動フェイルオーバー、自動ダウングレード戦略をサポート
 >   - 設定方法：config.jsonに`PROVIDER_POOLS_FILE_PATH`パラメータを追加
 >   - 参考設定：[provider_pools.json](./provider_pools.json.example)
 
@@ -85,8 +86,8 @@
 
 本プロジェクトは異なるプロトコルを通じて複数のモデルプロバイダーをサポートします。以下はそれらの関係の概要です：
 
-*   **OpenAIプロトコル (P_OPENAI)**：`openai-custom`、`gemini-cli-oauth`、`claude-custom`、`claude-kiro-oauth`、`openai-qwen-oauth`モデルプロバイダーによって実装。
-*   **Claudeプロトコル (P_CLAUDE)**：`claude-custom`、`claude-kiro-oauth`、`gemini-cli-oauth`、`openai-custom`、`openai-qwen-oauth`モデルプロバイダーによって実装。
+*   **OpenAIプロトコル (P_OPENAI)**：`openai-custom`、`gemini-cli-oauth`、`claude-custom`、`claude-kiro-oauth`、`openai-qwen-oauth`、`openaiResponses-custom`モデルプロバイダーによって実装。
+*   **Claudeプロトコル (P_CLAUDE)**：`claude-custom`、`claude-kiro-oauth`、`gemini-cli-oauth`、`openai-custom`、`openai-qwen-oauth`、`openaiResponses-custom`モデルプロバイダーによって実装。
 *   **Geminiプロトコル (P_GEMINI)**：`gemini-cli-oauth`モデルプロバイダーによって実装。
 
 詳細な関係図：
@@ -106,6 +107,7 @@
            MP_CLAUDE_C[claude-custom]
            MP_CLAUDE_K[claude-kiro-oauth]
            MP_QWEN[openai-qwen-oauth]
+           MP_OPENAI_RESP[openaiResponses-custom]
        end
 
        P_OPENAI ---|サポート| MP_OPENAI
@@ -113,14 +115,16 @@
        P_OPENAI ---|サポート| MP_GEMINI
        P_OPENAI ---|サポート| MP_CLAUDE_C
        P_OPENAI ---|サポート| MP_CLAUDE_K
-
+       P_OPENAI ---|サポート| MP_OPENAI_RESP
+   
        P_GEMINI ---|サポート| MP_GEMINI
-
+   
        P_CLAUDE ---|サポート| MP_CLAUDE_C
        P_CLAUDE ---|サポート| MP_CLAUDE_K
        P_CLAUDE ---|サポート| MP_GEMINI
        P_CLAUDE ---|サポート| MP_OPENAI
        P_CLAUDE ---|サポート| MP_QWEN
+       P_CLAUDE ---|サポート| MP_OPENAI_RESP
 
        style P_OPENAI fill:#f9f,stroke:#333,stroke-width:2px
        style P_GEMINI fill:#ccf,stroke:#333,stroke-width:2px
@@ -132,7 +136,79 @@
 
 ## 🔧 使用方法
 
+### 🚀 install-and-run スクリプトでクイックスタート
+
+AIClient-2-APIを使い始める最も簡単な方法は、自動的にインストールと起動を実行するスクリプトを使用することです。Linux/macOS版とWindows版の2つのバージョンを提供：
+
+#### Linux/macOS ユーザー向け
+```bash
+# スクリプトに実行権限を付与して実行
+chmod +x install-and-run.sh
+./install-and-run.sh
+```
+
+#### Windows ユーザー向け
+```cmd
+# バッチファイルを実行
+install-and-run.bat
+```
+
+#### スクリプトの機能
+
+`install-and-run` スクリプトは自動的に以下の操作を実行します：
+
+1. **Node.js インストール確認**：Node.js がインストールされているかを確認し、不足の場合はダウンロードリンクを提供
+2. **依存関係管理**：`node_modules` が存在しない場合、npm 依存関係を自動インストール
+3. **ファイル検証**：すべての必要なプロジェクトファイルが存在することを確認
+4. **サーバー起動**：`http://localhost:3000` で API サーバーを起動
+5. **Web UI アクセス**：管理コンソールへの直接アクセスを提供
+
+#### スクリプト実行例
+```
+========================================
+  AI Client 2 API 快速インストール起動スクリプト
+========================================
+
+[確認] Node.js がインストールされているかを確認中...
+✅ Node.js がインストールされています、バージョン: v20.10.0
+✅ package.json ファイルが見つかりました
+✅ node_modules ディレクトリが既に存在しています
+✅ プロジェクトファイルの確認が完了しました
+
+========================================
+  AI Client 2 API サーバーを起動中...
+========================================
+
+🌐 サーバーは http://localhost:3000 で起動します
+📖 管理インターフェースを表示するには http://localhost:3000 にアクセス
+⏹️  サーバーを停止するには Ctrl+C を押してください
+```
+
+> **💡 ヒント**：スクリプトは自動的に依存関係をインストールし、サーバーを起動します。問題が発生した場合、スクリプトは明確なエラーメッセージと解決案を提供します。
+
+---
+
 ### 📋 コア機能
+
+#### Web UI管理コントロールコンソール
+
+![Web UI](src/img/web.png)
+
+以下の機能モジュールを備えたWeb管理インターフェース：
+
+**📊 ダッシュボード**：システム概要、インタラクティブなルーティング例、クライアント設定ガイド
+
+**⚙️ 設定管理**：全プロバイダー（Gemini、OpenAI、Claude、Kiro、Qwen）のリアルタイムパラメータ修正、高度設定、ファイルアップロード対応
+
+**🔗 プロバイダープール**：アクティブ接続監視、プロバイダー健全性統計、有効化/無効化管理
+
+**📁 設定ファイル**：OAuth資格情報の集中管理、検索フィルタリング、ファイル操作機能
+
+**📜 リアルタイムログ**：システムログとリクエストログのライブ表示、管理コントロール付き
+
+**🔐 ログイン**：認証が必要（デフォルト：`admin123`、`pwd`ファイルで変更可能）
+
+アクセス：`http://localhost:3000` → ログイン → サイドバーナビゲーション → 即座有効
 
 #### MCPプロトコルサポート
 本プロジェクトは**Model Context Protocol (MCP)**と完全互換で、MCPをサポートするクライアントとシームレスに統合し、強力な機能拡張を実現します。
@@ -145,6 +221,8 @@
 *   **Kimi K2** - 月之暗面の最新フラッグシップモデル
 *   **GLM-4.5** - 智譜AIの最新バージョン
 *   **Qwen Code** - アリババ通義千問のコード専用モデル
+*   **Gemini 3** - Googleの最新プレビューモデル
+*   **Claude Sonnet 4.5** - Anthropicの最新フラッグシップモデル
 
 ---
 
@@ -186,31 +264,6 @@
 ### 🔄 モデルプロバイダー切り替え
 
 本プロジェクトは2つの柔軟なモデル切り替え方法を提供し、異なる使用シナリオのニーズに対応します。
-
-#### 方法1：起動パラメータ切り替え
-
-コマンドラインパラメータでデフォルトのモデルプロバイダーを指定：
-
-```bash
-# Geminiプロバイダーを使用
-node src/api-server.js --model-provider gemini-cli-oauth --project-id your-project-id
-
-# Claude Kiroプロバイダーを使用
-node src/api-server.js --model-provider claude-kiro-oauth
-
-# Qwenプロバイダーを使用
-node src/api-server.js --model-provider openai-qwen-oauth
-```
-
-**利用可能なモデルプロバイダー識別子**：
-- `openai-custom` - 標準OpenAI API
-- `claude-custom` - 公式Claude API
-- `gemini-cli-oauth` - Gemini CLI OAuth
-- `claude-kiro-oauth` - Kiro Claude OAuth
-- `openai-qwen-oauth` - Qwen Code OAuth
-- `openaiResponses-custom` - OpenAI Responses API
-
-#### 方法2：Pathルーティング切り替え（推奨）
 
 APIリクエストパスでプロバイダー識別子を指定して即座に切り替え：
 
@@ -268,7 +321,7 @@ curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
 
 | パラメータ | タイプ | デフォルト値 | 説明 |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AIモデルプロバイダー、選択可能値：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth |
+| `--model-provider` | string | gemini-cli-oauth | AIモデルプロバイダー、選択可能値：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
 
 ### 🧠 OpenAI互換プロバイダーパラメータ
 
