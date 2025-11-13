@@ -106,19 +106,19 @@ function updateProviderStatus(data) {
 }
 
 /**
- * 处理供应商更新事件
+ * 处理提供商更新事件
  * @param {Object} data - 更新数据
  */
 function handleProviderUpdate(data) {
     if (data.action && data.providerType) {
-        // 如果当前打开的模态框是更新事件的供应商类型，则刷新该模态框
+        // 如果当前打开的模态框是更新事件的提供商类型，则刷新该模态框
         const modal = document.querySelector('.provider-modal');
         if (modal && modal.getAttribute('data-provider-type') === data.providerType) {
             if (typeof refreshProviderConfig === 'function') {
                 refreshProviderConfig(data.providerType);
             }
         } else {
-            // 否则更新主界面的供应商列表
+            // 否则更新主界面的提供商列表
             if (typeof loadProviders === 'function') {
                 loadProviders();
             }

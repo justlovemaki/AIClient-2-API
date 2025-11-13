@@ -1,4 +1,4 @@
-// 供应商管理功能模块
+// 提供商管理功能模块
 
 import { providerStats, updateProviderStats } from './constants.js';
 import { showToast } from './utils.js';
@@ -96,7 +96,7 @@ function renderProviders(providers) {
     
     container.innerHTML = '';
 
-    // 检查是否有供应商池数据
+    // 检查是否有提供商池数据
     const hasProviders = Object.keys(providers).length > 0;
     const statsGrid = document.querySelector('#providers .stats-grid');
     
@@ -114,10 +114,10 @@ function renderProviders(providers) {
     ];
     
     // 获取所有提供商类型并按指定顺序排序
-    // 优先显示预定义的所有供应商类型，即使某些供应商没有数据也要显示
+    // 优先显示预定义的所有提供商类型，即使某些提供商没有数据也要显示
     let allProviderTypes;
     if (hasProviders) {
-        // 合并预定义类型和实际存在的类型，确保显示所有预定义供应商
+        // 合并预定义类型和实际存在的类型，确保显示所有预定义提供商
         const actualProviderTypes = Object.keys(providers);
         allProviderTypes = [...new Set([...providerDisplayOrder, ...actualProviderTypes])];
     } else {
@@ -205,7 +205,7 @@ function renderProviders(providers) {
             providerDiv.classList.add('empty-provider');
         }
 
-        // 添加点击事件 - 整个供应商组都可以点击
+        // 添加点击事件 - 整个提供商组都可以点击
         providerDiv.addEventListener('click', (e) => {
             e.preventDefault();
             openProviderManager(providerType);
@@ -286,7 +286,7 @@ function updateProviderStatsDisplay(activeProviders, healthyProviders, totalAcco
 }
 
 /**
- * 打开供应商管理模态框
+ * 打开提供商管理模态框
  * @param {string} providerType - 提供商类型
  */
 async function openProviderManager(providerType) {
@@ -296,7 +296,7 @@ async function openProviderManager(providerType) {
         showProviderManagerModal(data);
     } catch (error) {
         console.error('Failed to load provider details:', error);
-        showToast('加载供应商详情失败', 'error');
+        showToast('加载提供商详情失败', 'error');
     }
 }
 

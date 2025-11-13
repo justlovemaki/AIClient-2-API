@@ -4,8 +4,8 @@ import { showToast, getFieldLabel, getProviderTypeFields } from './utils.js';
 import { handleProviderPasswordToggle } from './event-handlers.js';
 
 /**
- * 显示供应商管理模态框
- * @param {Object} data - 供应商数据
+ * 显示提供商管理模态框
+ * @param {Object} data - 提供商数据
  */
 function showProviderManagerModal(data) {
     const { providerType, providers, totalCount, healthyCount } = data;
@@ -27,7 +27,7 @@ function showProviderManagerModal(data) {
     modal.innerHTML = `
         <div class="provider-modal-content">
             <div class="provider-modal-header">
-                <h3><i class="fas fa-cogs"></i> 管理 ${providerType} 供应商配置</h3>
+                <h3><i class="fas fa-cogs"></i> 管理 ${providerType} 提供商配置</h3>
                 <button class="modal-close" onclick="window.closeProviderModal(this)">
                     <i class="fas fa-times"></i>
                 </button>
@@ -44,7 +44,7 @@ function showProviderManagerModal(data) {
                     </div>
                     <div class="provider-summary-actions">
                         <button class="btn btn-success" onclick="window.showAddProviderForm('${providerType}')">
-                            <i class="fas fa-plus"></i> 添加新供应商
+                            <i class="fas fa-plus"></i> 添加新提供商
                         </button>
                     </div>
                 </div>
@@ -149,8 +149,8 @@ function closeProviderModal(button) {
 }
 
 /**
- * 渲染供应商列表
- * @param {Array} providers - 供应商数组
+ * 渲染提供商列表
+ * @param {Array} providers - 提供商数组
  * @returns {string} HTML字符串
  */
 function renderProviderList(providers) {
@@ -188,7 +188,7 @@ function renderProviderList(providers) {
                         </div>
                     </div>
                     <div class="provider-actions-group">
-                        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${provider.uuid}', event)" title="${toggleButtonText}此供应商">
+                        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${provider.uuid}', event)" title="${toggleButtonText}此提供商">
                             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
                         </button>
                         <button class="btn-small btn-edit" onclick="window.editProvider('${provider.uuid}', event)">
@@ -210,8 +210,8 @@ function renderProviderList(providers) {
 }
 
 /**
- * 渲染供应商配置
- * @param {Object} provider - 供应商对象
+ * 渲染提供商配置
+ * @param {Object} provider - 提供商对象
  * @returns {string} HTML字符串
  */
 function renderProviderConfig(provider) {
@@ -385,7 +385,7 @@ function renderProviderConfig(provider) {
 
 /**
  * 获取字段显示顺序
- * @param {Object} provider - 供应商对象
+ * @param {Object} provider - 提供商对象
  * @returns {Array} 字段键数组
  */
 function getFieldOrder(provider) {
@@ -405,8 +405,8 @@ function getFieldOrder(provider) {
 }
 
 /**
- * 切换供应商详情显示
- * @param {string} uuid - 供应商UUID
+ * 切换提供商详情显示
+ * @param {string} uuid - 提供商UUID
  */
 function toggleProviderDetails(uuid) {
     const content = document.getElementById(`content-${uuid}`);
@@ -416,8 +416,8 @@ function toggleProviderDetails(uuid) {
 }
 
 /**
- * 编辑供应商
- * @param {string} uuid - 供应商UUID
+ * 编辑提供商
+ * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
 function editProvider(uuid, event) {
@@ -465,7 +465,7 @@ function editProvider(uuid, event) {
         const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
         
         actionsGroup.innerHTML = `
-            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此供应商">
+            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此提供商">
                 <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
             </button>
             <button class="btn-small btn-save" onclick="window.saveProvider('${uuid}', event)">
@@ -480,7 +480,7 @@ function editProvider(uuid, event) {
 
 /**
  * 取消编辑
- * @param {string} uuid - 供应商UUID
+ * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
 function cancelEdit(uuid, event) {
@@ -523,7 +523,7 @@ function cancelEdit(uuid, event) {
     const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
     
     actionsGroup.innerHTML = `
-        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此供应商">
+        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此提供商">
             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
         </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
@@ -536,8 +536,8 @@ function cancelEdit(uuid, event) {
 }
 
 /**
- * 保存供应商
- * @param {string} uuid - 供应商UUID
+ * 保存提供商
+ * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
 async function saveProvider(uuid, event) {
@@ -564,8 +564,8 @@ async function saveProvider(uuid, event) {
     
     try {
         await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
-        showToast('供应商配置更新成功', 'success');
-        // 重新获取该供应商类型的最新配置
+        showToast('提供商配置更新成功', 'success');
+        // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to update provider:', error);
@@ -574,14 +574,14 @@ async function saveProvider(uuid, event) {
 }
 
 /**
- * 删除供应商
- * @param {string} uuid - 供应商UUID
+ * 删除提供商
+ * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
 async function deleteProvider(uuid, event) {
     event.stopPropagation();
     
-    if (!confirm('确定要删除这个供应商配置吗？此操作不可恢复。')) {
+    if (!confirm('确定要删除这个提供商配置吗？此操作不可恢复。')) {
         return;
     }
     
@@ -590,7 +590,7 @@ async function deleteProvider(uuid, event) {
     
     try {
         await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${uuid}`);
-        showToast('供应商配置删除成功', 'success');
+        showToast('提供商配置删除成功', 'success');
         // 重新获取最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
@@ -600,15 +600,15 @@ async function deleteProvider(uuid, event) {
 }
 
 /**
- * 重新获取并刷新供应商配置
- * @param {string} providerType - 供应商类型
+ * 重新获取并刷新提供商配置
+ * @param {string} providerType - 提供商类型
  */
 async function refreshProviderConfig(providerType) {
     try {
-        // 重新获取该供应商类型的最新数据
+        // 重新获取该提供商类型的最新数据
         const data = await window.apiClient.get(`/providers/${encodeURIComponent(providerType)}`);
         
-        // 如果当前显示的是该供应商类型的模态框，则更新模态框
+        // 如果当前显示的是该提供商类型的模态框，则更新模态框
         const modal = document.querySelector('.provider-modal');
         if (modal && modal.getAttribute('data-provider-type') === providerType) {
             // 更新统计信息
@@ -622,14 +622,14 @@ async function refreshProviderConfig(providerType) {
                 healthyCountElement.textContent = data.healthyCount;
             }
             
-            // 重新渲染供应商列表
+            // 重新渲染提供商列表
             const providerList = modal.querySelector('.provider-list');
             if (providerList) {
                 providerList.innerHTML = renderProviderList(data.providers);
             }
         }
         
-        // 同时更新主界面的供应商统计数据
+        // 同时更新主界面的提供商统计数据
         if (typeof window.loadProviders === 'function') {
             await window.loadProviders();
         }
@@ -640,8 +640,8 @@ async function refreshProviderConfig(providerType) {
 }
 
 /**
- * 显示添加供应商表单
- * @param {string} providerType - 供应商类型
+ * 显示添加提供商表单
+ * @param {string} providerType - 提供商类型
  */
 function showAddProviderForm(providerType) {
     const modal = document.querySelector('.provider-modal');
@@ -655,7 +655,7 @@ function showAddProviderForm(providerType) {
     const form = document.createElement('div');
     form.className = 'add-provider-form';
     form.innerHTML = `
-        <h4><i class="fas fa-plus"></i> 添加新供应商配置</h4>
+        <h4><i class="fas fa-plus"></i> 添加新提供商配置</h4>
         <div class="form-grid">
             <div class="form-group">
                 <label>检查模型名称 <span class="optional-mark">(选填)</span></label>
@@ -696,7 +696,7 @@ function showAddProviderForm(providerType) {
 /**
  * 添加动态配置字段
  * @param {HTMLElement} form - 表单元素
- * @param {string} providerType - 供应商类型
+ * @param {string} providerType - 提供商类型
  */
 function addDynamicConfigFields(form, providerType) {
     const configFields = form.querySelector('#dynamicConfigFields');
@@ -802,7 +802,7 @@ function addDynamicConfigFields(form, providerType) {
 }
 
 /**
- * 为添加新供应商表单中的密码切换按钮绑定事件监听器
+ * 为添加新提供商表单中的密码切换按钮绑定事件监听器
  * @param {HTMLElement} form - 表单元素
  */
 function bindAddFormPasswordToggleListeners(form) {
@@ -827,8 +827,8 @@ function bindAddFormPasswordToggleListeners(form) {
 }
 
 /**
- * 添加新供应商
- * @param {string} providerType - 供应商类型
+ * 添加新提供商
+ * @param {string} providerType - 提供商类型
  */
 async function addProvider(providerType) {
     const checkModelName = document.getElementById('newCheckModelName')?.value;
@@ -870,7 +870,7 @@ async function addProvider(providerType) {
             providerType,
             providerConfig
         });
-        showToast('供应商配置添加成功', 'success');
+        showToast('提供商配置添加成功', 'success');
         // 移除添加表单
         const form = document.querySelector('.add-provider-form');
         if (form) {
@@ -885,8 +885,8 @@ async function addProvider(providerType) {
 }
 
 /**
- * 切换供应商禁用/启用状态
- * @param {string} uuid - 供应商UUID
+ * 切换提供商禁用/启用状态
+ * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
 async function toggleProviderStatus(uuid, event) {
@@ -896,12 +896,12 @@ async function toggleProviderStatus(uuid, event) {
     const providerType = providerDetail.closest('.provider-modal').getAttribute('data-provider-type');
     const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
     
-    // 获取当前供应商信息
+    // 获取当前提供商信息
     const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
     const action = isCurrentlyDisabled ? 'enable' : 'disable';
     const confirmMessage = isCurrentlyDisabled ?
-        `确定要启用这个供应商配置吗？` :
-        `确定要禁用这个供应商配置吗？禁用后该供应商将不会被选中使用。`;
+        `确定要启用这个提供商配置吗？` :
+        `确定要禁用这个提供商配置吗？禁用后该提供商将不会被选中使用。`;
     
     if (!confirm(confirmMessage)) {
         return;
@@ -909,8 +909,8 @@ async function toggleProviderStatus(uuid, event) {
     
     try {
         await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${uuid}/${action}`, { action });
-        showToast(`供应商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
-        // 重新获取该供应商类型的最新配置
+        showToast(`提供商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
+        // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to toggle provider status:', error);

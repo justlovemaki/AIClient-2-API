@@ -628,7 +628,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 timestamp: new Date().toISOString()
             });
 
-            // 广播供应商更新事件
+            // 广播提供商更新事件
             broadcastEvent('provider_update', {
                 action: 'add',
                 providerType,
@@ -1216,13 +1216,13 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
         }
     }
 
-    // 使用最新的供应商池数据
+    // 使用最新的提供商池数据
     let providerPools = currentConfig.providerPools;
     if (providerPoolManager && providerPoolManager.providerPools) {
         providerPools = providerPoolManager.providerPools;
     }
 
-    // 检查供应商池文件中的所有OAuth凭据路径 - 标准化路径格式
+    // 检查提供商池文件中的所有OAuth凭据路径 - 标准化路径格式
     if (providerPools) {
         for (const [providerType, providers] of Object.entries(providerPools)) {
             for (const provider of providers) {
@@ -1409,7 +1409,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
         });
     }
 
-    // 检查供应商池中的使用情况
+    // 检查提供商池中的使用情况
     if (currentConfig.providerPools) {
         // 使用 flatMap 将双重循环优化为单层循环 O(n)
         const allProviders = Object.entries(currentConfig.providerPools).flatMap(
@@ -1424,7 +1424,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '供应商池',
+                    type: '提供商池',
                     location: `Gemini OAuth凭据 (节点${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
@@ -1436,7 +1436,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '供应商池',
+                    type: '提供商池',
                     location: `Kiro OAuth凭据 (节点${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
@@ -1448,7 +1448,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '供应商池',
+                    type: '提供商池',
                     location: `Qwen OAuth凭据 (节点${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,

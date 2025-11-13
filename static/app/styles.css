@@ -450,7 +450,7 @@ textarea.form-control {
     cursor: pointer;
 }
 
-/* 供应商配置组 */
+/* 提供商配置组 */
 .provider-config {
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
@@ -1191,7 +1191,7 @@ input:checked + .toggle-slider:before {
     font-style: italic;
 }
 
-/* 供应商类型显示 */
+/* 提供商类型显示 */
 .provider-type-text {
     font-size: 16px;
     font-weight: 600;
@@ -2288,7 +2288,7 @@ input:checked + .toggle-slider:before {
     background: var(--success-color);
 }
 
-/* 供应商池关联的特殊样式 */
+/* 提供商池关联的特殊样式 */
 .usage-detail-item[data-usage-type="provider_pool"] {
     background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
     border-color: #0ea5e9;
@@ -2700,7 +2700,7 @@ input:checked + .toggle-slider:before {
     }
 }
 
-/* 禁用供应商状态样式 */
+/* 禁用提供商状态样式 */
 .provider-item-detail.disabled {
     opacity: 0.6;
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
@@ -2776,7 +2776,7 @@ input:checked + .toggle-slider:before {
     transform: translateY(0);
 }
 
-/* 供应商状态指示器 */
+/* 提供商状态指示器 */
 .provider-status .disabled-indicator {
     position: relative;
 }

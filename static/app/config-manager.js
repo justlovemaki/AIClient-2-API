@@ -86,7 +86,7 @@ async function loadConfiguration() {
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
         if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
 
-        // 触发供应商配置显示
+        // 触发提供商配置显示
         handleProviderChange();
         
         // 根据Gemini凭据类型设置显示
@@ -105,7 +105,7 @@ async function loadConfiguration() {
             handleKiroCredsTypeChange({ target: kiroRadio });
         }
         
-        // 检查并设置供应商池菜单显示状态
+        // 检查并设置提供商池菜单显示状态
         const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH;
         const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
         if (providerPoolsFilePath && providerPoolsFilePath.trim() !== '') {
@@ -131,7 +131,7 @@ async function saveConfiguration() {
         systemPrompt: document.getElementById('systemPrompt')?.value || '',
     };
 
-    // 根据不同供应商保存不同的配置
+    // 根据不同提供商保存不同的配置
     const provider = document.getElementById('modelProvider')?.value;
     
     switch (provider) {
@@ -194,12 +194,12 @@ async function saveConfiguration() {
 
         showToast('配置已保存', 'success');
         
-        // 检查当前是否在供应商池管理页面，如果是则刷新数据
+        // 检查当前是否在提供商池管理页面，如果是则刷新数据
         const providersSection = document.getElementById('providers');
         if (providersSection && providersSection.classList.contains('active')) {
-            // 当前在供应商池页面，刷新数据
+            // 当前在提供商池页面，刷新数据
             await loadProviders();
-            showToast('供应商池数据已刷新', 'success');
+            showToast('提供商池数据已刷新', 'success');
         }
     } catch (error) {
         console.error('Failed to save configuration:', error);

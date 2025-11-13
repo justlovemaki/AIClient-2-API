@@ -169,7 +169,7 @@ function generateUsageInfoHtml(config) {
 
     const typeLabels = {
         'main_config': '主要配置',
-        'provider_pool': '供应商池',
+        'provider_pool': '提供商池',
         'multiple': '多种用途'
     };
 
@@ -567,7 +567,7 @@ function showDeleteConfirmModal(config) {
                             <ul>
                                 <li>相关的AI服务无法正常工作</li>
                                 <li>配置管理中的设置失效</li>
-                                <li>供应商池配置丢失</li>
+                                <li>提供商池配置丢失</li>
                             </ul>
                             <p><strong>建议：</strong>请先在配置管理中解除文件引用后再删除。</p>
                         </div>

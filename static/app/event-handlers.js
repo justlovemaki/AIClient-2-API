@@ -66,7 +66,7 @@ function initEventListeners() {
         button.addEventListener('click', handlePasswordToggle);
     });
 
-    // 供应商池配置监听
+    // 提供商池配置监听
     const providerPoolsInput = document.getElementById('providerPoolsFilePath');
     if (providerPoolsInput) {
         providerPoolsInput.addEventListener('input', handleProviderPoolsConfigChange);
@@ -92,7 +92,7 @@ function initEventListeners() {
 }
 
 /**
- * 供应商配置切换处理
+ * 提供商配置切换处理
  */
 function handleProviderChange() {
     const selectedProvider = elements.modelProvider?.value;
@@ -100,12 +100,12 @@ function handleProviderChange() {
 
     const allProviderConfigs = document.querySelectorAll('.provider-config');
     
-    // 隐藏所有供应商配置
+    // 隐藏所有提供商配置
     allProviderConfigs.forEach(config => {
         config.style.display = 'none';
     });
     
-    // 显示当前选中的供应商配置
+    // 显示当前选中的提供商配置
     const targetConfig = document.querySelector(`[data-provider="${selectedProvider}"]`);
     if (targetConfig) {
         targetConfig.style.display = 'block';
@@ -172,7 +172,7 @@ function handlePasswordToggle(event) {
 }
 
 /**
- * 供应商池配置变化处理
+ * 提供商池配置变化处理
  * @param {Event} event - 事件对象
  */
 function handleProviderPoolsConfigChange(event) {
@@ -180,13 +180,13 @@ function handleProviderPoolsConfigChange(event) {
     const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
     
     if (filePath) {
-        // 显示供应商池菜单
+        // 显示提供商池菜单
         if (providersMenuItem) providersMenuItem.style.display = 'flex';
     } else {
-        // 隐藏供应商池菜单
+        // 隐藏提供商池菜单
         if (providersMenuItem) providersMenuItem.style.display = 'none';
         
-        // 如果当前在供应商池页面，切换到仪表盘
+        // 如果当前在提供商池页面，切换到仪表盘
         if (providersMenuItem && providersMenuItem.classList.contains('active')) {
             const dashboardItem = document.querySelector('.nav-item[data-section="dashboard"]');
             const dashboardSection = document.getElementById('dashboard');

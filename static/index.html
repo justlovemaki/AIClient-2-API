@@ -42,8 +42,8 @@
                     <a href="#config" class="nav-item" data-section="config" aria-label="配置管理">
                         <i class="fas fa-cog" aria-hidden="true"></i> <span>配置管理</span>
                     </a>
-                    <a href="#providers" class="nav-item" data-section="providers" aria-label="供应商池管理">
-                        <i class="fas fa-network-wired" aria-hidden="true"></i> <span>供应商池管理</span>
+                    <a href="#providers" class="nav-item" data-section="providers" aria-label="提供商池管理">
+                        <i class="fas fa-network-wired" aria-hidden="true"></i> <span>提供商池管理</span>
                     </a>
                     <a href="#upload-config" class="nav-item" data-section="upload-config" aria-label="上传配置管理">
                         <i class="fas fa-upload" aria-hidden="true"></i> <span>上传配置管理</span>
@@ -602,9 +602,9 @@
                                 </div>
                                 
                                 <div class="form-group pool-section">
-                                    <label for="providerPoolsFilePath">供应商池配置文件路径</label>
+                                    <label for="providerPoolsFilePath">提供商池配置文件路径</label>
                                     <input type="text" id="providerPoolsFilePath" class="form-control" value="" placeholder="例如: provider_pools.json">
-                                    <small class="form-text">配置了供应商池后，可在供应商池管理中查看详细信息</small>
+                                    <small class="form-text">配置了提供商池后，可在提供商池管理中查看详细信息</small>
                                 </div>
                                 
                                 <!-- 系统提示配置移到最下面 -->
@@ -680,7 +680,7 @@
 
                 <!-- Provider Pools Section -->
                 <section id="providers" class="section" aria-labelledby="providers-title">
-                    <h2 id="providers-title">供应商池管理</h2>
+                    <h2 id="providers-title">提供商池管理</h2>
                     <!-- Provider Pool Stats -->
                     <div class="stats-grid">
                         <div class="stat-card">
@@ -764,7 +764,38 @@
                     }
                 });
             }
+
+            // 更新路径路由示例中的URL前缀
+            updateRoutingExamplesURLs();
         })();
+
+        // 更新路径路由示例中的URL前缀
+        function updateRoutingExamplesURLs() {
+            // 获取当前页面的基础URL（去掉index.html）
+            const currentURL = window.location.href;
+            const baseURL = currentURL.replace(/\/index\.html$/, '');
+            
+            // 更新所有端点路径
+            const endpointPaths = document.querySelectorAll('.endpoint-path');
+            endpointPaths.forEach(element => {
+                const originalPath = element.textContent;
+                if (!originalPath.startsWith(baseURL)) {
+                    // 确保baseURL不以斜杠结尾，然后正确拼接路径
+                    const cleanBaseURL = baseURL.replace(/\/$/, '');
+                    const cleanPath = originalPath.startsWith('/') ? originalPath : '/' + originalPath;
+                    element.textContent = cleanBaseURL + cleanPath;
+                }
+            });
+
+            // 更新curl命令中的URL
+            const curlCodes = document.querySelectorAll('.usage-example pre code');
+            curlCodes.forEach(element => {
+                const curlCommand = element.textContent;
+                // 替换curl命令中的http://localhost:3000部分
+                const updatedCommand = curlCommand.replace(/curl http:\/\/localhost:3000/g, `curl ${baseURL}`);
+                element.textContent = updatedCommand;
+            });
+        }
     </script>
     <script type="module" src="app/app.js"></script>
 </body>

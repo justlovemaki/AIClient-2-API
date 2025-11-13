@@ -202,7 +202,7 @@ install-and-run.bat
 
 **⚙️ 配置管理**：实时参数修改，支持所有提供商（Gemini、OpenAI、Claude、Kiro、Qwen），包含高级设置和文件上传
 
-**🔗 供应商池**：监控活动连接、提供商健康统计、启用/禁用管理
+**🔗 提供商池**：监控活动连接、提供商健康统计、启用/禁用管理
 
 **📁 配置文件**：OAuth 凭据集中管理，支持搜索过滤和文件操作
 
@@ -261,17 +261,17 @@ install-and-run.bat
 
 ---
 
-### 🔄 模型供应商切换
+### 🔄 模型提供商切换
 
 本项目提供两种灵活的模型切换方式，满足不同使用场景的需求。
 
-通过在 API 请求路径中指定供应商标识，实现即时切换：
+通过在 API 请求路径中指定提供商标识，实现即时切换：
 
 | 路由路径 | 说明 | 适用场景 |
 |---------|------|---------|
 | `/claude-custom` | 使用配置文件中的 Claude API | 官方 Claude API 调用 |
 | `/claude-kiro-oauth` | 通过 Kiro OAuth 访问 Claude | 免费使用 Claude Sonnet 4.5 |
-| `/openai-custom` | 使用 OpenAI 供应商处理请求 | 标准 OpenAI API 调用 |
+| `/openai-custom` | 使用 OpenAI 提供商处理请求 | 标准 OpenAI API 调用 |
 | `/gemini-cli-oauth` | 通过 Gemini CLI OAuth 访问 | 突破 Gemini 免费限制 |
 | `/openai-qwen-oauth` | 通过 Qwen OAuth 访问 | 使用 Qwen Code Plus |
 | `/openaiResponses-custom` | OpenAI Responses API | 结构化对话场景 |

@@ -12,7 +12,7 @@ export class ProviderPoolManager {
         this.providerStatus = {}; // Tracks health and usage for each provider instance
         this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
         this.maxErrorCount = options.maxErrorCount || 3; // Default to 1 errors before marking unhealthy
-        this.healthCheckInterval = options.healthCheckInterval || 30 * 60 * 1000; // Default to 30 minutes
+        this.healthCheckInterval = options.healthCheckInterval || 10 * 60 * 1000; // Default to 10 minutes
         
         // 优化1: 添加防抖机制，避免频繁的文件 I/O 操作
         this.saveDebounceTime = options.saveDebounceTime || 1000; // 默认1秒防抖
@@ -140,9 +140,9 @@ export class ProviderPoolManager {
     }
 
     /**
-     * 禁用指定供应商
-     * @param {string} providerType - 供应商类型
-     * @param {object} providerConfig - 供应商配置
+     * 禁用指定提供商
+     * @param {string} providerType - 提供商类型
+     * @param {object} providerConfig - 提供商配置
      */
     disableProvider(providerType, providerConfig) {
         const pool = this.providerStatus[providerType];
@@ -159,9 +159,9 @@ export class ProviderPoolManager {
     }
 
     /**
-     * 启用指定供应商
-     * @param {string} providerType - 供应商类型
-     * @param {object} providerConfig - 供应商配置
+     * 启用指定提供商
+     * @param {string} providerType - 提供商类型
+     * @param {object} providerConfig - 提供商配置
      */
     enableProvider(providerType, providerConfig) {
         const pool = this.providerStatus[providerType];
