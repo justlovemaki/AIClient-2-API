@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "google/protobuf/field_mask.proto";
+import "options.proto";
+import "suggestions.proto";
+import "task.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message ResponseEvent {
+    oneof type {
+        StreamInit init = 1;
+        ClientActions client_actions = 2;
+        StreamFinished finished = 3;
+    }
+    
+    message StreamInit {
+        string conversation_id = 1;
+        string request_id = 2;
+    }
+    
+    message ClientActions {
+        repeated ClientAction actions = 1;
+    }
+    
+    message StreamFinished {
+        repeated TokenUsage token_usage = 8;
+        message TokenUsage {
+            string model_id = 1;
+            uint32 total_input = 2;
+            uint32 output = 3;
+            uint32 input_cache_read = 4;
+            uint32 input_cache_write = 5;
+            float cost_in_cents = 6;
+        }
+        
+        bool should_refresh_model_config = 9;
+        
+        RequestCost request_cost = 10;
+        message RequestCost {
+            float exact = 1;
+        }
+        
+        ContextWindowInfo context_window_info = 11;
+        message ContextWindowInfo {
+            float context_window_usage = 1;
+            bool summarized = 2;
+        }
+        
+        oneof reason {
+            Other other = 1;
+            Done done = 2;
+            ReachedMaxTokenLimit max_token_limit = 3;
+            QuotaLimit quota_limit = 4;
+            ContextWindowExceeded context_window_exceeded = 5;
+            LLMUnavailable llm_unavailable = 6;
+            InternalError internal_error = 7;
+        }
+        
+        message Other {
+            
+        }
+        
+        message Done {
+            
+        }
+        
+        message ReachedMaxTokenLimit {
+            
+        }
+        
+        message QuotaLimit {
+            
+        }
+        
+        message ContextWindowExceeded {
+            
+        }
+        
+        message LLMUnavailable {
+            
+        }
+        
+        message InternalError {
+            string message = 1;
+        }
+    }
+}
+
+message ClientAction {
+    oneof action {
+        CreateTask create_task = 1;
+        UpdateTaskStatus update_task_status = 2;
+        AddMessagesToTask add_messages_to_task = 3;
+        UpdateTaskMessage update_task_message = 4;
+        AppendToMessageContent append_to_message_content = 5;
+        Suggestions show_suggestions = 6;
+        UpdateTaskSummary update_task_summary = 7;
+        UpdateTaskDescription update_task_description = 8;
+        BeginTransaction begin_transaction = 9;
+        CommitTransaction commit_transaction = 10;
+        RollbackTransaction rollback_transaction = 11;
+        StartNewConversation start_new_conversation = 12;
+    }
+    
+    message CreateTask {
+        Task task = 1;
+    }
+    
+    message UpdateTaskStatus {
+        string task_id = 1;
+        TaskStatus task_status = 2;
+    }
+    
+    message UpdateTaskDescription {
+        string task_id = 1;
+        string description = 2;
+    }
+    
+    message AddMessagesToTask {
+        string task_id = 1;
+        repeated Message messages = 2;
+    }
+    
+    message UpdateTaskMessage {
+        string task_id = 3;
+        Message message = 1;
+        google.protobuf.FieldMask mask = 2;
+    }
+    
+    message AppendToMessageContent {
+        string task_id = 3;
+        Message message = 1;
+        google.protobuf.FieldMask mask = 2;
+    }
+    
+    message UpdateTaskSummary {
+        string task_id = 1;
+        string summary = 2;
+    }
+    
+    message BeginTransaction {
+        
+    }
+    
+    message CommitTransaction {
+        
+    }
+    
+    message RollbackTransaction {
+        
+    }
+    
+    message StartNewConversation {
+        string start_from_message_id = 1;
+    }
+}

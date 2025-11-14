@@ -6,3 +6,5 @@ config.json
 provider_pools.json
 fetch_system_prompt.txt
 input_system_prompt.txt
+src/_warp2api-main-EXAMPLES/
+.kiro/

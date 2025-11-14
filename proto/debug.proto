@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "task.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message TaskList {
+    repeated Task tasks = 1;
+    repeated string ordered_message_ids = 2;
+}

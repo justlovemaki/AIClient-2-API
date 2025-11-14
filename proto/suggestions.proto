@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message Suggestions {
+    repeated SuggestedRule rules = 1;
+    repeated SuggestedAgentModeWorkflow workflows = 2;
+}
+
+message SuggestedRule {
+    string name = 1;
+    string content = 2;
+    string logging_id = 3;
+}
+
+message SuggestedAgentModeWorkflow {
+    string name = 1;
+    string prompt = 2;
+    string logging_id = 3;
+}

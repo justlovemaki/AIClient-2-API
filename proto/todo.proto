@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message TodoItem {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+}
+
+message CreateTodoList {
+    repeated TodoItem initial_todos = 1;
+}
+
+message UpdatePendingTodos {
+    repeated TodoItem updated_pending_todos = 1;
+}
+
+message MarkTodosCompleted {
+    repeated string todo_ids = 1;
+}

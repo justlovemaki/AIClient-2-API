@@ -6,6 +6,14 @@ import { getApiService } from './service-manager.js';
 import { getProviderPoolManager } from './service-manager.js';
 import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
+import {
+    handleOllamaTags,
+    handleOllamaShow,
+    handleOllamaVersion,
+    handleOllamaChat,
+    handleOllamaGenerate
+} from './ollama-handler.js';
+
 /**
  * Main request handler. It authenticates the request, determines the endpoint type,
  * and delegates to the appropriate specialized handler function.
@@ -66,6 +74,32 @@ export function createRequestHandler(config, providerPoolManager) {
             }
         }
 
+        // Normalize common Ollama path aliases (e.g., '/ollama/api/tags' -> '/api/tags')
+        if (path.startsWith('/ollama/')) {
+            path = path.replace(/^\/ollama/, '');
+            requestUrl.pathname = path;
+        }
+        // Map other common aliases
+        if (path === '/api/models') {
+            path = '/api/tags';
+            requestUrl.pathname = path;
+        }
+        if (path === '/api/tags/') {
+            path = '/api/tags';
+            requestUrl.pathname = path;
+        }
+
+        // Handle Ollama API endpoints BEFORE auth check (Ollama doesn't use authentication by default)
+        if (method === 'GET' && path === '/api/version') {
+            handleOllamaVersion(res);
+            return;
+        }
+        if (method === 'POST' && path === '/api/show') {
+            console.log('[Request] Ollama /api/show - Headers:', JSON.stringify(req.headers, null, 2));
+            await handleOllamaShow(req, res);
+            return;
+        }
+
         // 获取或选择 API Service 实例
         let apiService;
         try {
@@ -103,8 +137,27 @@ export function createRequestHandler(config, providerPoolManager) {
             return true;
         }
 
+        // Handle Ollama endpoints that need apiService (before auth check)
+        if (method === 'GET' && path === '/api/tags') {
+            console.log('[Request] Ollama /api/tags - Headers:', JSON.stringify(req.headers, null, 2));
+            await handleOllamaTags(req, res, apiService, currentConfig, providerPoolManager);
+            return;
+        }
+        if (method === 'POST' && path === '/api/chat') {
+            await handleOllamaChat(req, res, apiService, currentConfig, providerPoolManager);
+            return;
+        }
+        if (method === 'POST' && path === '/api/generate') {
+            await handleOllamaGenerate(req, res, apiService, currentConfig, providerPoolManager);
+            return;
+        }
+
         // Check authentication for API requests
-        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
+        // Allow empty Bearer token (from Ollama clients like VS Code Copilot)
+        const authHeader = req.headers['authorization'];
+        const hasEmptyBearer = authHeader === 'Bearer' || authHeader === 'Bearer ';
+        
+        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY) && !hasEmptyBearer) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;

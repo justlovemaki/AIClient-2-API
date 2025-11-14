@@ -4,6 +4,7 @@ import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiSe
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
+import { WarpApiService } from './warp/warp-core.js'; // 导入WarpApiService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -271,6 +272,30 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// Warp API 服务适配器
+export class WarpApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.warpApiService = new WarpApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        return this.warpApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        yield* this.warpApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        return this.warpApiService.listModels();
+    }
+
+    async refreshToken() {
+        return this.warpApiService.refreshToken();
+    }
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -298,6 +323,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.QWEN_API:
                 serviceInstances[providerKey] = new QwenApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.WARP_API:
+                serviceInstances[providerKey] = new WarpApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

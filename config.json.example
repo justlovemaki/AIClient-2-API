@@ -21,5 +21,9 @@
     "REQUEST_BASE_DELAY": 1000,
     "CRON_NEAR_MINUTES": 1,
     "CRON_REFRESH_TOKEN": false,
-    "PROVIDER_POOLS_FILE_PATH": "provider_pools.json"
+    "PROVIDER_POOLS_FILE_PATH": "provider_pools.json",
+    "WARP_URL": "https://app.warp.dev/ai/multi-agent",
+    "WARP_JWT": null,
+    "WARP_REFRESH_TOKEN": "AMf-vBxSRmdhveGGBYM69p05kDhIn1i7wscALEmC9fYdRpHzjER9dL7kk-kHPYwvY9ROkmy50qGTcIiJZ4Am86hPXkpVPL90HJmAf5fZ7PejypdbcK4wso8Kf3axiSWtIROhOcn9NzGaSvl7WqRMNOpHGgBrYn4I8krW57R8_ws8u7XcSw8u0DiL9HrpMm0LtwsCh81k_6bb2CWOEb1lIx3HWSBTePFWsQ",
+    "WARP_REFRESH_URL": "https://app.warp.dev/proxy/token?key=AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"
 }

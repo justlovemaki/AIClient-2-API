@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message Citation {
+    string document_id = 1;
+    DocumentType document_type = 2;
+}
+
+enum DocumentType {
+    WARP_DRIVE_WORKFLOW = 0;
+    WARP_DRIVE_NOTEBOOK = 1;
+    WARP_DRIVE_ENV_VAR = 2;
+    RULE = 3;
+    WARP_DOCUMENTATION = 4;
+    WEB_PAGE = 5;
+    UNKNOWN = 6;
+}

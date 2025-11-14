@@ -1,0 +1,503 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/struct.proto";
+import "citations.proto";
+import "input_context.proto";
+import "attachment.proto";
+import "file_content.proto";
+import "options.proto";
+import "todo.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message Task {
+    string id = 1;
+    string description = 2;
+    
+    Dependencies dependencies = 3;
+    message Dependencies {
+        string parent_task_id = 1;
+        repeated string sibling_dependencies = 2;
+    }
+    
+    TaskStatus status = 4;
+    repeated Message messages = 5;
+    string summary = 6;
+}
+
+message TaskStatus {
+    oneof status {
+        Pending pending = 1;
+        InProgress in_progress = 2;
+        Blocked blocked = 3;
+        Succeeded succeeded = 4;
+        Failed failed = 5;
+        Aborted aborted = 6;
+    }
+    
+    message Pending {
+        
+    }
+    
+    message InProgress {
+        
+    }
+    
+    message Blocked {
+        
+    }
+    
+    message Succeeded {
+        
+    }
+    
+    message Failed {
+        
+    }
+    
+    message Aborted {
+        
+    }
+}
+
+message Message {
+    string id = 1;
+    string task_id = 11;
+    string server_message_data = 7;
+    repeated Citation citations = 8;
+    
+    oneof message {
+        UserQuery user_query = 2;
+        AgentOutput agent_output = 3;
+        ToolCall tool_call = 4;
+        ToolCallResult tool_call_result = 5;
+        ServerEvent server_event = 6;
+        SystemQuery system_query = 9;
+        UpdateTodos update_todos = 10;
+    }
+    
+    message UserQuery {
+        string query = 1;
+        InputContext context = 2;
+        map<string, Attachment> referenced_attachments = 3;
+    }
+    
+    message SystemQuery {
+        InputContext context = 2;
+        
+        oneof type {
+            AutoCodeDiff auto_code_diff = 1;
+            ResumeConversation resume_conversation = 3;
+        }
+    }
+    
+    message AutoCodeDiff {
+        string query = 1;
+    }
+    
+    message ResumeConversation {
+        
+    }
+    
+    message AgentOutput {
+        string text = 1;
+        string reasoning = 2;
+    }
+    
+    message ToolCall {
+        string tool_call_id = 1;
+        
+        oneof tool {
+            RunShellCommand run_shell_command = 2;
+            SearchCodebase search_codebase = 3;
+            Server server = 4;
+            ReadFiles read_files = 5;
+            ApplyFileDiffs apply_file_diffs = 6;
+            SuggestPlan suggest_plan = 7;
+            SuggestCreatePlan suggest_create_plan = 8;
+            Grep grep = 9;
+            FileGlob file_glob = 10 [deprecated = true];
+            ReadMCPResource read_mcp_resource = 11;
+            CallMCPTool call_mcp_tool = 12;
+            WriteToLongRunningShellCommand write_to_long_running_shell_command = 13;
+            SuggestNewConversation suggest_new_conversation = 14;
+            FileGlobV2 file_glob_v2 = 15;
+        }
+        
+        message Server {
+            string payload = 1;
+        }
+        
+        message RunShellCommand {
+            string command = 1;
+            bool is_read_only = 2;
+            bool uses_pager = 3;
+            repeated Citation citations = 4;
+            bool is_risky = 5;
+        }
+        
+        message WriteToLongRunningShellCommand {
+            bytes input = 1;
+        }
+        
+        message SuggestNewConversation {
+            string message_id = 1;
+        }
+        
+        message ReadFiles {
+            repeated File files = 1;
+            message File {
+                string name = 1;
+                repeated FileContentLineRange line_ranges = 2;
+            }
+        }
+        
+        message SearchCodebase {
+            string query = 1;
+            repeated string path_filters = 2;
+            string codebase_path = 3;
+        }
+        
+        message ApplyFileDiffs {
+            string summary = 1;
+            
+            repeated FileDiff diffs = 2;
+            message FileDiff {
+                string file_path = 1;
+                string search = 2;
+                string replace = 3;
+            }
+            
+            repeated NewFile new_files = 3;
+            message NewFile {
+                string file_path = 1;
+                string content = 2;
+            }
+        }
+        
+        message SuggestPlan {
+            string summary = 1;
+            repeated Task proposed_tasks = 2;
+        }
+        
+        message SuggestCreatePlan {
+            
+        }
+        
+        message Grep {
+            repeated string queries = 1;
+            string path = 2;
+        }
+        
+        message FileGlob {
+            repeated string patterns = 1;
+            string path = 2;
+        }
+        
+        message FileGlobV2 {
+            repeated string patterns = 1;
+            string search_dir = 2;
+            int32 max_matches = 3;
+            int32 max_depth = 4;
+            int32 min_depth = 5;
+        }
+        
+        message ReadMCPResource {
+            string uri = 1;
+        }
+        
+        message CallMCPTool {
+            string name = 1;
+            google.protobuf.Struct args = 2;
+        }
+    }
+    
+    message ToolCallResult {
+        string tool_call_id = 1;
+        InputContext context = 11;
+        
+        oneof result {
+            RunShellCommandResult run_shell_command = 2;
+            SearchCodebaseResult search_codebase = 3;
+            ServerResult server = 4;
+            ReadFilesResult read_files = 5;
+            ApplyFileDiffsResult apply_file_diffs = 6;
+            SuggestPlanResult suggest_plan = 7;
+            SuggestCreatePlanResult suggest_create_plan = 8;
+            GrepResult grep = 9;
+            FileGlobResult file_glob = 10 [deprecated = true];
+            RefineResult refine = 13;
+            google.protobuf.Empty cancel = 14;
+            ReadMCPResourceResult read_mcp_resource = 15;
+            CallMCPToolResult call_mcp_tool = 16;
+            WriteToLongRunningShellCommandResult write_to_long_running_shell_command = 17;
+            SuggestNewConversationResult suggest_new_conversation = 18;
+            FileGlobV2Result file_glob_v2 = 19;
+        }
+        
+        message ServerResult {
+            string serialized_result = 1;
+        }
+        
+        message RefineResult {
+            UserQuery user_query = 1;
+        }
+    }
+    
+    message ServerEvent {
+        string payload = 1;
+    }
+    
+    message UpdateTodos {
+        oneof operation {
+            CreateTodoList create_todo_list = 1;
+            UpdatePendingTodos update_pending_todos = 2;
+            MarkTodosCompleted mark_todos_completed = 3;
+        }
+    }
+}
+
+message RunShellCommandResult {
+    string command = 3;
+    string output = 1 [deprecated = true];
+    int32 exit_code = 2 [deprecated = true];
+    
+    oneof result {
+        LongRunningShellCommandSnapshot long_running_command_snapshot = 4;
+        ShellCommandFinished command_finished = 5;
+    }
+}
+
+message ReadFilesResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated FileContent files = 1;
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message SearchCodebaseResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated FileContent files = 1;
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message ApplyFileDiffsResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated FileContent updated_files = 1 [deprecated = true];
+        
+        repeated UpdatedFileContent updated_files_v2 = 2;
+        message UpdatedFileContent {
+            FileContent file = 1;
+            bool was_edited_by_user = 2;
+        }
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message SuggestCreatePlanResult {
+    bool accepted = 1;
+}
+
+message SuggestPlanResult {
+    oneof result {
+        google.protobuf.Empty accepted = 1;
+        UserEditedPlan user_edited_plan = 2;
+    }
+    
+    message UserEditedPlan {
+        string plan_text = 1;
+    }
+}
+
+message GrepResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated GrepFileMatch matched_files = 1;
+        message GrepFileMatch {
+            string file_path = 1;
+            
+            repeated GrepLineMatch matched_lines = 2;
+            message GrepLineMatch {
+                uint32 line_number = 1;
+            }
+        }
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message FileGlobResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        string matched_files = 1;
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message FileGlobV2Result {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated FileGlobMatch matched_files = 1;
+        message FileGlobMatch {
+            string file_path = 1;
+        }
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message MCPResourceContent {
+    string uri = 1;
+    
+    oneof content_type {
+        Text text = 2;
+        Binary binary = 3;
+    }
+    
+    message Text {
+        string content = 1;
+        string mime_type = 2;
+    }
+    
+    message Binary {
+        bytes data = 1;
+        string mime_type = 2;
+    }
+}
+
+message ReadMCPResourceResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated MCPResourceContent contents = 1;
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+message WriteToLongRunningShellCommandResult {
+    oneof result {
+        LongRunningShellCommandSnapshot long_running_command_snapshot = 1;
+        ShellCommandFinished command_finished = 2;
+    }
+}
+
+message SuggestNewConversationResult {
+    oneof result {
+        Accepted accepted = 1;
+        Rejected rejected = 2;
+    }
+    
+    message Accepted {
+        string message_id = 1;
+    }
+    
+    message Rejected {
+        
+    }
+}
+
+message ShellCommandFinished {
+    string output = 1;
+    int32 exit_code = 2;
+}
+
+message CallMCPToolResult {
+    oneof result {
+        Success success = 1;
+        Error error = 2;
+    }
+    
+    message Success {
+        repeated Result results = 1;
+        message Result {
+            oneof result {
+                Text text = 1;
+                Image image = 2;
+                MCPResourceContent resource = 3;
+            }
+            
+            message Text {
+                string text = 1;
+            }
+            
+            message Image {
+                bytes data = 1;
+                string mime_type = 2;
+            }
+        }
+    }
+    
+    message Error {
+        string message = 1;
+    }
+}
+
+enum ToolType {
+    RUN_SHELL_COMMAND = 0;
+    SEARCH_CODEBASE = 1;
+    READ_FILES = 2;
+    APPLY_FILE_DIFFS = 3;
+    SUGGEST_PLAN = 4;
+    SUGGEST_CREATE_PLAN = 5;
+    GREP = 6;
+    FILE_GLOB = 7;
+    READ_MCP_RESOURCE = 8;
+    CALL_MCP_TOOL = 9;
+    WRITE_TO_LONG_RUNNING_SHELL_COMMAND = 10;
+    SUGGEST_NEW_CONVERSATION = 11;
+    FILE_GLOB_V2 = 12;
+}

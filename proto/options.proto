@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+extend google.protobuf.FieldOptions {
+    bool sensitive = 50000;
+    bool internal = 50001;
+}

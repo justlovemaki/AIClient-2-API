@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "google/protobuf/struct.proto";
+import "input_context.proto";
+import "attachment.proto";
+import "options.proto";
+import "suggestions.proto";
+import "task.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message Request {
+    TaskContext task_context = 1;
+    message TaskContext {
+        repeated Task tasks = 1;
+        string active_task_id = 2;
+    }
+    
+    Input input = 2;
+    message Input {
+        InputContext context = 1;
+        
+        oneof type {
+            UserInputs user_inputs = 6;
+            QueryWithCannedResponse query_with_canned_response = 4;
+            AutoCodeDiffQuery auto_code_diff_query = 5;
+            ResumeConversation resume_conversation = 7;
+            InitProjectRules init_project_rules = 8;
+            UserQuery user_query = 2 [deprecated = true];
+            ToolCallResult tool_call_result = 3 [deprecated = true];
+        }
+        
+        message UserQuery {
+            string query = 1;
+            map<string, Attachment> referenced_attachments = 2;
+        }
+        
+        message UserInputs {
+            repeated UserInput inputs = 1;
+            message UserInput {
+                oneof input {
+                    UserQuery user_query = 1;
+                    ToolCallResult tool_call_result = 2;
+                }
+            }
+        }
+        
+        message ToolCallResult {
+            string tool_call_id = 1;
+            
+            oneof result {
+                RunShellCommandResult run_shell_command = 2;
+                ReadFilesResult read_files = 3;
+                SearchCodebaseResult search_codebase = 4;
+                ApplyFileDiffsResult apply_file_diffs = 5;
+                SuggestPlanResult suggest_plan = 6;
+                SuggestCreatePlanResult suggest_create_plan = 7;
+                GrepResult grep = 8;
+                FileGlobResult file_glob = 9;
+                RefineResult refine = 10;
+                ReadMCPResourceResult read_mcp_resource = 11;
+                CallMCPToolResult call_mcp_tool = 12;
+                WriteToLongRunningShellCommandResult write_to_long_running_shell_command = 13;
+                SuggestNewConversationResult suggest_new_conversation = 14;
+                FileGlobV2Result file_glob_v2 = 15;
+            }
+            
+            message RefineResult {
+                UserQuery user_query = 1;
+            }
+        }
+        
+        message QueryWithCannedResponse {
+            string query = 1;
+            
+            oneof type {
+                Install install = 2;
+                Code code = 3;
+                Deploy deploy = 4;
+                SomethingElse something_else = 5;
+                CustomOnboardingRequest custom_onboarding_request = 6;
+                AgenticOnboardingKickoff agentic_onboarding_kickoff = 7;
+            }
+            
+            message Install {
+                
+            }
+            
+            message Code {
+                
+            }
+            
+            message Deploy {
+                
+            }
+            
+            message SomethingElse {
+                
+            }
+            
+            message CustomOnboardingRequest {
+                
+            }
+            
+            message AgenticOnboardingKickoff {
+                
+            }
+        }
+        
+        message AutoCodeDiffQuery {
+            string query = 1;
+        }
+        
+        message ResumeConversation {
+            
+        }
+        
+        message InitProjectRules {
+            
+        }
+    }
+    
+    Settings settings = 3;
+    message Settings {
+        ModelConfig model_config = 1;
+        message ModelConfig {
+            string base = 1;
+            string planning = 2;
+            string coding = 3;
+        }
+        
+        bool rules_enabled = 2;
+        bool web_context_retrieval_enabled = 3;
+        bool supports_parallel_tool_calls = 4;
+        bool use_anthropic_text_editor_tools = 5;
+        bool planning_enabled = 6;
+        bool warp_drive_context_enabled = 7;
+        bool supports_create_files = 8;
+        repeated ToolType supported_tools = 9;
+        bool supports_long_running_commands = 10;
+        bool should_preserve_file_content_in_history = 11;
+        bool supports_todos_ui = 12;
+        bool supports_linked_code_blocks = 13;
+    }
+    
+    Metadata metadata = 4;
+    message Metadata {
+        string conversation_id = 1;
+        map<string, google.protobuf.Value> logging = 2;
+    }
+    
+    Suggestions existing_suggestions = 5;
+    
+    MCPContext mcp_context = 6;
+    message MCPContext {
+        repeated MCPResource resources = 1;
+        message MCPResource {
+            string uri = 1;
+            string name = 2;
+            string description = 3;
+            string mime_type = 4;
+        }
+        
+        repeated MCPTool tools = 2;
+        message MCPTool {
+            string name = 1;
+            string description = 2;
+            google.protobuf.Struct input_schema = 3;
+        }
+    }
+}

@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "options.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message Attachment {
+    oneof value {
+        string plain_text = 1;
+        ExecutedShellCommand executed_shell_command = 2;
+        RunningShellCommand running_shell_command = 3;
+        DriveObject drive_object = 4;
+    }
+}
+
+message ExecutedShellCommand {
+    string command = 1;
+    string output = 2;
+    int32 exit_code = 3;
+}
+
+message RunningShellCommand {
+    string command = 1;
+    LongRunningShellCommandSnapshot snapshot = 2;
+}
+
+message LongRunningShellCommandSnapshot {
+    string output = 1;
+}
+
+message DriveObject {
+    string uid = 1;
+    
+    oneof object_payload {
+        Workflow workflow = 2;
+        Notebook notebook = 3;
+        GenericStringObject generic_string_object = 4;
+    }
+}
+
+message Workflow {
+    string name = 1;
+    string description = 2;
+    string command = 3;
+}
+
+message Notebook {
+    string title = 1;
+    string content = 2;
+}
+
+message GenericStringObject {
+    string payload = 1;
+    string object_type = 2;
+}

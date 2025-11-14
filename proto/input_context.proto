@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package warp.multi_agent.v1;
+
+import "google/protobuf/timestamp.proto";
+import "file_content.proto";
+import "attachment.proto";
+import "options.proto";
+
+option go_package = "github.com/warp/warp-proto-apis/multi_agent/v1";
+
+message InputContext {
+    Directory directory = 1;
+    message Directory {
+        string pwd = 1;
+        string home = 2;
+        bool pwd_file_symbols_indexed = 3;
+    }
+    
+    OperatingSystem operating_system = 2;
+    message OperatingSystem {
+        string platform = 1;
+        string distribution = 2;
+    }
+    
+    Shell shell = 3;
+    message Shell {
+        string name = 1;
+        string version = 2;
+    }
+    
+    google.protobuf.Timestamp current_time = 4;
+    
+    repeated Codebase codebases = 8;
+    message Codebase {
+        string name = 1;
+        string path = 2;
+    }
+    
+    repeated ProjectRules project_rules = 10;
+    message ProjectRules {
+        string root_path = 1;
+        repeated FileContent active_rule_files = 2;
+        repeated string additional_rule_file_paths = 3;
+    }
+    
+    repeated ExecutedShellCommand executed_shell_commands = 5 [deprecated = true];
+    
+    repeated SelectedText selected_text = 6;
+    message SelectedText {
+        string text = 1;
+    }
+    
+    repeated Image images = 7;
+    message Image {
+        bytes data = 1;
+        string mime_type = 2;
+    }
+    
+    repeated File files = 9;
+    message File {
+        FileContent content = 1;
+    }
+}

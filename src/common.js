@@ -5,6 +5,8 @@ import * as crypto from 'crypto'; // Import crypto for MD5 hashing
 import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
 import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
+import { getApiService } from './service-manager.js';
+import { getAllUniqueModels } from './warp/warp-models.js';
 
 export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
@@ -17,6 +19,8 @@ export const MODEL_PROTOCOL_PREFIX = {
     OPENAI: 'openai',
     OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
+    OLLAMA: 'ollama',
+    WARP: 'warp',
 }
 
 export const MODEL_PROVIDER = {
@@ -27,6 +31,7 @@ export const MODEL_PROVIDER = {
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
+    WARP_API: 'warp-api',
 }
 
 /**
@@ -38,9 +43,91 @@ export const MODEL_PROVIDER = {
 export function getProtocolPrefix(provider) {
     const hyphenIndex = provider.indexOf('-');
     if (hyphenIndex !== -1) {
-        return provider.substring(0, hyphenIndex);
+        const prefix = provider.substring(0, hyphenIndex);
+        // Warp uses OpenAI-compatible protocol
+        if (prefix === 'warp') {
+            return MODEL_PROTOCOL_PREFIX.OPENAI;
+        }
+        return prefix;
     }
     return provider; // Return original if no hyphen is found
+}
+
+/**
+ * Determine which provider to use based on model name
+ * @param {string} modelName - Model name
+ * @param {Object} providerPoolManager - Provider pool manager
+ * @param {string} defaultProvider - Default provider
+ * @returns {string} Provider type
+ */
+export function getProviderByModelName(modelName, providerPoolManager, defaultProvider) {
+    if (!modelName || !providerPoolManager || !providerPoolManager.providerPools) {
+        return defaultProvider;
+    }
+    
+    const lowerModelName = modelName.toLowerCase();
+    
+    // IMPORTANT: Check Warp models FIRST before checking GPT/Claude
+    // Warp models include names like 'gpt-5', 'claude-4-sonnet' which would match other providers
+    try {
+        const warpModels = getAllUniqueModels();
+        const isWarpModel = warpModels.some(m => m.id.toLowerCase() === lowerModelName);
+        
+        if (isWarpModel) {
+            // Find available Warp provider
+            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+                if (providerType.includes('warp')) {
+                    const healthyProvider = providers.find(p => p.isHealthy);
+                    if (healthyProvider) {
+                        return providerType;
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('[Provider Selection] Failed to check Warp models:', error.message);
+    }
+    
+    // Check if it's a Claude model
+    if (lowerModelName.includes('claude') || lowerModelName.includes('sonnet') || lowerModelName.includes('opus') || lowerModelName.includes('haiku')) {
+        // Find available Claude provider
+        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            if (providerType.includes('claude') || providerType.includes('kiro')) {
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    return providerType;
+                }
+            }
+        }
+    }
+    
+    // Check if it's a Gemini model
+    if (lowerModelName.includes('gemini')) {
+        // Find available Gemini provider
+        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            if (providerType.includes('gemini')) {
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    return providerType;
+                }
+            }
+        }
+    }
+    
+    // Check if it's a GPT model
+    if (lowerModelName.includes('gpt')) {
+        // Find available OpenAI provider
+        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            if (providerType.includes('openai')) {
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    return providerType;
+                }
+            }
+        }
+    }
+    
+    return defaultProvider;
 }
 
 export const ENDPOINT_TYPE = {
@@ -374,13 +461,23 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     };
 
     const fromProvider = clientProviderMap[endpointType];
-    const toProvider = CONFIG.MODEL_PROVIDER;
-
+    
     if (!fromProvider) {
         throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
     }
 
-    // 1. Convert request body from client format to backend format, if necessary.
+    // 1. Extract model first to determine the correct provider
+    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
+    
+    if (!model) {
+        throw new Error("Could not determine the model from the request.");
+    }
+    
+    // 2. Determine the correct provider based on model name
+    const toProvider = getProviderByModelName(model, providerPoolManager, CONFIG.MODEL_PROVIDER);
+    console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}`);
+
+    // 3. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
     // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
@@ -390,27 +487,24 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         console.log(`[Request Convert] Request format matches backend provider. No conversion needed.`);
     }
 
-    // 2. Extract model and determine if the request is for streaming.
-    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
-
-    if (!model) {
-        throw new Error("Could not determine the model from the request.");
-    }
     console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
 
-    // 3. Apply system prompt from file if configured.
+    // 4. Apply system prompt from file if configured.
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);
 
-    // 4. Log the incoming prompt (after potential conversion to the backend's format).
+    // 5. Log the incoming prompt (after potential conversion to the backend's format).
     const promptText = extractPromptText(processedRequestBody, toProvider);
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     
-    // 5. Call the appropriate stream or unary handler, passing the provider info.
+    // 6. Get the correct service for the selected provider
+    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider }, providerPoolManager);
+    
+    // 7. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
-        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleStreamRequest(res, correctService, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
     } else {
-        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleUnaryRequest(res, correctService, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
     }
 }
 
