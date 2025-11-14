@@ -18,27 +18,7 @@ import {
  * @returns {Promise<boolean>} - True if the request was handled by API
  */
 export async function handleAPIRequests(method, path, req, res, currentConfig, apiService, providerPoolManager, promptLogFilename) {
-    // Health check endpoint
-    if (method === 'GET' && path === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            provider: currentConfig.MODEL_PROVIDER
-        }));
-        return true;
-    }
 
-    // Ignore count_tokens requests
-    if (path.includes('/count_tokens')) {
-        console.log(`[Server] Ignoring count_tokens request: ${path}`);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            tokens: 0,
-            message: 'Token counting is not supported'
-        }));
-        return true;
-    }
 
     // Route model list requests
     if (method === 'GET') {

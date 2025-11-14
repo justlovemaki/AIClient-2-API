@@ -80,6 +80,28 @@ export function createRequestHandler(config, providerPoolManager) {
             }
             return;
         }
+        
+        // Health check endpoint
+        if (method === 'GET' && path === '/health') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                status: 'healthy',
+                timestamp: new Date().toISOString(),
+                provider: currentConfig.MODEL_PROVIDER
+            }));
+            return true;
+        }
+
+        // Ignore count_tokens requests
+        if (path.includes('/count_tokens')) {
+            console.log(`[Server] Ignoring count_tokens request: ${path}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                tokens: 0,
+                message: 'Token counting is not supported'
+            }));
+            return true;
+        }
 
         // Check authentication for API requests
         if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
