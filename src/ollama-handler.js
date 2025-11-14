@@ -3,7 +3,7 @@
  * 处理Ollama特定的端点并在后端协议之间进行转换
  */
 
-import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
+import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, getProtocolPrefix, addModelPrefix, removeModelPrefix } from './common.js';
 import { convertData } from './convert.js';
 import { ConverterFactory } from './converters/ConverterFactory.js';
 
@@ -17,55 +17,47 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
     try {
         console.log('[Ollama] Handling /api/tags request');
         
-        const allModels = [];
         const ollamaConverter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.OLLAMA);
         
-        // Get models from current provider
-        try {
-            const backendModels = await apiService.listModels();
-            const sourceProtocol = getProtocolPrefix(currentConfig.MODEL_PROVIDER);
-            const ollamaTags = ollamaConverter.convertModelList(backendModels, sourceProtocol);
-            
-            if (ollamaTags.models && Array.isArray(ollamaTags.models)) {
-                allModels.push(...ollamaTags.models);
+        // Helper to fetch and convert models from a provider
+        const fetchProviderModels = async (providerType, service) => {
+            try {
+                const models = await service.listModels();
+                const sourceProtocol = getProtocolPrefix(providerType);
+                const tags = ollamaConverter.convertModelList(models, sourceProtocol);
+                
+                if (tags.models && Array.isArray(tags.models)) {
+                    return addPrefixToModels(tags.models, providerType, 'ollama');
+                }
+                return [];
+            } catch (error) {
+                console.error(`[Ollama] Error from ${providerType}:`, error.message);
+                return [];
             }
-        } catch (error) {
-            console.error('[Ollama] Error getting models from current provider:', error.message);
+        };
+        
+        // Collect fetch promises
+        const fetchPromises = [fetchProviderModels(currentConfig.MODEL_PROVIDER, apiService)];
+        
+        // Add provider pool fetches
+        if (providerPoolManager?.providerPools) {
+            const { getServiceAdapter } = await import('./adapter.js');
+            
+            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+                if (providerType === currentConfig.MODEL_PROVIDER) continue;
+                
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    const tempConfig = { ...currentConfig, ...healthyProvider, MODEL_PROVIDER: providerType };
+                    const service = getServiceAdapter(tempConfig);
+                    fetchPromises.push(fetchProviderModels(providerType, service));
+                }
+            }
         }
         
-        // Get models from provider pools if available
-        if (providerPoolManager && providerPoolManager.providerPools) {
-            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-                // Skip current provider (already added above)
-                if (providerType === currentConfig.MODEL_PROVIDER) {
-                    continue;
-                }
-                
-                for (const providerConfig of providers) {
-                    if (providerConfig.isHealthy) {
-                        try {
-                            // Import getServiceAdapter dynamically
-                            const { getServiceAdapter } = await import('./adapter.js');
-                            const tempConfig = {
-                                ...currentConfig,
-                                ...providerConfig,
-                                MODEL_PROVIDER: providerType
-                            };
-                            const service = getServiceAdapter(tempConfig);
-                            const models = await service.listModels();
-                            const sourceProtocol = getProtocolPrefix(providerType);
-                            const tags = ollamaConverter.convertModelList(models, sourceProtocol);
-                            
-                            if (tags.models && Array.isArray(tags.models)) {
-                                allModels.push(...tags.models);
-                            }
-                        } catch (error) {
-                            console.error(`[Ollama] Error getting models from ${providerType}:`, error.message);
-                        }
-                    }
-                }
-            }
-        }
+        // Execute all fetches in parallel
+        const results = await Promise.all(fetchPromises);
+        const allModels = results.flat();
         
         const response = { models: allModels };
         
@@ -136,8 +128,10 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
         
         // Determine provider based on model name
         const { getProviderForModel } = await import('./model-provider-mapper.js');
-        const modelName = ollamaRequest.model;
-        const detectedProvider = getProviderForModel(modelName, currentConfig.MODEL_PROVIDER);
+        const rawModelName = ollamaRequest.model;
+        const modelName = removeModelPrefix(rawModelName);
+        ollamaRequest.model = modelName; // Use clean model name
+        const detectedProvider = getProviderForModel(rawModelName, currentConfig.MODEL_PROVIDER);
         
         console.log(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
         
@@ -231,8 +225,10 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
         
         // Determine provider based on model name
         const { getProviderForModel } = await import('./model-provider-mapper.js');
-        const modelName = ollamaRequest.model;
-        const detectedProvider = getProviderForModel(modelName, currentConfig.MODEL_PROVIDER);
+        const rawModelName = ollamaRequest.model;
+        const modelName = removeModelPrefix(rawModelName);
+        ollamaRequest.model = modelName; // Use clean model name
+        const detectedProvider = getProviderForModel(rawModelName, currentConfig.MODEL_PROVIDER);
         
         console.log(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
         

@@ -35,6 +35,21 @@ export const MODEL_PROVIDER = {
 }
 
 /**
+ * Model name prefix mapping for different providers
+ * These prefixes are added to model names in the list for user visibility
+ * but are removed before sending to actual providers
+ */
+export const MODEL_PREFIX_MAP = {
+    [MODEL_PROVIDER.WARP_API]: '[Warp]',
+    [MODEL_PROVIDER.KIRO_API]: '[Kiro]',
+    [MODEL_PROVIDER.CLAUDE_CUSTOM]: '[Claude API]',
+    [MODEL_PROVIDER.GEMINI_CLI]: '[Gemini CLI]',
+    [MODEL_PROVIDER.OPENAI_CUSTOM]: '[OpenAI]',
+    [MODEL_PROVIDER.QWEN_API]: '[Qwen CLI]',
+    [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
+}
+
+/**
  * Extracts the protocol prefix from a given model provider string.
  * This is used to determine if two providers belong to the same underlying protocol (e.g., gemini, openai, claude).
  * @param {string} provider - The model provider string (e.g., 'gemini-cli', 'openai-custom').
@@ -54,8 +69,101 @@ export function getProtocolPrefix(provider) {
 }
 
 /**
+ * Adds provider prefix to model name for display purposes
+ * @param {string} modelName - Original model name
+ * @param {string} provider - Provider type
+ * @returns {string} Model name with prefix
+ */
+export function addModelPrefix(modelName, provider) {
+    if (!modelName) return modelName;
+    
+    // Don't add prefix if already exists
+    if (/^\[.*?\]\s+/.test(modelName)) {
+        return modelName;
+    }
+    
+    const prefix = MODEL_PREFIX_MAP[provider];
+    if (!prefix) {
+        return modelName;
+    }
+    return `${prefix} ${modelName}`;
+}
+
+/**
+ * Removes provider prefix from model name before sending to provider
+ * @param {string} modelName - Model name with possible prefix
+ * @returns {string} Clean model name without prefix
+ */
+export function removeModelPrefix(modelName) {
+    if (!modelName) {
+        return modelName;
+    }
+    
+    // Remove any prefix pattern like [Warp], [Kiro], etc.
+    const prefixPattern = /^\[.*?\]\s+/;
+    return modelName.replace(prefixPattern, '');
+}
+
+/**
+ * Extracts provider type from prefixed model name
+ * @param {string} modelName - Model name with possible prefix
+ * @returns {string|null} Provider type or null if no prefix found
+ */
+export function getProviderFromPrefix(modelName) {
+    if (!modelName) {
+        return null;
+    }
+    
+    const match = modelName.match(/^\[(.*?)\]/);
+    if (!match) {
+        return null;
+    }
+    
+    const prefixText = `[${match[1]}]`;
+    
+    // Find provider by prefix
+    for (const [provider, prefix] of Object.entries(MODEL_PREFIX_MAP)) {
+        if (prefix === prefixText) {
+            return provider;
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Adds provider prefix to array of models (works with any format)
+ * @param {Array} models - Array of model objects
+ * @param {string} provider - Provider type
+ * @param {string} format - Format type ('openai', 'gemini', 'ollama')
+ * @returns {Array} Models with prefixed names
+ */
+export function addPrefixToModels(models, provider, format = 'openai') {
+    if (!Array.isArray(models)) return models;
+    
+    return models.map(model => {
+        if (format === 'openai') {
+            return { ...model, id: addModelPrefix(model.id, provider) };
+        } else if (format === 'ollama') {
+            return {
+                ...model,
+                name: addModelPrefix(model.name, provider),
+                model: addModelPrefix(model.model || model.name, provider)
+            };
+        } else {
+            // gemini/claude format
+            return {
+                ...model,
+                name: addModelPrefix(model.name, provider),
+                displayName: model.displayName ? addModelPrefix(model.displayName, provider) : undefined
+            };
+        }
+    });
+}
+
+/**
  * Determine which provider to use based on model name
- * @param {string} modelName - Model name
+ * @param {string} modelName - Model name (may include prefix like "[Warp] gpt-5")
  * @param {Object} providerPoolManager - Provider pool manager
  * @param {string} defaultProvider - Default provider
  * @returns {string} Provider type
@@ -65,7 +173,16 @@ export function getProviderByModelName(modelName, providerPoolManager, defaultPr
         return defaultProvider;
     }
     
-    const lowerModelName = modelName.toLowerCase();
+    // First, check if model name has a prefix that directly indicates the provider
+    const providerFromPrefix = getProviderFromPrefix(modelName);
+    if (providerFromPrefix) {
+        console.log(`[Provider Selection] Provider determined from prefix: ${providerFromPrefix}`);
+        return providerFromPrefix;
+    }
+    
+    // Remove prefix for further analysis
+    const cleanModelName = removeModelPrefix(modelName);
+    const lowerModelName = cleanModelName.toLowerCase();
     
     // IMPORTANT: Check Warp models FIRST before checking GPT/Claude
     // Warp models include names like 'gpt-5', 'claude-4-sonnet' which would match other providers
@@ -106,6 +223,19 @@ export function getProviderByModelName(modelName, providerPoolManager, defaultPr
         // Find available Gemini provider
         for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
             if (providerType.includes('gemini')) {
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    return providerType;
+                }
+            }
+        }
+    }
+    
+    // Check if it's a Qwen model
+    if (lowerModelName.includes('qwen')) {
+        // Find available Qwen provider
+        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            if (providerType.includes('qwen')) {
                 const healthyProvider = providers.find(p => p.isHealthy);
                 if (healthyProvider) {
                     return providerType;
@@ -410,21 +540,75 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
         }
 
-        // 1. Get the model list in the backend's native format.
-        const nativeModelList = await service.listModels();
-
-        // 2. Convert the model list to the client's expected format, if necessary.
-        let clientModelList = nativeModelList;
-        if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
-            console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
-            clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
+        // Helper function to fetch and process models from a provider
+        const fetchProviderModels = async (providerType, providerService) => {
+            try {
+                const models = await providerService.listModels();
+                
+                // Convert if necessary
+                let converted = models;
+                if (!getProtocolPrefix(providerType).includes(getProtocolPrefix(fromProvider))) {
+                    converted = convertData(models, 'modelList', providerType, fromProvider);
+                }
+                
+                // Determine format and add prefixes
+                const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
+                if (converted?.models) {
+                    return addPrefixToModels(converted.models, providerType, format);
+                } else if (converted?.data) {
+                    return addPrefixToModels(converted.data, providerType, format);
+                }
+                return [];
+            } catch (error) {
+                console.error(`[ModelList] Error from ${providerType}:`, error.message);
+                return [];
+            }
+        };
+        
+        // Collect all fetch promises
+        const fetchPromises = [];
+        
+        // 1. Fetch from current provider
+        fetchPromises.push(fetchProviderModels(toProvider, service));
+        
+        // 2. Fetch from provider pools in parallel
+        if (providerPoolManager?.providerPools) {
+            const { getServiceAdapter } = await import('./adapter.js');
+            
+            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+                if (providerType === toProvider) continue;
+                
+                const healthyProvider = providers.find(p => p.isHealthy);
+                if (healthyProvider) {
+                    const tempConfig = { ...CONFIG, ...healthyProvider, MODEL_PROVIDER: providerType };
+                    const tempService = getServiceAdapter(tempConfig);
+                    fetchPromises.push(fetchProviderModels(providerType, tempService));
+                }
+            }
+        }
+        
+        // Execute all fetches in parallel and flatten results
+        const results = await Promise.all(fetchPromises);
+        const allModels = results.flat();
+        
+        // 3. Build final response in the correct format
+        let finalResponse;
+        if (fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI) {
+            // OpenAI format
+            finalResponse = {
+                object: 'list',
+                data: allModels
+            };
         } else {
-            console.log(`[ModelList Convert] Model list format matches. No conversion needed.`);
+            // Gemini/Claude format
+            finalResponse = {
+                models: allModels
+            };
         }
 
-        console.log(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
+        console.log(`[ModelList Response] Sending ${allModels.length} models to client`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(clientModelList));
+        res.end(JSON.stringify(finalResponse));
     } catch (error) {
         console.error('\n[Server] Error during model list processing:', error.stack);
         if (providerPoolManager) {
@@ -467,11 +651,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
 
     // 1. Extract model first to determine the correct provider
-    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
+    const { model: rawModel, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
     
-    if (!model) {
+    if (!rawModel) {
         throw new Error("Could not determine the model from the request.");
     }
+    
+    // Remove prefix from model name if present (e.g., "[Warp] gpt-5" -> "gpt-5")
+    const model = removeModelPrefix(rawModel);
+    console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
     
     // 2. Determine the correct provider based on model name
     const toProvider = getProviderByModelName(model, providerPoolManager, CONFIG.MODEL_PROVIDER);

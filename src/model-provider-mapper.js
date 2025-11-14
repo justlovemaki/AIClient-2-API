@@ -3,12 +3,12 @@
  * Maps model names to their corresponding providers
  */
 
-import { MODEL_PROVIDER } from './common.js';
+import { MODEL_PROVIDER, removeModelPrefix, getProviderFromPrefix } from './common.js';
 import { getAllUniqueModels } from './warp/warp-models.js';
 
 /**
  * Get provider type for a given model name
- * @param {string} modelName - The model name to look up
+ * @param {string} modelName - The model name to look up (may include prefix like "[Warp] gpt-5")
  * @param {string} defaultProvider - The default provider if no match is found
  * @returns {string} The provider type
  */
@@ -17,7 +17,15 @@ export function getProviderForModel(modelName, defaultProvider) {
         return defaultProvider;
     }
 
-    const lowerModel = modelName.toLowerCase();
+    // First, check if model name has a prefix that directly indicates the provider
+    const providerFromPrefix = getProviderFromPrefix(modelName);
+    if (providerFromPrefix) {
+        return providerFromPrefix;
+    }
+    
+    // Remove prefix for further analysis
+    const cleanModelName = removeModelPrefix(modelName);
+    const lowerModel = cleanModelName.toLowerCase();
 
     // Warp models
     const warpModels = getAllUniqueModels();
