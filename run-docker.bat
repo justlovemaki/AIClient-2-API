@@ -4,26 +4,26 @@
 
 setlocal enabledelayedexpansion
 
-echo 正在生成指定的Docker运行命令...
+echo Generating Docker run command...
 
-:: 设置配置文件路径，使用USERPROFILE环境变量
+:: Set config file paths using USERPROFILE environment variable
 set "AWS_SSO_CACHE_PATH=%USERPROFILE%\.aws\sso\cache"
 set "GEMINI_CONFIG_PATH=%USERPROFILE%\.gemini\oauth_creds.json"
 
-:: 检查AWS SSO缓存目录是否存在
+:: Check if AWS SSO cache directory exists
 if exist "%AWS_SSO_CACHE_PATH%" (
-    echo 发现AWS SSO缓存目录: %AWS_SSO_CACHE_PATH%
+    echo Found AWS SSO cache directory: %AWS_SSO_CACHE_PATH%
 ) else (
-    echo 未找到AWS SSO缓存目录: %AWS_SSO_CACHE_PATH%
-    echo 注意：AWS SSO缓存目录不存在，Docker容器可能无法访问AWS凭证
+    echo AWS SSO cache directory not found: %AWS_SSO_CACHE_PATH%
+    echo Note: AWS SSO cache directory does not exist, Docker container may not access AWS credentials
 )
 
-:: 检查Gemini配置文件是否存在
+:: Check if Gemini config file exists
 if exist "%GEMINI_CONFIG_PATH%" (
-    echo 发现Gemini配置文件: %GEMINI_CONFIG_PATH%
+    echo Found Gemini config file: %GEMINI_CONFIG_PATH%
 ) else (
-    echo 未找到Gemini配置文件: %GEMINI_CONFIG_PATH%
-    echo 注意：Gemini配置文件不存在，Docker容器可能无法访问Gemini API
+    echo Gemini config file not found: %GEMINI_CONFIG_PATH%
+    echo Note: Gemini config file does not exist, Docker container may not access Gemini API
 )
 
 :: 构建Docker运行命令，使用USERPROFILE环境变量构建的路径
@@ -38,31 +38,31 @@ set "DOCKER_CMD=!DOCKER_CMD! -v "%GEMINI_CONFIG_PATH%:/root/.gemini/oauth_creds.
 set "DOCKER_CMD=!DOCKER_CMD! --name aiclient2api ^"
 set "DOCKER_CMD=!DOCKER_CMD! aiclient2api"
 
-:: 显示将要执行的命令
+:: Display command to be executed
 echo.
-echo 生成的Docker命令:
+echo Generated Docker command:
 echo !DOCKER_CMD!
 echo.
 
-:: 将命令保存到文件中
+:: Save command to file
 echo !DOCKER_CMD! > docker-run-command.txt
-echo 命令已保存到 docker-run-command.txt 文件中，您可以从该文件复制完整的命令。
+echo Command saved to docker-run-command.txt file, you can copy the complete command from this file.
 
-:: 询问用户是否要执行该命令
+:: Ask user if they want to execute the command
 echo.
-set /p EXECUTE_CMD="是否要立即执行该Docker命令？(y/n): "
+set /p EXECUTE_CMD="Do you want to execute this Docker command now? (y/n): "
 if /i "!EXECUTE_CMD!"=="y" (
-    echo 正在执行Docker命令...
+    echo Executing Docker command...
     !DOCKER_CMD!
     if !errorlevel! equ 0 (
-        echo Docker容器已成功启动！
-        echo 您可以通过 http://localhost:3000 访问API服务
+        echo Docker container started successfully!
+        echo You can access the API service at http://localhost:3000
     ) else (
-        echo Docker命令执行失败，请检查错误信息
+        echo Docker command execution failed, please check error messages
     )
 ) else (
-    echo 命令未执行，您可以手动从docker-run-command.txt文件复制并执行命令
+    echo Command not executed, you can manually copy and execute the command from docker-run-command.txt file
 )
 
-echo 脚本执行完成
+echo Script execution completed
 pause

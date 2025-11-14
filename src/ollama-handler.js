@@ -3,7 +3,7 @@
  * 处理Ollama特定的端点并在后端协议之间进行转换
  */
 
-import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, getProtocolPrefix, addModelPrefix, removeModelPrefix } from './common.js';
+import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, getProtocolPrefix, addModelPrefix, removeModelPrefix, addPrefixToModels } from './common.js';
 import { convertData } from './convert.js';
 import { ConverterFactory } from './converters/ConverterFactory.js';
 

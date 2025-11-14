@@ -2,9 +2,9 @@
 
 ![logo](src/img/logo-min.webp)
 
-# AIClient-2-API 🚀
+# AnyAI-2-Open-API 🚀
 
-**A powerful proxy that can unify the requests of various large model APIs (Gemini CLI, Qwen Code Plus, Kiro Claude...) that are only used within the client into a local OpenAI compatible interface.**
+**Enhanced fork with Warp protocol support, Ollama protocol converter, model prefix system, and parallel fetching. A powerful proxy that unifies various AI model APIs (Gemini CLI, Qwen CLI, Kiro Claude, Warp) into OpenAI-compatible interfaces. Includes Ollama protocol converter to access cloud AI models via Ollama clients.**
 
 </div>
 
@@ -21,36 +21,52 @@
 
 </div>
 
-`AIClient2API` is an API proxy service that breaks through client limitations, converting free large models originally restricted to client use only (such as Gemini CLI, Qwen Code Plus, Kiro Claude) into standard OpenAI-compatible interfaces that can be called by any application. Built on Node.js, it supports intelligent conversion between three major protocols (OpenAI, Claude, Gemini), enabling tools like Cherry-Studio, NextChat, and Cline to freely use advanced models such as Claude Sonnet 4.5, Gemini 2.5 Flash, and Qwen3 Coder Plus at scale. The project adopts a modular architecture based on strategy and adapter patterns, with built-in account pool management, intelligent polling, automatic failover, and health check mechanisms, ensuring 99.9% service availability.
+`AnyAI-2-Open-API` is an enhanced fork of AIClient2API. This fork adds Warp protocol integration, Ollama protocol converter (OpenAI ↔ Ollama translation), model prefix routing system, and parallel model fetching. Built on Node.js, it supports intelligent conversion between multiple protocols (OpenAI, Claude, Gemini, Warp, Ollama). The project adopts a modular architecture based on strategy and adapter patterns.
+
+## 🌟 Enhanced Features in This Fork
+
+- **🔥 Warp Protocol Support**: Full Warp API integration with Protocol Buffers support (11 proto definitions)
+  - Complete Warp module ecosystem (10 specialized handlers: auth, config, core, models, packet-builder, protobuf-utils, reorder, response, strategy, utils)
+  - WarpApiService adapter with full streaming support
+  - Protobuf-based packet building for Warp communication
+- **🦙 Ollama Protocol Converter**: Bidirectional translation (OpenAI ↔ Ollama)
+  - Native Ollama protocol converter with complete API support
+  - Ollama-specific endpoints: /api/tags, /api/show, /api/chat, /api/generate, /api/version
+  - **⚠️ Important**: To use Ollama endpoints, either run this server on Ollama's default port (11434) or manually configure the Ollama port in your client
+  - **⚠️ Note**: Close the official Ollama client before using this proxy, otherwise requests will be intercepted by the official client and models won't be visible
+- **🏷️ Model Prefix System**: Intelligent model-based provider routing (auto-detects Warp models like 'gpt-5')
+  - Model-to-provider mapper for automatic routing
+- **⚡ Parallel Model Fetching**: Concurrent model information retrieval for improved performance
+- **🎯 Enhanced Converter Architecture**: 
+  - Extended GeminiConverter with tool call support
+  - Enhanced OpenAIConverter with function call handling
+  - OllamaConverter strategy for protocol translation
 
 > [!NOTE]
-> **🎉 Important Milestone**
+> **🎉 Fork Enhancements**
 >
-> - Thanks to Ruan Yifeng for the recommendation in [Weekly Issue 359](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html)
+> This is an enhanced fork of the original [AIClient-2-API](https://github.com/justlovemaki/AIClient-2-API) project with additional enterprise features.
 >
-> **📅 Version Update Log**
+> **📅 Fork Update Log**
 >
-> - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
-> - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
-> - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
-> - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
-> - **2025.08.29** - Released account pool management feature, supporting multi-account polling, intelligent failover, and automatic degradation strategies
->   - Configuration: Add `PROVIDER_POOLS_FILE_PATH` parameter in config.json
->   - Reference configuration: [provider_pools.json](./provider_pools.json.example)
+> - **2025.11.14** - Added model prefix system and parallel model fetching
+> - **2025.11.14** - Added enterprise-grade Warp and Ollama protocol support with advanced routing
 
 ---
 
 ## 💡 Core Advantages
 
 ### 🎯 Unified Access, One-Stop Management
-*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, GPT, Qwen Code, Kimi K2, GLM-4.6
-*   **Flexible Switching Mechanism**: Support dynamic model switching via startup parameters, Path routing, or environment variables to meet different scenario requirements
-*   **Zero-Cost Migration**: Fully compatible with OpenAI API specifications, tools like Cherry-Studio, NextChat, Cline can be used without modification
-*   **Multi-Protocol Intelligent Conversion**: Support intelligent conversion between OpenAI, Claude, and Gemini protocols for cross-protocol model invocation
+*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, GPT, Qwen Code, Warp, Kimi K2, GLM-4.6
+*   **Flexible Switching Mechanism**: Support dynamic model switching via startup parameters, Path routing, model prefixes, or environment variables to meet different scenario requirements
+*   **Zero-Cost Migration**: Fully compatible with OpenAI API specifications
+*   **Multi-Protocol Intelligent Conversion**: Support intelligent conversion between OpenAI, Claude, Gemini, Warp, and Ollama protocols for cross-protocol model invocation
     *   Call Claude models using OpenAI protocol: Use `claude-custom` or `claude-kiro-oauth` providers
     *   Call Gemini models using OpenAI protocol: Use `gemini-cli-oauth` provider
     *   Call Gemini models using Claude protocol: Use `gemini-cli-oauth` provider
     *   Call OpenAI models using Claude protocol: Use `openai-custom` or `openai-qwen-oauth` providers
+    *   Call Warp models using OpenAI protocol: Use `warp` provider with model prefix routing
+    *   **Access cloud AI models via Ollama protocol**: Ollama protocol converter translates Ollama API requests to OpenAI format, then routes to configured cloud providers (Gemini, Claude, GPT, etc.)
 
 ### 🚀 Break Through Limitations, Improve Efficiency
 *   **Bypass Official Restrictions**: Utilize OAuth authorization mechanism to effectively break through rate and quota limits of free APIs like Gemini
@@ -64,9 +80,13 @@
 
 ### 🔧 Developer-Friendly, Easy to Extend
 *   **Modular Architecture**: Based on strategy and adapter patterns, adding new model providers requires only 3 steps
+*   **Enhanced Converter System**: Refactored protocol converters with improved maintainability and extensibility
+*   **Model Prefix Routing**: Intelligent model selection based on prefix patterns for flexible deployment
+*   **Parallel Processing**: Concurrent model fetching and request handling for optimal performance
 *   **Complete Test Coverage**: Integration and unit test coverage 90%+, ensuring code quality
 *   **Containerized Deployment**: Provides Docker support, one-click deployment, cross-platform operation
 *   **MCP Protocol Support**: Perfectly compatible with Model Context Protocol, easily extend functionality
+*   **Warp & Ollama Integration**: Enterprise-grade protocol support for advanced AI workflows
 
 ---
 
@@ -86,9 +106,11 @@
 
 This project supports multiple model providers through different protocols. The following is an overview of their relationships:
 
-*   **OpenAI Protocol (P_OPENAI)**: Implemented by `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth`, `openai-qwen-oauth`, and `openaiResponses-custom` model providers.
+*   **OpenAI Protocol (P_OPENAI)**: Implemented by `openai-custom`, `gemini-cli-oauth`, `claude-custom`, `claude-kiro-oauth`, `openai-qwen-oauth`, `openaiResponses-custom`, and `warp` model providers.
 *   **Claude Protocol (P_CLAUDE)**: Implemented by `claude-custom`, `claude-kiro-oauth`, `gemini-cli-oauth`, `openai-custom`, `openai-qwen-oauth`, and `openaiResponses-custom` model providers.
 *   **Gemini Protocol (P_GEMINI)**: Implemented by `gemini-cli-oauth` model provider.
+*   **Warp Protocol (P_WARP)**: Implemented by `warp` model provider with enterprise-grade features.
+*   **Ollama Protocol (P_OLLAMA)**: Protocol converter that translates Ollama API requests to OpenAI format, enabling Ollama clients to access cloud AI models through this proxy.
 
 Detailed relationship diagram:
 
@@ -249,6 +271,53 @@ Seamlessly supports the following latest large models, simply configure the corr
 2. **Complete Authorization**: Log in to your account in the client to generate `kiro-auth-token.json` credential file
 3. **Best Practice**: Recommended to use with **Claude Code** for optimal experience
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
+
+#### Warp API Configuration
+1. **Access Warp Website**: Visit [Warp AI website](https://warp.dev/) and sign in to your account
+2. **Open Browser Console**: After successful login, press `F12` or `Ctrl+Shift+I` (Windows/Linux) / `Cmd+Option+I` (Mac) to open Developer Tools
+3. **Extract Refresh Token**: In the Console tab, paste and execute the following code:
+   ```javascript
+   (async () => {
+     const request = indexedDB.open("firebaseLocalStorageDb");
+
+     request.onsuccess = function (event) {
+       const db = event.target.result;
+       const tx = db.transaction("firebaseLocalStorage", "readonly");
+       const store = tx.objectStore("firebaseLocalStorage");
+
+       const getAllReq = store.getAll();
+
+       getAllReq.onsuccess = function () {
+         const results = getAllReq.result;
+         const firstValue = results[0]?.value;
+         
+         console.log("Your account data:");
+         console.log(JSON.stringify(firstValue, null, 2));
+         
+         const valueString = JSON.stringify(firstValue, null, 2);
+         navigator.clipboard.writeText(valueString).then(() => {
+           alert("Account data copied to clipboard!");
+         });
+       };
+     };
+   })();
+   ```
+4. **Extract Refresh Token**: From the copied JSON data, find the `stsTokenManager.refreshToken` field
+5. **Configure in config.json**: 
+   - Set `MODEL_PROVIDER` to `warp`
+   - Copy the refresh token value to `WARP_REFRESH_TOKEN` field in `config.json`
+   - Example:
+     ```json
+     {
+       "MODEL_PROVIDER": "warp",
+       "WARP_REFRESH_TOKEN": "AMf-vBxSRmdhveGGBYM69p05kDhIn1i7wscALEmC9fYdRpHzjER9dL7kk...",
+       "WARP_REFRESH_URL": "https://app.warp.dev/proxy/token?key=AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"
+     }
+     ```
+6. **Important Notes**: 
+   - The system automatically refreshes JWT tokens using the refresh token
+   - Keep your refresh token secure and never share it publicly
+   - If refresh token expires, repeat steps 1-5 to get a new one
 
 #### OpenAI Responses API
 *   **Application Scenario**: Suitable for scenarios requiring structured dialogue using OpenAI Responses API, such as Codex
