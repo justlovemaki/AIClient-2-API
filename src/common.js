@@ -657,13 +657,14 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error("Could not determine the model from the request.");
     }
     
-    // Remove prefix from model name if present (e.g., "[Warp] gpt-5" -> "gpt-5")
-    const model = removeModelPrefix(rawModel);
-    console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
+    // 2. Determine the correct provider based on model name WITH prefix
+    // Prefix like "[Gemini CLI]" explicitly indicates which provider to use
+    const toProvider = getProviderByModelName(rawModel, providerPoolManager, CONFIG.MODEL_PROVIDER);
+    console.log(`[Provider Selection] Raw model: ${rawModel}, Selected provider: ${toProvider}`);
     
-    // 2. Determine the correct provider based on model name
-    const toProvider = getProviderByModelName(model, providerPoolManager, CONFIG.MODEL_PROVIDER);
-    console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}`);
+    // 3. Remove prefix from model name for actual API calls
+    const model = removeModelPrefix(rawModel);
+    console.log(`[Model Processing] Clean model for API: ${model}`);
 
     // 3. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
