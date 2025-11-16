@@ -493,11 +493,7 @@ node src/api-server.js \
 
 感谢以下所有为 AIClient-2-API 项目做出贡献的开发者：
 
-<div align="left">
-
-[<img src="https://avatars.githubusercontent.com/u/12859173?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="justlikemaki"/>](https://github.com/justlikemaki)[<img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="eltociear"/>](https://github.com/eltociear)[<img src="https://avatars.githubusercontent.com/u/26056971?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="LaelLuo"/>](https://github.com/LaelLuo)[<img src="https://avatars.githubusercontent.com/u/24641689?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="d7185540"/>](https://github.com/d7185540)[<img src="https://avatars.githubusercontent.com/u/122232211?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="bee4come"/>](https://github.com/bee4come)[<img src="https://avatars.githubusercontent.com/u/121296348?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="HALDRO"/>](https://github.com/HALDRO)
-
-</div>
+[![Contributors](https://contrib.rocks/image?repo=justlovemaki/AIClient-2-API)](https://github.com/justlovemaki/AIClient-2-API/graphs/contributors)
 
 
 ## 🌟 Star History
