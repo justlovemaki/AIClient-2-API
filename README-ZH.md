@@ -30,6 +30,7 @@
 >
 > **📅 版本更新日志**
 >
+> - **2025.11.16** - 新增 Ollama 协议支持，统一接口访问所有支持的模型（Claude、Gemini、Qwen、OpenAI等）
 > - **2025.11.11** - 新增 Web UI 管理控制台，支持实时配置管理和健康状态监控
 > - **2025.11.06** - 新增对 Gemini 3 预览版的支持，增强模型兼容性和性能优化
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
@@ -275,7 +276,8 @@ install-and-run.bat
 | `/gemini-cli-oauth` | 通过 Gemini CLI OAuth 访问 | 突破 Gemini 免费限制 |
 | `/openai-qwen-oauth` | 通过 Qwen OAuth 访问 | 使用 Qwen Code Plus |
 | `/openaiResponses-custom` | OpenAI Responses API | 结构化对话场景 |
-
+| `/ollama` | Ollama API 协议 | 统一访问所有支持的模型 |
+ 
 **使用示例**：
 ```bash
 # 在 Cline、Kilo 等编程 Agent 中配置
@@ -286,6 +288,36 @@ curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'
 ```
+
+### 🦙 Ollama 协议使用示例
+
+本项目支持 Ollama 协议，可以通过统一接口访问所有支持的模型。Ollama 端点提供 `/api/tags`、`/api/chat`、`/api/generate` 等标准接口。
+
+**Ollama API 调用示例**：
+
+1. **列出所有可用模型**：
+```bash
+curl http://localhost:3000/ollama/api/tags
+```
+
+2. **聊天接口**：
+```bash
+curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [
+      {"role": "user", "content": "你好"}
+    ]
+  }'
+```
+
+3. **使用模型前缀指定提供商**：
+- `[Kiro]` - 使用 Kiro API 访问 Claude 模型
+- `[Claude]` - 使用 Claude 官方 API
+- `[Gemini CLI]` - 通过 Gemini CLI OAuth 访问
+- `[OpenAI]` - 使用 OpenAI 官方 API
+- `[Qwen CLI]` - 通过 Qwen OAuth 访问
 
 ---
 
@@ -454,12 +486,22 @@ node src/api-server.js \
 ## 📄 开源许可
 
 本项目遵循 [**GNU General Public License v3 (GPLv3)**](https://www.gnu.org/licenses/gpl-3.0) 开源许可。详情请查看根目录下的 `LICENSE` 文件。
-
 ## 🙏 致谢
 
 本项目的开发受到了官方 Google Gemini CLI 的极大启发，并参考了Cline 3.18.0 版本 `gemini-cli.ts` 的部分代码实现。在此对 Google 官方团队和 Cline 开发团队的卓越工作表示衷心的感谢！
+### 贡献者列表
+
+感谢以下所有为 AIClient-2-API 项目做出贡献的开发者：
+
+<div align="left">
+
+[<img src="https://avatars.githubusercontent.com/u/12859173?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="justlikemaki"/>](https://github.com/justlikemaki)[<img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="eltociear"/>](https://github.com/eltociear)[<img src="https://avatars.githubusercontent.com/u/26056971?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="LaelLuo"/>](https://github.com/LaelLuo)[<img src="https://avatars.githubusercontent.com/u/24641689?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="d7185540"/>](https://github.com/d7185540)[<img src="https://avatars.githubusercontent.com/u/122232211?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="bee4come"/>](https://github.com/bee4come)[<img src="https://avatars.githubusercontent.com/u/121296348?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="HALDRO"/>](https://github.com/HALDRO)
+
+</div>
+
 
 ## 🌟 Star History
+
 
 [![Star History Chart](https://api.star-history.com/svg?repos=justlovemaki/AIClient-2-API&type=Timeline)](https://www.star-history.com/#justlovemaki/AIClient-2-API&Timeline)
 

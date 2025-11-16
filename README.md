@@ -30,6 +30,7 @@
 >
 > **📅 Version Update Log**
 >
+> - **2025.11.16** - Added Ollama protocol support, unified interface to access all supported models (Claude, Gemini, Qwen, OpenAI, etc.)
 > - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
 > - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
@@ -266,6 +267,7 @@ This project provides two flexible model switching methods to meet different usa
 
 Achieve instant switching by specifying provider identifier in API request path:
 
+
 | Route Path | Description | Use Case |
 |---------|------|---------|
 | `/claude-custom` | Use Claude API from config file | Official Claude API calls |
@@ -274,20 +276,51 @@ Achieve instant switching by specifying provider identifier in API request path:
 | `/gemini-cli-oauth` | Access via Gemini CLI OAuth | Break through Gemini free limits |
 | `/openai-qwen-oauth` | Access via Qwen OAuth | Use Qwen Code Plus |
 | `/openaiResponses-custom` | OpenAI Responses API | Structured dialogue scenarios |
-
+| `/ollama` | Ollama API protocol | Unified access to all supported models |
+ 
 **Usage Examples**:
 ```bash
 # Configure in programming agents like Cline, Kilo
 API_ENDPOINT=http://localhost:3000/claude-kiro-oauth
-
+ 
 # Direct API call
 curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'
 ```
 
----
+### Ollama Protocol Usage Examples
 
+This project supports the Ollama protocol, allowing access to all supported models through a unified interface. The Ollama endpoint provides standard interfaces such as `/api/tags`, `/api/chat`, `/api/generate`, etc.
+
+**Ollama API Call Examples**:
+
+1. **List all available models**:
+```bash
+curl http://localhost:3000/ollama/api/tags
+```
+
+2. **Chat interface**:
+```bash
+curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ]
+  }'
+```
+
+3. **Specify provider using model prefix**:
+- `[Kiro]` - Access Claude models using Kiro API
+- `[Claude]` - Use official Claude API
+- `[Gemini CLI]` - Access via Gemini CLI OAuth
+- `[OpenAI]` - Use official OpenAI API
+- `[Qwen CLI]` - Access via Qwen OAuth
+
+---
+ 
 ### 📁 Authorization File Storage Paths
 
 Default storage locations for authorization credential files of each service:
@@ -453,6 +486,16 @@ This project operates under the [**GNU General Public License v3 (GPLv3)**](http
 ## 🙏 Acknowledgements
 
 The development of this project was significantly inspired by the official Google Gemini CLI and incorporated some code implementations from Cline 3.18.0's `gemini-cli.ts`. We extend our sincere gratitude to the official Google team and the Cline development team for their exceptional work!
+### Contributor List
+
+Thanks to all the developers who contributed to the AIClient-2-API project:
+
+<div align="left">
+
+[<img src="https://avatars.githubusercontent.com/u/12859173?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="justlikemaki"/>](https://github.com/justlikemaki)[<img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="eltociear"/>](https://github.com/eltociear)[<img src="https://avatars.githubusercontent.com/u/26056971?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="LaelLuo"/>](https://github.com/LaelLuo)[<img src="https://avatars.githubusercontent.com/u/24641689?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="d7185540"/>](https://github.com/d7185540)[<img src="https://avatars.githubusercontent.com/u/122232211?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="bee4come"/>](https://github.com/bee4come)[<img src="https://avatars.githubusercontent.com/u/121296348?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="HALDRO"/>](https://github.com/HALDRO)
+
+</div>
+
 
 ## 🌟 Star History
 

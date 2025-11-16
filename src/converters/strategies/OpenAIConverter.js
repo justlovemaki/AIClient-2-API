@@ -533,13 +533,41 @@ export class OpenAIConverter extends BaseConverter {
             const geminiRole = message.role === 'assistant' ? 'model' : message.role;
             
             if (geminiRole === 'tool') {
-                if (lastMessage) processedMessages.push(lastMessage);
+                // Save previous model response with functionCall
+                if (lastMessage) {
+                    processedMessages.push(lastMessage);
+                    lastMessage = null;
+                }
+                
+                // Get function name from message.name or via tool_call_id
+                let functionName = message.name;
+                if (!functionName && message.tool_call_id) {
+                    const currentIndex = nonSystemMessages.indexOf(message);
+                    for (let i = currentIndex - 1; i >= 0; i--) {
+                        const prevMsg = nonSystemMessages[i];
+                        if (prevMsg.role === 'assistant' && prevMsg.tool_calls) {
+                            const toolCall = prevMsg.tool_calls.find(tc => tc.id === message.tool_call_id);
+                            if (toolCall?.function?.name) {
+                                functionName = toolCall.function.name;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Build functionResponse according to Gemini API spec
+                const parsedContent = safeParseJSON(message.content);
+                const contentStr = typeof parsedContent === 'string' ? parsedContent : JSON.stringify(parsedContent);
+                
                 processedMessages.push({
-                    role: 'function',
+                    role: 'user',
                     parts: [{
                         functionResponse: {
-                            name: message.name,
-                            response: { content: safeParseJSON(message.content) }
+                            name: functionName || 'unknown',
+                            response: {
+                                name: functionName || 'unknown',
+                                content: contentStr
+                            }
                         }
                     }]
                 });
@@ -547,7 +575,21 @@ export class OpenAIConverter extends BaseConverter {
                 continue;
             }
             
-            const processedContent = this.processOpenAIContentToGeminiParts(message.content);
+            let processedContent = this.processOpenAIContentToGeminiParts(message.content);
+            
+            // Add tool_calls as functionCall to parts
+            if (message.tool_calls && Array.isArray(message.tool_calls)) {
+                for (const toolCall of message.tool_calls) {
+                    if (toolCall.function) {
+                        processedContent.push({
+                            functionCall: {
+                                name: toolCall.function.name,
+                                args: safeParseJSON(toolCall.function.arguments)
+                            }
+                        });
+                    }
+                }
+            }
             
             if (lastMessage && lastMessage.role === geminiRole && !message.tool_calls &&
                 Array.isArray(processedContent) && processedContent.every(p => p.text) &&
@@ -589,7 +631,7 @@ export class OpenAIConverter extends BaseConverter {
             geminiRequest.toolConfig = this.buildGeminiToolConfig(openaiRequest.tool_choice);
         }
         
-        const config = this.buildGeminiGenerationConfig(openaiRequest);
+        const config = this.buildGeminiGenerationConfig(openaiRequest, openaiRequest.model);
         if (Object.keys(config).length) geminiRequest.generationConfig = config;
         
         return geminiRequest;
@@ -649,12 +691,23 @@ export class OpenAIConverter extends BaseConverter {
     /**
      * 构建Gemini生成配置
      */
-    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop }) {
+    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools }, model) {
         const config = {};
         config.temperature = checkAndAssignOrDefault(temperature, 1);
         config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, 65535);
         config.topP = checkAndAssignOrDefault(top_p, 0.95);
         if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
+        
+        // Gemini 2.5 and thinking models require responseModalities: ["TEXT"]
+        // But this parameter cannot be added when using tools (causes 400 error)
+        const hasTools = tools && Array.isArray(tools) && tools.length > 0;
+        if (!hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
+            console.log(`[OpenAI->Gemini] Adding responseModalities: ["TEXT"] for model: ${model}`);
+            config.responseModalities = ["TEXT"];
+        } else if (hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
+            console.log(`[OpenAI->Gemini] Skipping responseModalities for model ${model} because tools are present`);
+        }
+        
         return config;
     }
     /**

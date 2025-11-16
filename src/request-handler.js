@@ -6,6 +6,8 @@ import { getApiService } from './service-manager.js';
 import { getProviderPoolManager } from './service-manager.js';
 import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
+import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
+
 /**
  * Main request handler. It authenticates the request, determines the endpoint type,
  * and delegates to the appropriate specialized handler function.
@@ -39,6 +41,12 @@ export function createRequestHandler(config, providerPoolManager) {
 
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
+
+        // Ollama show endpoint with model name
+        if (method === 'POST' && path === '/ollama/api/show') {
+            await handleOllamaShow(req, res);
+            return true;
+        }
 
         console.log(`\n${new Date().toLocaleString()}`);
         console.log(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
@@ -104,13 +112,22 @@ export function createRequestHandler(config, providerPoolManager) {
         }
 
         // Check authentication for API requests
-        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
+        // Allow empty Bearer token (from Ollama clients like VS Code Copilot)
+        const authHeader = req.headers['authorization'];
+        const hasEmptyBearer = authHeader === 'Bearer' || authHeader === 'Bearer ';
+        
+        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY) && !hasEmptyBearer) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;
         }
 
         try {
+            // Handle Ollama request (normalize path and route to appropriate endpoints)
+            const { handled, normalizedPath } = await handleOllamaRequest(method, path, requestUrl, req, res, apiService, currentConfig, providerPoolManager);
+            if (handled) return;
+            path = normalizedPath;
+
             // Handle API requests
             const apiHandled = await handleAPIRequests(method, path, req, res, currentConfig, apiService, providerPoolManager, PROMPT_LOG_FILENAME);
             if (apiHandled) return;

@@ -174,75 +174,73 @@ export class GeminiConverter extends BaseConverter {
     toOpenAIStreamChunk(geminiChunk, model) {
         if (!geminiChunk) return null;
 
-        // 处理完整的Gemini chunk对象
-        if (typeof geminiChunk === 'object' && !Array.isArray(geminiChunk)) {
-            const candidate = geminiChunk.candidates?.[0];
-            
-            // 提取文本内容
-            let content = '';
-            let finishReason = null;
-            
-            if (candidate) {
-                // 从parts中提取文本
-                const parts = candidate.content?.parts;
-                if (parts && Array.isArray(parts)) {
-                    content = parts
-                        .filter(part => part && typeof part.text === 'string')
-                        .map(part => part.text)
-                        .join('');
+        const candidate = geminiChunk.candidates?.[0];
+        if (!candidate) return null;
+
+        let content = '';
+        const toolCalls = [];
+        
+        // 从parts中提取文本和tool calls
+        const parts = candidate.content?.parts;
+        if (parts && Array.isArray(parts)) {
+            for (const part of parts) {
+                if (part.text) {
+                    content += part.text;
                 }
-                
-                // 处理finishReason
-                if (candidate.finishReason) {
-                    finishReason = candidate.finishReason === 'STOP' ? 'stop' :
-                                 candidate.finishReason === 'MAX_TOKENS' ? 'length' :
-                                 candidate.finishReason.toLowerCase();
+                if (part.functionCall) {
+                    toolCalls.push({
+                        id: part.functionCall.id || `call_${uuidv4()}`,
+                        type: 'function',
+                        function: {
+                            name: part.functionCall.name,
+                            arguments: typeof part.functionCall.args === 'string' 
+                                ? part.functionCall.args 
+                                : JSON.stringify(part.functionCall.args)
+                        }
+                    });
                 }
+                // thoughtSignature is ignored (internal Gemini data)
             }
-
-            return {
-                id: `chatcmpl-${uuidv4()}`,
-                object: "chat.completion.chunk",
-                created: Math.floor(Date.now() / 1000),
-                model: model,
-                choices: [{
-                    index: 0,
-                    delta: content ? { content: content } : {},
-                    finish_reason: finishReason,
-                }],
-                usage: geminiChunk.usageMetadata ? {
-                    prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
-                    completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
-                    total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
-                } : {
-                    prompt_tokens: 0,
-                    completion_tokens: 0,
-                    total_tokens: 0,
-                },
-            };
         }
 
-        // 向后兼容：处理字符串格式
-        if (typeof geminiChunk === 'string') {
-            return {
-                id: `chatcmpl-${uuidv4()}`,
-                object: "chat.completion.chunk",
-                created: Math.floor(Date.now() / 1000),
-                model: model,
-                choices: [{
-                    index: 0,
-                    delta: { content: geminiChunk },
-                    finish_reason: null,
-                }],
-                usage: {
-                    prompt_tokens: 0,
-                    completion_tokens: 0,
-                    total_tokens: 0,
-                },
-            };
+        // 处理finishReason
+        let finishReason = null;
+        if (candidate.finishReason) {
+            finishReason = candidate.finishReason === 'STOP' ? 'stop' :
+                         candidate.finishReason === 'MAX_TOKENS' ? 'length' :
+                         candidate.finishReason.toLowerCase();
         }
 
-        return null;
+        // 构建delta对象
+        const delta = {};
+        if (content) delta.content = content;
+        if (toolCalls.length > 0) delta.tool_calls = toolCalls;
+
+        // Don't return empty delta chunks
+        if (Object.keys(delta).length === 0 && !finishReason) {
+            return null;
+        }
+
+        return {
+            id: `chatcmpl-${uuidv4()}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: model,
+            choices: [{
+                index: 0,
+                delta: delta,
+                finish_reason: finishReason,
+            }],
+            usage: geminiChunk.usageMetadata ? {
+                prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
+                total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
+            } : {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+            },
+        };
     }
 
     /**

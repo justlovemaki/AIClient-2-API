@@ -17,6 +17,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     OPENAI: 'openai',
     OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
+    OLLAMA: 'ollama',
 }
 
 export const MODEL_PROVIDER = {
@@ -325,7 +326,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // 1. Get the model list in the backend's native format.
         const nativeModelList = await service.listModels();
-
+                
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
         if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
@@ -375,7 +376,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     const fromProvider = clientProviderMap[endpointType];
     const toProvider = CONFIG.MODEL_PROVIDER;
-
+    
     if (!fromProvider) {
         throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
     }

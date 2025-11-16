@@ -30,6 +30,7 @@
 >
 > **📅 バージョン更新ログ**
 >
+> - **2025.11.16** - Ollamaプロトコルサポートの追加、統一インターフェースでサポートされるすべてのモデルにアクセス
 > - **2025.11.11** - Web UI管理コントロールコンソールの追加、リアルタイム設定管理与健康状態モニタリングをサポート
 > - **2025.11.06** - Gemini 3 プレビュー版のサポートを追加、モデル互換性とパフォーマンス最適化を向上
 > - **2025.10.18** - Kiroオープン登録、新規アカウントに500クレジット付与、Claude Sonnet 4.5を完全サポート
@@ -267,6 +268,7 @@ install-and-run.bat
 
 APIリクエストパスでプロバイダー識別子を指定して即座に切り替え：
 
+
 | ルートパス | 説明 | 使用ケース |
 |---------|------|---------|
 | `/claude-custom` | 設定ファイルのClaude APIを使用 | 公式Claude API呼び出し |
@@ -275,20 +277,51 @@ APIリクエストパスでプロバイダー識別子を指定して即座に�
 | `/gemini-cli-oauth` | Gemini CLI OAuth経由でアクセス | Gemini無料制限の突破 |
 | `/openai-qwen-oauth` | Qwen OAuth経由でアクセス | Qwen Code Plusの使用 |
 | `/openaiResponses-custom` | OpenAI Responses API | 構造化対話シナリオ |
-
+| `/ollama` | Ollama APIプロトコル | サポートされるすべてのモデルへの統一アクセス |
+ 
 **使用例**：
 ```bash
 # Cline、Kiloなどのプログラミングエージェントで設定
 API_ENDPOINT=http://localhost:3000/claude-kiro-oauth
-
+ 
 # 直接API呼び出し
 curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-2.0-flash-exp","messages":[...]}'
 ```
 
----
+#### Ollamaプロトコル使用例
 
+本プロジェクトはOllamaプロトコルをサポートしており、統一インターフェースを通じてすべてのサポートモデルにアクセスできます。Ollamaエンドポイントは`/api/tags`、`/api/chat`、`/api/generate`などの標準インターフェースを提供します。
+
+**Ollama API呼び出し例**：
+
+1. **利用可能なすべてのモデルをリスト表示**：
+```bash
+curl http://localhost:3000/ollama/api/tags
+```
+
+2. **チャットインターフェース**：
+```bash
+curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [
+      {"role": "user", "content": "こんにちは"}
+    ]
+  }'
+```
+
+3. **モデルプレフィックスを使用してプロバイダーを指定**：
+- `[Kiro]` - Kiro APIを使用してClaudeモデルにアクセス
+- `[Claude]` - 公式Claude APIを使用
+- `[Gemini CLI]` - Gemini CLI OAuth経由でアクセス
+- `[OpenAI]` - 公式OpenAI APIを使用
+- `[Qwen CLI]` - Qwen OAuth経由でアクセス
+
+---
+ 
 ### 📁 認証ファイル保存パス
 
 各サービスの認証情報ファイルのデフォルト保存場所：
@@ -453,6 +486,15 @@ node src/api-server.js \
 ## 🙏 謝辞
 
 本プロジェクトの開発は公式Google Gemini CLIから大きなインスピレーションを受け、Cline 3.18.0版 `gemini-cli.ts` の一部のコード実装を参考にしました。ここにGoogle公式チームとCline開発チームの優れた仕事に心より感謝申し上げます！
+### 貢献者リスト
+
+AIClient-2-APIプロジェクトに貢献してくれたすべての開発者に感謝します：
+
+<div align="left">
+
+[<img src="https://avatars.githubusercontent.com/u/12859173?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="justlikemaki"/>](https://github.com/justlikemaki)[<img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="eltociear"/>](https://github.com/eltociear)[<img src="https://avatars.githubusercontent.com/u/26056971?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="LaelLuo"/>](https://github.com/LaelLuo)[<img src="https://avatars.githubusercontent.com/u/24641689?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="d7185540"/>](https://github.com/d7185540)[<img src="https://avatars.githubusercontent.com/u/122232211?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="bee4come"/>](https://github.com/bee4come)[<img src="https://avatars.githubusercontent.com/u/121296348?v=4" width="50px" style="border-radius: 50%; margin: 5px;" alt="HALDRO"/>](https://github.com/HALDRO)
+
+</div>
 
 ## 🌟 Star History
 

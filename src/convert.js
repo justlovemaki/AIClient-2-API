@@ -7,8 +7,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { MODEL_PROTOCOL_PREFIX } from './common.js';
-import { getProtocolPrefix } from './common.js';
+import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from './common.js';
 import { ConverterFactory } from './converters/ConverterFactory.js';
 import {
     generateResponseCreated,
