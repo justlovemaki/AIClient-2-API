@@ -607,6 +607,12 @@
                                     <small class="form-text">配置了提供商池后，可在提供商池管理中查看详细信息</small>
                                 </div>
                                 
+                                <div class="form-group pool-section">
+                                    <label for="maxErrorCount">提供商最大错误次数</label>
+                                    <input type="number" id="maxErrorCount" class="form-control" value="3" min="1" max="10" placeholder="默认: 3">
+                                    <small class="form-text">提供商连续错误达到此次数后将被标记为不健康，默认为 3 次</small>
+                                </div>
+                                
                                 <!-- 系统提示配置移到最下面 -->
                                 <div class="form-group system-prompt-section">
                                     <label for="systemPrompt">系统提示</label>

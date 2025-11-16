@@ -75,6 +75,7 @@ async function loadConfiguration() {
         const cronNearMinutesEl = document.getElementById('cronNearMinutes');
         const cronRefreshTokenEl = document.getElementById('cronRefreshToken');
         const providerPoolsFilePathEl = document.getElementById('providerPoolsFilePath');
+        const maxErrorCountEl = document.getElementById('maxErrorCount');
 
         if (systemPromptFilePathEl) systemPromptFilePathEl.value = data.SYSTEM_PROMPT_FILE_PATH || 'input_system_prompt.txt';
         if (systemPromptModeEl) systemPromptModeEl.value = data.SYSTEM_PROMPT_MODE || 'append';
@@ -85,6 +86,7 @@ async function loadConfiguration() {
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
         if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
+        if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 3;
 
         // 触发提供商配置显示
         handleProviderChange();
@@ -188,10 +190,11 @@ async function saveConfiguration() {
     config.CRON_NEAR_MINUTES = parseInt(document.getElementById('cronNearMinutes')?.value || 1);
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
     config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
+    config.MAX_ERROR_COUNT = parseInt(document.getElementById('maxErrorCount')?.value || 3);
 
     try {
         await window.apiClient.post('/config', config);
-
+        await window.apiClient.post('/reload-config');
         showToast('配置已保存', 'success');
         
         // 检查当前是否在提供商池管理页面，如果是则刷新数据

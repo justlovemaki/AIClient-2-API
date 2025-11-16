@@ -21,5 +21,6 @@
     "REQUEST_BASE_DELAY": 1000,
     "CRON_NEAR_MINUTES": 1,
     "CRON_REFRESH_TOKEN": false,
-    "PROVIDER_POOLS_FILE_PATH": "provider_pools.json"
+    "PROVIDER_POOLS_FILE_PATH": "provider_pools.json",
+    "MAX_ERROR_COUNT": 3
 }

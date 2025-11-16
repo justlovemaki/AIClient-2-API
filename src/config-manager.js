@@ -85,7 +85,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
             CRON_REFRESH_TOKEN: false,
-            PROVIDER_POOLS_FILE_PATH: '' // 新增号池配置文件路径
+            PROVIDER_POOLS_FILE_PATH: '', // 新增号池配置文件路径
+            MAX_ERROR_COUNT: 3 // 提供商最大错误次数
         };
         console.log('[Config] Using default configuration.');
     }
@@ -250,6 +251,13 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 i++;
             } else {
                 console.warn(`[Config Warning] --provider-pools-file flag requires a value.`);
+            }
+        } else if (args[i] === '--max-error-count') {
+            if (i + 1 < args.length) {
+                currentConfig.MAX_ERROR_COUNT = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                console.warn(`[Config Warning] --max-error-count flag requires a value.`);
             }
         }
     }

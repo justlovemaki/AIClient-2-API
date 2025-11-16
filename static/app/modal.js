@@ -107,8 +107,9 @@ function addModalEventListeners(modal) {
             event.preventDefault();
             event.stopPropagation();
             const targetInputId = button.getAttribute('data-target');
+            const providerType = modal.getAttribute('data-provider-type');
             if (targetInputId && window.fileUploadHandler) {
-                window.fileUploadHandler.handleFileUpload(button, targetInputId);
+                window.fileUploadHandler.handleFileUpload(button, targetInputId, providerType);
             }
         }
     };
@@ -564,6 +565,7 @@ async function saveProvider(uuid, event) {
     
     try {
         await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
+        await window.apiClient.post('/reload-config');
         showToast('提供商配置更新成功', 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
@@ -590,6 +592,7 @@ async function deleteProvider(uuid, event) {
     
     try {
         await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${uuid}`);
+        await window.apiClient.post('/reload-config');
         showToast('提供商配置删除成功', 'success');
         // 重新获取最新配置
         await refreshProviderConfig(providerType);
@@ -870,6 +873,7 @@ async function addProvider(providerType) {
             providerType,
             providerConfig
         });
+        await window.apiClient.post('/reload-config');
         showToast('提供商配置添加成功', 'success');
         // 移除添加表单
         const form = document.querySelector('.add-provider-form');
@@ -909,6 +913,7 @@ async function toggleProviderStatus(uuid, event) {
     
     try {
         await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${uuid}/${action}`, { action });
+        await window.apiClient.post('/reload-config');
         showToast(`提供商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);

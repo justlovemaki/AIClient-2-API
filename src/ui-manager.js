@@ -5,6 +5,8 @@ import multer from 'multer';
 import crypto from 'crypto';
 import { getRequestBody } from './common.js';
 import { CONFIG } from './config-manager.js';
+import { serviceInstances } from './adapter.js';
+import { initApiService } from './service-manager.js';
 
 // Token存储在内存中（生产环境建议使用Redis）
 const tokenStore = new Map();
@@ -252,6 +254,36 @@ export async function serveStaticFiles(pathParam, res) {
  * @param {Object} providerPoolManager - The provider pool manager instance
  * @returns {Promise<boolean>} - True if the request was handled by UI API
  */
+/**
+ * 重载配置文件
+ * 动态导入config-manager并重新初始化配置
+ * @returns {Promise<Object>} 返回重载后的配置对象
+ */
+async function reloadConfig() {
+    try {
+        // Import config manager dynamically
+        const { initializeConfig } = await import('./config-manager.js');
+        
+        // Reload main config
+        const newConfig = await initializeConfig(process.argv.slice(2), 'config.json');
+        
+        // Update global CONFIG
+        Object.assign(CONFIG, newConfig);
+        console.log('[UI API] Configuration reloaded:');
+
+        // Update initApiService - 清空并重新初始化服务实例
+        Object.keys(serviceInstances).forEach(key => delete serviceInstances[key]);
+        initApiService(CONFIG);
+        
+        console.log('[UI API] Configuration reloaded successfully');
+        
+        return newConfig;
+    } catch (error) {
+        console.error('[UI API] Failed to reload configuration:', error);
+        throw error;
+    }
+}
+
 export async function handleUIApiRequests(method, pathParam, req, res, currentConfig, providerPoolManager) {
     // 处理登录接口
     if (method === 'POST' && pathParam === '/api/login') {
@@ -407,6 +439,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
             if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
             if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
+            if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
 
             // Handle system prompt update
             if (newConfig.systemPrompt !== undefined) {
@@ -414,7 +447,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 try {
                     const relativePath = path.relative(process.cwd(), promptPath);
                     writeFileSync(promptPath, newConfig.systemPrompt, 'utf-8');
-                    
+
                     // 广播更新事件
                     broadcastEvent('config_update', {
                         action: 'update',
@@ -457,7 +490,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
                     CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                     CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
-                    PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH
+                    PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
+                    MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
@@ -616,9 +650,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPoolManager.initializeProviderStatus();
             }
 
-            // Update CONFIG cache to maintain consistency
-            CONFIG.providerPools = providerPools;
-
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'add',
@@ -716,9 +747,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPoolManager.initializeProviderStatus();
             }
 
-            // Update CONFIG cache to maintain consistency
-            CONFIG.providerPools = providerPools;
-
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'update',
@@ -790,9 +818,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPoolManager.providerPools = providerPools;
                 providerPoolManager.initializeProviderStatus();
             }
-
-            // Update CONFIG cache to maintain consistency
-            CONFIG.providerPools = providerPools;
 
             // 广播更新事件
             broadcastEvent('config_update', {
@@ -869,9 +894,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     providerPoolManager.enableProvider(providerType, provider);
                 }
             }
-
-            // Update CONFIG cache to maintain consistency
-            CONFIG.providerPools = providerPools;
 
             // 广播更新事件
             broadcastEvent('config_update', {
@@ -1065,14 +1087,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Reload configuration files
     if (method === 'POST' && pathParam === '/api/reload-config') {
         try {
-            // Import config manager dynamically
-            const { initializeConfig } = await import('./config-manager.js');
-            
-            // Reload main config
-            const newConfig = await initializeConfig(process.argv.slice(2), 'config.json');
-            
-            // Update global CONFIG
-            Object.assign(CONFIG, newConfig);
+            // 调用重载配置函数
+            const newConfig = await reloadConfig();
             
             // 广播更新事件
             broadcastEvent('config_update', {
@@ -1110,9 +1126,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
 /**
  * Initialize UI management features
- * @param {Object} config - The server configuration
  */
-export function initializeUIManagement(config) {
+export function initializeUIManagement() {
     // Initialize log broadcasting for UI
     if (!global.eventClients) {
         global.eventClients = [];

@@ -21,7 +21,10 @@ class FileUploadHandler {
                 const button = event.target.closest('.upload-btn');
                 const targetInputId = button.getAttribute('data-target');
                 if (targetInputId) {
-                    this.handleFileUpload(button, targetInputId);
+                    // 尝试从模态框获取 providerType
+                    const modal = button.closest('.provider-modal');
+                    const providerType = modal ? modal.getAttribute('data-provider-type') : null;
+                    this.handleFileUpload(button, targetInputId, providerType);
                 }
             }
         });
@@ -61,8 +64,9 @@ class FileUploadHandler {
      * 处理文件上传
      * @param {HTMLElement} button - 上传按钮元素
      * @param {string} targetInputId - 目标输入框ID
+     * @param {string} providerType - 提供商类型
      */
-    async handleFileUpload(button, targetInputId) {
+    async handleFileUpload(button, targetInputId, providerType) {
         // 创建隐藏的文件输入元素
         const fileInput = this.createFileInput();
         
@@ -73,7 +77,7 @@ class FileUploadHandler {
             if (file) {
                 // 只有文件被实际选择后才显示加载状态并上传
                 this.setButtonLoading(button, true);
-                await this.uploadFile(file, targetInputId, button);
+                await this.uploadFile(file, targetInputId, button, providerType);
             }
             
             // 清理临时文件输入元素
@@ -102,8 +106,9 @@ class FileUploadHandler {
      * @param {File} file - 要上传的文件
      * @param {string} targetInputId - 目标输入框ID
      * @param {HTMLElement} button - 上传按钮
+     * @param {string} providerType - 提供商类型
      */
-    async uploadFile(file, targetInputId, button) {
+    async uploadFile(file, targetInputId, button, providerType) {
         try {
             // 验证文件类型
             if (!this.validateFileType(file)) {
@@ -119,10 +124,13 @@ class FileUploadHandler {
                 return;
             }
 
+            // 使用传入的 providerType 或回退到 currentProvider
+            const provider = providerType ? this.getProviderKey(providerType) : this.currentProvider;
+
             // 创建 FormData
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('provider', this.currentProvider);
+            formData.append('provider', provider);
             formData.append('targetInputId', targetInputId);
 
             // 使用封装接口发送上传请求
