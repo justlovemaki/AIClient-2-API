@@ -50,6 +50,29 @@ export function createRequestHandler(config, providerPoolManager) {
 
         console.log(`\n${new Date().toLocaleString()}`);
         console.log(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
+
+        // Health check endpoint
+        if (method === 'GET' && path === '/health') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                status: 'healthy',
+                timestamp: new Date().toISOString(),
+                provider: currentConfig.MODEL_PROVIDER
+            }));
+            return true;
+        }
+
+        // Ignore count_tokens requests
+        if (path.includes('/count_tokens')) {
+            console.log(`[Server] Ignoring count_tokens request: ${path}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                tokens: 0,
+                message: 'Token counting is not supported'
+            }));
+            return true;
+        }
+
         // Handle API requests
         // Allow overriding MODEL_PROVIDER via request header
         const modelProviderHeader = req.headers['model-provider'];
@@ -88,35 +111,9 @@ export function createRequestHandler(config, providerPoolManager) {
             }
             return;
         }
-        
-        // Health check endpoint
-        if (method === 'GET' && path === '/health') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                status: 'healthy',
-                timestamp: new Date().toISOString(),
-                provider: currentConfig.MODEL_PROVIDER
-            }));
-            return true;
-        }
-
-        // Ignore count_tokens requests
-        if (path.includes('/count_tokens')) {
-            console.log(`[Server] Ignoring count_tokens request: ${path}`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                tokens: 0,
-                message: 'Token counting is not supported'
-            }));
-            return true;
-        }
 
         // Check authentication for API requests
-        // Allow empty Bearer token (from Ollama clients like VS Code Copilot)
-        const authHeader = req.headers['authorization'];
-        const hasEmptyBearer = authHeader === 'Bearer' || authHeader === 'Bearer ';
-        
-        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY) && !hasEmptyBearer) {
+        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;
