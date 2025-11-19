@@ -85,7 +85,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
             CRON_REFRESH_TOKEN: false,
-            PROVIDER_POOLS_FILE_PATH: '', // 新增号池配置文件路径
+            PROVIDER_POOLS_FILE_PATH: 'provider_pools.json', // 新增号池配置文件路径
             MAX_ERROR_COUNT: 3 // 提供商最大错误次数
         };
         console.log('[Config] Using default configuration.');
@@ -270,6 +270,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
     currentConfig.SYSTEM_PROMPT_CONTENT = await getSystemPromptFileContent(currentConfig.SYSTEM_PROMPT_FILE_PATH);
 
     // 加载号池配置
+    if (!currentConfig.PROVIDER_POOLS_FILE_PATH) {
+        currentConfig.PROVIDER_POOLS_FILE_PATH = 'provider_pools.json';
+    }
     if (currentConfig.PROVIDER_POOLS_FILE_PATH) {
         try {
             const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');

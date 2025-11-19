@@ -85,7 +85,7 @@ async function loadConfiguration() {
         if (requestBaseDelayEl) requestBaseDelayEl.value = data.REQUEST_BASE_DELAY || 1000;
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
-        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
+        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 3;
 
         // 触发提供商配置显示
@@ -108,13 +108,13 @@ async function loadConfiguration() {
         }
         
         // 检查并设置提供商池菜单显示状态
-        const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH;
-        const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
-        if (providerPoolsFilePath && providerPoolsFilePath.trim() !== '') {
-            if (providersMenuItem) providersMenuItem.style.display = 'flex';
-        } else {
-            if (providersMenuItem) providersMenuItem.style.display = 'none';
-        }
+        // const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH;
+        // const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
+        // if (providerPoolsFilePath && providerPoolsFilePath.trim() !== '') {
+        //     if (providersMenuItem) providersMenuItem.style.display = 'flex';
+        // } else {
+        //     if (providersMenuItem) providersMenuItem.style.display = 'none';
+        // }
         
     } catch (error) {
         console.error('Failed to load configuration:', error);
