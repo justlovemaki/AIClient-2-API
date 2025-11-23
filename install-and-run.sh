@@ -92,11 +92,3 @@ echo
 
 # 启动服务器
 node src/api-server.js
-
-# 如果启动失败
-if [ $? -ne 0 ]; then
-    echo
-    echo "❌ 服务器异常"
-    echo "请检查错误信息并重试"
-    exit 1
-fi

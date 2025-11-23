@@ -89,13 +89,3 @@ echo.
 
 :: 启动服务器
 node src\api-server.js
-
-:: 如果启动失败
-if !errorlevel! neq 0 (
-    echo.
-    echo ❌ 服务器异常
-    pause
-    exit /b 1
-)
-
-pause

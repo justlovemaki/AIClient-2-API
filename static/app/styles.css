@@ -120,6 +120,33 @@ body {
     font-size: 14px;
 }
 
+/* 高亮说明样式 */
+.highlight-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    color: #92400e;
+    font-weight: 500;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.highlight-note i {
+    color: #f59e0b;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.highlight-note span {
+    flex: 1;
+    text-align: center;
+}
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;
@@ -2956,4 +2983,5 @@ input:checked + .toggle-slider:before {
 .contact-section h3 i {
     color: var(--primary-color);
 }
+
 }

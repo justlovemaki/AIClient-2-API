@@ -8,8 +8,38 @@ import { CONFIG } from './config-manager.js';
 import { serviceInstances } from './adapter.js';
 import { initApiService } from './service-manager.js';
 
-// Token存储在内存中（生产环境建议使用Redis）
-const tokenStore = new Map();
+// Token存储到本地文件中
+const TOKEN_STORE_FILE = 'token-store.json';
+
+/**
+ * 读取token存储文件
+ */
+async function readTokenStore() {
+    try {
+        if (existsSync(TOKEN_STORE_FILE)) {
+            const content = await fs.readFile(TOKEN_STORE_FILE, 'utf8');
+            return JSON.parse(content);
+        } else {
+            // 如果文件不存在，创建一个默认的token store
+            await writeTokenStore({ tokens: {} });
+            return { tokens: {} };
+        }
+    } catch (error) {
+        console.error('读取token存储文件失败:', error);
+        return { tokens: {} };
+    }
+}
+
+/**
+ * 写入token存储文件
+ */
+async function writeTokenStore(tokenStore) {
+    try {
+        await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
+    } catch (error) {
+        console.error('写入token存储文件失败:', error);
+    }
+}
 
 /**
  * 生成简单的token
@@ -30,15 +60,16 @@ function getExpiryTime() {
 /**
  * 验证简单token
  */
-function verifyToken(token) {
-    const tokenInfo = tokenStore.get(token);
+async function verifyToken(token) {
+    const tokenStore = await readTokenStore();
+    const tokenInfo = tokenStore.tokens[token];
     if (!tokenInfo) {
         return null;
     }
     
     // 检查是否过期
     if (Date.now() > tokenInfo.expiryTime) {
-        tokenStore.delete(token);
+        await deleteToken(token);
         return null;
     }
     
@@ -46,14 +77,42 @@ function verifyToken(token) {
 }
 
 /**
+ * 保存token到本地文件
+ */
+async function saveToken(token, tokenInfo) {
+    const tokenStore = await readTokenStore();
+    tokenStore.tokens[token] = tokenInfo;
+    await writeTokenStore(tokenStore);
+}
+
+/**
+ * 删除token
+ */
+async function deleteToken(token) {
+    const tokenStore = await readTokenStore();
+    if (tokenStore.tokens[token]) {
+        delete tokenStore.tokens[token];
+        await writeTokenStore(tokenStore);
+    }
+}
+
+/**
  * 清理过期的token
  */
-function cleanupExpiredTokens() {
+async function cleanupExpiredTokens() {
+    const tokenStore = await readTokenStore();
     const now = Date.now();
-    for (const [token, info] of tokenStore.entries()) {
-        if (now > info.expiryTime) {
-            tokenStore.delete(token);
+    let hasChanges = false;
+    
+    for (const token in tokenStore.tokens) {
+        if (now > tokenStore.tokens[token].expiryTime) {
+            delete tokenStore.tokens[token];
+            hasChanges = true;
         }
+    }
+    
+    if (hasChanges) {
+        await writeTokenStore(tokenStore);
     }
 }
 
@@ -105,7 +164,7 @@ function parseRequestBody(req) {
 /**
  * 检查token验证
  */
-function checkAuth(req) {
+async function checkAuth(req) {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -113,7 +172,7 @@ function checkAuth(req) {
     }
 
     const token = authHeader.substring(7);
-    const tokenInfo = verifyToken(token);
+    const tokenInfo = await verifyToken(token);
     
     return tokenInfo !== null;
 }
@@ -145,8 +204,8 @@ async function handleLoginRequest(req, res) {
             const token = generateToken();
             const expiryTime = getExpiryTime();
             
-            // 存储token信息
-            tokenStore.set(token, {
+            // 存储token信息到本地文件
+            await saveToken(token, {
                 username: 'admin',
                 loginTime: Date.now(),
                 expiryTime
@@ -301,7 +360,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Handle UI management API requests (需要token验证，除了登录接口、健康检查和Events接口)
     if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events') {
         // 检查token验证
-        if (!checkAuth(req)) {
+        const isAuth = await checkAuth(req);
+        if (!isAuth) {
             res.writeHead(401, {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',

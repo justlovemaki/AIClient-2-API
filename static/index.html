@@ -625,7 +625,7 @@
                                 <div class="form-group pool-section">
                                     <label for="providerPoolsFilePath">提供商池配置文件路径</label>
                                     <input type="text" id="providerPoolsFilePath" class="form-control" value="provider_pools.json" placeholder="例如: provider_pools.json">
-                                    <small class="form-text">配置了提供商池后，可在提供商池管理中查看详细信息</small>
+                                    <small class="form-text">配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置</small>
                                 </div>
                                 
                                 <div class="form-group pool-section">
@@ -708,6 +708,12 @@
                 <!-- Provider Pools Section -->
                 <section id="providers" class="section" aria-labelledby="providers-title">
                     <h2 id="providers-title">提供商池管理</h2>
+                    <div class="pool-description">
+                        <div class="highlight-note">
+                            <i class="fas fa-info-circle"></i>
+                            <span>配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置</span>
+                        </div>
+                    </div>
                     <!-- Provider Pool Stats -->
                     <div class="stats-grid">
                         <div class="stat-card">
