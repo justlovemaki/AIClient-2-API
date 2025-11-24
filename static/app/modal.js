@@ -667,8 +667,8 @@ function showAddProviderForm(providerType) {
             <div class="form-group">
                 <label>健康检查</label>
                 <select id="newCheckHealth">
-                    <option value="true">启用</option>
                     <option value="false">禁用</option>
+                    <option value="true">启用</option>
                 </select>
             </div>
         </div>

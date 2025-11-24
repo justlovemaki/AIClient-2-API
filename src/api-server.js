@@ -111,10 +111,7 @@ import { createRequestHandler } from './request-handler.js';
  */
 
 import 'dotenv/config'; // Import dotenv and configure it
-import deepmerge from 'deepmerge';
 import './converters/register-converters.js'; // 注册所有转换器
-
-// 导入各个模块功能
 import { getProviderPoolManager } from './service-manager.js';
 
 // --- Server Initialization ---
@@ -129,7 +126,7 @@ async function startServer() {
     initializeUIManagement(CONFIG);
     
     // Initialize API management and get heartbeat function
-    const heartbeatAndRefreshToken = initializeAPIManagement(CONFIG, services, getProviderPoolManager());
+    const heartbeatAndRefreshToken = initializeAPIManagement(services);
     
     // Create request handler
     const requestHandlerInstance = createRequestHandler(CONFIG, getProviderPoolManager());

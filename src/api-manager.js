@@ -4,6 +4,7 @@ import {
     API_ACTIONS,
     ENDPOINT_TYPE
 } from './common.js';
+import { getProviderPoolManager } from './service-manager.js';
 
 /**
  * Handle API authentication and routing
@@ -58,18 +59,16 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
 
 /**
  * Initialize API management features
- * @param {Object} config - The server configuration
  * @param {Object} services - The initialized services
- * @param {Object} providerPoolManager - The provider pool manager instance
  * @returns {Function} - The heartbeat and token refresh function
  */
-export function initializeAPIManagement(config, services, providerPoolManager) {
+export function initializeAPIManagement(services) {
     return async function heartbeatAndRefreshToken() {
-        console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`);
+        console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`, Object.keys(services));
         // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
-        if (providerPoolManager) {
-            await providerPoolManager.performHealthChecks(); // 定期执行健康检查
-        }
+        // if (getProviderPoolManager()) {
+        //     await getProviderPoolManager().performHealthChecks(); // 定期执行健康检查
+        // }
         for (const providerKey in services) {
             const serviceAdapter = services[providerKey];
             try {

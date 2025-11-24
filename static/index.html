@@ -614,7 +614,7 @@
                                         <input type="number" id="cronNearMinutes" class="form-control" min="1" max="60" value="1">
                                     </div>
                                     <div class="form-group">
-                                        <label for="cronNearMinutes">启用OAuth令牌自动刷新</label>
+                                        <label for="cronNearMinutes">启用OAuth令牌自动刷新(需重启服务)</label>
                                         <label class="toggle-switch">
                                             <input type="checkbox" id="cronRefreshToken">
                                             <span class="toggle-slider"></span>
@@ -624,7 +624,7 @@
                                 
                                 <div class="form-group pool-section">
                                     <label for="providerPoolsFilePath">提供商池配置文件路径</label>
-                                    <input type="text" id="providerPoolsFilePath" class="form-control" value="provider_pools.json" placeholder="例如: provider_pools.json">
+                                    <input type="text" id="providerPoolsFilePath" class="form-control" value="" placeholder="例如: provider_pools.json">
                                     <small class="form-text">配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置</small>
                                 </div>
                                 

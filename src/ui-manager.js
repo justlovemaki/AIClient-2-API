@@ -609,11 +609,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Get provider pools summary
     if (method === 'GET' && pathParam === '/api/providers') {
         let providerPools = {};
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
-            } else if (currentConfig.PROVIDER_POOLS_FILE_PATH && existsSync(currentConfig.PROVIDER_POOLS_FILE_PATH)) {
-                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf-8'));
+            } else if (filePath && existsSync(filePath)) {
+                const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
                 providerPools = poolsData;
             }
         } catch (error) {
@@ -630,12 +631,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     if (method === 'GET' && providerTypeMatch) {
         const providerType = decodeURIComponent(providerTypeMatch[1]);
         let providerPools = {};
-        
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
-            } else if (currentConfig.PROVIDER_POOLS_FILE_PATH && existsSync(currentConfig.PROVIDER_POOLS_FILE_PATH)) {
-                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf-8'));
+            } else if (filePath && existsSync(filePath)) {
+                const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
                 providerPools = poolsData;
             }
         } catch (error) {
