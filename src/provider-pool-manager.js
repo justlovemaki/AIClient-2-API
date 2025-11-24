@@ -139,6 +139,26 @@ export class ProviderPoolManager {
         }
     }
 
+        /**
+     * Marks a provider as healthy.
+     * @param {string} providerType - The type of the provider.
+     * @param {object} providerConfig - The configuration of the provider to mark.
+     */
+    markProviderZero(providerType, providerConfig) {
+        const pool = this.providerStatus[providerType];
+        if (pool) {
+            const provider = pool.find(p => p.uuid === providerConfig.uuid);
+            if (provider) {
+                provider.config.errorCount = 0; // Reset error count on health recovery
+                provider.config.usageCount = 0; // Reset usage count on health recovery
+                console.log(`[ProviderPoolManager] Marked provider as zero: ${provider.config.uuid} for type ${providerType}`);
+                
+                // 优化1: 使用防抖保存
+                this._debouncedSave(providerType);
+            }
+        }
+    }
+
     /**
      * 禁用指定提供商
      * @param {string} providerType - 提供商类型
@@ -198,6 +218,11 @@ export class ProviderPoolManager {
                 try {
                     // Perform actual health check based on provider type
                     const isHealthy = await this._checkProviderHealth(providerType, providerConfig);
+                    if(isHealthy === null){
+                        console.log(`[ProviderPoolManager] Health check for ${providerConfig.uuid} (${providerType}) skipped: Check not implemented.`);
+                        this.markProviderZero(providerType, providerConfig);
+                        continue;
+                    }
                     
                     if (isHealthy) {
                         if (!providerStatus.config.isHealthy) {
@@ -246,7 +271,7 @@ export class ProviderPoolManager {
             };
             const serviceAdapter = getServiceAdapter(tempConfig);
             if(!providerConfig.checkHealth){
-                return true;
+                return null;
             }
             
             // Determine a suitable model name for health check
