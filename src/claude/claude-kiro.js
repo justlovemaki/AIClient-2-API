@@ -10,7 +10,7 @@ const KIRO_CONSTANTS = {
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse',
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
-    DEFAULT_MODEL_NAME: 'claude-sonnet-4-5',
+    DEFAULT_MODEL_NAME: 'claude-opus-4-5',
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout
     USER_AGENT: 'KiroIDE',
     CONTENT_TYPE_JSON: 'application/json',
@@ -21,6 +21,7 @@ const KIRO_CONSTANTS = {
 };
 
 const MODEL_MAPPING = {
+    "claude-opus-4-5":"claude-opus-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
