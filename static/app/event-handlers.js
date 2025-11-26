@@ -67,10 +67,10 @@ function initEventListeners() {
     });
 
     // 提供商池配置监听
-    const providerPoolsInput = document.getElementById('providerPoolsFilePath');
-    if (providerPoolsInput) {
-        providerPoolsInput.addEventListener('input', handleProviderPoolsConfigChange);
-    }
+    // const providerPoolsInput = document.getElementById('providerPoolsFilePath');
+    // if (providerPoolsInput) {
+    //     providerPoolsInput.addEventListener('input', handleProviderPoolsConfigChange);
+    // }
 
     // 日志容器滚动
     if (elements.logsContainer) {

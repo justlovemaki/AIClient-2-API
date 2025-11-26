@@ -270,9 +270,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
     currentConfig.SYSTEM_PROMPT_CONTENT = await getSystemPromptFileContent(currentConfig.SYSTEM_PROMPT_FILE_PATH);
 
     // 加载号池配置
-    // if (!currentConfig.PROVIDER_POOLS_FILE_PATH) {
-    //     currentConfig.PROVIDER_POOLS_FILE_PATH = 'provider_pools.json';
-    // }
+    if (!currentConfig.PROVIDER_POOLS_FILE_PATH) {
+        currentConfig.PROVIDER_POOLS_FILE_PATH = 'provider_pools.json';
+    }
     if (currentConfig.PROVIDER_POOLS_FILE_PATH) {
         try {
             const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');

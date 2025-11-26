@@ -318,13 +318,18 @@ export async function serveStaticFiles(pathParam, res) {
  * 动态导入config-manager并重新初始化配置
  * @returns {Promise<Object>} 返回重载后的配置对象
  */
-async function reloadConfig() {
+async function reloadConfig(providerPoolManager) {
     try {
         // Import config manager dynamically
         const { initializeConfig } = await import('./config-manager.js');
         
         // Reload main config
         const newConfig = await initializeConfig(process.argv.slice(2), 'config.json');
+        // Update provider pool manager if available
+        if (providerPoolManager) {
+            providerPoolManager.providerPools = newConfig.providerPools;
+            providerPoolManager.initializeProviderStatus();
+        }
         
         // Update global CONFIG
         Object.assign(CONFIG, newConfig);
@@ -409,7 +414,17 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 const tempFilePath = req.file.path;
                 
                 // 根据实际的provider移动文件到正确的目录
-                const targetDir = path.join(process.cwd(), 'configs', provider);
+                let targetDir = path.join(process.cwd(), 'configs', provider);
+                
+                // 如果是kiro类型的凭证，需要再包裹一层文件夹
+                if (provider === 'kiro') {
+                    // 使用时间戳作为子文件夹名称，确保每个上传的文件都有独立的目录
+                    const timestamp = Date.now();
+                    const originalNameWithoutExt = path.parse(req.file.originalname).name;
+                    const subFolder = `${timestamp}_${originalNameWithoutExt}`;
+                    targetDir = path.join(targetDir, subFolder);
+                }
+                
                 await fs.mkdir(targetDir, { recursive: true });
                 
                 const targetFilePath = path.join(targetDir, req.file.filename);
@@ -1149,7 +1164,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     if (method === 'POST' && pathParam === '/api/reload-config') {
         try {
             // 调用重载配置函数
-            const newConfig = await reloadConfig();
+            const newConfig = await reloadConfig(providerPoolManager);
             
             // 广播更新事件
             broadcastEvent('config_update', {
@@ -1575,7 +1590,8 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
             } else if (file.isDirectory()) {
                 // 递归扫描子目录（限制深度）
                 const relativePath = path.relative(process.cwd(), fullPath);
-                if (relativePath.split(path.sep).length < 3) { // 最大深度3层
+                // 最大深度4层，以支持 configs/kiro/{subfolder}/file.json 这样的结构
+                if (relativePath.split(path.sep).length < 4) {
                     const subFiles = await scanOAuthDirectory(fullPath, usedPaths, currentConfig);
                     oauthFiles.push(...subFiles);
                 }

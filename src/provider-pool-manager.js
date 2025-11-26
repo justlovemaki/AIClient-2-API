@@ -166,7 +166,7 @@ export class ProviderPoolManager {
      * @param {object} providerConfig - The configuration of the provider to mark.
      * @param {boolean} isInit - Whether to reset usage count (optional, default: false).
      */
-    markProviderHealthy(providerType, providerConfig, isInit = false) {
+    markProviderHealthy(providerType, providerConfig, resetUsageCount = false) {
         if (!providerConfig?.uuid) {
             this._log('error', 'Invalid providerConfig in markProviderHealthy');
             return;
@@ -177,10 +177,11 @@ export class ProviderPoolManager {
             provider.config.isHealthy = true;
             provider.config.errorCount = 0;
             provider.config.lastErrorTime = null;
-            if (isInit) {
+            // 只有在明确要求重置使用计数时才重置
+            if (resetUsageCount) {
                 provider.config.usageCount = 0;
             }
-            this._log('info', `Marked provider as healthy: ${provider.config.uuid} for type ${providerType}`);
+            this._log('info', `Marked provider as healthy: ${provider.config.uuid} for type ${providerType}${resetUsageCount ? ' (usage count reset)' : ''}`);
             
             this._debouncedSave(providerType);
         }
@@ -277,11 +278,13 @@ export class ProviderPoolManager {
                     if (isHealthy) {
                         if (!providerStatus.config.isHealthy) {
                             // Provider was unhealthy but is now healthy
-                            this.markProviderHealthy(providerType, providerConfig, isInit);
+                            // 恢复健康时不重置使用计数，保持原有值
+                            this.markProviderHealthy(providerType, providerConfig);
                             this._log('info', `Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
                         } else {
                             // Provider was already healthy and still is
-                            this.markProviderHealthy(providerType, providerConfig, isInit);
+                            // 只在初始化时重置使用计数
+                            this.markProviderHealthy(providerType, providerConfig);
                             this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
                         }
                     } else {
