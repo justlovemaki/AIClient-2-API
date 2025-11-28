@@ -17,6 +17,8 @@ export class ClaudeApiService {
         this.config = config;
         this.apiKey = config.CLAUDE_API_KEY;
         this.baseUrl = config.CLAUDE_BASE_URL;
+        this.useSystemProxy = config?.USE_SYSTEM_PROXY_CLAUDE ?? false;
+        console.log(`[Claude] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         this.client = this.createClient();
     }
 
@@ -25,14 +27,21 @@ export class ClaudeApiService {
      * @returns {object} Axios instance.
      */
     createClient() {
-        return axios.create({
+        const axiosConfig = {
             baseURL: this.baseUrl,
             headers: {
                 'x-api-key': this.apiKey,
                 'Content-Type': 'application/json',
                 'anthropic-version': '2023-06-01', // Claude API 版本
             },
-        });
+        };
+        
+        // 禁用系统代理以避免HTTPS代理错误
+        if (!this.useSystemProxy) {
+            axiosConfig.proxy = false;
+        }
+        
+        return axios.create(axiosConfig);
     }
 
     /**

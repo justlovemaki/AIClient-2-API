@@ -10,7 +10,7 @@ const KIRO_CONSTANTS = {
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse',
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
-    DEFAULT_MODEL_NAME: 'kiro-claude-sonnet-4-20250514',
+    DEFAULT_MODEL_NAME: 'claude-opus-4-5',
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout
     USER_AGENT: 'KiroIDE',
     CONTENT_TYPE_JSON: 'application/json',
@@ -21,6 +21,9 @@ const KIRO_CONSTANTS = {
 };
 
 const MODEL_MAPPING = {
+    "claude-opus-4-5":"claude-opus-4.5",
+    "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
+    "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
     "claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0",
     "amazonq-claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
@@ -229,6 +232,8 @@ export class KiroApiService {
         this.config = config;
         this.credPath = config.KIRO_OAUTH_CREDS_DIR_PATH || path.join(os.homedir(), ".aws", "sso", "cache");
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
+        this.useSystemProxy = config?.USE_SYSTEM_PROXY_KIRO ?? false;
+        console.log(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         // this.accessToken = config.KIRO_ACCESS_TOKEN;
         // this.refreshToken = config.KIRO_REFRESH_TOKEN;
         // this.clientId = config.KIRO_CLIENT_ID;
@@ -263,18 +268,24 @@ export class KiroApiService {
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
         const macSha256 = await getMacAddressSha256();
-        this.axiosInstance = axios.create({
+        const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
-             headers: {
+            headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'x-amz-user-agent': `aws-sdk-js/1.0.7 KiroIDE-0.1.25-${macSha256}`,
                 'user-agent': `aws-sdk-js/1.0.7 ua/2.1 os/win32#10.0.26100 lang/js md/nodejs#20.16.0 api/codewhispererstreaming#1.0.7 m/E KiroIDE-0.1.25-${macSha256}`,
                 'amz-sdk-request': 'attempt=1; max=1',
                 'x-amzn-kiro-agent-mode': 'vibe',
-                'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
-            }
-        });
+            },
+        };
+        
+        // 根据 useSystemProxy 配置代理设置
+        if (!this.useSystemProxy) {
+            axiosConfig.proxy = false;
+        }
+        
+        this.axiosInstance = axios.create(axiosConfig);
         this.isInitialized = true;
     }
 
@@ -334,41 +345,38 @@ async initializeAuth(forceRefresh = false) {
             this.base64Creds = null;
         }
 
-        // Priority 2: Load from a specific file path if provided and not already loaded from token file
-        const credPath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-        if (credPath) {
-            console.debug(`[Kiro Auth] Attempting to load credentials from specified file: ${credPath}`);
-            const credentialsFromFile = await loadCredentialsFromFile(credPath);
-            if (credentialsFromFile) {
-                Object.assign(mergedCredentials, credentialsFromFile);
-                console.info(`[Kiro Auth] Successfully loaded credentials from ${credPath}.`);
-            } else {
-                console.warn(`[Kiro Auth] Could not load credentials from specified file path: ${credPath}`);
+        // Priority 2 & 3 合并: 从指定文件路径或目录加载凭证
+        // 读取指定的 credPath 文件以及目录下的其他 JSON 文件(排除当前文件)
+        const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+        const dirPath = path.dirname(targetFilePath);
+        const targetFileName = path.basename(targetFilePath);
+        
+        console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+        
+        try {
+            // 首先尝试读取目标文件
+            const targetCredentials = await loadCredentialsFromFile(targetFilePath);
+            if (targetCredentials) {
+                Object.assign(mergedCredentials, targetCredentials);
+                console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
             }
-        }
-
-        // Priority 3: Load from default directory only if no specific file path is configured
-        if (!this.credsFilePath) {
-            const dirPath = this.credPath;
-            console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
-            try {
-                const files = await fs.readdir(dirPath);
-                for (const file of files) {
-                    if (file.endsWith('.json') && file !== KIRO_AUTH_TOKEN_FILE) {
-                        const filePath = path.join(dirPath, file);
-                        const credentials = await loadCredentialsFromFile(filePath);
-                        if (credentials) {
-                            credentials.expiresAt = mergedCredentials.expiresAt;
-                            Object.assign(mergedCredentials, credentials);
-                            console.debug(`[Kiro Auth] Loaded credentials from ${file}`);
-                        }
+            
+            // 然后读取目录下的其他 JSON 文件(排除目标文件本身)
+            const files = await fs.readdir(dirPath);
+            for (const file of files) {
+                if (file.endsWith('.json') && file !== targetFileName) {
+                    const filePath = path.join(dirPath, file);
+                    const credentials = await loadCredentialsFromFile(filePath);
+                    if (credentials) {
+                        // 保留已有的 expiresAt,避免被覆盖
+                        credentials.expiresAt = mergedCredentials.expiresAt;
+                        Object.assign(mergedCredentials, credentials);
+                        console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
                     }
                 }
-            } catch (error) {
-                console.debug(`[Kiro Auth] Could not read credential directory ${dirPath}: ${error.message}`);
             }
-        } else {
-            console.debug(`[Kiro Auth] Skipping directory scan because specific file path is configured: ${this.credsFilePath}`);
+        } catch (error) {
+            console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
         }
 
         // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
@@ -670,14 +678,31 @@ async initializeAuth(forceRefresh = false) {
         let fullContent = '';
         const toolCalls = [];
         let currentToolCallDict = null;
+        // console.log(`rawStr=${rawStr}`);
 
-        const eventBlockRegex = /event({.*?(?=event{|$))/gs;
+        // 改进的 SSE 事件解析：匹配 :message-typeevent 后面的 JSON 数据
+        // 使用更精确的正则来匹配 SSE 格式的事件
+        const sseEventRegex = /:message-typeevent(\{[^]*?(?=:event-type|$))/g;
+        const legacyEventRegex = /event(\{.*?(?=event\{|$))/gs;
+        
+        // 首先尝试使用 SSE 格式解析
+        let matches = [...rawStr.matchAll(sseEventRegex)];
+        
+        // 如果 SSE 格式没有匹配到，回退到旧的格式
+        if (matches.length === 0) {
+            matches = [...rawStr.matchAll(legacyEventRegex)];
+        }
 
-        for (const match of rawStr.matchAll(eventBlockRegex)) {
+        for (const match of matches) {
             const potentialJsonBlock = match[1];
+            if (!potentialJsonBlock || potentialJsonBlock.trim().length === 0) {
+                continue;
+            }
+
+            // 尝试找到完整的 JSON 对象
             let searchPos = 0;
             while ((searchPos = potentialJsonBlock.indexOf('}', searchPos + 1)) !== -1) {
-                const jsonCandidate = potentialJsonBlock.substring(0, searchPos + 1);
+                const jsonCandidate = potentialJsonBlock.substring(0, searchPos + 1).trim();
                 try {
                     const eventData = JSON.parse(jsonCandidate);
 
@@ -701,22 +726,30 @@ async initializeAuth(forceRefresh = false) {
                                 const args = JSON.parse(currentToolCallDict.function.arguments);
                                 currentToolCallDict.function.arguments = JSON.stringify(args);
                             } catch (e) {
-                                console.warn(`Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
+                                console.warn(`[Kiro] Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
                             }
                             toolCalls.push(currentToolCallDict);
                             currentToolCallDict = null;
                         }
                     } else if (!eventData.followupPrompt && eventData.content) {
-                        const decodedContent = eventData.content.replace(/\\n/g, '\n');
+                        // 处理内容，移除转义字符
+                        let decodedContent = eventData.content;
+                        // 处理常见的转义序列
+                        decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
+                        // decodedContent = decodedContent.replace(/(?<!\\)\\t/g, '\t');
+                        // decodedContent = decodedContent.replace(/\\"/g, '"');
+                        // decodedContent = decodedContent.replace(/\\\\/g, '\\');
                         fullContent += decodedContent;
                     }
                     break;
                 } catch (e) {
-                    // 解析失败，说明这个 '}' 是内容的一部分，继续寻找下一个 '}'。
+                    // JSON 解析失败，继续寻找下一个可能的结束位置
+                    continue;
                 }
             }
         }
         
+        // 如果还有未完成的工具调用，添加到列表中
         if (currentToolCallDict) {
             toolCalls.push(currentToolCallDict);
         }
@@ -835,7 +868,15 @@ async initializeAuth(forceRefresh = false) {
 
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期,如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, refreshing before generateContent request...');
+            await this.initializeAuth(true);
+        }
+        
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
         const response = await this.callApi('', finalModel, requestBody);
 
         try {
@@ -861,8 +902,16 @@ async initializeAuth(forceRefresh = false) {
     // 重构2: generateContentStream 调用新的普通async函数
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期,如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, refreshing before generateContentStream request...');
+            await this.initializeAuth(true);
+        }
+        
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-
+        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel}`);
+        
         try {
             const response = await this.streamApi('', finalModel, requestBody);
             const { responseText, toolCalls } = this._processApiResponse(response);
@@ -874,11 +923,12 @@ async initializeAuth(forceRefresh = false) {
             }
         } catch (error) {
             console.error('[Kiro] Error in streaming generation:', error);
+            throw new Error(`Error processing response: ${error.message}`);
             // For Claude, we yield an array of events for streaming error
             // Ensure error message is passed as content, not toolCalls
-            for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
-                yield chunkJson;
-            }
+            // for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
+            //     yield chunkJson;
+            // }
         }
     }
 

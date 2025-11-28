@@ -9,13 +9,23 @@ export class OpenAIApiService {
         this.config = config;
         this.apiKey = config.OPENAI_API_KEY;
         this.baseUrl = config.OPENAI_BASE_URL;
-        this.axiosInstance = axios.create({
+        this.useSystemProxy = config?.USE_SYSTEM_PROXY_OPENAI ?? false;
+        console.log(`[OpenAI] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+
+        const axiosConfig = {
             baseURL: this.baseUrl,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.apiKey}`
-            }
-        });
+            },
+        };
+        
+        // 禁用系统代理以避免HTTPS代理错误
+        if (!this.useSystemProxy) {
+            axiosConfig.proxy = false;
+        }
+        
+        this.axiosInstance = axios.create(axiosConfig);
     }
 
     async callApi(endpoint, body, isRetry = false, retryCount = 0) {

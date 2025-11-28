@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
 import * as crypto from 'crypto'; // Import crypto for MD5 hashing
 import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
-import { convertData, getOpenAIStreamChunkStop } from './convert.js';
+import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 
 export const API_ACTIONS = {
@@ -15,13 +15,16 @@ export const MODEL_PROTOCOL_PREFIX = {
     // Model provider constants
     GEMINI: 'gemini',
     OPENAI: 'openai',
+    OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
+    OLLAMA: 'ollama',
 }
 
 export const MODEL_PROVIDER = {
     // Model provider constants
     GEMINI_CLI: 'gemini-cli-oauth',
     OPENAI_CUSTOM: 'openai-custom',
+    OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
@@ -43,6 +46,7 @@ export function getProtocolPrefix(provider) {
 
 export const ENDPOINT_TYPE = {
     OPENAI_CHAT: 'openai_chat',
+    OPENAI_RESPONSES: 'openai_responses',
     GEMINI_CONTENT: 'gemini_content',
     CLAUDE_MESSAGE: 'claude_message',
     OPENAI_MODEL_LIST: 'openai_model_list',
@@ -63,33 +67,6 @@ export function formatExpiryTime(expiryTimestamp) {
     const seconds = totalSeconds % 60;
     const pad = (num) => String(num).padStart(2, '0');
     return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
-}
-
-/**
- * Ensures that all content parts in a request body have a 'role' property.
- * If 'systemInstruction' is present and lacks a role, it defaults to 'user'.
- * If any 'contents' entry lacks a role, it defaults to 'user'.
- * @param {Object} requestBody - The request body object.
- * @returns {Object} The modified request body with roles ensured.
- */
-export function ensureRolesInContents(requestBody) {
-    if (requestBody.system_instruction) {
-        requestBody.systemInstruction = requestBody.system_instruction;
-        delete requestBody.system_instruction;
-    }
-
-    if (requestBody.systemInstruction && !requestBody.systemInstruction.role) {
-        requestBody.systemInstruction.role = 'user';
-    }
-
-    if (requestBody.contents && Array.isArray(requestBody.contents)) {
-        requestBody.contents.forEach(content => {
-            if (!content.role) {
-                content.role = 'user';
-            }
-        });
-    }
-    return requestBody;
 }
 
 /**
@@ -210,36 +187,45 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
     // fs.writeFile('request'+Date.now()+'.json', JSON.stringify(requestBody));
     // The service returns a stream in its native format (toProvider).
-    const nativeStream = await service.generateContentStream(model, requestBody);
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
-    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE;
-    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI;
+    requestBody.model = model;
+    const nativeStream = await service.generateContentStream(model, requestBody);
+    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
+    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI ;
 
     try {
         for await (const nativeChunk of nativeStream) {
-            // Convert chunk to the client's format (fromProvider), if necessary.
+            // Extract text for logging purposes
             const chunkText = extractResponseText(nativeChunk, toProvider);
             if (chunkText && !Array.isArray(chunkText)) {
                 fullResponseText += chunkText;
             }
 
-            const chunkToSend = needsConversion 
-                ? convertData(chunkText, 'streamChunk', toProvider, fromProvider, model)
+            // Convert the complete chunk object to the client's format (fromProvider), if necessary.
+            const chunkToSend = needsConversion
+                ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model)
                 : nativeChunk;
 
             if (!chunkToSend) {
                 continue;
             }
 
-            if (addEvent) {
-                res.write(`event: ${chunkToSend.type}\n`);
-                // console.log(`event: ${chunkToSend.type}\n`);
-            }
+            // 处理 chunkToSend 可能是数组或对象的情况
+            const chunksToSend = Array.isArray(chunkToSend) ? chunkToSend : [chunkToSend];
 
-            // fullOldResponseJson += JSON.stringify(nativeChunk)+"\n";
-            // fullResponseJson += JSON.stringify(chunkToSend)+"\n";
-            res.write(`data: ${JSON.stringify(chunkToSend)}\n\n`);
-            // console.log(`data: ${JSON.stringify(chunkToSend)}\n`);
+            for (const chunk of chunksToSend) {
+                if (addEvent) {
+                    // fullOldResponseJson += chunk.type+"\n";
+                    // fullResponseJson += chunk.type+"\n";
+                    res.write(`event: ${chunk.type}\n`);
+                    // console.log(`event: ${chunk.type}\n`);
+                }
+
+                // fullOldResponseJson += JSON.stringify(chunk)+"\n";
+                // fullResponseJson += JSON.stringify(chunk)+"\n\n";
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                // console.log(`data: ${JSON.stringify(chunk)}\n`);
+            }
         }
         if (openStop && needsConversion) {
             res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
@@ -261,26 +247,29 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             res.end(JSON.stringify(errorPayload));
             responseClosed = true;
         }
-    
+
     } finally {
         if (!responseClosed) {
             res.end();
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-        // fs.writeFile('oldResponse'+Date.now()+'.json', fullOldResponseJson);
-        // fs.writeFile('response'+Date.now()+'.json', fullResponseJson);
+        // fs.writeFile('oldResponseChunk'+Date.now()+'.json', fullOldResponseJson);
+        // fs.writeFile('responseChunk'+Date.now()+'.json', fullResponseJson);
     }
 }
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     try{
         // The service returns the response in its native format (toProvider).
+        const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
+        requestBody.model = model;
+        // fs.writeFile('oldRequest'+Date.now()+'.json', JSON.stringify(requestBody));
         const nativeResponse = await service.generateContent(model, requestBody);
         const responseText = extractResponseText(nativeResponse, toProvider);
 
         // Convert the response back to the client's format (fromProvider), if necessary.
         let clientResponse = nativeResponse;
-        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+        if (needsConversion) {
             console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
@@ -288,6 +277,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
         console.error('\n[Server] Error during unary processing:', error.stack);
         if (providerPoolManager) {
@@ -296,6 +286,16 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 uuid: pooluuid
             });
         }
+
+        // 返回错误响应给客户端
+        const errorResponse = {
+            error: {
+                message: error.message || "An error occurred during processing.",
+                code: error.status || 500,
+                details: error.stack
+            }
+        };
+        await handleUnifiedResponse(res, JSON.stringify(errorResponse), false);
     }
 }
 
@@ -326,10 +326,10 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // 1. Get the model list in the backend's native format.
         const nativeModelList = await service.listModels();
-
+                
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
-        if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
+        if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
             console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
             clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
         } else {
@@ -369,13 +369,14 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     const clientProviderMap = {
         [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
+        [ENDPOINT_TYPE.OPENAI_RESPONSES]: MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES,
         [ENDPOINT_TYPE.CLAUDE_MESSAGE]: MODEL_PROTOCOL_PREFIX.CLAUDE,
         [ENDPOINT_TYPE.GEMINI_CONTENT]: MODEL_PROTOCOL_PREFIX.GEMINI,
     };
 
     const fromProvider = clientProviderMap[endpointType];
     const toProvider = CONFIG.MODEL_PROVIDER;
-
+    
     if (!fromProvider) {
         throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
     }

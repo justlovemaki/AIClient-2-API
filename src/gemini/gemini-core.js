@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
-import { API_ACTIONS, ensureRolesInContents, formatExpiryTime } from '../common.js';
+import { API_ACTIONS, formatExpiryTime } from '../common.js';
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -14,7 +14,23 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-09-2025', 'gemini-3-pro-preview'];
+const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
+
+function is_anti_truncation_model(model) {
+    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel));
+}
+
+// 从防截断模型名中提取实际模型名
+function extract_model_from_anti_model(model) {
+    if (model.startsWith('anti-')) {
+        const originalModel = model.substring(5); // 移除 'anti-' 前缀
+        if (GEMINI_MODELS.includes(originalModel)) {
+            return originalModel;
+        }
+    }
+    return model; // 如果不是anti-前缀或不在原模型列表中，则返回原模型名
+}
 
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
@@ -23,6 +39,138 @@ function toGeminiApiResponse(codeAssistResponse) {
     if (codeAssistResponse.promptFeedback) compliantResponse.promptFeedback = codeAssistResponse.promptFeedback;
     if (codeAssistResponse.automaticFunctionCallingHistory) compliantResponse.automaticFunctionCallingHistory = codeAssistResponse.automaticFunctionCallingHistory;
     return compliantResponse;
+}
+
+/**
+ * Ensures that all content parts in a request body have a 'role' property.
+ * If 'systemInstruction' is present and lacks a role, it defaults to 'user'.
+ * If any 'contents' entry lacks a role, it defaults to 'user'.
+ * @param {Object} requestBody - The request body object.
+ * @returns {Object} The modified request body with roles ensured.
+ */
+function ensureRolesInContents(requestBody) {
+    delete requestBody.model;
+    // delete requestBody.system_instruction;
+    // delete requestBody.systemInstruction;
+    if (requestBody.system_instruction) {
+        requestBody.systemInstruction = requestBody.system_instruction;
+        delete requestBody.system_instruction;
+    }
+
+    if (requestBody.systemInstruction && !requestBody.systemInstruction.role) {
+        requestBody.systemInstruction.role = 'user';
+    }
+
+    if (requestBody.contents && Array.isArray(requestBody.contents)) {
+        requestBody.contents.forEach(content => {
+            if (!content.role) {
+                content.role = 'user';
+            }
+        });
+
+        // 如果存在 systemInstruction，将其放在 contents 索引 0 的位置
+        // if (requestBody.systemInstruction) {
+        //     // 检查 contents[0] 是否与 systemInstruction 内容相同
+        //     const firstContent = requestBody.contents[0];
+        //     let isSame = false;
+
+        //     if (firstContent && firstContent.parts && requestBody.systemInstruction.parts) {
+        //         // 比较 parts 数组的内容
+        //         const firstContentText = firstContent.parts
+        //             .filter(p => p?.text)
+        //             .map(p => p.text)
+        //             .join('\n');
+        //         const systemInstructionText = requestBody.systemInstruction.parts
+        //             .filter(p => p?.text)
+        //             .map(p => p.text)
+        //             .join('\n');
+                
+        //         isSame = firstContentText === systemInstructionText;
+        //     }
+
+        //     // 如果内容不同，则将 systemInstruction 插入到索引 0 的位置
+        //     if (!isSame) {
+        //         requestBody.contents.unshift({
+        //             role: requestBody.systemInstruction.role || 'user',
+        //             parts: requestBody.systemInstruction.parts
+        //         });
+        //     }
+        //     delete requestBody.systemInstruction;
+        // }
+    }
+    return requestBody;
+}
+
+async function* apply_anti_truncation_to_stream(service, model, requestBody) {
+    let currentRequest = { ...requestBody };
+    let allGeneratedText = '';
+
+    while (true) {
+        // 发送请求并处理流式响应
+        const apiRequest = {
+            model: model,
+            project: service.projectId,
+            request: currentRequest
+        };
+        const stream = service.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
+
+        let lastChunk = null;
+        let hasContent = false;
+
+        for await (const chunk of stream) {
+            const response = toGeminiApiResponse(chunk.response);
+            if (response && response.candidates && response.candidates[0]) {
+                yield response;
+                lastChunk = response;
+                hasContent = true;
+            }
+        }
+
+        // 检查是否因为达到token限制而截断
+        if (lastChunk &&
+            lastChunk.candidates &&
+            lastChunk.candidates[0] &&
+            lastChunk.candidates[0].finishReason === 'MAX_TOKENS') {
+
+            // 提取已生成的文本内容
+            if (lastChunk.candidates[0].content && lastChunk.candidates[0].content.parts) {
+                const generatedParts = lastChunk.candidates[0].content.parts
+                    .filter(part => part.text)
+                    .map(part => part.text);
+
+                if (generatedParts.length > 0) {
+                    const currentGeneratedText = generatedParts.join('');
+                    allGeneratedText += currentGeneratedText;
+
+                    // 构建新的请求，包含之前的对话历史和继续指令
+                    const newContents = [...requestBody.contents];
+
+                    // 添加之前生成的内容作为模型响应
+                    newContents.push({
+                        role: 'model',
+                        parts: [{ text: currentGeneratedText }]
+                    });
+
+                    // 添加继续生成的指令
+                    newContents.push({
+                        role: 'user',
+                        parts: [{ text: 'Please continue from where you left off.' }]
+                    });
+
+                    currentRequest = {
+                        ...requestBody,
+                        contents: newContents
+                    };
+
+                    // 继续下一轮请求
+                    continue;
+                }
+            }
+        }
+
+        // 如果没有截断或无法继续，则退出循环
+        break;
+    }
 }
 
 export class GeminiApiService {
@@ -78,12 +226,14 @@ export class GeminiApiService {
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
             console.log('[Gemini Auth] Authentication configured successfully from file.');
+            
             if (forceRefresh) {
                 console.log('[Gemini Auth] Forcing token refresh...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
+                // Save refreshed credentials back to file
                 await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log('[Gemini Auth] Token refresh response: ok');
+                console.log('[Gemini Auth] Token refreshed and saved successfully.');
             }
         } catch (error) {
             console.error('[Gemini Auth] Error initializing authentication:', error.code);
@@ -164,18 +314,56 @@ export class GeminiApiService {
         this.availableModels = GEMINI_MODELS;
         console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
-            const loadResponse = await this.callApi('loadCodeAssist', { metadata: { pluginType: 'GEMINI' } });
+            const initialProjectId = ""
+            // Prepare client metadata
+            const clientMetadata = {
+                ideType: "IDE_UNSPECIFIED",
+                platform: "PLATFORM_UNSPECIFIED",
+                pluginType: "GEMINI",
+                duetProject: initialProjectId,
+            }
+
+            // Call loadCodeAssist to discover the actual project ID
+            const loadRequest = {
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            }
+
+            const loadResponse = await this.callApi('loadCodeAssist', loadRequest);
+
+            // Check if we already have a project ID from the response
             if (loadResponse.cloudaicompanionProject) {
                 return loadResponse.cloudaicompanionProject;
             }
+
+            // If no existing project, we need to onboard
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const onboardRequest = { tierId: defaultTier?.id || 'free-tier', metadata: { pluginType: 'GEMINI' } , cloudaicompanionProject: 'default',};
-            let lro = await this.callApi('onboardUser', onboardRequest);
-            while (!lro.done) {
+            const tierId = defaultTier?.id || 'free-tier';
+
+            const onboardRequest = {
+                tierId: tierId,
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            };
+
+            let lroResponse = await this.callApi('onboardUser', onboardRequest);
+
+            // Poll until operation is complete with timeout protection
+            const MAX_RETRIES = 30; // Maximum number of retries (60 seconds total)
+            let retryCount = 0;
+
+            while (!lroResponse.done && retryCount < MAX_RETRIES) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                lro = await this.callApi('onboardUser', onboardRequest);
+                lroResponse = await this.callApi('onboardUser', onboardRequest);
+                retryCount++;
             }
-            return lro.response?.cloudaicompanionProject?.id;
+
+            if (!lroResponse.done) {
+                throw new Error('Onboarding timeout: Operation did not complete within expected time.');
+            }
+
+            const discoveredProjectId = lroResponse.response?.cloudaicompanionProject?.id || initialProjectId;
+            return discoveredProjectId;
         } catch (error) {
             console.error('[Gemini] Failed to discover Project ID:', error.response?.data || error.message);
             throw new Error('Could not discover a valid Google Cloud Project ID.');
@@ -197,8 +385,8 @@ export class GeminiApiService {
     }
 
     async callApi(method, body, isRetry = false, retryCount = 0) {
-        const maxRetries = this.config.REQUEST_MAX_RETRIES;
-        const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
         try {
             const requestOptions = {
@@ -211,8 +399,11 @@ export class GeminiApiService {
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
+            console.error(`[API] Error calling ${method}:`, error.response?.status, error.message);
+
+            // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401. Refreshing auth and retrying...');
+                console.log('[API] Received 401/400. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount);
             }
@@ -238,8 +429,8 @@ export class GeminiApiService {
     }
 
     async * streamApi(method, body, isRetry = false, retryCount = 0) {
-        const maxRetries = this.config.REQUEST_MAX_RETRIES;
-        const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
         try {
             const requestOptions = {
@@ -258,8 +449,11 @@ export class GeminiApiService {
             }
             yield* this.parseSSEStream(res.data);
         } catch (error) {
+            console.error(`[API] Error during stream ${method}:`, error.response?.status, error.message);
+
+            // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401 during stream. Refreshing auth and retrying...');
+                console.log('[API] Received 401/400 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount);
                 return;
@@ -317,16 +511,27 @@ export class GeminiApiService {
 
     async * generateContentStream(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
-        let selectedModel = model;
-        if (!GEMINI_MODELS.includes(model)) {
-            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
-            selectedModel = GEMINI_MODELS[0];
-        }
-        const processedRequestBody = ensureRolesInContents(requestBody);
-        const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
-        const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
-        for await (const chunk of stream) {
-            yield toGeminiApiResponse(chunk.response);
+
+        // 检查是否为防截断模型
+        if (is_anti_truncation_model(model)) {
+            // 从防截断模型名中提取实际模型名
+            const actualModel = extract_model_from_anti_model(model);
+            // 使用防截断流处理
+            const processedRequestBody = ensureRolesInContents(requestBody);
+            yield* apply_anti_truncation_to_stream(this, actualModel, processedRequestBody);
+        } else {
+            // 正常流处理
+            let selectedModel = model;
+            if (!GEMINI_MODELS.includes(model)) {
+                console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+                selectedModel = GEMINI_MODELS[0];
+            }
+            const processedRequestBody = ensureRolesInContents(requestBody);
+            const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
+            const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest);
+            for await (const chunk of stream) {
+                yield toGeminiApiResponse(chunk.response);
+            }
         }
     }
 
