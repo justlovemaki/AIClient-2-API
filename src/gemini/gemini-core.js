@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { getProviderModels } from '../provider-models.js';
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -14,7 +15,7 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-09-2025', 'gemini-3-pro-preview'];
+const GEMINI_MODELS = getProviderModels('gemini-cli-oauth');
 const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
 function is_anti_truncation_model(model) {

@@ -2985,3 +2985,115 @@ input:checked + .toggle-slider:before {
 }
 
 }
+
+
+/* 不支持的模型选择器样式 */
+.not-supported-models-section {
+    grid-column: 1 / -1;
+    margin-top: 16px;
+}
+
+.not-supported-models-section label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 12px;
+}
+
+.not-supported-models-section .help-text {
+    font-size: 12px;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+.not-supported-models-container {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 100px;
+}
+
+.models-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #6c757d;
+    padding: 20px;
+}
+
+.models-checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.model-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.model-checkbox-label:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.model-checkbox-label input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.model-checkbox-label input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+.model-checkbox-label .model-name {
+    font-size: 13px;
+    color: #495057;
+    user-select: none;
+}
+
+.model-checkbox-label input[type="checkbox"]:checked + .model-name {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+.no-models,
+.error-message {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.error-message {
+    color: #dc3545;
+}
+
+/* 编辑模式下的样式 */
+.provider-item-detail.editing .model-checkbox-label {
+    cursor: pointer;
+}
+
+.provider-item-detail.editing .model-checkbox-label input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.provider-item-detail.editing .model-checkbox-label input[type="checkbox"]:not(:disabled) {
+    cursor: pointer;
+}
+
+/* 全宽配置项 */
+.form-grid.full-width {
+    grid-column: 1 / -1;
+}

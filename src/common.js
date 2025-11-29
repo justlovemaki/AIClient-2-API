@@ -399,6 +399,13 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
     console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
 
+    // 2.5. 如果使用了提供商池，根据模型重新选择提供商
+    if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
+        const { getApiService } = await import('./service-manager.js');
+        service = await getApiService(CONFIG, model);
+        console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+    }
+
     // 3. Apply system prompt from file if configured.
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);

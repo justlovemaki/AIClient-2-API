@@ -61,6 +61,36 @@ function showProviderManagerModal(data) {
     
     // 添加模态框事件监听
     addModalEventListeners(modal);
+    
+    // 先获取该提供商类型的模型列表（只调用一次API）
+    loadModelsForProviderType(providerType, providers);
+}
+
+/**
+ * 为提供商类型加载模型列表（优化：只调用一次API）
+ * @param {string} providerType - 提供商类型
+ * @param {Array} providers - 提供商列表
+ */
+async function loadModelsForProviderType(providerType, providers) {
+    try {
+        // 只调用一次API获取模型列表
+        const response = await window.apiClient.get(`/provider-models/${encodeURIComponent(providerType)}`);
+        const models = response.models || [];
+        
+        // 为每个提供商渲染模型选择器
+        providers.forEach(provider => {
+            renderNotSupportedModelsSelector(provider.uuid, models, provider.notSupportedModels || []);
+        });
+    } catch (error) {
+        console.error('Failed to load models for provider type:', error);
+        // 如果加载失败，为每个提供商显示错误信息
+        providers.forEach(provider => {
+            const container = document.querySelector(`.not-supported-models-container[data-uuid="${provider.uuid}"]`);
+            if (container) {
+                container.innerHTML = '<div class="error-message">加载模型列表失败</div>';
+            }
+        });
+    }
 }
 
 /**
@@ -381,6 +411,23 @@ function renderProviderConfig(provider) {
         html += '</div>';
     }
     
+    // 添加 notSupportedModels 配置区域
+    html += '<div class="form-grid full-width">';
+    html += `
+        <div class="config-item not-supported-models-section">
+            <label>
+                <i class="fas fa-ban"></i> 不支持的模型
+                <span class="help-text">选择此提供商不支持的模型，系统会自动排除这些模型</span>
+            </label>
+            <div class="not-supported-models-container" data-uuid="${provider.uuid}">
+                <div class="models-loading">
+                    <i class="fas fa-spinner fa-spin"></i> 加载模型列表...
+                </div>
+            </div>
+        </div>
+    `;
+    html += '</div>';
+    
     return html;
 }
 
@@ -456,6 +503,15 @@ function editProvider(uuid, event) {
             select.disabled = false;
         });
         
+        // 启用模型复选框
+        const modelCheckboxes = providerDetail.querySelectorAll('.model-checkbox');
+        modelCheckboxes.forEach(checkbox => {
+            checkbox.disabled = false;
+        });
+        
+        // 添加编辑状态类
+        providerDetail.classList.add('editing');
+        
         // 替换编辑按钮为保存和取消按钮，但保留禁用/启用按钮
         const actionsGroup = providerDetail.querySelector('.provider-actions-group');
         const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
@@ -500,6 +556,15 @@ function cancelEdit(uuid, event) {
             input.value = actualValue ? '••••••••' : '';
         }
     });
+    
+    // 禁用模型复选框
+    const modelCheckboxes = providerDetail.querySelectorAll('.model-checkbox');
+    modelCheckboxes.forEach(checkbox => {
+        checkbox.disabled = true;
+    });
+    
+    // 移除编辑状态类
+    providerDetail.classList.remove('editing');
     
     // 禁用文件上传按钮
     const uploadButtons = providerDetail.querySelectorAll('.upload-btn');
@@ -562,6 +627,11 @@ async function saveProvider(uuid, event) {
         const value = select.value === 'true';
         providerConfig[key] = value;
     });
+    
+    // 收集不支持的模型列表
+    const modelCheckboxes = providerDetail.querySelectorAll(`.model-checkbox[data-uuid="${uuid}"]:checked`);
+    const notSupportedModels = Array.from(modelCheckboxes).map(checkbox => checkbox.value);
+    providerConfig.notSupportedModels = notSupportedModels;
     
     try {
         await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
@@ -630,6 +700,9 @@ async function refreshProviderConfig(providerType) {
             if (providerList) {
                 providerList.innerHTML = renderProviderList(data.providers);
             }
+            
+            // 重新加载模型列表
+            loadModelsForProviderType(providerType, data.providers);
         }
         
         // 同时更新主界面的提供商统计数据
@@ -923,6 +996,42 @@ async function toggleProviderStatus(uuid, event) {
     }
 }
 
+/**
+ * 渲染不支持的模型选择器（不调用API，直接使用传入的模型列表）
+ * @param {string} uuid - 提供商UUID
+ * @param {Array} models - 模型列表
+ * @param {Array} notSupportedModels - 当前不支持的模型列表
+ */
+function renderNotSupportedModelsSelector(uuid, models, notSupportedModels = []) {
+    const container = document.querySelector(`.not-supported-models-container[data-uuid="${uuid}"]`);
+    if (!container) return;
+    
+    if (models.length === 0) {
+        container.innerHTML = '<div class="no-models">该提供商类型暂无可用模型列表</div>';
+        return;
+    }
+    
+    // 渲染模型复选框列表
+    let html = '<div class="models-checkbox-grid">';
+    models.forEach(model => {
+        const isChecked = notSupportedModels.includes(model);
+        html += `
+            <label class="model-checkbox-label">
+                <input type="checkbox"
+                       class="model-checkbox"
+                       value="${model}"
+                       data-uuid="${uuid}"
+                       ${isChecked ? 'checked' : ''}
+                       disabled>
+                <span class="model-name">${model}</span>
+            </label>
+        `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
 // 导出所有函数，并挂载到window对象供HTML调用
 export {
     showProviderManagerModal,
@@ -935,7 +1044,9 @@ export {
     refreshProviderConfig,
     showAddProviderForm,
     addProvider,
-    toggleProviderStatus
+    toggleProviderStatus,
+    loadModelsForProviderType,
+    renderNotSupportedModelsSelector
 };
 
 // 将函数挂载到window对象

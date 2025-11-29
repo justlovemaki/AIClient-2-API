@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { getProviderModels } from '../provider-models.js';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -20,7 +21,11 @@ const KIRO_CONSTANTS = {
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
 };
 
-const MODEL_MAPPING = {
+// 从 provider-models.js 获取支持的模型列表
+const KIRO_MODELS = getProviderModels('claude-kiro-oauth');
+
+// 完整的模型映射表
+const FULL_MODEL_MAPPING = {
     "claude-opus-4-5":"claude-opus-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
@@ -29,6 +34,11 @@ const MODEL_MAPPING = {
     "amazonq-claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
     "amazonq-claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
 };
+
+// 只保留 KIRO_MODELS 中存在的模型映射
+const MODEL_MAPPING = Object.fromEntries(
+    Object.entries(FULL_MODEL_MAPPING).filter(([key]) => KIRO_MODELS.includes(key))
+);
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
@@ -1115,7 +1125,7 @@ async initializeAuth(forceRefresh = false) {
      * List available models
      */
     async listModels() {
-        const models = Object.keys(MODEL_MAPPING).map(id => ({
+        const models = KIRO_MODELS.map(id => ({
             name: id
         }));
         

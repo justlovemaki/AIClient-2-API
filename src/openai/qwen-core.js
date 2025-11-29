@@ -6,14 +6,17 @@ import * as os from 'os';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
+import { getProviderModels } from '../provider-models.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
-const QWEN_MODEL_LIST = [
-    { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
-    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
-];
+// 从 provider-models.js 获取支持的模型列表
+const QWEN_MODELS = getProviderModels('openai-qwen-oauth');
+const QWEN_MODEL_LIST = QWEN_MODELS.map(id => ({
+    id: id,
+    name: id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}));
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 const LOCK_TIMEOUT_MS = 10000;

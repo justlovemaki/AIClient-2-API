@@ -93,10 +93,12 @@ export class ProviderPoolManager {
     /**
      * Selects a provider from the pool for a given provider type.
      * Currently uses a simple round-robin for healthy providers.
+     * If requestedModel is provided, providers that don't support the model will be excluded.
      * @param {string} providerType - The type of provider to select (e.g., 'gemini-cli', 'openai-custom').
+     * @param {string} [requestedModel] - Optional. The model name to filter providers by.
      * @returns {object|null} The selected provider's configuration, or null if no healthy provider is found.
      */
-    selectProvider(providerType) {
+    selectProvider(providerType, requestedModel = null) {
         // 参数校验
         if (!providerType || typeof providerType !== 'string') {
             this._log('error', `Invalid providerType: ${providerType}`);
@@ -104,28 +106,52 @@ export class ProviderPoolManager {
         }
 
         const availableProviders = this.providerStatus[providerType] || [];
-        const availableAndHealthyProviders = availableProviders.filter(p =>
+        let availableAndHealthyProviders = availableProviders.filter(p =>
             p.config.isHealthy && !p.config.isDisabled
         );
+
+        // 如果指定了模型，则排除不支持该模型的提供商
+        if (requestedModel) {
+            const modelFilteredProviders = availableAndHealthyProviders.filter(p => {
+                // 如果提供商没有配置 notSupportedModels，则认为它支持所有模型
+                if (!p.config.notSupportedModels || !Array.isArray(p.config.notSupportedModels)) {
+                    return true;
+                }
+                // 检查 notSupportedModels 数组中是否包含请求的模型，如果包含则排除
+                return !p.config.notSupportedModels.includes(requestedModel);
+            });
+
+            if (modelFilteredProviders.length === 0) {
+                this._log('warn', `No available providers for type: ${providerType} that support model: ${requestedModel}`);
+                return null;
+            }
+
+            availableAndHealthyProviders = modelFilteredProviders;
+            this._log('debug', `Filtered ${modelFilteredProviders.length} providers supporting model: ${requestedModel}`);
+        }
 
         if (availableAndHealthyProviders.length === 0) {
             this._log('warn', `No available and healthy providers for type: ${providerType}`);
             return null;
         }
 
-        // 简化轮询逻辑
-        const currentIndex = this.roundRobinIndex[providerType] || 0;
+        // 为每个提供商类型和模型组合维护独立的轮询索引
+        // 使用组合键：providerType 或 providerType:model
+        const indexKey = requestedModel ? `${providerType}:${requestedModel}` : providerType;
+        const currentIndex = this.roundRobinIndex[indexKey] || 0;
+        
+        // 使用取模确保索引始终在有效范围内，即使列表长度变化
         const providerIndex = currentIndex % availableAndHealthyProviders.length;
         const selected = availableAndHealthyProviders[providerIndex];
         
         // 更新下次轮询的索引
-        this.roundRobinIndex[providerType] = (providerIndex + 1) % availableAndHealthyProviders.length;
+        this.roundRobinIndex[indexKey] = (currentIndex + 1) % availableAndHealthyProviders.length;
         
         // 更新使用信息
         selected.config.lastUsed = new Date().toISOString();
         selected.config.usageCount++;
 
-        this._log('debug', `Selected provider for ${providerType} (round-robin): ${selected.config.uuid}`);
+        this._log('debug', `Selected provider for ${providerType} (round-robin): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}`);
         
         // 使用防抖保存
         this._debouncedSave(providerType);

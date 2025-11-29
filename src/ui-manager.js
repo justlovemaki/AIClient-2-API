@@ -4,6 +4,7 @@ import path from 'path';
 import multer from 'multer';
 import crypto from 'crypto';
 import { getRequestBody } from './common.js';
+import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances } from './adapter.js';
 import { initApiService } from './service-manager.js';
@@ -665,6 +666,27 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             providers,
             totalCount: providers.length,
             healthyCount: providers.filter(p => p.isHealthy).length
+        }));
+        return true;
+    }
+
+    // Get available models for all providers or specific provider type
+    if (method === 'GET' && pathParam === '/api/provider-models') {
+        const allModels = getAllProviderModels();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(allModels));
+        return true;
+    }
+
+    // Get available models for a specific provider type
+    const providerModelsMatch = pathParam.match(/^\/api\/provider-models\/([^\/]+)$/);
+    if (method === 'GET' && providerModelsMatch) {
+        const providerType = decodeURIComponent(providerModelsMatch[1]);
+        const models = getProviderModels(providerType);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            providerType,
+            models
         }));
         return true;
     }

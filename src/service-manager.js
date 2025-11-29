@@ -59,21 +59,22 @@ export async function initApiService(config) {
 /**
  * Get API service adapter, considering provider pools
  * @param {Object} config - The current request configuration
+ * @param {string} [requestedModel] - Optional. The model name to filter providers by.
  * @returns {Promise<Object>} The API service adapter
  */
-export async function getApiService(config) {
+export async function getApiService(config, requestedModel = null) {
     let serviceConfig = config;
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
-        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER);
+        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER, requestedModel);
         if (selectedProviderConfig) {
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);
             delete serviceConfig.providerPools; // 移除 providerPools 属性
             config.uuid = serviceConfig.uuid;
-            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}`);
+            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
-            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}. Falling back to main config.`);
+            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
         }
     }
     return getServiceAdapter(serviceConfig);
