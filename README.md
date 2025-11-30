@@ -1,6 +1,6 @@
 <div align="center">
 
-![logo](src/img/logo-min.webp)
+<img src="src/img/logo-min.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
 # AIClient-2-API 🚀
 
