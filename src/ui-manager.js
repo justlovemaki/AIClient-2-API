@@ -8,6 +8,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances } from './adapter.js';
 import { initApiService } from './service-manager.js';
+import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth } from './oauth-handlers.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = 'token-store.json';
@@ -1012,6 +1013,58 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         } catch (error) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
+    // Generate OAuth authorization URL for providers
+    const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
+    if (method === 'POST' && generateAuthUrlMatch) {
+        const providerType = decodeURIComponent(generateAuthUrlMatch[1]);
+        
+        try {
+            let authUrl = '';
+            let authInfo = {};
+            
+            // 根据提供商类型生成授权链接并启动回调服务器
+            if (providerType === 'gemini-cli-oauth') {
+                const result = await handleGeminiCliOAuth(currentConfig);
+                authUrl = result.authUrl;
+                authInfo = result.authInfo;
+            } else if (providerType === 'gemini-antigravity') {
+                const result = await handleGeminiAntigravityOAuth(currentConfig);
+                authUrl = result.authUrl;
+                authInfo = result.authInfo;
+            } else if (providerType === 'openai-qwen-oauth') {
+                const result = await handleQwenOAuth(currentConfig);
+                authUrl = result.authUrl;
+                authInfo = result.authInfo;
+            } else {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: `不支持的提供商类型: ${providerType}`
+                    }
+                }));
+                return true;
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                authUrl: authUrl,
+                authInfo: authInfo
+            }));
+            return true;
+            
+        } catch (error) {
+            console.error(`[UI API] Failed to generate auth URL for ${providerType}:`, error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: `生成授权链接失败: ${error.message}`
+                }
+            }));
             return true;
         }
     }

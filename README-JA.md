@@ -30,6 +30,7 @@
 >
 > **📅 バージョン更新ログ**
 >
+> - **2025.11.30** - Antigravityプロトコルサポートの追加、Google内部インターフェース経由でGemini 3 Pro、Claude Sonnet 4.5などのモデルへのアクセスをサポート
 > - **2025.11.16** - Ollamaプロトコルサポートの追加、統一インターフェースでサポートされるすべてのモデルにアクセス
 > - **2025.11.11** - Web UI管理コントロールコンソールの追加、リアルタイム設定管理与健康状態モニタリングをサポート
 > - **2025.11.06** - Gemini 3 プレビュー版のサポートを追加、モデル互換性とパフォーマンス最適化を向上
@@ -252,6 +253,12 @@ install-and-run.bat
 3. **ベストプラクティス**：**Claude Code**との併用を推奨、最適な体験を得られる
 4. **重要なお知らせ**：Kiroサービス使用ポリシーが更新されました、最新の使用制限と条件については公式ウェブサイトをご確認ください
 
+#### アカウントプール管理設定
+1. **プール設定ファイルの作成**：[provider_pools.json.example](./provider_pools.json.example) を参考に設定ファイルを作成します
+2. **プールパラメータの設定**：config.json で `PROVIDER_POOLS_FILE_PATH` を設定し、プール設定ファイルを指定します
+3. **起動パラメータ設定**：`--provider-pools-file <path>` パラメータを使用してプール設定ファイルのパスを指定します
+4. **ヘルスチェック**：システムは定期的にヘルスチェックを自動実行し、健全でないプロバイダーを削除します
+
 #### OpenAI Responses API
 *   **適用シナリオ**：Codexなど、OpenAI Responses APIを使用した構造化対話が必要なシナリオに適用
 *   **設定方法**：
@@ -331,6 +338,7 @@ curl http://localhost:3000/ollama/api/chat \
 | **Gemini** | `~/.gemini/oauth_creds.json` | OAuth認証情報 |
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro認証トークン |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth認証情報 |
+| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 |
 
 > **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
 >
@@ -354,7 +362,7 @@ curl http://localhost:3000/ollama/api/chat \
 
 | パラメータ | タイプ | デフォルト値 | 説明 |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AIモデルプロバイダー、選択可能値：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
+| `--model-provider` | string | gemini-cli-oauth | AIモデルプロバイダー、選択可能値：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom, gemini-antigravity |
 
 ### 🧠 OpenAI互換プロバイダーパラメータ
 
@@ -390,6 +398,12 @@ curl http://localhost:3000/ollama/api/chat \
 | パラメータ | タイプ | デフォルト値 | 説明 |
 |------|------|--------|------|
 | `--qwen-oauth-creds-file` | string | null | Qwen OAuth認証情報JSONファイルパス（`model-provider`が`openai-qwen-oauth`の場合必須） |
+
+### 🌌 Antigravity OAuth認証パラメータ
+
+| パラメータ | タイプ | デフォルト値 | 説明 |
+|------|------|--------|------|
+| `--antigravity-oauth-creds-file` | string | null | Antigravity OAuth認証情報JSONファイルパス（`model-provider`が`gemini-antigravity`の場合オプション） |
 
 ### 🔄 OpenAI Responses APIパラメータ
 
@@ -464,6 +478,9 @@ node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mo
 node src/api-server.js --log-prompts console
 node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
 
+# アカウントプールの設定
+node src/api-server.js --provider-pools-file ./provider_pools.json
+
 # 完全な例
 node src/api-server.js \
   --host 0.0.0.0 \
@@ -475,7 +492,8 @@ node src/api-server.js \
   --system-prompt-file ./custom-system-prompt.txt \
   --system-prompt-mode overwrite \
   --log-prompts file \
-  --prompt-log-base-name api-logs
+  --prompt-log-base-name api-logs \
+  --provider-pools-file ./provider_pools.json
 ```
 ---
 

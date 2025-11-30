@@ -154,11 +154,11 @@
                                 </div>
                             </div>
 
-                            <div class="routing-example-card" data-provider="openai-qwen-oauth-card">
+                            <div class="routing-example-card" data-provider="gemini-antigravity-card">
                                 <div class="routing-card-header">
-                                    <i class="fas fa-code"></i>
-                                    <h4>Qwen OAuth</h4>
-                                    <span class="provider-badge oauth">突破限制</span>
+                                    <i class="fas fa-rocket"></i>
+                                    <h4>Gemini Antigravity</h4>
+                                    <span class="provider-badge oauth">突破限制/实验性</span>
                                 </div>
                                 <div class="routing-card-content">
                                     <!-- 协议标签切换 -->
@@ -171,15 +171,15 @@
                                     <div class="protocol-content" data-protocol="openai">
                                         <div class="endpoint-info">
                                             <label>端点路径:</label>
-                                            <code class="endpoint-path">/openai-qwen-oauth/v1/chat/completions</code>
+                                            <code class="endpoint-path">/gemini-antigravity/v1/chat/completions</code>
                                         </div>
                                         <div class="usage-example">
                                             <label>使用示例 (OpenAI格式):</label>
-                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/chat/completions \
+                                            <pre><code>curl http://localhost:3000/gemini-antigravity/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen-turbo",
+    "model": "gemini-3-pro-preview",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 1000
   }'</code></pre>
@@ -190,15 +190,15 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label>端点路径:</label>
-                                            <code class="endpoint-path">/openai-qwen-oauth/v1/messages</code>
+                                            <code class="endpoint-path">/gemini-antigravity/v1/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label>使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/messages \
+                                            <pre><code>curl http://localhost:3000/gemini-antigravity/v1/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
-    "model": "qwen-turbo",
+    "model": "gemini-3-pro-preview",
     "max_tokens": 1000,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'</code></pre>
@@ -365,6 +365,59 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                                                        <div class="routing-example-card" data-provider="openai-qwen-oauth-card">
+                                <div class="routing-card-header">
+                                    <i class="fas fa-code"></i>
+                                    <h4>Qwen OAuth</h4>
+                                    <span class="provider-badge oauth">突破限制</span>
+                                </div>
+                                <div class="routing-card-content">
+                                    <!-- 协议标签切换 -->
+                                    <div class="protocol-tabs">
+                                        <button class="protocol-tab" data-protocol="openai">OpenAI协议</button>
+                                        <button class="protocol-tab active" data-protocol="claude">Claude协议</button>
+                                    </div>
+                                    
+                                    <!-- OpenAI协议示例 -->
+                                    <div class="protocol-content" data-protocol="openai">
+                                        <div class="endpoint-info">
+                                            <label>端点路径:</label>
+                                            <code class="endpoint-path">/openai-qwen-oauth/v1/chat/completions</code>
+                                        </div>
+                                        <div class="usage-example">
+                                            <label>使用示例 (OpenAI格式):</label>
+                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "qwen-turbo",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Claude协议示例 -->
+                                    <div class="protocol-content active" data-protocol="claude">
+                                        <div class="endpoint-info">
+                                            <label>端点路径:</label>
+                                            <code class="endpoint-path">/openai-qwen-oauth/v1/messages</code>
+                                        </div>
+                                        <div class="usage-example">
+                                            <label>使用示例 (Claude格式):</label>
+                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "qwen-turbo",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                         </div>
 
@@ -428,6 +481,7 @@
                                 <label for="modelProvider">模型提供商</label>
                                 <select id="modelProvider" class="form-control">
                                     <option value="gemini-cli-oauth">Gemini CLI OAuth</option>
+                                    <option value="gemini-antigravity">Gemini Antigravity</option>
                                     <option value="openai-custom">OpenAI Custom</option>
                                     <option value="claude-custom">Claude Custom</option>
                                     <option value="claude-kiro-oauth">Claude Kiro OAuth</option>
@@ -467,6 +521,20 @@
                                             <i class="fas fa-upload"></i>
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Gemini Antigravity 配置 -->
+                            <div class="provider-config" data-provider="gemini-antigravity" style="display: none;">
+                                <div class="form-group">
+                                    <label for="antigravityOauthCredsFilePath">OAuth凭据文件路径</label>
+                                    <div class="file-input-group">
+                                        <input type="text" id="antigravityOauthCredsFilePath" class="form-control" placeholder="例如: ~/.antigravity/oauth_creds.json">
+                                        <button type="button" class="btn btn-outline upload-btn" data-target="antigravityOauthCredsFilePath" aria-label="上传文件">
+                                            <i class="fas fa-upload"></i>
+                                        </button>
+                                    </div>
+                                    <small class="form-text">Antigravity 使用 Google OAuth 认证，需要提供凭据文件路径</small>
                                 </div>
                             </div>
                             

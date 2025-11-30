@@ -139,5 +139,33 @@
       "errorCount": 0,
       "lastErrorTime": null
     }
+  ],
+  "gemini-antigravity": [
+    {
+      "ANTIGRAVITY_OAUTH_CREDS_FILE_PATH": "./antigravity_creds1.json",
+      "PROJECT_ID": "antigravity-project-1",
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "checkModelName": null,
+      "checkHealth": true,
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "ANTIGRAVITY_OAUTH_CREDS_FILE_PATH": "./antigravity_creds2.json",
+      "PROJECT_ID": "antigravity-project-2",
+      "uuid": "f0e9d8c7-b6a5-4321-fedc-ba9876543210",
+      "checkModelName": null,
+      "checkHealth": true,
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
   ]
 }

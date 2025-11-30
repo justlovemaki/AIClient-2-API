@@ -30,6 +30,7 @@
 >
 > **📅 Version Update Log**
 >
+> - **2025.11.30** - Added Antigravity protocol support, enabling access to Gemini 3 Pro, Claude Sonnet 4.5, and other models via Google internal interfaces
 > - **2025.11.16** - Added Ollama protocol support, unified interface to access all supported models (Claude, Gemini, Qwen, OpenAI, etc.)
 > - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
 > - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
@@ -251,13 +252,11 @@ Seamlessly supports the following latest large models, simply configure the corr
 3. **Best Practice**: Recommended to use with **Claude Code** for optimal experience
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
-#### OpenAI Responses API
-*   **Application Scenario**: Suitable for scenarios requiring structured dialogue using OpenAI Responses API, such as Codex
-*   **Configuration Method**:
-    *   Method 1: Set `MODEL_PROVIDER` to `openaiResponses-custom` in [`config.json`](./config.json)
-    *   Method 2: Use startup parameter `--model-provider openaiResponses-custom`
-    *   Method 3: Use path routing `/openaiResponses-custom`
-*   **Required Parameters**: Provide valid API key and base URL
+#### Account Pool Management Configuration
+1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./provider_pools.json.example)
+2. **Configure Pool Parameter**: Set `PROVIDER_POOLS_FILE_PATH` in config.json to point to the pool configuration file
+3. **Startup Parameter Configuration**: Use `--provider-pools-file <path>` parameter to specify the pool configuration file path
+4. **Health Check**: The system will automatically perform periodic health checks and remove unhealthy providers
 
 ---
 
@@ -330,6 +329,7 @@ Default storage locations for authorization credential files of each service:
 | **Gemini** | `~/.gemini/oauth_creds.json` | OAuth authentication credentials |
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
+| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials |
 
 > **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
 >
@@ -353,7 +353,7 @@ This project supports rich command-line parameter configuration, allowing flexib
 
 | Parameter | Type | Default Value | Description |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
+| `--model-provider` | string | gemini-cli-oauth | AI model provider, optional values: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom, gemini-antigravity |
 
 ### 🧠 OpenAI Compatible Provider Parameters
 
@@ -389,6 +389,12 @@ This project supports rich command-line parameter configuration, allowing flexib
 | Parameter | Type | Default Value | Description |
 |------|------|--------|------|
 | `--qwen-oauth-creds-file` | string | null | Qwen OAuth credentials JSON file path (required when `model-provider` is `openai-qwen-oauth`) |
+
+### 🌌 Antigravity OAuth Authentication Parameters
+
+| Parameter | Type | Default Value | Description |
+|------|------|--------|------|
+| `--antigravity-oauth-creds-file` | string | null | Antigravity OAuth credentials JSON file path (optional when `model-provider` is `gemini-antigravity`) |
 
 ### 🔄 OpenAI Responses API Parameters
 
@@ -463,6 +469,9 @@ node src/api-server.js --system-prompt-file custom-prompt.txt --system-prompt-mo
 node src/api-server.js --log-prompts console
 node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
 
+# Configure Account Pool
+node src/api-server.js --provider-pools-file ./provider_pools.json
+
 # Complete example
 node src/api-server.js \
   --host 0.0.0.0 \
@@ -474,7 +483,8 @@ node src/api-server.js \
   --system-prompt-file ./custom-system-prompt.txt \
   --system-prompt-mode overwrite \
   --log-prompts file \
-  --prompt-log-base-name api-logs
+  --prompt-log-base-name api-logs \
+  --provider-pools-file ./provider_pools.json
 ```
 
 ---

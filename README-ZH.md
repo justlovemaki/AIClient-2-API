@@ -30,6 +30,7 @@
 >
 > **📅 版本更新日志**
 >
+> - **2025.11.30** - 新增 Antigravity 协议支持，支持通过 Google 内部接口访问 Gemini 3 Pro、Claude Sonnet 4.5 等模型
 > - **2025.11.16** - 新增 Ollama 协议支持，统一接口访问所有支持的模型（Claude、Gemini、Qwen、OpenAI等）
 > - **2025.11.11** - 新增 Web UI 管理控制台，支持实时配置管理和健康状态监控
 > - **2025.11.06** - 新增对 Gemini 3 预览版的支持，增强模型兼容性和性能优化
@@ -330,6 +331,7 @@ curl http://localhost:3000/ollama/api/chat \
 | **Gemini** | `~/.gemini/oauth_creds.json` | OAuth 认证凭据 |
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro 认证令牌 |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth 凭据 |
+| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth 凭据 |
 
 > **说明**：`~` 表示用户主目录（Windows: `C:\Users\用户名`，Linux/macOS: `/home/用户名` 或 `/Users/用户名`）
 >
@@ -353,7 +355,7 @@ curl http://localhost:3000/ollama/api/chat \
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom |
+| `--model-provider` | string | gemini-cli-oauth | AI 模型提供商，可选值：openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth, openai-qwen-oauth, openaiResponses-custom, gemini-antigravity |
 
 ### 🧠 OpenAI 兼容提供商参数
 
@@ -388,7 +390,13 @@ curl http://localhost:3000/ollama/api/chat \
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `openai-qwen-oauth` 时必需) |
+| `--qwen-oauth-creds-file` | string | null | Qwen OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `openai-qwen-oauth` 时可选) |
+
+### 🌌 Antigravity OAuth 认证参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--antigravity-oauth-creds-file` | string | null | Antigravity OAuth 凭据 JSON 文件路径 (当 `model-provider` 为 `gemini-antigravity` 时可选) |
 
 ### 🔄 OpenAI Responses API 参数
 

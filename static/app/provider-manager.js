@@ -106,6 +106,7 @@ function renderProviders(providers) {
     // 定义所有支持的提供商显示顺序
     const providerDisplayOrder = [
         'gemini-cli-oauth',
+        'gemini-antigravity',
         'openai-custom',
         'claude-custom',
         'claude-kiro-oauth',
@@ -175,9 +176,12 @@ function renderProviders(providers) {
                 <div class="provider-name">
                     <span class="provider-type-text">${providerType}</span>
                 </div>
-                <div class="provider-status ${statusClass}">
-                    <i class="fas fa-${statusIcon}"></i>
-                    <span>${statusText}</span>
+                <div class="provider-header-right">
+                    ${generateAuthButton(providerType)}
+                    <div class="provider-status ${statusClass}">
+                        <i class="fas fa-${statusIcon}"></i>
+                        <span>${statusText}</span>
+                    </div>
                 </div>
             </div>
             <div class="provider-stats">
@@ -212,6 +216,15 @@ function renderProviders(providers) {
         });
 
         container.appendChild(providerDiv);
+        
+        // 为授权按钮添加事件监听
+        const authBtn = providerDiv.querySelector('.generate-auth-btn');
+        if (authBtn) {
+            authBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡到父元素
+                handleGenerateAuthUrl(providerType);
+            });
+        }
     });
     
     // 更新统计卡片数据
@@ -298,6 +311,165 @@ async function openProviderManager(providerType) {
         console.error('Failed to load provider details:', error);
         showToast('加载提供商详情失败', 'error');
     }
+}
+
+/**
+ * 生成授权按钮HTML
+ * @param {string} providerType - 提供商类型
+ * @returns {string} 授权按钮HTML
+ */
+function generateAuthButton(providerType) {
+    // 只为支持OAuth的提供商显示授权按钮
+    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth'];
+    
+    if (!oauthProviders.includes(providerType)) {
+        return '';
+    }
+    
+    return `
+        <button class="generate-auth-btn" title="生成OAuth授权链接">
+            <i class="fas fa-key"></i>
+            <span>生成授权</span>
+        </button>
+    `;
+}
+
+/**
+ * 处理生成授权链接
+ * @param {string} providerType - 提供商类型
+ */
+async function handleGenerateAuthUrl(providerType) {
+    try {
+        showToast('正在生成授权链接...', 'info');
+        
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
+            {}
+        );
+        
+        if (response.success && response.authUrl) {
+            // 显示授权信息模态框
+            showAuthModal(response.authUrl, response.authInfo);
+        } else {
+            showToast('生成授权链接失败', 'error');
+        }
+    } catch (error) {
+        console.error('生成授权链接失败:', error);
+        showToast(`生成授权链接失败: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * 显示授权信息模态框
+ * @param {string} authUrl - 授权URL
+ * @param {Object} authInfo - 授权信息
+ */
+function showAuthModal(authUrl, authInfo) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    
+    let instructionsHtml = '';
+    if (authInfo.provider === 'openai-qwen-oauth') {
+        instructionsHtml = `
+            <div class="auth-instructions">
+                <h4>授权步骤：</h4>
+                <ol>
+                    <li>点击下方按钮在浏览器中打开授权页面</li>
+                    <li>在授权页面输入用户码: <strong>${authInfo.userCode}</strong></li>
+                    <li>完成授权后，系统会自动获取访问令牌</li>
+                    <li>授权有效期: ${Math.floor(authInfo.expiresIn / 60)} 分钟</li>
+                </ol>
+                <p class="auth-note">${authInfo.instructions}</p>
+            </div>
+        `;
+    } else {
+        instructionsHtml = `
+            <div class="auth-instructions">
+                <div class="auth-warning" style="margin-bottom: 15px;">
+                    <div>
+                        <strong>⚠️ 重要提醒：回调地址限制</strong>
+                        <p>OAuth回调地址的 host 必须是 <code>localhost</code> 或 <code>127.0.0.1</code>，否则授权将无法完成！</p>
+                        <p style="margin-top: 8px;">当前回调地址: <code>${authInfo.redirectUri}</code></p>
+                        <p style="margin-top: 8px; color: #d97706;">如果当前配置的 host 不是 localhost 或 127.0.0.1，请先修改配置后重新生成授权链接。</p>
+                    </div>
+                </div>
+                <h4>授权步骤：</h4>
+                <ol>
+                    <li>确认上方回调地址的 host 是 localhost 或 127.0.0.1</li>
+                    <li>点击下方按钮在浏览器中打开授权页面</li>
+                    <li>使用您的Google账号登录并授权</li>
+                    <li>授权完成后，凭据文件会自动保存</li>
+                </ol>
+                <p class="auth-note">${authInfo.instructions}</p>
+            </div>
+        `;
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-key"></i>OAuth 授权</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-info">
+                    <p><strong>提供商:</strong> ${authInfo.provider}</p>
+                    ${instructionsHtml}
+                    <div class="auth-url-section">
+                        <label>授权链接:</label>
+                        <div class="auth-url-container">
+                            <input type="text" readonly value="${authUrl}" class="auth-url-input">
+                            <button class="copy-btn" title="复制链接">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel">关闭</button>
+                <button class="open-auth-btn">
+                    <i class="fas fa-external-link-alt"></i>
+                    在浏览器中打开
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 关闭按钮事件
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    [closeBtn, cancelBtn].forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+    
+    // 复制链接按钮
+    const copyBtn = modal.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', () => {
+        const input = modal.querySelector('.auth-url-input');
+        input.select();
+        document.execCommand('copy');
+        showToast('授权链接已复制到剪贴板', 'success');
+    });
+    
+    // 在浏览器中打开按钮
+    const openBtn = modal.querySelector('.open-auth-btn');
+    openBtn.addEventListener('click', () => {
+        window.open(authUrl, '_blank');
+        showToast('已在新标签页中打开授权页面', 'success');
+    });
+    
+    // 点击遮罩层关闭
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
 // 导入工具函数
