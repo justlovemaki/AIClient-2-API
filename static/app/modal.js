@@ -46,6 +46,9 @@ function showProviderManagerModal(data) {
                         <button class="btn btn-success" onclick="window.showAddProviderForm('${providerType}')">
                             <i class="fas fa-plus"></i> 添加新提供商
                         </button>
+                        <button class="btn btn-warning" onclick="window.resetAllProvidersHealth('${providerType}')" title="将所有节点的健康状态重置为健康">
+                            <i class="fas fa-heartbeat"></i> 重置为健康
+                        </button>
                     </div>
                 </div>
                 
@@ -997,6 +1000,40 @@ async function toggleProviderStatus(uuid, event) {
 }
 
 /**
+ * 重置所有提供商的健康状态
+ * @param {string} providerType - 提供商类型
+ */
+async function resetAllProvidersHealth(providerType) {
+    if (!confirm(`确定要将 ${providerType} 的所有节点重置为健康状态吗？\n\n这将清除所有节点的错误计数和错误时间。`)) {
+        return;
+    }
+    
+    try {
+        showToast('正在重置健康状态...', 'info');
+        
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/reset-health`,
+            {}
+        );
+        
+        if (response.success) {
+            showToast(`成功重置 ${response.resetCount} 个节点的健康状态`, 'success');
+            
+            // 重新加载配置
+            await window.apiClient.post('/reload-config');
+            
+            // 刷新提供商配置显示
+            await refreshProviderConfig(providerType);
+        } else {
+            showToast('重置健康状态失败', 'error');
+        }
+    } catch (error) {
+        console.error('重置健康状态失败:', error);
+        showToast(`重置健康状态失败: ${error.message}`, 'error');
+    }
+}
+
+/**
  * 渲染不支持的模型选择器（不调用API，直接使用传入的模型列表）
  * @param {string} uuid - 提供商UUID
  * @param {Array} models - 模型列表
@@ -1045,6 +1082,7 @@ export {
     showAddProviderForm,
     addProvider,
     toggleProviderStatus,
+    resetAllProvidersHealth,
     loadModelsForProviderType,
     renderNotSupportedModelsSelector
 };
@@ -1059,3 +1097,4 @@ window.deleteProvider = deleteProvider;
 window.showAddProviderForm = showAddProviderForm;
 window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;
+window.resetAllProvidersHealth = resetAllProvidersHealth;

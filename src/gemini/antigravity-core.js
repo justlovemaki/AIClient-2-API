@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
+import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 
@@ -293,14 +294,32 @@ export class AntigravityApiService {
         const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
         this.authClient.redirectUri = redirectUri;
         
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({
                 access_type: 'offline',
                 scope: ['https://www.googleapis.com/auth/cloud-platform']
             });
             
-            console.log('\n[Antigravity Auth] Please open this URL in your browser to authenticate:');
-            console.log(authUrl, '\n');
+            console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
+            console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
+            
+            // 自动打开浏览器
+            const showFallbackMessage = () => {
+                console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+            };
+            
+            if (this.config) {
+                try {
+                    const childProcess = await open(authUrl);
+                    if (childProcess) {
+                        childProcess.on('error', () => showFallbackMessage());
+                    }
+                } catch (_err) {
+                    showFallbackMessage();
+                }
+            } else {
+                showFallbackMessage();
+            }
             
             const server = http.createServer(async (req, res) => {
                 try {

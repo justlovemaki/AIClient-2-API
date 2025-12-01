@@ -1357,6 +1357,7 @@ input:checked + .toggle-slider:before {
     margin-left: auto;
     display: flex;
     align-items: center;
+    gap: 0.75rem;
 }
 
 .provider-actions {

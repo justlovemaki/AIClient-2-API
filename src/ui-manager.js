@@ -1017,6 +1017,80 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Reset all providers health status for a specific provider type
+    const resetHealthMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/reset-health$/);
+    if (method === 'POST' && resetHealthMatch) {
+        const providerType = decodeURIComponent(resetHealthMatch[1]);
+
+        try {
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            let providerPools = {};
+            
+            // Load existing pools
+            if (existsSync(filePath)) {
+                try {
+                    const fileContent = readFileSync(filePath, 'utf8');
+                    providerPools = JSON.parse(fileContent);
+                } catch (readError) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
+                    return true;
+                }
+            }
+
+            // Reset health status for all providers of this type
+            const providers = providerPools[providerType] || [];
+            
+            if (providers.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
+                return true;
+            }
+
+            let resetCount = 0;
+            providers.forEach(provider => {
+                if (!provider.isHealthy) {
+                    provider.isHealthy = true;
+                    provider.errorCount = 0;
+                    provider.lastErrorTime = null;
+                    resetCount++;
+                }
+            });
+
+            // Save to file
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] Reset health status for ${resetCount} providers in ${providerType}`);
+
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+
+            // 广播更新事件
+            broadcastEvent('config_update', {
+                action: 'reset_health',
+                filePath: filePath,
+                providerType,
+                resetCount,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `成功重置 ${resetCount} 个节点的健康状态`,
+                resetCount,
+                totalCount: providers.length
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Generate OAuth authorization URL for providers
     const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
     if (method === 'POST' && generateAuthUrlMatch) {

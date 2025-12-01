@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
+import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 
@@ -257,10 +258,28 @@ export class GeminiApiService {
         }
         const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
         this.authClient.redirectUri = redirectUri;
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
-            console.log('\n[Gemini Auth] Please open this URL in your browser to authenticate:');
-            console.log(authUrl, '\n');
+            console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
+            
+            // 自动打开浏览器
+            const showFallbackMessage = () => {
+                console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+            };
+            
+            if (this.config) {
+                try {
+                    const childProcess = await open(authUrl);
+                    if (childProcess) {
+                        childProcess.on('error', () => showFallbackMessage());
+                    }
+                } catch (_err) {
+                    showFallbackMessage();
+                }
+            } else {
+                showFallbackMessage();
+            }
+            console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
             const server = http.createServer(async (req, res) => {
                 try {
                     const url = new URL(req.url, redirectUri);
