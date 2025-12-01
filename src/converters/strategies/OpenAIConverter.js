@@ -138,7 +138,7 @@ export class OpenAIConverter extends BaseConverter {
                 // 普通消息
                 if (typeof message.content === 'string') {
                     if (message.content) {
-                        content.push({ type: 'text', text: message.content });
+                        content.push({ type: 'text', text: message.content.trim() });
                     }
                 } else if (Array.isArray(message.content)) {
                     message.content.forEach(item => {
@@ -146,7 +146,7 @@ export class OpenAIConverter extends BaseConverter {
                         switch (item.type) {
                             case 'text':
                                 if (item.text) {
-                                    content.push({ type: 'text', text: item.text });
+                                    content.push({ type: 'text', text: item.text.trim() });
                                 }
                                 break;
                             case 'image_url':
@@ -201,6 +201,22 @@ export class OpenAIConverter extends BaseConverter {
                     lastMessage.content = lastMessage.content.concat(currentMessage.content);
                 } else {
                     mergedClaudeMessages.push(currentMessage);
+                }
+            }
+        }
+
+        // 清理最后一条 assistant 消息的尾部空白
+        if (mergedClaudeMessages.length > 0) {
+            const lastMessage = mergedClaudeMessages[mergedClaudeMessages.length - 1];
+            if (lastMessage.role === 'assistant' && Array.isArray(lastMessage.content)) {
+                // 从后往前找到最后一个 text 类型的内容块
+                for (let i = lastMessage.content.length - 1; i >= 0; i--) {
+                    const contentBlock = lastMessage.content[i];
+                    if (contentBlock.type === 'text' && contentBlock.text) {
+                        // 移除尾部空白字符
+                        contentBlock.text = contentBlock.text.trimEnd();
+                        break;
+                    }
                 }
             }
         }
