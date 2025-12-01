@@ -336,7 +336,7 @@ export class ProviderPoolManager {
         const baseMessage = { role: 'user', content: 'Hello, are you ok?' };
         
         // Gemini 使用不同的请求格式
-        if (providerType === 'gemini-cli') {
+        if (providerType.startsWith('gemini')) {
             return {
                 contents: [{
                     role: 'user',
@@ -346,7 +346,7 @@ export class ProviderPoolManager {
         }
         
         // OpenAI Custom Responses 使用特殊格式
-        if (providerType === 'openai-custom-responses') {
+        if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
             return {
                 input: [baseMessage],
                 model: modelName
