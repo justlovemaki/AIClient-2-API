@@ -505,6 +505,52 @@ async initializeAuth(forceRefresh = false) {
             throw new Error('No user messages found');
         }
 
+        // 判断最后一条消息是否为 assistant,如果是则移除
+        const lastMessage = processedMessages[processedMessages.length - 1];
+        if (processedMessages.length > 0 && lastMessage.role === 'assistant') {
+            if (lastMessage.content[0].type === "text" && lastMessage.content[0].text === "{") {
+                console.log('[Kiro] Removing last assistant with "{" message from processedMessages');
+                processedMessages.pop();
+            }
+        }
+
+        // 合并相邻相同 role 的消息
+        const mergedMessages = [];
+        for (let i = 0; i < processedMessages.length; i++) {
+            const currentMsg = processedMessages[i];
+            
+            if (mergedMessages.length === 0) {
+                mergedMessages.push(currentMsg);
+            } else {
+                const lastMsg = mergedMessages[mergedMessages.length - 1];
+                
+                // 判断当前消息和上一条消息是否为相同 role
+                if (currentMsg.role === lastMsg.role) {
+                    // 合并消息内容
+                    if (Array.isArray(lastMsg.content) && Array.isArray(currentMsg.content)) {
+                        // 如果都是数组,合并数组内容
+                        lastMsg.content.push(...currentMsg.content);
+                    } else if (typeof lastMsg.content === 'string' && typeof currentMsg.content === 'string') {
+                        // 如果都是字符串,用换行符连接
+                        lastMsg.content += '\n' + currentMsg.content;
+                    } else if (Array.isArray(lastMsg.content) && typeof currentMsg.content === 'string') {
+                        // 上一条是数组,当前是字符串,添加为 text 类型
+                        lastMsg.content.push({ type: 'text', text: currentMsg.content });
+                    } else if (typeof lastMsg.content === 'string' && Array.isArray(currentMsg.content)) {
+                        // 上一条是字符串,当前是数组,转换为数组格式
+                        lastMsg.content = [{ type: 'text', text: lastMsg.content }, ...currentMsg.content];
+                    }
+                    console.log(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
+                } else {
+                    mergedMessages.push(currentMsg);
+                }
+            }
+        }
+        
+        // 用合并后的消息替换原消息数组
+        processedMessages.length = 0;
+        processedMessages.push(...mergedMessages);
+
         const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
         
         let toolsContext = {};
@@ -610,55 +656,6 @@ async initializeAuth(forceRefresh = false) {
             }
         }
 
-        // 合并相邻相同 role 的消息
-        const mergedHistory = [];
-        for (let i = 0; i < history.length; i++) {
-            const currentMessage = history[i];
-            
-            if (mergedHistory.length === 0) {
-                mergedHistory.push(currentMessage);
-            } else {
-                const lastMessage = mergedHistory[mergedHistory.length - 1];
-                
-                // 判断当前消息和上一条消息是否为相同类型（都是 userInputMessage 或都是 assistantResponseMessage）
-                const currentIsUser = currentMessage.hasOwnProperty('userInputMessage');
-                const lastIsUser = lastMessage.hasOwnProperty('userInputMessage');
-                
-                if (currentIsUser && lastIsUser) {
-                    // 合并两个 userInputMessage
-                    lastMessage.userInputMessage.content += '\n' + currentMessage.userInputMessage.content;
-                    
-                    // 合并 toolResults（如果存在）
-                    if (currentMessage.userInputMessage.userInputMessageContext?.toolResults) {
-                        if (!lastMessage.userInputMessage.userInputMessageContext.toolResults) {
-                            lastMessage.userInputMessage.userInputMessageContext.toolResults = [];
-                        }
-                        lastMessage.userInputMessage.userInputMessageContext.toolResults.push(
-                            ...currentMessage.userInputMessage.userInputMessageContext.toolResults
-                        );
-                    }
-                    
-                    // 合并 images（如果存在）
-                    if (currentMessage.userInputMessage.images && currentMessage.userInputMessage.images.length > 0) {
-                        if (!lastMessage.userInputMessage.images) {
-                            lastMessage.userInputMessage.images = [];
-                        }
-                        lastMessage.userInputMessage.images.push(...currentMessage.userInputMessage.images);
-                    }
-                } else if (!currentIsUser && !lastIsUser) {
-                    // 合并两个 assistantResponseMessage
-                    lastMessage.assistantResponseMessage.content += '\n' + currentMessage.assistantResponseMessage.content;
-                    
-                    // 合并 toolUses（如果存在）
-                    if (currentMessage.assistantResponseMessage.toolUses && currentMessage.assistantResponseMessage.toolUses.length > 0) {
-                        lastMessage.assistantResponseMessage.toolUses.push(...currentMessage.assistantResponseMessage.toolUses);
-                    }
-                } else {
-                    mergedHistory.push(currentMessage);
-                }
-            }
-        }
-
         // Build current message
         const currentMessage = processedMessages[processedMessages.length - 1];
         let currentContent = '';
@@ -704,7 +701,7 @@ async initializeAuth(forceRefresh = false) {
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
                 currentMessage: {}, // Will be populated based on the last message's role
-                history: mergedHistory
+                history: history
             }
         };
 
