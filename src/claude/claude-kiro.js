@@ -27,6 +27,7 @@ const KIRO_MODELS = getProviderModels('claude-kiro-oauth');
 // 完整的模型映射表
 const FULL_MODEL_MAPPING = {
     "claude-opus-4-5":"claude-opus-4.5",
+    "claude-haiku-4-5":"claude-haiku-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
@@ -609,6 +610,55 @@ async initializeAuth(forceRefresh = false) {
             }
         }
 
+        // 合并相邻相同 role 的消息
+        const mergedHistory = [];
+        for (let i = 0; i < history.length; i++) {
+            const currentMessage = history[i];
+            
+            if (mergedHistory.length === 0) {
+                mergedHistory.push(currentMessage);
+            } else {
+                const lastMessage = mergedHistory[mergedHistory.length - 1];
+                
+                // 判断当前消息和上一条消息是否为相同类型（都是 userInputMessage 或都是 assistantResponseMessage）
+                const currentIsUser = currentMessage.hasOwnProperty('userInputMessage');
+                const lastIsUser = lastMessage.hasOwnProperty('userInputMessage');
+                
+                if (currentIsUser && lastIsUser) {
+                    // 合并两个 userInputMessage
+                    lastMessage.userInputMessage.content += '\n' + currentMessage.userInputMessage.content;
+                    
+                    // 合并 toolResults（如果存在）
+                    if (currentMessage.userInputMessage.userInputMessageContext?.toolResults) {
+                        if (!lastMessage.userInputMessage.userInputMessageContext.toolResults) {
+                            lastMessage.userInputMessage.userInputMessageContext.toolResults = [];
+                        }
+                        lastMessage.userInputMessage.userInputMessageContext.toolResults.push(
+                            ...currentMessage.userInputMessage.userInputMessageContext.toolResults
+                        );
+                    }
+                    
+                    // 合并 images（如果存在）
+                    if (currentMessage.userInputMessage.images && currentMessage.userInputMessage.images.length > 0) {
+                        if (!lastMessage.userInputMessage.images) {
+                            lastMessage.userInputMessage.images = [];
+                        }
+                        lastMessage.userInputMessage.images.push(...currentMessage.userInputMessage.images);
+                    }
+                } else if (!currentIsUser && !lastIsUser) {
+                    // 合并两个 assistantResponseMessage
+                    lastMessage.assistantResponseMessage.content += '\n' + currentMessage.assistantResponseMessage.content;
+                    
+                    // 合并 toolUses（如果存在）
+                    if (currentMessage.assistantResponseMessage.toolUses && currentMessage.assistantResponseMessage.toolUses.length > 0) {
+                        lastMessage.assistantResponseMessage.toolUses.push(...currentMessage.assistantResponseMessage.toolUses);
+                    }
+                } else {
+                    mergedHistory.push(currentMessage);
+                }
+            }
+        }
+
         // Build current message
         const currentMessage = processedMessages[processedMessages.length - 1];
         let currentContent = '';
@@ -654,7 +704,7 @@ async initializeAuth(forceRefresh = false) {
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
                 currentMessage: {}, // Will be populated based on the last message's role
-                history: history
+                history: mergedHistory
             }
         };
 
@@ -680,6 +730,7 @@ async initializeAuth(forceRefresh = false) {
             request.profileArn = this.profileArn;
         }
         
+        // fs.writeFile('claude-kiro-request'+Date.now()+'.json', JSON.stringify(request));
         return request;
     }
 

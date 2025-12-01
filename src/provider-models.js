@@ -17,11 +17,13 @@ export const PROVIDER_MODELS = {
         'gemini-3-pro-image-preview',
         'gemini-3-pro-preview',
         'gemini-claude-sonnet-4-5',
-        'gemini-claude-sonnet-4-5-thinking'
+        'gemini-claude-sonnet-4-5-thinking',
+        'gemini-2.5-flash'
     ],
     'claude-custom': [],
     'claude-kiro-oauth': [
         'claude-opus-4-5',
+        'claude-haiku-4-5',
         'claude-sonnet-4-5',
         'claude-sonnet-4-5-20250929',
         'claude-sonnet-4-20250514',
