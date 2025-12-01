@@ -219,6 +219,7 @@ export class AntigravityApiService {
         this.oauthCredsFilePath = config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH;
         this.baseURL = ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
+        this.projectId = config.PROJECT_ID;
         
         // 多环境降级顺序
         this.baseURLs = this.baseURL ? [this.baseURL] : [

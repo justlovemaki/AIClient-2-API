@@ -305,12 +305,12 @@ export class ProviderPoolManager {
                         if (!providerStatus.config.isHealthy) {
                             // Provider was unhealthy but is now healthy
                             // 恢复健康时不重置使用计数，保持原有值
-                            this.markProviderHealthy(providerType, providerConfig);
+                            this.markProviderHealthy(providerType, providerConfig, true);
                             this._log('info', `Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
                         } else {
                             // Provider was already healthy and still is
                             // 只在初始化时重置使用计数
-                            this.markProviderHealthy(providerType, providerConfig);
+                            this.markProviderHealthy(providerType, providerConfig, true);
                             this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
                         }
                     } else {
