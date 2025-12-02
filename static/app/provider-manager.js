@@ -360,6 +360,21 @@ async function handleGenerateAuthUrl(providerType) {
 }
 
 /**
+ * 获取提供商的授权文件路径
+ * @param {string} provider - 提供商类型
+ * @returns {string} 授权文件路径
+ */
+function getAuthFilePath(provider) {
+    const authFilePaths = {
+        'gemini-cli-oauth': '~/.gemini/oauth_creds.json',
+        'gemini-antigravity': '~/.antigravity/oauth_creds.json',
+        'openai-qwen-oauth': '~/.qwen/oauth_creds.json',
+        'claude-kiro-oauth': '~/.aws/sso/cache/kiro-auth-token.json'
+    };
+    return authFilePaths[provider] || '未知路径';
+}
+
+/**
  * 显示授权信息模态框
  * @param {string} authUrl - 授权URL
  * @param {Object} authInfo - 授权信息
@@ -368,6 +383,9 @@ function showAuthModal(authUrl, authInfo) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.style.display = 'flex';
+    
+    // 获取授权文件路径
+    const authFilePath = getAuthFilePath(authInfo.provider);
     
     let instructionsHtml = '';
     if (authInfo.provider === 'openai-qwen-oauth') {
@@ -381,6 +399,11 @@ function showAuthModal(authUrl, authInfo) {
                     <li>授权有效期: ${Math.floor(authInfo.expiresIn / 60)} 分钟</li>
                 </ol>
                 <p class="auth-note">${authInfo.instructions}</p>
+                <div class="auth-file-path" style="margin-top: 15px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; border-left: 4px solid var(--primary-color);">
+                    <strong style="color: var(--text-primary);"><i class="fas fa-folder-open" style="margin-right: 5px; color: var(--primary-color);"></i>授权文件路径：</strong>
+                    <code style="display: block; margin-top: 5px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-all; font-family: 'Courier New', monospace; color: var(--text-primary);">${authFilePath}</code>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">注：<code style="background: var(--bg-tertiary); padding: 0.125rem 0.25rem; border-radius: 0.25rem;">~</code> 表示用户主目录（Windows: C:\\Users\\用户名，Linux/macOS: /home/用户名 或 /Users/用户名）</small>
+                </div>
             </div>
         `;
     } else {
@@ -402,6 +425,11 @@ function showAuthModal(authUrl, authInfo) {
                     <li>授权完成后，凭据文件会自动保存</li>
                 </ol>
                 <p class="auth-note">${authInfo.instructions}</p>
+                <div class="auth-file-path" style="margin-top: 15px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; border-left: 4px solid var(--primary-color);">
+                    <strong style="color: var(--text-primary);"><i class="fas fa-folder-open" style="margin-right: 5px; color: var(--primary-color);"></i>授权文件路径：</strong>
+                    <code style="display: block; margin-top: 5px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-all; font-family: 'Courier New', monospace; color: var(--text-primary);">${authFilePath}</code>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">注：<code style="background: var(--bg-tertiary); padding: 0.125rem 0.25rem; border-radius: 0.25rem;">~</code> 表示用户主目录（Windows: C:\\Users\\用户名，Linux/macOS: /home/用户名 或 /Users/用户名）</small>
+                </div>
             </div>
         `;
     }
