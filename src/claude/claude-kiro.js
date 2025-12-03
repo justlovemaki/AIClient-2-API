@@ -1028,14 +1028,49 @@ async initializeAuth(forceRefresh = false) {
         
         while (true) {
             // 查找 JSON 对象的起始位置
-            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...}
+            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx","input":{...},...}
             const jsonStart = remaining.indexOf('{', searchStart);
             if (jsonStart < 0) break;
             
-            // 查找对应的 } 结束位置（简单匹配，不处理嵌套）
-            const jsonEnd = remaining.indexOf('}', jsonStart);
+            // 正确处理嵌套的 {} - 使用括号计数法
+            let braceCount = 0;
+            let jsonEnd = -1;
+            let inString = false;
+            let escapeNext = false;
+            
+            for (let i = jsonStart; i < remaining.length; i++) {
+                const char = remaining[i];
+                
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                
+                if (!inString) {
+                    if (char === '{') {
+                        braceCount++;
+                    } else if (char === '}') {
+                        braceCount--;
+                        if (braceCount === 0) {
+                            jsonEnd = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            
             if (jsonEnd < 0) {
-                // 不完整的 JSON，保留在缓冲区
+                // 不完整的 JSON，保留在缓冲区等待更多数据
                 remaining = remaining.substring(jsonStart);
                 break;
             }
@@ -1063,7 +1098,8 @@ async initializeAuth(forceRefresh = false) {
                     });
                 }
             } catch (e) {
-                // JSON 解析失败，可能是不完整的，继续搜索
+                // JSON 解析失败，跳过这个位置继续搜索
+                console.debug('[Kiro] JSON parse failed for:', jsonStr.substring(0, 100));
             }
             
             searchStart = jsonEnd + 1;
