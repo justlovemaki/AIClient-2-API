@@ -286,13 +286,13 @@ export class KiroApiService {
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
             keepAlive: true,
-            maxSockets: 10,        // 每个主机最多 10 个连接
+            maxSockets: 200,        // 每个主机最多 10 个连接
             maxFreeSockets: 5,     // 最多保留 5 个空闲连接
             timeout: 60000,        // 空闲连接 60 秒后关闭
         });
         const httpsAgent = new https.Agent({
             keepAlive: true,
-            maxSockets: 10,
+            maxSockets: 100,
             maxFreeSockets: 5,
             timeout: 60000,
         });
@@ -1329,7 +1329,7 @@ async initializeAuth(forceRefresh = false) {
             for await (const event of this.streamApiReal('', finalModel, requestBody)) {
                 if (event.type === 'content' && event.content) {
                     totalContent += event.content;
-                    outputTokens += this.countTextTokens(event.content);
+                    // 不再每个 chunk 都计算 token，改为最后统一计算，避免阻塞事件循环
                     
                     yield {
                         type: "content_block_delta",
@@ -1441,12 +1441,16 @@ async initializeAuth(forceRefresh = false) {
                     };
                     
                     yield { type: "content_block_stop", index: blockIndex };
-                    
-                    outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
                 }
             }
 
             // 6. 发送 message_delta 事件
+            // 在流结束后统一计算 output tokens，避免在流式循环中阻塞事件循环
+            outputTokens = this.countTextTokens(totalContent);
+            for (const tc of toolCalls) {
+                outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
+            }
+            
             yield {
                 type: "message_delta",
                 delta: { stop_reason: toolCalls.length > 0 ? "tool_use" : "end_turn" },
