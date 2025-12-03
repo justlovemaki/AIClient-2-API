@@ -637,7 +637,16 @@ async initializeAuth(forceRefresh = false) {
                     userInputMessage.images = images;
                 }
                 if (toolResults.length > 0) {
-                    userInputMessage.userInputMessageContext = { toolResults };
+                    // 去重 toolResults - Kiro API 不接受重复的 toolUseId
+                    const uniqueToolResults = [];
+                    const seenIds = new Set();
+                    for (const tr of toolResults) {
+                        if (!seenIds.has(tr.toolUseId)) {
+                            seenIds.add(tr.toolUseId);
+                            uniqueToolResults.push(tr);
+                        }
+                    }
+                    userInputMessage.userInputMessageContext = { toolResults: uniqueToolResults };
                 }
                 
                 history.push({ userInputMessage });
@@ -777,7 +786,16 @@ async initializeAuth(forceRefresh = false) {
         // 构建 userInputMessageContext，只包含非空字段
         const userInputMessageContext = {};
         if (currentToolResults.length > 0) {
-            userInputMessageContext.toolResults = currentToolResults;
+            // 去重 toolResults - Kiro API 不接受重复的 toolUseId
+            const uniqueToolResults = [];
+            const seenToolUseIds = new Set();
+            for (const tr of currentToolResults) {
+                if (!seenToolUseIds.has(tr.toolUseId)) {
+                    seenToolUseIds.add(tr.toolUseId);
+                    uniqueToolResults.push(tr);
+                }
+            }
+            userInputMessageContext.toolResults = uniqueToolResults;
         }
         if (Object.keys(toolsContext).length > 0 && toolsContext.tools) {
             userInputMessageContext.tools = toolsContext.tools;
