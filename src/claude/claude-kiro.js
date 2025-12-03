@@ -1098,7 +1098,6 @@ async initializeAuth(forceRefresh = false) {
 
             const stream = response.data;
             let buffer = '';
-            const processedPositions = new Set();  // 避免重复处理
 
             for await (const chunk of stream) {
                 buffer += chunk.toString();
@@ -1107,16 +1106,12 @@ async initializeAuth(forceRefresh = false) {
                 const { events, remaining } = this.parseAwsEventStreamBuffer(buffer);
                 buffer = remaining;
                 
-                // 只 yield 新的事件
+                // yield 所有事件（不再去重，因为重复内容是有效的）
                 for (const event of events) {
-                    const eventKey = `${event.type}:${event.data}`;
-                    if (!processedPositions.has(eventKey)) {
-                        processedPositions.add(eventKey);
-                        if (event.type === 'content' && event.data) {
-                            yield { type: 'content', content: event.data };
-                        } else if (event.type === 'toolUse') {
-                            yield { type: 'toolUse', toolUse: event.data };
-                        }
+                    if (event.type === 'content' && event.data) {
+                        yield { type: 'content', content: event.data };
+                    } else if (event.type === 'toolUse') {
+                        yield { type: 'toolUse', toolUse: event.data };
                     }
                 }
             }
