@@ -1309,24 +1309,31 @@ async initializeAuth(forceRefresh = false) {
                     };
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
-                    // 工具调用开始事件（包含 name 和 toolUseId）
+                    // 工具调用事件（包含 name 和 toolUseId）
                     if (tc.name && tc.toolUseId) {
-                        // 如果有未完成的工具调用，先保存它
-                        if (currentToolCall) {
-                            try {
-                                currentToolCall.input = JSON.parse(currentToolCall.input);
-                            } catch (e) {
-                                // input 不是有效 JSON，保持原样
+                        // 检查是否是同一个工具调用的续传（相同 toolUseId）
+                        if (currentToolCall && currentToolCall.toolUseId === tc.toolUseId) {
+                            // 同一个工具调用，累积 input
+                            currentToolCall.input += tc.input || '';
+                        } else {
+                            // 不同的工具调用
+                            // 如果有未完成的工具调用，先保存它
+                            if (currentToolCall) {
+                                try {
+                                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                                } catch (e) {
+                                    // input 不是有效 JSON，保持原样
+                                }
+                                toolCalls.push(currentToolCall);
                             }
-                            toolCalls.push(currentToolCall);
+                            // 开始新的工具调用
+                            currentToolCall = {
+                                toolUseId: tc.toolUseId,
+                                name: tc.name,
+                                input: tc.input || ''
+                            };
                         }
-                        // 开始新的工具调用
-                        currentToolCall = {
-                            toolUseId: tc.toolUseId,
-                            name: tc.name,
-                            input: tc.input || ''
-                        };
-                        // 如果这个事件同时包含 stop，直接完成
+                        // 如果这个事件包含 stop，完成工具调用
                         if (tc.stop) {
                             try {
                                 currentToolCall.input = JSON.parse(currentToolCall.input);
