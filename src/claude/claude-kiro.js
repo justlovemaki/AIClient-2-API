@@ -752,10 +752,14 @@ async initializeAuth(forceRefresh = false) {
             conversationState: {
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
-                currentMessage: {}, // Will be populated as userInputMessage
-                history: history
+                currentMessage: {} // Will be populated as userInputMessage
             }
         };
+        
+        // 只有当 history 非空时才添加（API 可能不接受空数组）
+        if (history.length > 0) {
+            request.conversationState.history = history;
+        }
 
         // currentMessage 始终是 userInputMessage 类型
         // 注意：API 不接受 null 值，空字段应该完全不包含
