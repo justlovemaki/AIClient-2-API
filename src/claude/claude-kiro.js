@@ -659,71 +659,100 @@ async initializeAuth(forceRefresh = false) {
         }
 
         // Build current message
-        const currentMessage = processedMessages[processedMessages.length - 1];
+        let currentMessage = processedMessages[processedMessages.length - 1];
         let currentContent = '';
         let currentToolResults = [];
         let currentToolUses = [];
         let currentImages = [];
 
-        if (Array.isArray(currentMessage.content)) {
-            for (const part of currentMessage.content) {
-                if (part.type === 'text') {
-                    currentContent += part.text;
-                } else if (part.type === 'tool_result') {
-                    currentToolResults.push({
-                        content: [{ text: this.getContentText(part.content) }],
-                        status: 'success',
-                        toolUseId: part.tool_use_id
-                    });
-                } else if (part.type === 'tool_use') {
-                    currentToolUses.push({
-                        input: part.input,
-                        name: part.name,
-                        toolUseId: part.id
-                    });
-                } else if (part.type === 'image') {
-                    currentImages.push({
-                        format: part.source.media_type.split('/')[1],
-                        source: {
-                            bytes: part.source.data
-                        }
-                    });
+        // 如果最后一条消息是 assistant，需要将其加入 history，然后创建一个 user 类型的 currentMessage
+        // 因为 CodeWhisperer API 的 currentMessage 必须是 userInputMessage 类型
+        if (currentMessage.role === 'assistant') {
+            console.log('[Kiro] Last message is assistant, moving it to history and creating user currentMessage');
+            
+            // 构建 assistant 消息并加入 history
+            let assistantResponseMessage = {
+                content: '',
+                toolUses: []
+            };
+            if (Array.isArray(currentMessage.content)) {
+                for (const part of currentMessage.content) {
+                    if (part.type === 'text') {
+                        assistantResponseMessage.content += part.text;
+                    } else if (part.type === 'tool_use') {
+                        assistantResponseMessage.toolUses.push({
+                            input: part.input,
+                            name: part.name,
+                            toolUseId: part.id
+                        });
+                    }
                 }
+            } else {
+                assistantResponseMessage.content = this.getContentText(currentMessage);
             }
-        } else {
-            currentContent = this.getContentText(currentMessage);
-        }
-
-        if (!currentContent && currentToolResults.length === 0 && currentToolUses.length === 0) {
+            if (assistantResponseMessage.toolUses.length === 0) {
+                delete assistantResponseMessage.toolUses;
+            }
+            history.push({ assistantResponseMessage });
+            
+            // 设置 currentContent 为 "Continue"，因为我们需要一个 user 消息来触发 AI 继续
             currentContent = 'Continue';
+        } else {
+            // 处理 user 消息
+            if (Array.isArray(currentMessage.content)) {
+                for (const part of currentMessage.content) {
+                    if (part.type === 'text') {
+                        currentContent += part.text;
+                    } else if (part.type === 'tool_result') {
+                        currentToolResults.push({
+                            content: [{ text: this.getContentText(part.content) }],
+                            status: 'success',
+                            toolUseId: part.tool_use_id
+                        });
+                    } else if (part.type === 'tool_use') {
+                        currentToolUses.push({
+                            input: part.input,
+                            name: part.name,
+                            toolUseId: part.id
+                        });
+                    } else if (part.type === 'image') {
+                        currentImages.push({
+                            format: part.source.media_type.split('/')[1],
+                            source: {
+                                bytes: part.source.data
+                            }
+                        });
+                    }
+                }
+            } else {
+                currentContent = this.getContentText(currentMessage);
+            }
+
+            if (!currentContent && currentToolResults.length === 0 && currentToolUses.length === 0) {
+                currentContent = 'Continue';
+            }
         }
 
         const request = {
             conversationState: {
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
-                currentMessage: {}, // Will be populated based on the last message's role
+                currentMessage: {}, // Will be populated as userInputMessage
                 history: history
             }
         };
 
-        if (currentMessage.role === 'user') {
-            request.conversationState.currentMessage.userInputMessage = {
-                content: currentContent,
-                modelId: codewhispererModel,
-                origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
-                images: currentImages && currentImages.length > 0 ? currentImages : null, // Add images here
-                userInputMessageContext: {
-                    toolResults: currentToolResults.length > 0 ? currentToolResults : null,
-                    tools: Object.keys(toolsContext).length > 0 ? toolsContext.tools : null
-                }
-            };
-        } else if (currentMessage.role === 'assistant') {
-            request.conversationState.currentMessage.assistantResponseMessage = {
-                content: currentContent,
-                toolUses: currentToolUses.length > 0 ? currentToolUses : undefined
-            };
-        }
+        // currentMessage 始终是 userInputMessage 类型
+        request.conversationState.currentMessage.userInputMessage = {
+            content: currentContent,
+            modelId: codewhispererModel,
+            origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
+            images: currentImages && currentImages.length > 0 ? currentImages : null,
+            userInputMessageContext: {
+                toolResults: currentToolResults.length > 0 ? currentToolResults : null,
+                tools: Object.keys(toolsContext).length > 0 ? toolsContext.tools : null
+            }
+        };
 
         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
             request.profileArn = this.profileArn;
