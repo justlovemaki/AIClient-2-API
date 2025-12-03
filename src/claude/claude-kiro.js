@@ -1032,12 +1032,18 @@ async initializeAuth(forceRefresh = false) {
             // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...} 或 {"followupPrompt":"..."}
             
             // 搜索所有可能的 JSON payload 开头模式
+            // Kiro 返回的 toolUse 可能分多个事件：
+            // 1. {"name":"xxx","toolUseId":"xxx"} - 开始
+            // 2. {"input":"..."} - input 数据（可能多次）
+            // 3. {"stop":true} - 结束
             const contentStart = remaining.indexOf('{"content":', searchStart);
             const nameStart = remaining.indexOf('{"name":', searchStart);
             const followupStart = remaining.indexOf('{"followupPrompt":', searchStart);
+            const inputStart = remaining.indexOf('{"input":', searchStart);
+            const stopStart = remaining.indexOf('{"stop":', searchStart);
             
             // 找到最早出现的有效 JSON 模式
-            const candidates = [contentStart, nameStart, followupStart].filter(pos => pos >= 0);
+            const candidates = [contentStart, nameStart, followupStart, inputStart, stopStart].filter(pos => pos >= 0);
             if (candidates.length === 0) break;
             
             const jsonStart = Math.min(...candidates);
@@ -1096,7 +1102,7 @@ async initializeAuth(forceRefresh = false) {
                     decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
                     events.push({ type: 'content', data: decodedContent });
                 }
-                // 处理结构化工具调用事件
+                // 处理结构化工具调用事件 - 开始事件（包含 name 和 toolUseId）
                 else if (parsed.name && parsed.toolUseId) {
                     events.push({ 
                         type: 'toolUse', 
@@ -1105,6 +1111,24 @@ async initializeAuth(forceRefresh = false) {
                             toolUseId: parsed.toolUseId,
                             input: parsed.input || '',
                             stop: parsed.stop || false
+                        }
+                    });
+                }
+                // 处理工具调用的 input 续传事件（只有 input 字段）
+                else if (parsed.input !== undefined && !parsed.name) {
+                    events.push({
+                        type: 'toolUseInput',
+                        data: {
+                            input: parsed.input
+                        }
+                    });
+                }
+                // 处理工具调用的结束事件（只有 stop 字段）
+                else if (parsed.stop !== undefined) {
+                    events.push({
+                        type: 'toolUseStop',
+                        data: {
+                            stop: parsed.stop
                         }
                     });
                 }
@@ -1174,6 +1198,10 @@ async initializeAuth(forceRefresh = false) {
                         yield { type: 'content', content: event.data };
                     } else if (event.type === 'toolUse') {
                         yield { type: 'toolUse', toolUse: event.data };
+                    } else if (event.type === 'toolUseInput') {
+                        yield { type: 'toolUseInput', input: event.data.input };
+                    } else if (event.type === 'toolUseStop') {
+                        yield { type: 'toolUseStop', stop: event.data.stop };
                     }
                 }
             }
@@ -1263,32 +1291,58 @@ async initializeAuth(forceRefresh = false) {
                     };
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
-                    // 结构化工具调用是逐步构建的
+                    // 工具调用开始事件（包含 name 和 toolUseId）
                     if (tc.name && tc.toolUseId) {
-                        if (!currentToolCall || currentToolCall.toolUseId !== tc.toolUseId) {
-                            // 新的工具调用
-                            currentToolCall = {
-                                toolUseId: tc.toolUseId,
-                                name: tc.name,
-                                input: tc.input || ''
-                            };
-                        } else {
-                            // 累积 input
-                            currentToolCall.input += tc.input || '';
-                        }
-                        
-                        // 如果是最后一个事件，完成工具调用
-                        if (tc.stop) {
+                        // 如果有未完成的工具调用，先保存它
+                        if (currentToolCall) {
                             try {
                                 currentToolCall.input = JSON.parse(currentToolCall.input);
                             } catch (e) {
                                 // input 不是有效 JSON，保持原样
                             }
                             toolCalls.push(currentToolCall);
+                        }
+                        // 开始新的工具调用
+                        currentToolCall = {
+                            toolUseId: tc.toolUseId,
+                            name: tc.name,
+                            input: tc.input || ''
+                        };
+                        // 如果这个事件同时包含 stop，直接完成
+                        if (tc.stop) {
+                            try {
+                                currentToolCall.input = JSON.parse(currentToolCall.input);
+                            } catch (e) {}
+                            toolCalls.push(currentToolCall);
                             currentToolCall = null;
                         }
                     }
+                } else if (event.type === 'toolUseInput') {
+                    // 工具调用的 input 续传事件
+                    if (currentToolCall) {
+                        currentToolCall.input += event.input || '';
+                    }
+                } else if (event.type === 'toolUseStop') {
+                    // 工具调用结束事件
+                    if (currentToolCall && event.stop) {
+                        try {
+                            currentToolCall.input = JSON.parse(currentToolCall.input);
+                        } catch (e) {
+                            // input 不是有效 JSON，保持原样
+                        }
+                        toolCalls.push(currentToolCall);
+                        currentToolCall = null;
+                    }
                 }
+            }
+            
+            // 处理未完成的工具调用（如果流提前结束）
+            if (currentToolCall) {
+                try {
+                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                } catch (e) {}
+                toolCalls.push(currentToolCall);
+                currentToolCall = null;
             }
             
             // 检查文本内容中的 bracket 格式工具调用
