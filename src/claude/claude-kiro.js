@@ -742,8 +742,9 @@ async initializeAuth(forceRefresh = false) {
                 currentContent = this.getContentText(currentMessage);
             }
 
-            if (!currentContent && currentToolResults.length === 0 && currentToolUses.length === 0) {
-                currentContent = 'Continue';
+            // Kiro API 要求 content 不能为空，即使有 toolResults
+            if (!currentContent) {
+                currentContent = currentToolResults.length > 0 ? 'Tool results provided.' : 'Continue';
             }
         }
 
