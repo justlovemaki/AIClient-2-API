@@ -1022,22 +1022,12 @@ async initializeAuth(forceRefresh = false) {
         let searchStart = 0;
         
         while (true) {
-            // 查找 {"content": 或 {"toolUse" 的起始位置
-            const contentStart = remaining.indexOf('{"content":', searchStart);
-            const toolUseStart = remaining.indexOf('{"toolUse":', searchStart);
-            
-            let jsonStart = -1;
-            if (contentStart >= 0 && toolUseStart >= 0) {
-                jsonStart = Math.min(contentStart, toolUseStart);
-            } else if (contentStart >= 0) {
-                jsonStart = contentStart;
-            } else if (toolUseStart >= 0) {
-                jsonStart = toolUseStart;
-            }
-            
+            // 查找 JSON 对象的起始位置
+            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...}
+            const jsonStart = remaining.indexOf('{', searchStart);
             if (jsonStart < 0) break;
             
-            // 查找对应的 } 结束位置
+            // 查找对应的 } 结束位置（简单匹配，不处理嵌套）
             const jsonEnd = remaining.indexOf('}', jsonStart);
             if (jsonEnd < 0) {
                 // 不完整的 JSON，保留在缓冲区
@@ -1048,10 +1038,24 @@ async initializeAuth(forceRefresh = false) {
             const jsonStr = remaining.substring(jsonStart, jsonEnd + 1);
             try {
                 const parsed = JSON.parse(jsonStr);
-                if (parsed.content !== undefined) {
-                    events.push({ type: 'content', data: parsed.content });
-                } else if (parsed.toolUse !== undefined) {
-                    events.push({ type: 'toolUse', data: parsed.toolUse });
+                // 处理 content 事件
+                if (parsed.content !== undefined && !parsed.followupPrompt) {
+                    // 处理转义字符
+                    let decodedContent = parsed.content;
+                    decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
+                    events.push({ type: 'content', data: decodedContent });
+                }
+                // 处理结构化工具调用事件
+                else if (parsed.name && parsed.toolUseId) {
+                    events.push({ 
+                        type: 'toolUse', 
+                        data: {
+                            name: parsed.name,
+                            toolUseId: parsed.toolUseId,
+                            input: parsed.input || '',
+                            stop: parsed.stop || false
+                        }
+                    });
                 }
             } catch (e) {
                 // JSON 解析失败，可能是不完整的，继续搜索
@@ -1186,6 +1190,7 @@ async initializeAuth(forceRefresh = false) {
             let totalContent = '';
             let outputTokens = 0;
             const toolCalls = [];
+            let currentToolCall = null;  // 用于累积结构化工具调用
 
             // 3. 流式接收并发送每个 content_block_delta
             for await (const event of this.streamApiReal('', finalModel, requestBody)) {
@@ -1199,7 +1204,44 @@ async initializeAuth(forceRefresh = false) {
                         delta: { type: "text_delta", text: event.content }
                     };
                 } else if (event.type === 'toolUse') {
-                    toolCalls.push(event.toolUse);
+                    const tc = event.toolUse;
+                    // 结构化工具调用是逐步构建的
+                    if (tc.name && tc.toolUseId) {
+                        if (!currentToolCall || currentToolCall.toolUseId !== tc.toolUseId) {
+                            // 新的工具调用
+                            currentToolCall = {
+                                toolUseId: tc.toolUseId,
+                                name: tc.name,
+                                input: tc.input || ''
+                            };
+                        } else {
+                            // 累积 input
+                            currentToolCall.input += tc.input || '';
+                        }
+                        
+                        // 如果是最后一个事件，完成工具调用
+                        if (tc.stop) {
+                            try {
+                                currentToolCall.input = JSON.parse(currentToolCall.input);
+                            } catch (e) {
+                                // input 不是有效 JSON，保持原样
+                            }
+                            toolCalls.push(currentToolCall);
+                            currentToolCall = null;
+                        }
+                    }
+                }
+            }
+            
+            // 检查文本内容中的 bracket 格式工具调用
+            const bracketToolCalls = parseBracketToolCalls(totalContent);
+            if (bracketToolCalls && bracketToolCalls.length > 0) {
+                for (const btc of bracketToolCalls) {
+                    toolCalls.push({
+                        toolUseId: btc.id || `tool_${uuidv4()}`,
+                        name: btc.function.name,
+                        input: JSON.parse(btc.function.arguments || '{}')
+                    });
                 }
             }
 
@@ -1228,11 +1270,13 @@ async initializeAuth(forceRefresh = false) {
                         index: blockIndex,
                         delta: {
                             type: "input_json_delta",
-                            partial_json: JSON.stringify(tc.input || {})
+                            partial_json: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input || {})
                         }
                     };
                     
                     yield { type: "content_block_stop", index: blockIndex };
+                    
+                    outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
                 }
             }
 
