@@ -4,6 +4,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as http from 'http';
+import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
 
@@ -281,8 +283,24 @@ export class KiroApiService {
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
         const macSha256 = await getMacAddressSha256();
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 10,        // 每个主机最多 10 个连接
+            maxFreeSockets: 5,     // 最多保留 5 个空闲连接
+            timeout: 60000,        // 空闲连接 60 秒后关闭
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 10,
+            maxFreeSockets: 5,
+            timeout: 60000,
+        });
+        
         const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'x-amz-user-agent': `aws-sdk-js/1.0.7 KiroIDE-0.1.25-${macSha256}`,
@@ -1187,13 +1205,14 @@ async initializeAuth(forceRefresh = false) {
 
         const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
 
+        let stream = null;
         try {
             const response = await this.axiosInstance.post(requestUrl, requestData, { 
                 headers,
                 responseType: 'stream'
             });
 
-            const stream = response.data;
+            stream = response.data;
             let buffer = '';
             let lastContentEvent = null;  // 用于检测连续重复的 content 事件
 
@@ -1224,6 +1243,11 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
         } catch (error) {
+            // 确保出错时关闭流
+            if (stream && typeof stream.destroy === 'function') {
+                stream.destroy();
+            }
+            
             if (error.response?.status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403 in stream. Attempting token refresh and retrying...');
                 await this.initializeAuth(true);
@@ -1241,6 +1265,11 @@ async initializeAuth(forceRefresh = false) {
 
             console.error('[Kiro] Stream API call failed:', error.message);
             throw error;
+        } finally {
+            // 确保流被关闭，释放资源
+            if (stream && typeof stream.destroy === 'function') {
+                stream.destroy();
+            }
         }
     }
 
