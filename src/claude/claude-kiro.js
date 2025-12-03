@@ -1027,9 +1027,20 @@ async initializeAuth(forceRefresh = false) {
         let searchStart = 0;
         
         while (true) {
-            // 查找 JSON 对象的起始位置
-            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx","input":{...},...}
-            const jsonStart = remaining.indexOf('{', searchStart);
+            // 查找真正的 JSON payload 起始位置
+            // AWS Event Stream 包含二进制头部，我们只搜索有效的 JSON 模式
+            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...} 或 {"followupPrompt":"..."}
+            
+            // 搜索所有可能的 JSON payload 开头模式
+            const contentStart = remaining.indexOf('{"content":', searchStart);
+            const nameStart = remaining.indexOf('{"name":', searchStart);
+            const followupStart = remaining.indexOf('{"followupPrompt":', searchStart);
+            
+            // 找到最早出现的有效 JSON 模式
+            const candidates = [contentStart, nameStart, followupStart].filter(pos => pos >= 0);
+            if (candidates.length === 0) break;
+            
+            const jsonStart = Math.min(...candidates);
             if (jsonStart < 0) break;
             
             // 正确处理嵌套的 {} - 使用括号计数法
@@ -1099,7 +1110,6 @@ async initializeAuth(forceRefresh = false) {
                 }
             } catch (e) {
                 // JSON 解析失败，跳过这个位置继续搜索
-                console.debug('[Kiro] JSON parse failed for:', jsonStr.substring(0, 100));
             }
             
             searchStart = jsonEnd + 1;
