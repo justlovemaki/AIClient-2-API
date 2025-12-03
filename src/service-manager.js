@@ -57,10 +57,27 @@ export async function initApiService(config) {
 }
 
 /**
+ * Custom error class for no available provider in pool
+ */
+export class NoAvailableProviderError extends Error {
+    constructor(providerType, requestedModel = null) {
+        const message = requestedModel 
+            ? `号池无可用账号: ${providerType} (model: ${requestedModel})`
+            : `号池无可用账号: ${providerType}`;
+        super(message);
+        this.name = 'NoAvailableProviderError';
+        this.providerType = providerType;
+        this.requestedModel = requestedModel;
+        this.statusCode = 400;
+    }
+}
+
+/**
  * Get API service adapter, considering provider pools
  * @param {Object} config - The current request configuration
  * @param {string} [requestedModel] - Optional. The model name to filter providers by.
  * @returns {Promise<Object>} The API service adapter
+ * @throws {NoAvailableProviderError} If no healthy provider is available in the pool
  */
 export async function getApiService(config, requestedModel = null) {
     let serviceConfig = config;
@@ -74,7 +91,9 @@ export async function getApiService(config, requestedModel = null) {
             config.uuid = serviceConfig.uuid;
             console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
-            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
+            // 号池没有可用账号，抛出错误
+            console.error(`[API Service] 号池无可用账号: ${config.MODEL_PROVIDER}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
+            throw new NoAvailableProviderError(config.MODEL_PROVIDER, requestedModel);
         }
     }
     return getServiceAdapter(serviceConfig);

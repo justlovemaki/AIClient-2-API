@@ -402,9 +402,24 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     // 2.5. 如果使用了提供商池，根据模型重新选择提供商
     if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
-        const { getApiService } = await import('./service-manager.js');
-        service = await getApiService(CONFIG, model);
-        console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+        const { getApiService, NoAvailableProviderError } = await import('./service-manager.js');
+        try {
+            service = await getApiService(CONFIG, model);
+            console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+        } catch (error) {
+            if (error instanceof NoAvailableProviderError) {
+                // 号池无可用账号，返回 400 错误
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        type: 'no_available_provider',
+                        message: error.message
+                    }
+                }));
+                return;
+            }
+            throw error;
+        }
     }
 
     // 3. Apply system prompt from file if configured.
