@@ -57,10 +57,30 @@ export async function initApiService(config) {
 }
 
 /**
+ * Custom error class for no available provider in pool
+ */
+export class NoAvailableProviderError extends Error {
+    constructor(providerType, requestedModel = null) {
+        const message = requestedModel 
+            ? `号池无可用账号: ${providerType} (model: ${requestedModel})`
+            : `号池无可用账号: ${providerType}`;
+        super(message);
+        this.name = 'NoAvailableProviderError';
+        this.providerType = providerType;
+        this.requestedModel = requestedModel;
+        this.statusCode = 400;
+    }
+}
+
+// Provider types that should throw error when no available provider (instead of falling back to main config)
+const STRICT_POOL_PROVIDERS = ['claude-kiro-oauth'];
+
+/**
  * Get API service adapter, considering provider pools
  * @param {Object} config - The current request configuration
  * @param {string} [requestedModel] - Optional. The model name to filter providers by.
  * @returns {Promise<Object>} The API service adapter
+ * @throws {NoAvailableProviderError} If no healthy provider is available in the pool (only for strict pool providers)
  */
 export async function getApiService(config, requestedModel = null) {
     let serviceConfig = config;
@@ -74,7 +94,14 @@ export async function getApiService(config, requestedModel = null) {
             config.uuid = serviceConfig.uuid;
             console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
-            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
+            // 号池没有可用账号
+            // 只有 Kiro 类型的 provider 抛出错误，其他 provider 回退到主配置
+            if (STRICT_POOL_PROVIDERS.includes(config.MODEL_PROVIDER)) {
+                console.error(`[API Service] 号池无可用账号: ${config.MODEL_PROVIDER}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
+                throw new NoAvailableProviderError(config.MODEL_PROVIDER, requestedModel);
+            } else {
+                console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
+            }
         }
     }
     return getServiceAdapter(serviceConfig);
