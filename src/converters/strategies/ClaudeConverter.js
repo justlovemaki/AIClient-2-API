@@ -355,6 +355,10 @@ export class ClaudeConverter extends BaseConverter {
                 prompt_tokens: claudeResponse.usage?.input_tokens || 0,
                 completion_tokens: claudeResponse.usage?.output_tokens || 0,
                 total_tokens: (claudeResponse.usage?.input_tokens || 0) + (claudeResponse.usage?.output_tokens || 0),
+                cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0
+                }
             },
         };
     }
@@ -388,7 +392,8 @@ export class ClaudeConverter extends BaseConverter {
                 usage: {
                     prompt_tokens: claudeChunk.message?.usage?.input_tokens || 0,
                     completion_tokens: 0,
-                    total_tokens: claudeChunk.message?.usage?.input_tokens || 0
+                    total_tokens: claudeChunk.message?.usage?.input_tokens || 0,
+                    cached_tokens: claudeChunk.message?.usage?.cache_read_input_tokens || 0
                 }
             };
         }
@@ -542,7 +547,11 @@ export class ClaudeConverter extends BaseConverter {
                 usage: claudeChunk.usage ? {
                     prompt_tokens: claudeChunk.usage.input_tokens || 0,
                     completion_tokens: claudeChunk.usage.output_tokens || 0,
-                    total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
+                    total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0),
+                    cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0,
+                    prompt_tokens_details: {
+                        cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
+                    }
                 } : undefined
             };
         }
@@ -887,7 +896,16 @@ export class ClaudeConverter extends BaseConverter {
             usageMetadata: claudeResponse.usage ? {
                 promptTokenCount: claudeResponse.usage.input_tokens || 0,
                 candidatesTokenCount: claudeResponse.usage.output_tokens || 0,
-                totalTokenCount: (claudeResponse.usage.input_tokens || 0) + (claudeResponse.usage.output_tokens || 0)
+                totalTokenCount: (claudeResponse.usage.input_tokens || 0) + (claudeResponse.usage.output_tokens || 0),
+                cachedContentTokenCount: claudeResponse.usage.cache_read_input_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: claudeResponse.usage.input_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: claudeResponse.usage.output_tokens || 0
+                }]
             } : {}
         };
     }
@@ -936,13 +954,33 @@ export class ClaudeConverter extends BaseConverter {
             // message_delta 事件 - 流结束
             if (claudeChunk.type === 'message_delta') {
                 const stopReason = claudeChunk.delta?.stop_reason;
-                return {
+                const result = {
                     candidates: [{
                         finishReason: stopReason === 'end_turn' ? 'STOP' :
                                     stopReason === 'max_tokens' ? 'MAX_TOKENS' :
                                     'OTHER'
                     }]
                 };
+                
+                // 添加 usage 信息
+                if (claudeChunk.usage) {
+                    result.usageMetadata = {
+                        promptTokenCount: claudeChunk.usage.input_tokens || 0,
+                        candidatesTokenCount: claudeChunk.usage.output_tokens || 0,
+                        totalTokenCount: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0),
+                        cachedContentTokenCount: claudeChunk.usage.cache_read_input_tokens || 0,
+                        promptTokensDetails: [{
+                            modality: "TEXT",
+                            tokenCount: claudeChunk.usage.input_tokens || 0
+                        }],
+                        candidatesTokensDetails: [{
+                            modality: "TEXT",
+                            tokenCount: claudeChunk.usage.output_tokens || 0
+                        }]
+                    };
+                }
+                
+                return result;
             }
         }
 
@@ -1153,7 +1191,7 @@ export class ClaudeConverter extends BaseConverter {
             usage: {
                 input_tokens: claudeResponse.usage?.input_tokens || 0,
                 input_tokens_details: {
-                    cached_tokens: claudeResponse.usage?.cache_creation_input_tokens || 0,
+                    cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0
                 },
                 output_tokens: claudeResponse.usage?.output_tokens || 0,
                 output_tokens_details: {
@@ -1266,7 +1304,13 @@ export class ClaudeConverter extends BaseConverter {
                 if (lastEvent.response) {
                     lastEvent.response.usage = {
                         input_tokens: claudeChunk.usage.input_tokens || 0,
+                        input_tokens_details: {
+                            cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
+                        },
                         output_tokens: claudeChunk.usage.output_tokens || 0,
+                        output_tokens_details: {
+                            reasoning_tokens: 0
+                        },
                         total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
                     };
                 }

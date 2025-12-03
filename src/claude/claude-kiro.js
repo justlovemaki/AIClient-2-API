@@ -76,9 +76,18 @@ async function getMacAddressSha256() {
     return sha256Hash;
 }
 
-// Helper functions for tool calls
-function findMatchingBracket(text, startPos) {
-    if (!text || startPos >= text.length || text[startPos] !== '[') {
+// Helper functions for tool calls and JSON parsing
+
+/**
+ * 通用的括号匹配函数 - 支持多种括号类型
+ * @param {string} text - 要搜索的文本
+ * @param {number} startPos - 起始位置
+ * @param {string} openChar - 开括号字符 (默认 '[')
+ * @param {string} closeChar - 闭括号字符 (默认 ']')
+ * @returns {number} 匹配的闭括号位置，未找到返回 -1
+ */
+function findMatchingBracket(text, startPos, openChar = '[', closeChar = ']') {
+    if (!text || startPos >= text.length || text[startPos] !== openChar) {
         return -1;
     }
 
@@ -105,9 +114,9 @@ function findMatchingBracket(text, startPos) {
         }
 
         if (!inString) {
-            if (char === '[') {
+            if (char === openChar) {
                 bracketCount++;
-            } else if (char === ']') {
+            } else if (char === closeChar) {
                 bracketCount--;
                 if (bracketCount === 0) {
                     return i;
@@ -118,6 +127,28 @@ function findMatchingBracket(text, startPos) {
     return -1;
 }
 
+
+/**
+ * 尝试修复常见的 JSON 格式问题
+ * @param {string} jsonStr - 可能有问题的 JSON 字符串
+ * @returns {string} 修复后的 JSON 字符串
+ */
+function repairJson(jsonStr) {
+    let repaired = jsonStr;
+    // 移除尾部逗号
+    repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+    // 为未引用的键添加引号
+    repaired = repaired.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
+    // 确保字符串值被正确引用
+    repaired = repaired.replace(/:\s*([a-zA-Z0-9_]+)(?=[,\}\]])/g, ':"$1"');
+    return repaired;
+}
+
+/**
+ * 解析单个工具调用文本
+ * @param {string} toolCallText - 工具调用文本
+ * @returns {Object|null} 解析后的工具调用对象或 null
+ */
 function parseSingleToolCall(toolCallText) {
     const namePattern = /\[Called\s+(\w+)\s+with\s+args:/i;
     const nameMatch = toolCallText.match(namePattern);
@@ -144,16 +175,7 @@ function parseSingleToolCall(toolCallText) {
     const jsonCandidate = toolCallText.substring(argsStart, argsEnd).trim();
 
     try {
-        // Simple repair for common issues like trailing commas or unquoted keys
-        let repairedJson = jsonCandidate;
-        // Remove trailing comma before closing brace/bracket
-        repairedJson = repairedJson.replace(/,\s*([}\]])/g, '$1');
-        // Add quotes to unquoted keys (basic attempt)
-        repairedJson = repairedJson.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
-        // Ensure string values are properly quoted if they contain special characters and are not already quoted
-        repairedJson = repairedJson.replace(/:\s*([a-zA-Z0-9_]+)(?=[,\}\]])/g, ':"$1"');
-
-
+        const repairedJson = repairJson(jsonCandidate);
         const argumentsObj = JSON.parse(repairedJson);
 
         if (typeof argumentsObj !== 'object' || argumentsObj === null) {
@@ -934,6 +956,9 @@ async initializeAuth(forceRefresh = false) {
     }
  
 
+    /**
+     * 调用 API 并处理错误重试
+     */
     async callApi(method, model, body, isRetry = false, retryCount = 0) {
         if (!this.isInitialized) await this.initialize();
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
@@ -963,13 +988,13 @@ async initializeAuth(forceRefresh = false) {
                     throw refreshError;
                 }
             }
-
+            
             // Handle 429 (Too Many Requests) with exponential backoff
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -1135,7 +1160,8 @@ async initializeAuth(forceRefresh = false) {
                 if (parsed.content !== undefined && !parsed.followupPrompt) {
                     // 处理转义字符
                     let decodedContent = parsed.content;
-                    decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
+                    // 无须处理转义的换行符，原来要处理是因为智能体返回的 content 需要通过换行符切割不同的json
+                    // decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
                     events.push({ type: 'content', data: decodedContent });
                 }
                 // 处理结构化工具调用事件 - 开始事件（包含 name 和 toolUseId）
@@ -1258,8 +1284,8 @@ async initializeAuth(forceRefresh = false) {
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
                 return;
             }
 

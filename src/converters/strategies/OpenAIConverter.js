@@ -327,6 +327,8 @@ export class OpenAIConverter extends BaseConverter {
             stop_sequence: null,
             usage: {
                 input_tokens: openaiResponse.usage?.prompt_tokens || 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: openaiResponse.usage?.prompt_tokens_details?.cached_tokens || 0,
                 output_tokens: openaiResponse.usage?.completion_tokens || 0
             }
         };
@@ -458,8 +460,10 @@ export class OpenAIConverter extends BaseConverter {
                         stop_sequence: null
                     },
                     usage: {
-                        output_tokens: openaiChunk.usage?.completion_tokens || 0,
                         input_tokens: openaiChunk.usage?.prompt_tokens || 0,
+                        cache_creation_input_tokens: 0,
+                        cache_read_input_tokens: openaiChunk.usage?.prompt_tokens_details?.cached_tokens || 0,
+                        output_tokens: openaiChunk.usage?.completion_tokens || 0
                     }
                 });
 
@@ -778,7 +782,17 @@ export class OpenAIConverter extends BaseConverter {
             usageMetadata: openaiResponse.usage ? {
                 promptTokenCount: openaiResponse.usage.prompt_tokens || 0,
                 candidatesTokenCount: openaiResponse.usage.completion_tokens || 0,
-                totalTokenCount: openaiResponse.usage.total_tokens || 0
+                totalTokenCount: openaiResponse.usage.total_tokens || 0,
+                cachedContentTokenCount: openaiResponse.usage.prompt_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiResponse.usage.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiResponse.usage.completion_tokens || 0
+                }],
+                thoughtsTokenCount: openaiResponse.usage.completion_tokens_details?.reasoning_tokens || 0
             } : {}
         };
     }
@@ -850,7 +864,17 @@ export class OpenAIConverter extends BaseConverter {
             result.usageMetadata = {
                 promptTokenCount: openaiChunk.usage.prompt_tokens || 0,
                 candidatesTokenCount: openaiChunk.usage.completion_tokens || 0,
-                totalTokenCount: openaiChunk.usage.total_tokens || 0
+                totalTokenCount: openaiChunk.usage.total_tokens || 0,
+                cachedContentTokenCount: openaiChunk.usage.prompt_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiChunk.usage.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiChunk.usage.completion_tokens || 0
+                }],
+                thoughtsTokenCount: openaiChunk.usage.completion_tokens_details?.reasoning_tokens || 0
             };
         }
 
@@ -946,11 +970,23 @@ export class OpenAIConverter extends BaseConverter {
             output: output,
             usage: openaiResponse.usage ? {
                 input_tokens: openaiResponse.usage.prompt_tokens || 0,
+                input_tokens_details: {
+                    cached_tokens: openaiResponse.usage.prompt_tokens_details?.cached_tokens || 0
+                },
                 output_tokens: openaiResponse.usage.completion_tokens || 0,
+                output_tokens_details: {
+                    reasoning_tokens: openaiResponse.usage.completion_tokens_details?.reasoning_tokens || 0
+                },
                 total_tokens: openaiResponse.usage.total_tokens || 0
             } : {
                 input_tokens: 0,
+                input_tokens_details: {
+                    cached_tokens: 0
+                },
                 output_tokens: 0,
+                output_tokens_details: {
+                    reasoning_tokens: 0
+                },
                 total_tokens: 0
             }
         };
@@ -1051,7 +1087,13 @@ export class OpenAIConverter extends BaseConverter {
                 if (lastEvent.response) {
                     lastEvent.response.usage = {
                         input_tokens: openaiChunk.usage.prompt_tokens || 0,
+                        input_tokens_details: {
+                            cached_tokens: openaiChunk.usage.prompt_tokens_details?.cached_tokens || 0
+                        },
                         output_tokens: openaiChunk.usage.completion_tokens || 0,
+                        output_tokens_details: {
+                            reasoning_tokens: openaiChunk.usage.completion_tokens_details?.reasoning_tokens || 0
+                        },
                         total_tokens: openaiChunk.usage.total_tokens || 0
                     };
                 }

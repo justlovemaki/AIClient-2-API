@@ -243,12 +243,11 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             });
         }
 
-        if (!res.writableEnded) {
-            const errorPayload = { error: { message: "An error occurred during streaming.", details: error.message } };
-            res.end(JSON.stringify(errorPayload));
-            responseClosed = true;
-        }
-
+        // 使用新方法创建符合 fromProvider 格式的流式错误响应
+        const errorPayload = createStreamErrorResponse(error, fromProvider);
+        res.write(errorPayload);
+        res.end();
+        responseClosed = true;
     } finally {
         if (!responseClosed) {
             res.end();
@@ -258,6 +257,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         // fs.writeFile('responseChunk'+Date.now()+'.json', fullResponseJson);
     }
 }
+
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     try{
@@ -288,14 +288,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             });
         }
 
-        // 返回错误响应给客户端
-        const errorResponse = {
-            error: {
-                message: error.message || "An error occurred during processing.",
-                code: error.status || 500,
-                details: error.stack
-            }
-        };
+        // 使用新方法创建符合 fromProvider 格式的错误响应
+        const errorResponse = createErrorResponse(error, fromProvider);
         await handleUnifiedResponse(res, JSON.stringify(errorResponse), false);
     }
 }
@@ -402,24 +396,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     // 2.5. 如果使用了提供商池，根据模型重新选择提供商
     if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
-        const { getApiService, NoAvailableProviderError } = await import('./service-manager.js');
-        try {
-            service = await getApiService(CONFIG, model);
-            console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
-        } catch (error) {
-            if (error instanceof NoAvailableProviderError) {
-                // 号池无可用账号，返回 400 错误
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    error: {
-                        type: 'no_available_provider',
-                        message: error.message
-                    }
-                }));
-                return;
-            }
-            throw error;
-        }
+        const { getApiService } = await import('./service-manager.js');
+        service = await getApiService(CONFIG, model);
+        console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
     }
 
     // 3. Apply system prompt from file if configured.
@@ -618,4 +597,183 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
 export function getMD5Hash(obj) {
     const jsonString = JSON.stringify(obj);
     return crypto.createHash('md5').update(jsonString).digest('hex');
+}
+
+
+/**
+ * 创建符合 fromProvider 格式的错误响应（非流式）
+ * @param {Error} error - 错误对象
+ * @param {string} fromProvider - 客户端期望的提供商格式
+ * @returns {Object} 格式化的错误响应对象
+ */
+function createErrorResponse(error, fromProvider) {
+    const protocolPrefix = getProtocolPrefix(fromProvider);
+    const statusCode = error.status || error.code || 500;
+    const errorMessage = error.message || "An error occurred during processing.";
+    
+    // 根据 HTTP 状态码映射错误类型
+    const getErrorType = (code) => {
+        if (code === 401) return 'authentication_error';
+        if (code === 403) return 'permission_error';
+        if (code === 429) return 'rate_limit_error';
+        if (code >= 500) return 'server_error';
+        return 'invalid_request_error';
+    };
+    
+    // 根据 HTTP 状态码映射 Gemini 的 status
+    const getGeminiStatus = (code) => {
+        if (code === 400) return 'INVALID_ARGUMENT';
+        if (code === 401) return 'UNAUTHENTICATED';
+        if (code === 403) return 'PERMISSION_DENIED';
+        if (code === 404) return 'NOT_FOUND';
+        if (code === 429) return 'RESOURCE_EXHAUSTED';
+        if (code >= 500) return 'INTERNAL';
+        return 'UNKNOWN';
+    };
+    
+    switch (protocolPrefix) {
+        case MODEL_PROTOCOL_PREFIX.OPENAI:
+            // OpenAI 非流式错误格式
+            return {
+                error: {
+                    message: errorMessage,
+                    type: getErrorType(statusCode),
+                    code: getErrorType(statusCode)  // OpenAI 使用 code 字段作为核心判断
+                }
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            // OpenAI Responses API 非流式错误格式
+            return {
+                error: {
+                    type: getErrorType(statusCode),
+                    message: errorMessage,
+                    code: getErrorType(statusCode)
+                }
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.CLAUDE:
+            // Claude 非流式错误格式（外层有 type 标记）
+            return {
+                type: "error",  // 核心区分标记
+                error: {
+                    type: getErrorType(statusCode),  // Claude 使用 error.type 作为核心判断
+                    message: errorMessage
+                }
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.GEMINI:
+            // Gemini 非流式错误格式（遵循 Google Cloud 标准）
+            return {
+                error: {
+                    code: statusCode,
+                    message: errorMessage,
+                    status: getGeminiStatus(statusCode)  // Gemini 使用 status 作为核心判断
+                }
+            };
+            
+        default:
+            // 默认使用 OpenAI 格式
+            return {
+                error: {
+                    message: errorMessage,
+                    type: getErrorType(statusCode),
+                    code: getErrorType(statusCode)
+                }
+            };
+    }
+}
+
+/**
+ * 创建符合 fromProvider 格式的流式错误响应
+ * @param {Error} error - 错误对象
+ * @param {string} fromProvider - 客户端期望的提供商格式
+ * @returns {string} 格式化的流式错误响应字符串
+ */
+function createStreamErrorResponse(error, fromProvider) {
+    const protocolPrefix = getProtocolPrefix(fromProvider);
+    const statusCode = error.status || error.code || 500;
+    const errorMessage = error.message || "An error occurred during streaming.";
+    
+    // 根据 HTTP 状态码映射错误类型
+    const getErrorType = (code) => {
+        if (code === 401) return 'authentication_error';
+        if (code === 403) return 'permission_error';
+        if (code === 429) return 'rate_limit_error';
+        if (code >= 500) return 'server_error';
+        return 'invalid_request_error';
+    };
+    
+    // 根据 HTTP 状态码映射 Gemini 的 status
+    const getGeminiStatus = (code) => {
+        if (code === 400) return 'INVALID_ARGUMENT';
+        if (code === 401) return 'UNAUTHENTICATED';
+        if (code === 403) return 'PERMISSION_DENIED';
+        if (code === 404) return 'NOT_FOUND';
+        if (code === 429) return 'RESOURCE_EXHAUSTED';
+        if (code >= 500) return 'INTERNAL';
+        return 'UNKNOWN';
+    };
+    
+    switch (protocolPrefix) {
+        case MODEL_PROTOCOL_PREFIX.OPENAI:
+            // OpenAI 流式错误格式（SSE data 块）
+            const openaiError = {
+                error: {
+                    message: errorMessage,
+                    type: getErrorType(statusCode),
+                    code: null
+                }
+            };
+            return `data: ${JSON.stringify(openaiError)}\n\n`;
+            
+        case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            // OpenAI Responses API 流式错误格式（SSE event + data）
+            const responsesError = {
+                id: `resp_${Date.now()}`,
+                object: "error",
+                created: Math.floor(Date.now() / 1000),
+                error: {
+                    type: getErrorType(statusCode),
+                    message: errorMessage,
+                    code: getErrorType(statusCode)
+                }
+            };
+            return `event: error\ndata: ${JSON.stringify(responsesError)}\n\n`;
+            
+        case MODEL_PROTOCOL_PREFIX.CLAUDE:
+            // Claude 流式错误格式（SSE event + data）
+            const claudeError = {
+                type: "error",
+                error: {
+                    type: getErrorType(statusCode),
+                    message: errorMessage
+                }
+            };
+            return `event: error\ndata: ${JSON.stringify(claudeError)}\n\n`;
+            
+        case MODEL_PROTOCOL_PREFIX.GEMINI:
+            // Gemini 流式错误格式
+            // 注意：虽然 Gemini 原生使用 JSON 数组，但在我们的实现中已经转换为 SSE 格式
+            // 所以这里也需要使用 data: 前缀，保持与正常流式响应一致
+            const geminiError = {
+                error: {
+                    code: statusCode,
+                    message: errorMessage,
+                    status: getGeminiStatus(statusCode)
+                }
+            };
+            return `data: ${JSON.stringify(geminiError)}\n\n`;
+            
+        default:
+            // 默认使用 OpenAI SSE 格式
+            const defaultError = {
+                error: {
+                    message: errorMessage,
+                    type: getErrorType(statusCode),
+                    code: null
+                }
+            };
+            return `data: ${JSON.stringify(defaultError)}\n\n`;
+    }
 }

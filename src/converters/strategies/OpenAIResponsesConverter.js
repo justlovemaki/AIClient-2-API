@@ -173,10 +173,26 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 },
                 finish_reason: responsesResponse.finish_reason || 'stop'
             }],
-            usage: responsesResponse.usage || {
+            usage: responsesResponse.usage ? {
+                prompt_tokens: responsesResponse.usage.input_tokens || 0,
+                completion_tokens: responsesResponse.usage.output_tokens || 0,
+                total_tokens: responsesResponse.usage.total_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: responsesResponse.usage.input_tokens_details?.cached_tokens || 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: responsesResponse.usage.output_tokens_details?.reasoning_tokens || 0
+                }
+            } : {
                 prompt_tokens: 0,
                 completion_tokens: 0,
-                total_tokens: 0
+                total_tokens: 0,
+                prompt_tokens_details: {
+                    cached_tokens: 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: 0
+                }
             }
         };
     }
@@ -283,8 +299,16 @@ export class OpenAIResponsesConverter extends BaseConverter {
             model: model || responsesResponse.model,
             stop_reason: responsesResponse.choices?.[0]?.finish_reason || 'end_turn',
             usage: {
-                input_tokens: responsesResponse.usage?.prompt_tokens || 0,
-                output_tokens: responsesResponse.usage?.completion_tokens || 0
+                input_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
+                output_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                prompt_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                completion_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                total_tokens: responsesResponse.usage?.total_tokens ||
+                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
+                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
+                cached_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0
             }
         };
     }
@@ -429,9 +453,21 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 index: 0
             }],
             usageMetadata: {
-                promptTokenCount: responsesResponse.usage?.prompt_tokens || 0,
-                candidatesTokenCount: responsesResponse.usage?.completion_tokens || 0,
-                totalTokenCount: responsesResponse.usage?.total_tokens || 0
+                promptTokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                candidatesTokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                totalTokenCount: responsesResponse.usage?.total_tokens ||
+                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
+                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
+                cachedContentTokenCount: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0
+                }],
+                thoughtsTokenCount: responsesResponse.usage?.output_tokens_details?.reasoning_tokens || 0
             }
         };
     }
