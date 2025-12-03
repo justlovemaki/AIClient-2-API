@@ -1153,6 +1153,7 @@ async initializeAuth(forceRefresh = false) {
 
             const stream = response.data;
             let buffer = '';
+            let lastContentEvent = null;  // 用于检测连续重复的 content 事件
 
             for await (const chunk of stream) {
                 buffer += chunk.toString();
@@ -1161,9 +1162,15 @@ async initializeAuth(forceRefresh = false) {
                 const { events, remaining } = this.parseAwsEventStreamBuffer(buffer);
                 buffer = remaining;
                 
-                // yield 所有事件（不再去重，因为重复内容是有效的）
+                // yield 所有事件，但过滤连续完全相同的 content 事件（Kiro API 有时会重复发送）
                 for (const event of events) {
                     if (event.type === 'content' && event.data) {
+                        // 检查是否与上一个 content 事件完全相同
+                        if (lastContentEvent === event.data) {
+                            // 跳过重复的内容
+                            continue;
+                        }
+                        lastContentEvent = event.data;
                         yield { type: 'content', content: event.data };
                     } else if (event.type === 'toolUse') {
                         yield { type: 'toolUse', toolUse: event.data };
