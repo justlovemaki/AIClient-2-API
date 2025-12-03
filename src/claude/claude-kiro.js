@@ -604,25 +604,23 @@ async initializeAuth(forceRefresh = false) {
                 let userInputMessage = {
                     content: '',
                     modelId: codewhispererModel,
-                    origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
-                    userInputMessageContext: {}
+                    origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR
                 };
+                let images = [];
+                let toolResults = [];
+                
                 if (Array.isArray(message.content)) {
-                    userInputMessage.images = []; // Initialize images array
                     for (const part of message.content) {
                         if (part.type === 'text') {
                             userInputMessage.content += part.text;
                         } else if (part.type === 'tool_result') {
-                            if (!userInputMessage.userInputMessageContext.toolResults) {
-                                userInputMessage.userInputMessageContext.toolResults = [];
-                            }
-                            userInputMessage.userInputMessageContext.toolResults.push({
+                            toolResults.push({
                                 content: [{ text: this.getContentText(part.content) }],
                                 status: 'success',
                                 toolUseId: part.tool_use_id
                             });
                         } else if (part.type === 'image') {
-                            userInputMessage.images.push({
+                            images.push({
                                 format: part.source.media_type.split('/')[1],
                                 source: {
                                     bytes: part.source.data
@@ -633,18 +631,28 @@ async initializeAuth(forceRefresh = false) {
                 } else {
                     userInputMessage.content = this.getContentText(message);
                 }
+                
+                // 只添加非空字段，API 不接受空数组或空对象
+                if (images.length > 0) {
+                    userInputMessage.images = images;
+                }
+                if (toolResults.length > 0) {
+                    userInputMessage.userInputMessageContext = { toolResults };
+                }
+                
                 history.push({ userInputMessage });
             } else if (message.role === 'assistant') {
                 let assistantResponseMessage = {
-                    content: '',
-                    toolUses: []
+                    content: ''
                 };
+                let toolUses = [];
+                
                 if (Array.isArray(message.content)) {
                     for (const part of message.content) {
                         if (part.type === 'text') {
                             assistantResponseMessage.content += part.text;
                         } else if (part.type === 'tool_use') {
-                            assistantResponseMessage.toolUses.push({
+                            toolUses.push({
                                 input: part.input,
                                 name: part.name,
                                 toolUseId: part.id
@@ -654,6 +662,12 @@ async initializeAuth(forceRefresh = false) {
                 } else {
                     assistantResponseMessage.content = this.getContentText(message);
                 }
+                
+                // 只添加非空字段
+                if (toolUses.length > 0) {
+                    assistantResponseMessage.toolUses = toolUses;
+                }
+                
                 history.push({ assistantResponseMessage });
             }
         }
@@ -743,16 +757,33 @@ async initializeAuth(forceRefresh = false) {
         };
 
         // currentMessage 始终是 userInputMessage 类型
-        request.conversationState.currentMessage.userInputMessage = {
+        // 注意：API 不接受 null 值，空字段应该完全不包含
+        const userInputMessage = {
             content: currentContent,
             modelId: codewhispererModel,
-            origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
-            images: currentImages && currentImages.length > 0 ? currentImages : null,
-            userInputMessageContext: {
-                toolResults: currentToolResults.length > 0 ? currentToolResults : null,
-                tools: Object.keys(toolsContext).length > 0 ? toolsContext.tools : null
-            }
+            origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR
         };
+
+        // 只有当 images 非空时才添加
+        if (currentImages && currentImages.length > 0) {
+            userInputMessage.images = currentImages;
+        }
+
+        // 构建 userInputMessageContext，只包含非空字段
+        const userInputMessageContext = {};
+        if (currentToolResults.length > 0) {
+            userInputMessageContext.toolResults = currentToolResults;
+        }
+        if (Object.keys(toolsContext).length > 0 && toolsContext.tools) {
+            userInputMessageContext.tools = toolsContext.tools;
+        }
+
+        // 只有当 userInputMessageContext 有内容时才添加
+        if (Object.keys(userInputMessageContext).length > 0) {
+            userInputMessage.userInputMessageContext = userInputMessageContext;
+        }
+
+        request.conversationState.currentMessage.userInputMessage = userInputMessage;
 
         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
             request.profileArn = this.profileArn;
