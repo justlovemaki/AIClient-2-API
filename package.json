@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "axios": "^1.10.0",
     "deepmerge": "^4.3.1",
     "dotenv": "^16.4.5",
