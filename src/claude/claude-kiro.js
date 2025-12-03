@@ -1012,18 +1012,110 @@ async initializeAuth(forceRefresh = false) {
         }
     }
 
-    //kiro提供的接口没有流式返回
-    async streamApi(method, model, body, isRetry = false, retryCount = 0) {
+    /**
+     * 解析 AWS Event Stream 格式的单个事件
+     * 格式: :event-type xxx:content-type application/json:message-type event{"content":"..."}
+     */
+    parseAwsEventStreamChunk(chunk) {
+        const results = [];
+        // 匹配 JSON 内容，可能是 {"content":"..."} 或其他格式
+        const jsonMatches = chunk.match(/\{"[^"]+":"[^"]*"\}/g);
+        if (jsonMatches) {
+            for (const jsonStr of jsonMatches) {
+                try {
+                    const parsed = JSON.parse(jsonStr);
+                    if (parsed.content !== undefined) {
+                        results.push({ type: 'content', data: parsed.content });
+                    } else if (parsed.toolUse !== undefined) {
+                        results.push({ type: 'toolUse', data: parsed.toolUse });
+                    }
+                } catch (e) {
+                    // 解析失败，跳过
+                }
+            }
+        }
+        return results;
+    }
+
+    /**
+     * 真正的流式 API 调用 - 使用 responseType: 'stream'
+     */
+    async * streamApiReal(method, model, body, isRetry = false, retryCount = 0) {
+        if (!this.isInitialized) await this.initialize();
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        const requestData = this.buildCodewhispererRequest(body.messages, model, body.tools, body.system);
+
+        const token = this.accessToken;
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'amz-sdk-invocation-id': `${uuidv4()}`,
+        };
+
+        const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
+
         try {
-            // 直接调用并返回Promise，最终解析为response
-            return await this.callApi(method, model, body, isRetry, retryCount);
+            const response = await this.axiosInstance.post(requestUrl, requestData, { 
+                headers,
+                responseType: 'stream'  // 关键：使用流式响应
+            });
+
+            const stream = response.data;
+            let buffer = '';
+
+            for await (const chunk of stream) {
+                const chunkStr = chunk.toString();
+                buffer += chunkStr;
+                
+                // 尝试解析缓冲区中的事件
+                const events = this.parseAwsEventStreamChunk(buffer);
+                for (const event of events) {
+                    if (event.type === 'content' && event.data) {
+                        yield { type: 'content', content: event.data };
+                    } else if (event.type === 'toolUse') {
+                        yield { type: 'toolUse', toolUse: event.data };
+                    }
+                }
+                
+                // 清理已处理的部分（保留最后一部分以防不完整）
+                const lastBraceIndex = buffer.lastIndexOf('}');
+                if (lastBraceIndex > 0) {
+                    buffer = buffer.substring(lastBraceIndex + 1);
+                }
+            }
         } catch (error) {
-            console.error('[Kiro] Error calling API:', error);
-            throw error; // 向上抛出错误
+            if (error.response?.status === 403 && !isRetry) {
+                console.log('[Kiro] Received 403 in stream. Attempting token refresh and retrying...');
+                await this.initializeAuth(true);
+                yield* this.streamApiReal(method, model, body, true, retryCount);
+                return;
+            }
+            
+            if (error.response?.status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            console.error('[Kiro] Stream API call failed:', error.message);
+            throw error;
         }
     }
 
-    // 重构2: generateContentStream 调用新的普通async函数
+    // 保留旧的非流式方法用于 generateContent
+    async streamApi(method, model, body, isRetry = false, retryCount = 0) {
+        try {
+            return await this.callApi(method, model, body, isRetry, retryCount);
+        } catch (error) {
+            console.error('[Kiro] Error calling API:', error);
+            throw error;
+        }
+    }
+
+    // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
         
@@ -1034,28 +1126,98 @@ async initializeAuth(forceRefresh = false) {
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel}`);
+        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
         
-        // Estimate input tokens before making the API call
         const inputTokens = this.estimateInputTokens(requestBody);
+        const messageId = `${uuidv4()}`;
         
         try {
-            const response = await this.streamApi('', finalModel, requestBody);
-            const { responseText, toolCalls } = this._processApiResponse(response);
+            // 1. 先发送 message_start 事件
+            yield {
+                type: "message_start",
+                message: {
+                    id: messageId,
+                    type: "message",
+                    role: "assistant",
+                    model: model,
+                    usage: { input_tokens: inputTokens, output_tokens: 0 },
+                    content: []
+                }
+            };
 
-            // Pass both responseText and toolCalls to buildClaudeResponse
-            // buildClaudeResponse will handle the logic of combining them into a single stream
-            for (const chunkJson of this.buildClaudeResponse(responseText, true, 'assistant', model, toolCalls, inputTokens)) {
-                yield chunkJson;
+            // 2. 发送 content_block_start 事件
+            yield {
+                type: "content_block_start",
+                index: 0,
+                content_block: { type: "text", text: "" }
+            };
+
+            let totalContent = '';
+            let outputTokens = 0;
+            const toolCalls = [];
+
+            // 3. 流式接收并发送每个 content_block_delta
+            for await (const event of this.streamApiReal('', finalModel, requestBody)) {
+                if (event.type === 'content' && event.content) {
+                    totalContent += event.content;
+                    outputTokens += this.countTextTokens(event.content);
+                    
+                    yield {
+                        type: "content_block_delta",
+                        index: 0,
+                        delta: { type: "text_delta", text: event.content }
+                    };
+                } else if (event.type === 'toolUse') {
+                    toolCalls.push(event.toolUse);
+                }
             }
+
+            // 4. 发送 content_block_stop 事件
+            yield { type: "content_block_stop", index: 0 };
+
+            // 5. 处理工具调用（如果有）
+            if (toolCalls.length > 0) {
+                for (let i = 0; i < toolCalls.length; i++) {
+                    const tc = toolCalls[i];
+                    const blockIndex = i + 1;
+                    
+                    yield {
+                        type: "content_block_start",
+                        index: blockIndex,
+                        content_block: {
+                            type: "tool_use",
+                            id: tc.toolUseId || `tool_${uuidv4()}`,
+                            name: tc.name,
+                            input: {}
+                        }
+                    };
+                    
+                    yield {
+                        type: "content_block_delta",
+                        index: blockIndex,
+                        delta: {
+                            type: "input_json_delta",
+                            partial_json: JSON.stringify(tc.input || {})
+                        }
+                    };
+                    
+                    yield { type: "content_block_stop", index: blockIndex };
+                }
+            }
+
+            // 6. 发送 message_delta 事件
+            yield {
+                type: "message_delta",
+                delta: { stop_reason: toolCalls.length > 0 ? "tool_use" : "end_turn" },
+                usage: { output_tokens: outputTokens }
+            };
+
+            // 7. 发送 message_stop 事件
+            yield { type: "message_stop" };
+
         } catch (error) {
             console.error('[Kiro] Error in streaming generation:', error);
             throw new Error(`Error processing response: ${error.message}`);
-            // For Claude, we yield an array of events for streaming error
-            // Ensure error message is passed as content, not toolCalls
-            // for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
-            //     yield chunkJson;
-            // }
         }
     }
 
