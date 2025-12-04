@@ -21,8 +21,9 @@ export class ProviderPoolManager {
         this.globalConfig = options.globalConfig || {}; // 存储全局配置
         this.providerStatus = {}; // Tracks health and usage for each provider instance
         this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
-        this.maxErrorCount = options.maxErrorCount || 3; // Default to 3 errors before marking unhealthy
-        this.healthCheckInterval = options.healthCheckInterval || 10 * 60 * 1000; // Default to 10 minutes
+        // 使用 ?? 运算符确保 0 也能被正确设置，而不是被 || 替换为默认值
+        this.maxErrorCount = options.maxErrorCount ?? 3; // Default to 3 errors before marking unhealthy
+        this.healthCheckInterval = options.healthCheckInterval ?? 10 * 60 * 1000; // Default to 10 minutes
         
         // 日志级别控制
         this.logLevel = options.logLevel || 'info'; // 'debug', 'info', 'warn', 'error'
@@ -87,7 +88,7 @@ export class ProviderPoolManager {
                 });
             });
         }
-        this._log('info', 'Initialized provider statuses: ok');
+        this._log('info', `Initialized provider statuses: ok (maxErrorCount: ${this.maxErrorCount})`);
     }
 
     /**
