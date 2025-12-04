@@ -249,11 +249,12 @@ export class AntigravityApiService {
     }
     
     async initializeAuth(forceRefresh = false) {
-        if (this.authClient.credentials.access_token && !forceRefresh) {
-            // 检查 Token 是否即将过期
-            if (!this.isTokenExpiringSoon()) {
-                return;
-            }
+        // 检查是否需要刷新 Token
+        const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
+        
+        if (this.authClient.credentials.access_token && !needsRefresh) {
+            // Token 有效且不需要刷新
+            return;
         }
         
         // Antigravity 不支持 base64 配置，直接使用文件路径
@@ -265,13 +266,13 @@ export class AntigravityApiService {
             this.authClient.setCredentials(credentials);
             console.log('[Antigravity Auth] Authentication configured successfully from file.');
             
-            if (forceRefresh) {
-                console.log('[Antigravity Auth] Forcing token refresh...');
+            if (needsRefresh) {
+                console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
-                // 保存刷新后的凭证
+                // 保存刷新后的凭证到文件
                 await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log('[Antigravity Auth] Token refreshed and saved successfully.');
+                console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
             }
         } catch (error) {
             console.error('[Antigravity Auth] Error initializing authentication:', error.code);

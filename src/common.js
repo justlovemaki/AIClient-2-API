@@ -395,9 +395,10 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
 
     // 2.5. 如果使用了提供商池，根据模型重新选择提供商
+    // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
     if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
         const { getApiService } = await import('./service-manager.js');
-        service = await getApiService(CONFIG, model);
+        service = await getApiService(CONFIG, model, { skipUsageCount: true });
         console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
     }
 

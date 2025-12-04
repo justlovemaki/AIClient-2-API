@@ -98,7 +98,7 @@ export class ProviderPoolManager {
      * @param {string} [requestedModel] - Optional. The model name to filter providers by.
      * @returns {object|null} The selected provider's configuration, or null if no healthy provider is found.
      */
-    selectProvider(providerType, requestedModel = null) {
+    selectProvider(providerType, requestedModel = null, options = {}) {
         // 参数校验
         if (!providerType || typeof providerType !== 'string') {
             this._log('error', `Invalid providerType: ${providerType}`);
@@ -147,14 +147,15 @@ export class ProviderPoolManager {
         // 更新下次轮询的索引
         this.roundRobinIndex[indexKey] = (currentIndex + 1) % availableAndHealthyProviders.length;
         
-        // 更新使用信息
-        selected.config.lastUsed = new Date().toISOString();
-        selected.config.usageCount++;
+        // 更新使用信息（除非明确跳过）
+        if (!options.skipUsageCount) {
+            selected.config.lastUsed = new Date().toISOString();
+            selected.config.usageCount++;
+            // 使用防抖保存
+            this._debouncedSave(providerType);
+        }
 
-        this._log('debug', `Selected provider for ${providerType} (round-robin): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}`);
-        
-        // 使用防抖保存
-        this._debouncedSave(providerType);
+        this._log('debug', `Selected provider for ${providerType} (round-robin): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}${options.skipUsageCount ? ' (skip usage count)' : ''}`);
         
         return selected.config;
     }
