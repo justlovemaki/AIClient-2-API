@@ -397,7 +397,7 @@ export class GeminiApiService {
             return {
                 name: `models/${modelId}`, version: "1.0.0", displayName: displayName,
                 description: `A generative model for text and chat generation. ID: ${modelId}`,
-                inputTokenLimit: 32768, outputTokenLimit: 8192,
+                inputTokenLimit: 1024000, outputTokenLimit: 65535,
                 supportedGenerationMethods: ["generateContent", "streamGenerateContent"],
             };
         });

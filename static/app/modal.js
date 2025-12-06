@@ -809,6 +809,7 @@ function addDynamicConfigFields(form, providerType) {
                 `;
             } else if (isOAuthFilePath1) {
                 // OAuth凭据文件路径字段，添加上传按钮
+                const isKiroField = field1.id.includes('Kiro');
                 fields += `
                     <div class="form-group">
                         <label>${field1.label}</label>
@@ -818,6 +819,7 @@ function addDynamicConfigFields(form, providerType) {
                                 <i class="fas fa-upload"></i>
                             </button>
                         </div>
+                        ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> 使用 AWS 登录方式时，请确保授权文件中包含 <code>clientId</code> 和 <code>clientSecret</code> 字段</small>' : ''}
                     </div>
                 `;
             } else {
@@ -850,6 +852,7 @@ function addDynamicConfigFields(form, providerType) {
                     `;
                 } else if (isOAuthFilePath2) {
                     // OAuth凭据文件路径字段，添加上传按钮
+                    const isKiroField = field2.id.includes('Kiro');
                     fields += `
                         <div class="form-group">
                             <label>${field2.label}</label>
@@ -859,6 +862,7 @@ function addDynamicConfigFields(form, providerType) {
                                     <i class="fas fa-upload"></i>
                                 </button>
                             </div>
+                            ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> 使用 AWS 登录方式时，请确保授权文件中包含 <code>clientId</code> 和 <code>clientSecret</code> 字段</small>' : ''}
                         </div>
                     `;
                 } else {
