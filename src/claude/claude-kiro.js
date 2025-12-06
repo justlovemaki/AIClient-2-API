@@ -473,6 +473,13 @@ async initializeAuth(forceRefresh = false) {
                 requestBody.clientId = this.clientId;
                 requestBody.clientSecret = this.clientSecret;
                 requestBody.grantType = 'refresh_token';
+                if (!this.clientId) {
+                    console.warn('[Kiro Auth] clientId not found in credentials.')
+                }
+                if (!this.clientSecret) {
+                    console.warn('[Kiro Auth] clientSecret not found in credentials.')
+                }
+
             }
             const response = await this.axiosInstance.post(refreshUrl, requestBody);
             console.log('[Kiro Auth] Token refresh response: ok');
