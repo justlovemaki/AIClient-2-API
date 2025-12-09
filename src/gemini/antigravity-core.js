@@ -91,29 +91,29 @@ function generateProjectID() {
 /**
  * 将 Gemini 格式请求转换为 Antigravity 格式
  */
-function geminiToAntigravity(modelName, payload) {
+function geminiToAntigravity(modelName, payload, projectId) {
     // 深拷贝请求体,避免修改原始对象
     let template = JSON.parse(JSON.stringify(payload));
-    
+
     // 设置基本字段
     template.model = modelName;
     template.userAgent = 'antigravity';
-    template.project = generateProjectID();
+    template.project = projectId || generateProjectID();
     template.requestId = generateRequestID();
-    
+
     // 确保 request 对象存在
     if (!template.request) {
         template.request = {};
     }
-    
+
     // 设置会话ID
     template.request.sessionId = generateSessionID();
-    
+
     // 删除安全设置
     if (template.request.safetySettings) {
         delete template.request.safetySettings;
     }
-    
+
     // 设置工具配置
     if (template.request.toolConfig) {
         if (!template.request.toolConfig.functionCallingConfig) {
@@ -121,12 +121,12 @@ function geminiToAntigravity(modelName, payload) {
         }
         template.request.toolConfig.functionCallingConfig.mode = 'VALIDATED';
     }
-    
+
     // 删除 maxOutputTokens
     if (template.request.generationConfig && template.request.generationConfig.maxOutputTokens) {
         delete template.request.generationConfig.maxOutputTokens;
     }
-    
+
     // 处理 Thinking 配置
     if (!modelName.startsWith('gemini-3-')) {
         if (template.request.generationConfig &&
@@ -136,7 +136,7 @@ function geminiToAntigravity(modelName, payload) {
             template.request.generationConfig.thinkingConfig.thinkingBudget = -1;
         }
     }
-    
+
     // 处理 Claude Sonnet 模型的工具声明
     if (modelName.startsWith('claude-sonnet-')) {
         if (template.request.tools && Array.isArray(template.request.tools)) {
@@ -153,7 +153,7 @@ function geminiToAntigravity(modelName, payload) {
             });
         }
     }
-    
+
     return template;
 }
 
@@ -162,23 +162,23 @@ function geminiToAntigravity(modelName, payload) {
  */
 function toGeminiApiResponse(antigravityResponse) {
     if (!antigravityResponse) return null;
-    
+
     const compliantResponse = {
         candidates: antigravityResponse.candidates
     };
-    
+
     if (antigravityResponse.usageMetadata) {
         compliantResponse.usageMetadata = antigravityResponse.usageMetadata;
     }
-    
+
     if (antigravityResponse.promptFeedback) {
         compliantResponse.promptFeedback = antigravityResponse.promptFeedback;
     }
-    
+
     if (antigravityResponse.automaticFunctionCallingHistory) {
         compliantResponse.automaticFunctionCallingHistory = antigravityResponse.automaticFunctionCallingHistory;
     }
-    
+
     return compliantResponse;
 }
 
@@ -187,16 +187,16 @@ function toGeminiApiResponse(antigravityResponse) {
  */
 function ensureRolesInContents(requestBody) {
     delete requestBody.model;
-    
+
     if (requestBody.system_instruction) {
         requestBody.systemInstruction = requestBody.system_instruction;
         delete requestBody.system_instruction;
     }
-    
+
     if (requestBody.systemInstruction && !requestBody.systemInstruction.role) {
         requestBody.systemInstruction.role = 'user';
     }
-    
+
     if (requestBody.contents && Array.isArray(requestBody.contents)) {
         requestBody.contents.forEach(content => {
             if (!content.role) {
@@ -204,7 +204,7 @@ function ensureRolesInContents(requestBody) {
             }
         });
     }
-    
+
     return requestBody;
 }
 
@@ -213,14 +213,14 @@ export class AntigravityApiService {
         this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
         this.availableModels = [];
         this.isInitialized = false;
-        
+
         this.config = config;
         this.host = config.HOST;
         this.oauthCredsFilePath = config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH;
         this.baseURL = ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
         this.projectId = config.PROJECT_ID;
-        
+
         // 多环境降级顺序
         this.baseURLs = this.baseURL ? [this.baseURL] : [
             ANTIGRAVITY_BASE_URL_DAILY,
@@ -228,44 +228,42 @@ export class AntigravityApiService {
             // ANTIGRAVITY_BASE_URL_PROD // 生产环境已注释
         ];
     }
-    
+
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Antigravity] Initializing Antigravity API Service...');
         await this.initializeAuth();
-        
+
         if (!this.projectId) {
-            this.projectId = generateProjectID();
-            console.log(`[Antigravity] Generated Project ID: ${this.projectId}`);
+            this.projectId = await this.discoverProjectAndModels();
         } else {
             console.log(`[Antigravity] Using provided Project ID: ${this.projectId}`);
+            // 获取可用模型
+            await this.fetchAvailableModels();
         }
-        
-        // 获取可用模型
-        await this.fetchAvailableModels();
-        
+
         this.isInitialized = true;
         console.log(`[Antigravity] Initialization complete. Project ID: ${this.projectId}`);
     }
-    
+
     async initializeAuth(forceRefresh = false) {
         // 检查是否需要刷新 Token
         const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
-        
+
         if (this.authClient.credentials.access_token && !needsRefresh) {
             // Token 有效且不需要刷新
             return;
         }
-        
+
         // Antigravity 不支持 base64 配置，直接使用文件路径
-        
+
         const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
         try {
             const data = await fs.readFile(credPath, "utf8");
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
             console.log('[Antigravity Auth] Authentication configured successfully from file.');
-            
+
             if (needsRefresh) {
                 console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
@@ -287,7 +285,7 @@ export class AntigravityApiService {
             }
         }
     }
-    
+
     async getNewToken(credPath) {
         let host = this.host;
         if (!host || host === 'undefined') {
@@ -295,21 +293,21 @@ export class AntigravityApiService {
         }
         const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
         this.authClient.redirectUri = redirectUri;
-        
+
         return new Promise(async (resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({
                 access_type: 'offline',
                 scope: ['https://www.googleapis.com/auth/cloud-platform']
             });
-            
+
             console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
             console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
-            
+
             // 自动打开浏览器
             const showFallbackMessage = () => {
                 console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
             };
-            
+
             if (this.config) {
                 try {
                     const childProcess = await open(authUrl);
@@ -322,19 +320,19 @@ export class AntigravityApiService {
             } else {
                 showFallbackMessage();
             }
-            
+
             const server = http.createServer(async (req, res) => {
                 try {
                     const url = new URL(req.url, redirectUri);
                     const code = url.searchParams.get('code');
                     const errorParam = url.searchParams.get('error');
-                    
+
                     if (code) {
                         console.log(`[Antigravity Auth] Received successful callback from Google: ${req.url}`);
                         res.writeHead(200, { 'Content-Type': 'text/plain' });
                         res.end('Authentication successful! You can close this browser tab.');
                         server.close();
-                        
+
                         const { tokens } = await this.authClient.getToken(code);
                         await fs.mkdir(path.dirname(credPath), { recursive: true });
                         await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
@@ -356,7 +354,7 @@ export class AntigravityApiService {
                     reject(e);
                 }
             });
-            
+
             server.on('error', (err) => {
                 if (err.code === 'EADDRINUSE') {
                     const errorMessage = `[Antigravity Auth] Port ${AUTH_REDIRECT_PORT} on ${host} is already in use.`;
@@ -366,11 +364,11 @@ export class AntigravityApiService {
                     reject(err);
                 }
             });
-            
+
             server.listen(AUTH_REDIRECT_PORT, host);
         });
     }
-    
+
     isTokenExpiringSoon() {
         if (!this.authClient.credentials.expiry_date) {
             return true;
@@ -380,10 +378,85 @@ export class AntigravityApiService {
         const refreshSkewMs = REFRESH_SKEW * 1000;
         return expiryTime <= (currentTime + refreshSkewMs);
     }
-    
+
+    async discoverProjectAndModels() {
+        if (this.projectId) {
+            console.log(`[Antigravity] Using pre-configured Project ID: ${this.projectId}`);
+            return this.projectId;
+        }
+
+        console.log('[Antigravity] Discovering Project ID...');
+        try {
+            const initialProjectId = "";
+            // Prepare client metadata
+            const clientMetadata = {
+                ideType: "IDE_UNSPECIFIED",
+                platform: "PLATFORM_UNSPECIFIED",
+                pluginType: "GEMINI",
+                duetProject: initialProjectId,
+            };
+
+            // Call loadCodeAssist to discover the actual project ID
+            const loadRequest = {
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            };
+
+            const loadResponse = await this.callApi('loadCodeAssist', loadRequest);
+
+            // Check if we already have a project ID from the response
+            if (loadResponse.cloudaicompanionProject) {
+                console.log(`[Antigravity] Discovered existing Project ID: ${loadResponse.cloudaicompanionProject}`);
+                // 获取可用模型
+                await this.fetchAvailableModels();
+                return loadResponse.cloudaicompanionProject;
+            }
+
+            // If no existing project, we need to onboard
+            const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
+            const tierId = defaultTier?.id || 'free-tier';
+
+            const onboardRequest = {
+                tierId: tierId,
+                cloudaicompanionProject: initialProjectId,
+                metadata: clientMetadata,
+            };
+
+            let lroResponse = await this.callApi('onboardUser', onboardRequest);
+
+            // Poll until operation is complete with timeout protection
+            const MAX_RETRIES = 30; // Maximum number of retries (60 seconds total)
+            let retryCount = 0;
+
+            while (!lroResponse.done && retryCount < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                lroResponse = await this.callApi('onboardUser', onboardRequest);
+                retryCount++;
+            }
+
+            if (!lroResponse.done) {
+                throw new Error('Onboarding timeout: Operation did not complete within expected time.');
+            }
+
+            const discoveredProjectId = lroResponse.response?.cloudaicompanionProject?.id || initialProjectId;
+            console.log(`[Antigravity] Onboarded and discovered Project ID: ${discoveredProjectId}`);
+            // 获取可用模型
+            await this.fetchAvailableModels();
+            return discoveredProjectId;
+        } catch (error) {
+            console.error('[Antigravity] Failed to discover Project ID:', error.response?.data || error.message);
+            console.log('[Antigravity] Falling back to generated Project ID as last resort...');
+            const fallbackProjectId = generateProjectID();
+            console.log(`[Antigravity] Generated fallback Project ID: ${fallbackProjectId}`);
+            // 获取可用模型
+            await this.fetchAvailableModels();
+            return fallbackProjectId;
+        }
+    }
+
     async fetchAvailableModels() {
         console.log('[Antigravity] Fetching available models...');
-        
+
         for (const baseURL of this.baseURLs) {
             try {
                 const modelsURL = `${baseURL}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
@@ -397,15 +470,15 @@ export class AntigravityApiService {
                     responseType: 'json',
                     body: JSON.stringify({})
                 };
-                
+
                 const res = await this.authClient.request(requestOptions);
-                
+
                 if (res.data && res.data.models) {
                     const models = Object.keys(res.data.models);
                     this.availableModels = models
                         .map(modelName2Alias)
                         .filter(alias => alias !== '');
-                    
+
                     console.log(`[Antigravity] Available models: [${this.availableModels.join(', ')}]`);
                     return;
                 }
@@ -413,20 +486,20 @@ export class AntigravityApiService {
                 console.error(`[Antigravity] Failed to fetch models from ${baseURL}:`, error.message);
             }
         }
-        
+
         console.warn('[Antigravity] Failed to fetch models from all endpoints. Using default models.');
         this.availableModels = ANTIGRAVITY_MODELS;
     }
-    
+
     async listModels() {
         if (!this.isInitialized) await this.initialize();
-        
+
         const now = Math.floor(Date.now() / 1000);
         const formattedModels = this.availableModels.map(modelId => {
-            const displayName = modelId.split('-').map(word => 
+            const displayName = modelId.split('-').map(word =>
                 word.charAt(0).toUpperCase() + word.slice(1)
             ).join(' ');
-            
+
             const modelInfo = {
                 name: `models/${modelId}`,
                 version: '1.0.0',
@@ -440,7 +513,7 @@ export class AntigravityApiService {
                 ownedBy: 'antigravity',
                 type: 'antigravity'
             };
-            
+
             if (modelId.endsWith('-thinking') || modelId.includes('-thinking-')) {
                 modelInfo.thinking = {
                     min: 1024,
@@ -449,23 +522,23 @@ export class AntigravityApiService {
                     dynamicAllowed: true
                 };
             }
-            
+
             return modelInfo;
         });
-        
+
         return { models: formattedModels };
     }
-    
+
     async callApi(method, body, isRetry = false, retryCount = 0, baseURLIndex = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
-        
+
         if (baseURLIndex >= this.baseURLs.length) {
             throw new Error('All Antigravity base URLs failed');
         }
-        
+
         const baseURL = this.baseURLs[baseURLIndex];
-        
+
         try {
             const requestOptions = {
                 url: `${baseURL}/${ANTIGRAVITY_API_VERSION}:${method}`,
@@ -477,18 +550,18 @@ export class AntigravityApiService {
                 responseType: 'json',
                 body: JSON.stringify(body)
             };
-            
+
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
             console.error(`[Antigravity API] Error calling ${method} on ${baseURL}:`, error.response?.status, error.message);
-            
+
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
                 console.log('[Antigravity API] Received 401/400. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount, baseURLIndex);
             }
-            
+
             if (error.response?.status === 429) {
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     console.log(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
@@ -500,33 +573,33 @@ export class AntigravityApiService {
                     return this.callApi(method, body, isRetry, retryCount + 1, 0);
                 }
             }
-            
+
             if (!error.response && baseURLIndex + 1 < this.baseURLs.length) {
                 console.log(`[Antigravity API] Network error on ${baseURL}. Trying next base URL...`);
                 return this.callApi(method, body, isRetry, retryCount, baseURLIndex + 1);
             }
-            
+
             if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Antigravity API] Server error ${error.response.status}. Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1, baseURLIndex);
             }
-            
+
             throw error;
         }
     }
-    
+
     async * streamApi(method, body, isRetry = false, retryCount = 0, baseURLIndex = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
-        
+
         if (baseURLIndex >= this.baseURLs.length) {
             throw new Error('All Antigravity base URLs failed');
         }
-        
+
         const baseURL = this.baseURLs[baseURLIndex];
-        
+
         try {
             const requestOptions = {
                 url: `${baseURL}/${ANTIGRAVITY_API_VERSION}:${method}`,
@@ -540,9 +613,9 @@ export class AntigravityApiService {
                 responseType: 'stream',
                 body: JSON.stringify(body)
             };
-            
+
             const res = await this.authClient.request(requestOptions);
-            
+
             if (res.status !== 200) {
                 let errorBody = '';
                 for await (const chunk of res.data) {
@@ -550,18 +623,18 @@ export class AntigravityApiService {
                 }
                 throw new Error(`Upstream API Error (Status ${res.status}): ${errorBody}`);
             }
-            
+
             yield* this.parseSSEStream(res.data);
         } catch (error) {
             console.error(`[Antigravity API] Error during stream ${method} on ${baseURL}:`, error.response?.status, error.message);
-            
+
             if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
                 console.log('[Antigravity API] Received 401/400 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount, baseURLIndex);
                 return;
             }
-            
+
             if (error.response?.status === 429) {
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     console.log(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
@@ -575,13 +648,13 @@ export class AntigravityApiService {
                     return;
                 }
             }
-            
+
             if (!error.response && baseURLIndex + 1 < this.baseURLs.length) {
                 console.log(`[Antigravity API] Network error on ${baseURL}. Trying next base URL...`);
                 yield* this.streamApi(method, body, isRetry, retryCount, baseURLIndex + 1);
                 return;
             }
-            
+
             if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Antigravity API] Server error ${error.response.status} during stream. Retrying in ${delay}ms...`);
@@ -589,17 +662,17 @@ export class AntigravityApiService {
                 yield* this.streamApi(method, body, isRetry, retryCount + 1, baseURLIndex);
                 return;
             }
-            
+
             throw error;
         }
     }
-    
+
     async * parseSSEStream(stream) {
         const rl = readline.createInterface({
             input: stream,
             crlfDelay: Infinity
         });
-        
+
         let buffer = [];
         for await (const line of rl) {
             if (line.startsWith('data: ')) {
@@ -613,7 +686,7 @@ export class AntigravityApiService {
                 buffer = [];
             }
         }
-        
+
         if (buffer.length > 0) {
             try {
                 yield JSON.parse(buffer.join('\n'));
@@ -622,55 +695,55 @@ export class AntigravityApiService {
             }
         }
     }
-    
+
     async generateContent(model, requestBody) {
         console.log(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
-        
+
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
             console.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
             selectedModel = this.availableModels[0];
         }
-        
+
         // 深拷贝请求体
         const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)));
         const actualModelName = alias2ModelName(selectedModel);
-        
+
         // 将处理后的请求体转换为 Antigravity 格式
-        const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody });
-        
+        const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody }, this.projectId);
+
         // 设置模型名称为实际模型名
         payload.model = actualModelName;
-        
+
         const response = await this.callApi('generateContent', payload);
         return toGeminiApiResponse(response.response);
     }
-    
+
     async * generateContentStream(model, requestBody) {
         console.log(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
-        
+
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
             console.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
             selectedModel = this.availableModels[0];
         }
-        
+
         // 深拷贝请求体
         const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)));
         const actualModelName = alias2ModelName(selectedModel);
-        
+
         // 将处理后的请求体转换为 Antigravity 格式
-        const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody });
-        
+        const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody }, this.projectId);
+
         // 设置模型名称为实际模型名
         payload.model = actualModelName;
-        
+
         const stream = this.streamApi('streamGenerateContent', payload);
         for await (const chunk of stream) {
             yield toGeminiApiResponse(chunk.response);
         }
     }
-    
+
     isExpiryDateNear() {
         try {
             const currentTime = Date.now();
