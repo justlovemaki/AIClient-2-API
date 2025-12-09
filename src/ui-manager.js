@@ -1091,6 +1091,117 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Perform health check for all providers of a specific type
+    const healthCheckMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/health-check$/);
+    if (method === 'POST' && healthCheckMatch) {
+        const providerType = decodeURIComponent(healthCheckMatch[1]);
+
+        try {
+            if (!providerPoolManager) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider pool manager not initialized' } }));
+                return true;
+            }
+
+            const providers = providerPoolManager.providerStatus[providerType] || [];
+            
+            if (providers.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
+                return true;
+            }
+
+            console.log(`[UI API] Starting health check for ${providers.length} providers in ${providerType}`);
+
+            // 执行健康检测
+            const results = [];
+            for (const providerStatus of providers) {
+                const providerConfig = providerStatus.config;
+                try {
+                    const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig);
+                    
+                    if (healthResult === null) {
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: null,
+                            message: '未启用健康检测 (checkHealth=false)'
+                        });
+                        continue;
+                    }
+                    
+                    if (healthResult.success) {
+                        providerPoolManager.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: true,
+                            modelName: healthResult.modelName,
+                            message: '健康'
+                        });
+                    } else {
+                        providerPoolManager.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
+                        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+                        if (healthResult.modelName) {
+                            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+                        }
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: false,
+                            modelName: healthResult.modelName,
+                            message: healthResult.errorMessage || '检测失败'
+                        });
+                    }
+                } catch (error) {
+                    providerPoolManager.markProviderUnhealthy(providerType, providerConfig, error.message);
+                    results.push({
+                        uuid: providerConfig.uuid,
+                        success: false,
+                        message: error.message
+                    });
+                }
+            }
+
+            // 保存更新后的状态到文件
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            
+            // 从 providerStatus 构建 providerPools 对象并保存
+            const providerPools = {};
+            for (const pType in providerPoolManager.providerStatus) {
+                providerPools[pType] = providerPoolManager.providerStatus[pType].map(ps => ps.config);
+            }
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+
+            const successCount = results.filter(r => r.success === true).length;
+            const failCount = results.filter(r => r.success === false).length;
+
+            console.log(`[UI API] Health check completed for ${providerType}: ${successCount} healthy, ${failCount} unhealthy`);
+
+            // 广播更新事件
+            broadcastEvent('config_update', {
+                action: 'health_check',
+                filePath: filePath,
+                providerType,
+                results,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `健康检测完成: ${successCount} 个健康, ${failCount} 个异常`,
+                successCount,
+                failCount,
+                totalCount: providers.length,
+                results
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Health check error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Generate OAuth authorization URL for providers
     const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
     if (method === 'POST' && generateAuthUrlMatch) {
@@ -1303,6 +1414,125 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.end(JSON.stringify({
                 error: {
                     message: 'Failed to delete config file: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Quick link Kiro config to claude-kiro-oauth
+    if (method === 'POST' && pathParam === '/api/quick-link-kiro') {
+        try {
+            const body = await getRequestBody(req);
+            const { filePath } = body;
+
+            if (!filePath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'filePath is required' } }));
+                return true;
+            }
+
+            const providerType = 'claude-kiro-oauth';
+            const defaultCheckModel = 'claude-haiku-4-5';
+            const poolsFilePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            
+            // Load existing pools
+            let providerPools = {};
+            if (existsSync(poolsFilePath)) {
+                try {
+                    const fileContent = readFileSync(poolsFilePath, 'utf8');
+                    providerPools = JSON.parse(fileContent);
+                } catch (readError) {
+                    console.warn('[UI API] Failed to read existing provider pools:', readError.message);
+                }
+            }
+
+            // Ensure claude-kiro-oauth array exists
+            if (!providerPools[providerType]) {
+                providerPools[providerType] = [];
+            }
+
+            // Check if already linked
+            const normalizedPath = filePath.replace(/\\/g, '/');
+            const isAlreadyLinked = providerPools[providerType].some(p => {
+                if (!p.KIRO_OAUTH_CREDS_FILE_PATH) return false;
+                const existingPath = p.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
+                return existingPath === normalizedPath || 
+                       existingPath === './' + normalizedPath ||
+                       './' + existingPath === normalizedPath;
+            });
+
+            if (isAlreadyLinked) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: '该配置文件已关联' } }));
+                return true;
+            }
+
+            // Generate UUID
+            const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+
+            // Create new provider config
+            const newProvider = {
+                KIRO_OAUTH_CREDS_FILE_PATH: normalizedPath.startsWith('./') ? normalizedPath : './' + normalizedPath,
+                uuid: uuid,
+                checkModelName: defaultCheckModel,
+                checkHealth: true,
+                isHealthy: true,
+                isDisabled: false,
+                lastUsed: null,
+                usageCount: 0,
+                errorCount: 0,
+                lastErrorTime: null,
+                lastHealthCheckTime: null,
+                lastHealthCheckModel: null,
+                lastErrorMessage: null
+            };
+
+            providerPools[providerType].push(newProvider);
+
+            // Save to file
+            writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] Quick linked Kiro config: ${filePath} -> ${providerType}`);
+
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+
+            // Broadcast update event
+            broadcastEvent('config_update', {
+                action: 'quick_link',
+                filePath: poolsFilePath,
+                providerType,
+                newProvider,
+                timestamp: new Date().toISOString()
+            });
+
+            broadcastEvent('provider_update', {
+                action: 'add',
+                providerType,
+                providerConfig: newProvider,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: '配置已成功关联到 claude-kiro-oauth',
+                provider: newProvider
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Quick link failed:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: '关联失败: ' + error.message
                 }
             }));
             return true;

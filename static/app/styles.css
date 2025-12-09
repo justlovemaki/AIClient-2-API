@@ -1409,6 +1409,49 @@ input:checked + .toggle-slider:before {
     line-height: 1.4;
 }
 
+.provider-health-meta {
+    font-size: 12px;
+    color: #8b95a5;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.provider-health-meta i {
+    margin-right: 4px;
+    opacity: 0.7;
+}
+
+.provider-error-info {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+    border: 1px solid #feb2b2;
+    border-radius: 6px;
+    font-size: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.provider-error-info i {
+    color: #e53e3e;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.provider-error-info .error-label {
+    color: #c53030;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.provider-error-info .error-message {
+    color: #742a2a;
+    word-break: break-word;
+    max-height: 60px;
+    overflow-y: auto;
+}
+
 .provider-actions-group {
     display: flex;
     gap: 8px;
@@ -1443,6 +1486,59 @@ input:checked + .toggle-slider:before {
     background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
     color: white;
     box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+.btn-quick-link {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.btn-quick-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
+
+.btn-quick-link i {
+    font-size: 10px;
+}
+
+.btn-batch-link-kiro {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    font-weight: 500;
+}
+
+.btn-batch-link-kiro:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
+
+.btn-batch-link-kiro i {
+    font-size: 11px;
 }
 
 .btn-delete:hover {
@@ -2810,6 +2906,21 @@ input:checked + .toggle-slider:before {
     transform: translateY(0);
 }
 
+/* 健康检测按钮样式 */
+.btn-info {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+.btn-info:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-info:active {
+    transform: translateY(0);
+}
+
 /* 提供商状态指示器 */
 .provider-status .disabled-indicator {
     position: relative;
@@ -3412,5 +3523,141 @@ input:checked + .toggle-slider:before {
     .generate-auth-btn {
         font-size: 0.75rem;
         padding: 0.4rem 0.8rem;
+    }
+}
+
+
+/* ==================== 分页控件样式 ==================== */
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin: 12px 0;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.pagination-container.top {
+    margin-top: 0;
+}
+
+.pagination-container.bottom {
+    margin-bottom: 0;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.page-btn {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.page-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-btn.nav-btn {
+    background: var(--bg-secondary);
+}
+
+.page-ellipsis {
+    padding: 0 8px;
+    color: var(--text-secondary);
+}
+
+.pagination-jump {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.page-jump-input {
+    width: 60px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.875rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.page-jump-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+}
+
+/* 移除数字输入框的上下箭头 */
+.page-jump-input::-webkit-outer-spin-button,
+.page-jump-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.page-jump-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* 响应式分页 */
+@media (max-width: 768px) {
+    .pagination-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .pagination-info {
+        text-align: center;
+    }
+    
+    .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .pagination-jump {
+        justify-content: center;
     }
 }
