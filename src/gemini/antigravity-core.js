@@ -255,33 +255,76 @@ export class AntigravityApiService {
             return;
         }
 
-        // Antigravity 不支持 base64 配置，直接使用文件路径
-
         const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
-        try {
-            const data = await fs.readFile(credPath, "utf8");
-            const credentials = JSON.parse(data);
-            this.authClient.setCredentials(credentials);
-            console.log('[Antigravity Auth] Authentication configured successfully from file.');
 
-            if (needsRefresh) {
+        let loadedFromBase64 = false;
+        if (this.config.ANTIGRAVITY_OAUTH_CREDS_BASE64) {
+            try {
+                const buffer = Buffer.from(this.config.ANTIGRAVITY_OAUTH_CREDS_BASE64, 'base64');
+                const credentials = JSON.parse(buffer.toString('utf-8'));
+                this.authClient.setCredentials(credentials);
+                console.log('[Antigravity Auth] Authentication configured successfully from Base64.');
+                loadedFromBase64 = true;
+            } catch (error) {
+                console.error('[Antigravity Auth] Invalid Base64 credentials, falling back to file:', error.message);
+            }
+        }
+
+        if (!loadedFromBase64) {
+            try {
+                const data = await fs.readFile(credPath, "utf8");
+                const credentials = JSON.parse(data);
+                this.authClient.setCredentials(credentials);
+                console.log('[Antigravity Auth] Authentication configured successfully from file.');
+            } catch (error) {
+                // If file read fails and we didn't have base64, we will handle error below
+                if (error.code !== 'ENOENT' && error.code !== 'EISDIR') {
+                    console.error('[Antigravity Auth] Error reading credentials file:', error.message);
+                }
+            }
+        }
+
+        // If we still don't have credentials and not forcing refresh (which implies we expected them), check if we need to start flow
+        if (!this.authClient.credentials || !this.authClient.credentials.access_token) {
+            if (!needsRefresh) {
+                // Try to load from file again to trigger the error handling/new token flow if missing
+                try {
+                    const data = await fs.readFile(credPath, "utf8");
+                    // This block is just to fall through to the catch below if it fails
+                } catch (error) {
+                    console.error('[Antigravity Auth] Error initializing authentication:', error.code);
+                    if (error.code === 'ENOENT' || error.code === 400) {
+                        console.log(`[Antigravity Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
+                        const newTokens = await this.getNewToken(credPath);
+                        this.authClient.setCredentials(newTokens);
+                        console.log('[Antigravity Auth] New token obtained and loaded into memory.');
+                        return; // Successfully got new token
+                    } else {
+                        console.error('[Antigravity Auth] Failed to initialize authentication from file:', error);
+                        throw new Error(`Failed to load OAuth credentials.`);
+                    }
+                }
+            }
+        } else {
+            // We have credentials (from Base64 or file).
+            // Check logic below for refresh
+        }
+
+        if (needsRefresh && this.authClient.credentials && this.authClient.credentials.refresh_token) {
+            try {
                 console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
-                // 保存刷新后的凭证到文件
-                await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
-                console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
-            }
-        } catch (error) {
-            console.error('[Antigravity Auth] Error initializing authentication:', error.code);
-            if (error.code === 'ENOENT' || error.code === 400) {
-                console.log(`[Antigravity Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
-                const newTokens = await this.getNewToken(credPath);
-                this.authClient.setCredentials(newTokens);
-                console.log('[Antigravity Auth] New token obtained and loaded into memory.');
-            } else {
-                console.error('[Antigravity Auth] Failed to initialize authentication from file:', error);
-                throw new Error(`Failed to load OAuth credentials.`);
+                // Try to save back to file if possible, but don't fail if we can't (e.g. read-only fs)
+                try {
+                    await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
+                    console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
+                } catch (saveError) {
+                    console.warn(`[Antigravity Auth] Token refreshed but failed to save to file (likely read-only environment): ${saveError.message}`);
+                }
+            } catch (refreshError) {
+                console.error('[Antigravity Auth] Failed to refresh token:', refreshError.message);
+                // If refresh fails, we might want to trigger re-auth flow, but for now just log
             }
         }
     }

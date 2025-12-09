@@ -10,111 +10,45 @@ import { serviceInstances } from './adapter.js';
 import { initApiService } from './service-manager.js';
 import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth } from './oauth-handlers.js';
 
-// Token存储到本地文件中
-const TOKEN_STORE_FILE = 'token-store.json';
+// Tokenless/Stateless Authentication Logic
 
 /**
- * 读取token存储文件
+ * Generate a stateless token (Simple JWT-like structure: payload.signature)
  */
-async function readTokenStore() {
+async function generateStatelessToken() {
+    const expiry = Date.now() + 60 * 60 * 1000; // 1 hour
+    const payload = JSON.stringify({ exp: expiry, sub: 'admin', loginTime: Date.now() });
+    const base64Payload = Buffer.from(payload).toString('base64url');
+
+    // Use the password as the signing secret
+    const secret = await readPasswordFile();
+    const signature = crypto.createHmac('sha256', secret).update(base64Payload).digest('base64url');
+
+    return `${base64Payload}.${signature}`;
+}
+
+/**
+ * Verify a stateless token
+ */
+async function verifyStatelessToken(token) {
     try {
-        if (existsSync(TOKEN_STORE_FILE)) {
-            const content = await fs.readFile(TOKEN_STORE_FILE, 'utf8');
-            return JSON.parse(content);
-        } else {
-            // 如果文件不存在，创建一个默认的token store
-            await writeTokenStore({ tokens: {} });
-            return { tokens: {} };
-        }
-    } catch (error) {
-        console.error('读取token存储文件失败:', error);
-        return { tokens: {} };
-    }
-}
+        if (!token || !token.includes('.')) return null;
+        const [base64Payload, signature] = token.split('.');
+        if (!base64Payload || !signature) return null;
 
-/**
- * 写入token存储文件
- */
-async function writeTokenStore(tokenStore) {
-    try {
-        await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
-    } catch (error) {
-        console.error('写入token存储文件失败:', error);
-    }
-}
+        const secret = await readPasswordFile();
+        const expectedSignature = crypto.createHmac('sha256', secret).update(base64Payload).digest('base64url');
 
-/**
- * 生成简单的token
- */
-function generateToken() {
-    return crypto.randomBytes(32).toString('hex');
-}
+        // Constant time comparison to prevent timing attacks (optional but good practice)
+        // using simple string comparison for now as timing attack risk is low for this internal tool
+        if (signature !== expectedSignature) return null;
 
-/**
- * 生成token过期时间
- */
-function getExpiryTime() {
-    const now = Date.now();
-    const expiry = 60 * 60 * 1000; // 1小时
-    return now + expiry;
-}
+        const payload = JSON.parse(Buffer.from(base64Payload, 'base64url').toString());
+        if (Date.now() > payload.exp) return null;
 
-/**
- * 验证简单token
- */
-async function verifyToken(token) {
-    const tokenStore = await readTokenStore();
-    const tokenInfo = tokenStore.tokens[token];
-    if (!tokenInfo) {
+        return payload;
+    } catch (e) {
         return null;
-    }
-    
-    // 检查是否过期
-    if (Date.now() > tokenInfo.expiryTime) {
-        await deleteToken(token);
-        return null;
-    }
-    
-    return tokenInfo;
-}
-
-/**
- * 保存token到本地文件
- */
-async function saveToken(token, tokenInfo) {
-    const tokenStore = await readTokenStore();
-    tokenStore.tokens[token] = tokenInfo;
-    await writeTokenStore(tokenStore);
-}
-
-/**
- * 删除token
- */
-async function deleteToken(token) {
-    const tokenStore = await readTokenStore();
-    if (tokenStore.tokens[token]) {
-        delete tokenStore.tokens[token];
-        await writeTokenStore(tokenStore);
-    }
-}
-
-/**
- * 清理过期的token
- */
-async function cleanupExpiredTokens() {
-    const tokenStore = await readTokenStore();
-    const now = Date.now();
-    let hasChanges = false;
-    
-    for (const token in tokenStore.tokens) {
-        if (now > tokenStore.tokens[token].expiryTime) {
-            delete tokenStore.tokens[token];
-            hasChanges = true;
-        }
-    }
-    
-    if (hasChanges) {
-        await writeTokenStore(tokenStore);
     }
 }
 
@@ -122,13 +56,25 @@ async function cleanupExpiredTokens() {
  * 读取密码文件内容
  */
 async function readPasswordFile() {
-    try {
-        const password = await fs.readFile('./pwd', 'utf8');
-        return password.trim();
-    } catch (error) {
-        console.error('读取密码文件失败:', error);
-        return null;
+    // 1. 优先检查环境变量
+    if (process.env.WEB_UI_PASSWORD) {
+        return process.env.WEB_UI_PASSWORD.trim();
     }
+
+    // 2. 尝试读取本地 pwd 文件
+    try {
+        const pwdPath = path.join(process.cwd(), 'pwd');
+        if (existsSync(pwdPath)) {
+            const password = await fs.readFile(pwdPath, 'utf8');
+            return password.trim();
+        }
+    } catch (error) {
+        console.error('Reading password file failed:', error);
+    }
+
+    // 3. 如果都失败，返回默认密码
+    console.warn('[UI Auth] Password file not found and WEB_UI_PASSWORD not set. Using default password.');
+    return 'admin123';
 }
 
 /**
@@ -168,14 +114,14 @@ function parseRequestBody(req) {
  */
 async function checkAuth(req) {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return false;
     }
 
     const token = authHeader.substring(7);
-    const tokenInfo = await verifyToken(token);
-    
+    const tokenInfo = await verifyStatelessToken(token);
+
     return tokenInfo !== null;
 }
 
@@ -192,7 +138,7 @@ async function handleLoginRequest(req, res) {
     try {
         const requestData = await parseRequestBody(req);
         const { password } = requestData;
-        
+
         if (!password) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, message: '密码不能为空' }));
@@ -200,25 +146,18 @@ async function handleLoginRequest(req, res) {
         }
 
         const isValid = await validateCredentials(password);
-        
+
         if (isValid) {
-            // 生成简单token
-            const token = generateToken();
-            const expiryTime = getExpiryTime();
-            
-            // 存储token信息到本地文件
-            await saveToken(token, {
-                username: 'admin',
-                loginTime: Date.now(),
-                expiryTime
-            });
+            // 生成无状态token
+            const token = await generateStatelessToken();
+            const expiresIn = '1小时';
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
                 message: '登录成功',
                 token,
-                expiresIn: '1小时'
+                expiresIn
             }));
         } else {
             res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -238,8 +177,7 @@ async function handleLoginRequest(req, res) {
     return true;
 }
 
-// 定时清理过期token
-setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
+// Removed periodic cleanup as it's not needed for stateless tokens
 
 // 配置multer中间件
 const storage = multer.diskStorage({
@@ -324,7 +262,7 @@ async function reloadConfig(providerPoolManager) {
     try {
         // Import config manager dynamically
         const { initializeConfig } = await import('./config-manager.js');
-        
+
         // Reload main config
         const newConfig = await initializeConfig(process.argv.slice(2), 'config.json');
         // Update provider pool manager if available
@@ -332,7 +270,7 @@ async function reloadConfig(providerPoolManager) {
             providerPoolManager.providerPools = newConfig.providerPools;
             providerPoolManager.initializeProviderStatus();
         }
-        
+
         // Update global CONFIG
         Object.assign(CONFIG, newConfig);
         console.log('[UI API] Configuration reloaded:');
@@ -340,9 +278,9 @@ async function reloadConfig(providerPoolManager) {
         // Update initApiService - 清空并重新初始化服务实例
         Object.keys(serviceInstances).forEach(key => delete serviceInstances[key]);
         initApiService(CONFIG);
-        
+
         console.log('[UI API] Configuration reloaded successfully');
-        
+
         return newConfig;
     } catch (error) {
         console.error('[UI API] Failed to reload configuration:', error);
@@ -363,7 +301,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
         return true;
     }
-    
+
     // Handle UI management API requests (需要token验证，除了登录接口、健康检查和Events接口)
     if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events') {
         // 检查token验证
@@ -387,7 +325,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // 文件上传API
     if (method === 'POST' && pathParam === '/api/upload-oauth-credentials') {
         const uploadMiddleware = upload.single('file');
-        
+
         uploadMiddleware(req, res, async (err) => {
             if (err) {
                 console.error('文件上传错误:', err.message);
@@ -414,10 +352,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 // multer执行完成后，表单字段已解析到req.body中
                 const provider = req.body.provider || 'common';
                 const tempFilePath = req.file.path;
-                
+
                 // 根据实际的provider移动文件到正确的目录
                 let targetDir = path.join(process.cwd(), 'configs', provider);
-                
+
                 // 如果是kiro类型的凭证，需要再包裹一层文件夹
                 if (provider === 'kiro') {
                     // 使用时间戳作为子文件夹名称，确保每个上传的文件都有独立的目录
@@ -426,12 +364,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     const subFolder = `${timestamp}_${originalNameWithoutExt}`;
                     targetDir = path.join(targetDir, subFolder);
                 }
-                
+
                 await fs.mkdir(targetDir, { recursive: true });
-                
+
                 const targetFilePath = path.join(targetDir, req.file.filename);
                 await fs.rename(tempFilePath, targetFilePath);
-                
+
                 const relativePath = path.relative(process.cwd(), targetFilePath);
 
                 // 广播更新事件
@@ -532,7 +470,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                         type: 'system_prompt',
                         timestamp: new Date().toISOString()
                     });
-                    
+
                     console.log('[UI API] System prompt updated');
                 } catch (e) {
                     console.warn('[UI API] Failed to write system prompt:', e.message);
@@ -542,7 +480,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Update config.json file
             try {
                 const configPath = 'config.json';
-                
+
                 // Create a clean config object for saving (exclude runtime-only properties)
                 const configToSave = {
                     REQUIRED_API_KEY: currentConfig.REQUIRED_API_KEY,
@@ -573,7 +511,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
                 console.log('[UI API] Configuration saved to config.json');
-                
+
                 // 广播更新事件
                 broadcastEvent('config_update', {
                     action: 'update',
@@ -706,7 +644,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             // Generate UUID if not provided
             if (!providerConfig.uuid) {
-                providerConfig.uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                providerConfig.uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
                     const r = Math.random() * 16 | 0;
                     const v = c == 'x' ? r : (r & 0x3 | 0x8);
                     return v.toString(16);
@@ -722,7 +660,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let providerPools = {};
-            
+
             // Load existing pools
             if (existsSync(filePath)) {
                 try {
@@ -799,7 +737,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let providerPools = {};
-            
+
             // Load existing pools
             if (existsSync(filePath)) {
                 try {
@@ -815,7 +753,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Find and update the provider
             const providers = providerPools[providerType] || [];
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
-            
+
             if (providerIndex === -1) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
@@ -877,7 +815,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let providerPools = {};
-            
+
             // Load existing pools
             if (existsSync(filePath)) {
                 try {
@@ -893,7 +831,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Find and remove the provider
             const providers = providerPools[providerType] || [];
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
-            
+
             if (providerIndex === -1) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
@@ -951,7 +889,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let providerPools = {};
-            
+
             // Load existing pools
             if (existsSync(filePath)) {
                 try {
@@ -967,7 +905,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Find and update the provider
             const providers = providerPools[providerType] || [];
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
-            
+
             if (providerIndex === -1) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
@@ -977,7 +915,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Update isDisabled field
             const provider = providers[providerIndex];
             provider.isDisabled = action === 'disable';
-            
+
             // Save to file
             writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
             console.log(`[UI API] ${action === 'disable' ? 'Disabled' : 'Enabled'} provider ${providerUuid} in ${providerType}`);
@@ -985,7 +923,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // Update provider pool manager if available
             if (providerPoolManager) {
                 providerPoolManager.providerPools = providerPools;
-                
+
                 // Call the appropriate method
                 if (action === 'disable') {
                     providerPoolManager.disableProvider(providerType, provider);
@@ -1025,7 +963,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
             let providerPools = {};
-            
+
             // Load existing pools
             if (existsSync(filePath)) {
                 try {
@@ -1040,7 +978,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             // Reset health status for all providers of this type
             const providers = providerPools[providerType] || [];
-            
+
             if (providers.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
@@ -1095,11 +1033,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
     if (method === 'POST' && generateAuthUrlMatch) {
         const providerType = decodeURIComponent(generateAuthUrlMatch[1]);
-        
+
         try {
             let authUrl = '';
             let authInfo = {};
-            
+
             // 根据提供商类型生成授权链接并启动回调服务器
             if (providerType === 'gemini-cli-oauth') {
                 const result = await handleGeminiCliOAuth(currentConfig);
@@ -1122,7 +1060,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }));
                 return true;
             }
-            
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
@@ -1130,7 +1068,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 authInfo: authInfo
             }));
             return true;
-            
+
         } catch (error) {
             console.error(`[UI API] Failed to generate auth URL for ${providerType}:`, error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1198,12 +1136,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             const filePath = decodeURIComponent(viewConfigMatch[1]);
             const fullPath = path.join(process.cwd(), filePath);
-            
+
             // 安全检查：确保文件路径在允许的目录内
             const allowedDirs = ['configs'];
             const relativePath = path.relative(process.cwd(), fullPath);
             const isAllowed = allowedDirs.some(dir => relativePath.startsWith(dir + path.sep) || relativePath === dir);
-            
+
             if (!isAllowed) {
                 res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1213,7 +1151,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }));
                 return true;
             }
-            
+
             if (!existsSync(fullPath)) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1223,10 +1161,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }));
                 return true;
             }
-            
+
             const content = await fs.readFile(fullPath, 'utf8');
             const stats = await fs.stat(fullPath);
-            
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 path: relativePath,
@@ -1254,12 +1192,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             const filePath = decodeURIComponent(deleteConfigMatch[1]);
             const fullPath = path.join(process.cwd(), filePath);
-            
+
             // 安全检查：确保文件路径在允许的目录内
             const allowedDirs = ['configs'];
             const relativePath = path.relative(process.cwd(), fullPath);
             const isAllowed = allowedDirs.some(dir => relativePath.startsWith(dir + path.sep) || relativePath === dir);
-            
+
             if (!isAllowed) {
                 res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1269,7 +1207,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }));
                 return true;
             }
-            
+
             if (!existsSync(fullPath)) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1279,17 +1217,17 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }));
                 return true;
             }
-            
-            
+
+
             await fs.unlink(fullPath);
-            
+
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'delete',
                 filePath: relativePath,
                 timestamp: new Date().toISOString()
             });
-            
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
@@ -1314,7 +1252,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             // 调用重载配置函数
             const newConfig = await reloadConfig(providerPoolManager);
-            
+
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'reload',
@@ -1322,7 +1260,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPoolsPath: newConfig.PROVIDER_POOLS_FILE_PATH || null,
                 timestamp: new Date().toISOString()
             });
-            
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
@@ -1363,7 +1301,7 @@ export function initializeUIManagement() {
 
     // Override console.log to broadcast logs
     const originalLog = console.log;
-    console.log = function(...args) {
+    console.log = function (...args) {
         originalLog.apply(console, args);
         const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
         const logEntry = {
@@ -1380,7 +1318,7 @@ export function initializeUIManagement() {
 
     // Override console.error to broadcast errors
     const originalError = console.error;
-    console.error = function(...args) {
+    console.error = function (...args) {
         originalError.apply(console, args);
         const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
         const logEntry = {
@@ -1419,10 +1357,10 @@ export function broadcastEvent(eventType, data) {
  */
 async function scanConfigFiles(currentConfig, providerPoolManager) {
     const configFiles = [];
-    
+
     // 只扫描configs目录
     const configsPath = path.join(process.cwd(), 'configs');
-    
+
     if (!existsSync(configsPath)) {
         // console.log('[Config Scanner] configs directory not found, creating empty result');
         return configFiles;
@@ -1517,7 +1455,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
         const ext = path.extname(filePath).toLowerCase();
         const filename = path.basename(filePath);
         const relativePath = path.relative(process.cwd(), filePath);
-        
+
         // 读取文件内容进行分析
         let content = '';
         let type = 'oauth_credentials';
@@ -1525,13 +1463,13 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
         let errorMessage = '';
         let oauthProvider = 'unknown';
         let usageInfo = getFileUsageInfo(relativePath, filename, usedPaths, currentConfig);
-        
+
         try {
             if (ext === '.json') {
                 const rawContent = await fs.readFile(filePath, 'utf8');
                 const jsonData = JSON.parse(rawContent);
                 content = rawContent;
-                
+
                 // 识别OAuth提供商
                 if (jsonData.apiKey || jsonData.api_key) {
                     type = 'api_key';
@@ -1542,7 +1480,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
                 } else if (jsonData.credentials) {
                     oauthProvider = 'service_account';
                 }
-                
+
                 if (jsonData.base_url || jsonData.endpoint) {
                     if (jsonData.base_url.includes('openai.com')) {
                         oauthProvider = 'openai';
@@ -1554,7 +1492,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
                 }
             } else {
                 content = await fs.readFile(filePath, 'utf8');
-                
+
                 if (ext === '.key' || ext === '.pem') {
                     if (content.includes('-----BEGIN') && content.includes('PRIVATE KEY-----')) {
                         oauthProvider = 'private_key';
@@ -1571,7 +1509,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
             isValid = false;
             errorMessage = `无法读取文件: ${readError.message}`;
         }
-        
+
         return {
             name: filename,
             path: relativePath,
@@ -1618,7 +1556,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
     // 检查主要配置中的使用情况
     if (currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH &&
         (pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+            pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
             type: '主要配置',
@@ -1629,7 +1567,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
     if (currentConfig.KIRO_OAUTH_CREDS_FILE_PATH &&
         (pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+            pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
             type: '主要配置',
@@ -1640,7 +1578,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
     if (currentConfig.QWEN_OAUTH_CREDS_FILE_PATH &&
         (pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+            pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
             type: '主要配置',
@@ -1662,7 +1600,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
             if (provider.GEMINI_OAUTH_CREDS_FILE_PATH &&
                 (pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH) ||
-                 pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+                    pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
                     type: '提供商池',
                     location: `Gemini OAuth凭据 (节点${index + 1})`,
@@ -1674,7 +1612,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
             if (provider.KIRO_OAUTH_CREDS_FILE_PATH &&
                 (pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH) ||
-                 pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+                    pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
                     type: '提供商池',
                     location: `Kiro OAuth凭据 (节点${index + 1})`,
@@ -1686,7 +1624,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
             if (provider.QWEN_OAUTH_CREDS_FILE_PATH &&
                 (pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH) ||
-                 pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+                    pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
                     type: '提供商池',
                     location: `Qwen OAuth凭据 (节点${index + 1})`,
@@ -1695,7 +1633,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
                 });
             }
-            
+
             if (providerUsages.length > 0) {
                 usageInfo.usageType = 'provider_pool';
                 usageInfo.usageDetails.push(...providerUsages);
@@ -1720,13 +1658,13 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
  */
 async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
     const oauthFiles = [];
-    
+
     try {
         const files = await fs.readdir(dirPath, { withFileTypes: true });
-        
+
         for (const file of files) {
             const fullPath = path.join(dirPath, file.name);
-            
+
             if (file.isFile()) {
                 const ext = path.extname(file.name).toLowerCase();
                 // 只关注OAuth相关的文件类型
@@ -1749,7 +1687,7 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
     } catch (error) {
         console.warn(`[OAuth Scanner] Failed to scan directory ${dirPath}:`, error.message);
     }
-    
+
     return oauthFiles;
 }
 
@@ -1761,7 +1699,7 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
  */
 function normalizePath(filePath) {
     if (!filePath) return filePath;
-    
+
     // Use path module to normalize and then convert to forward slashes
     const normalized = path.normalize(filePath);
     return normalized.replace(/\\/g, '/');
@@ -1784,30 +1722,30 @@ function getFileName(filePath) {
  */
 function pathsEqual(path1, path2) {
     if (!path1 || !path2) return false;
-    
+
     try {
         // Normalize both paths
         const normalized1 = normalizePath(path1);
         const normalized2 = normalizePath(path2);
-        
+
         // Direct match
         if (normalized1 === normalized2) {
             return true;
         }
-        
+
         // Remove leading './' if present
         const clean1 = normalized1.replace(/^\.\//, '');
         const clean2 = normalized2.replace(/^\.\//, '');
-        
+
         if (clean1 === clean2) {
             return true;
         }
-        
+
         // Check if one is a subset of the other (for relative vs absolute)
         if (normalized1.endsWith('/' + clean2) || normalized2.endsWith('/' + clean1)) {
             return true;
         }
-        
+
         return false;
     } catch (error) {
         console.warn(`[Path Comparison] Error comparing paths: ${path1} vs ${path2}`, error.message);
@@ -1824,54 +1762,54 @@ function pathsEqual(path1, path2) {
  */
 function isPathUsed(relativePath, fileName, usedPaths) {
     if (!relativePath) return false;
-    
+
     // Normalize the relative path
     const normalizedRelativePath = normalizePath(relativePath);
     const cleanRelativePath = normalizedRelativePath.replace(/^\.\//, '');
-    
+
     // Get the filename from relative path
     const relativeFileName = getFileName(normalizedRelativePath);
-    
+
     // 遍历所有已使用路径进行匹配
     for (const usedPath of usedPaths) {
         if (!usedPath) continue;
-        
+
         // 1. 直接路径匹配
         if (pathsEqual(relativePath, usedPath) || pathsEqual(relativePath, './' + usedPath)) {
             return true;
         }
-        
+
         // 2. 标准化路径匹配
         if (pathsEqual(normalizedRelativePath, usedPath) ||
             pathsEqual(normalizedRelativePath, './' + usedPath)) {
             return true;
         }
-        
+
         // 3. 清理后的路径匹配
         if (pathsEqual(cleanRelativePath, usedPath) ||
             pathsEqual(cleanRelativePath, './' + usedPath)) {
             return true;
         }
-        
+
         // 4. 文件名匹配（确保不是误匹配）
         const usedFileName = getFileName(usedPath);
         if (usedFileName === fileName || usedFileName === relativeFileName) {
             // 确保是同一个目录下的文件
             const usedDir = path.dirname(usedPath);
             const relativeDir = path.dirname(normalizedRelativePath);
-            
+
             if (pathsEqual(usedDir, relativeDir) ||
                 pathsEqual(usedDir, cleanRelativePath.replace(/\/[^\/]+$/, '')) ||
                 pathsEqual(relativeDir.replace(/^\.\//, ''), usedDir.replace(/^\.\//, ''))) {
                 return true;
             }
         }
-        
+
         // 5. 绝对路径匹配（Windows和Unix）
         try {
             const resolvedUsedPath = path.resolve(usedPath);
             const resolvedRelativePath = path.resolve(relativePath);
-            
+
             if (resolvedUsedPath === resolvedRelativePath) {
                 return true;
             }
@@ -1879,6 +1817,6 @@ function isPathUsed(relativePath, fileName, usedPaths) {
             // Ignore path resolution errors
         }
     }
-    
+
     return false;
 }

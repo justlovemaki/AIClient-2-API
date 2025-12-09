@@ -1,0 +1,19 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "src/api-server.js",
+            "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/src/api-server.js"
+        }
+    ],
+    "env": {
+        "PORT": "3000",
+        "MODEL_PROVIDER": "gemini-cli-oauth"
+    }
+}

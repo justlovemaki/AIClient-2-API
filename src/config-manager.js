@@ -63,30 +63,32 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         console.error('[Config Error] Failed to load config.json:', error.message);
         // Fallback to default values if config.json is not found or invalid
         currentConfig = {
-            REQUIRED_API_KEY: "123456",
-            SERVER_PORT: 3000,
-            HOST: 'localhost',
-            MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
-            OPENAI_API_KEY: null,
-            OPENAI_BASE_URL: null,
-            CLAUDE_API_KEY: null,
-            CLAUDE_BASE_URL: null,
-            GEMINI_OAUTH_CREDS_BASE64: null,
-            GEMINI_OAUTH_CREDS_FILE_PATH: null,
-            KIRO_OAUTH_CREDS_BASE64: null,
-            KIRO_OAUTH_CREDS_FILE_PATH: null,
-            QWEN_OAUTH_CREDS_FILE_PATH: null,
-            PROJECT_ID: null,
-            SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
-            SYSTEM_PROMPT_MODE: 'append',
-            PROMPT_LOG_BASE_NAME: "prompt_log",
-            PROMPT_LOG_MODE: "none",
-            REQUEST_MAX_RETRIES: 3,
-            REQUEST_BASE_DELAY: 1000,
-            CRON_NEAR_MINUTES: 15,
-            CRON_REFRESH_TOKEN: false,
-            PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
-            MAX_ERROR_COUNT: 3 // 提供商最大错误次数
+            REQUIRED_API_KEY: process.env.REQUIRED_API_KEY || "123456",
+            SERVER_PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+            HOST: process.env.HOST || 'localhost',
+            MODEL_PROVIDER: process.env.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI,
+            OPENAI_API_KEY: process.env.OPENAI_API_KEY || null,
+            OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || null,
+            CLAUDE_API_KEY: process.env.CLAUDE_API_KEY || null,
+            CLAUDE_BASE_URL: process.env.CLAUDE_BASE_URL || null,
+            GEMINI_OAUTH_CREDS_BASE64: process.env.GEMINI_OAUTH_CREDS_BASE64 || null,
+            GEMINI_OAUTH_CREDS_FILE_PATH: process.env.GEMINI_OAUTH_CREDS_FILE_PATH || null,
+            KIRO_OAUTH_CREDS_BASE64: process.env.KIRO_OAUTH_CREDS_BASE64 || null,
+            KIRO_OAUTH_CREDS_FILE_PATH: process.env.KIRO_OAUTH_CREDS_FILE_PATH || null,
+            QWEN_OAUTH_CREDS_FILE_PATH: process.env.QWEN_OAUTH_CREDS_FILE_PATH || null,
+            ANTIGRAVITY_OAUTH_CREDS_BASE64: process.env.ANTIGRAVITY_OAUTH_CREDS_BASE64 || null,
+            ANTIGRAVITY_OAUTH_CREDS_FILE_PATH: process.env.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH || null,
+            PROJECT_ID: process.env.PROJECT_ID || null,
+            SYSTEM_PROMPT_FILE_PATH: process.env.SYSTEM_PROMPT_FILE_PATH || INPUT_SYSTEM_PROMPT_FILE,
+            SYSTEM_PROMPT_MODE: process.env.SYSTEM_PROMPT_MODE || 'append',
+            PROMPT_LOG_BASE_NAME: process.env.PROMPT_LOG_BASE_NAME || "prompt_log",
+            PROMPT_LOG_MODE: process.env.PROMPT_LOG_MODE || "none",
+            REQUEST_MAX_RETRIES: process.env.REQUEST_MAX_RETRIES ? parseInt(process.env.REQUEST_MAX_RETRIES, 10) : 3,
+            REQUEST_BASE_DELAY: process.env.REQUEST_BASE_DELAY ? parseInt(process.env.REQUEST_BASE_DELAY, 10) : 1000,
+            CRON_NEAR_MINUTES: process.env.CRON_NEAR_MINUTES ? parseInt(process.env.CRON_NEAR_MINUTES, 10) : 15,
+            CRON_REFRESH_TOKEN: process.env.CRON_REFRESH_TOKEN === 'true' || false,
+            PROVIDER_POOLS_FILE_PATH: process.env.PROVIDER_POOLS_FILE_PATH || null,
+            MAX_ERROR_COUNT: process.env.MAX_ERROR_COUNT ? parseInt(process.env.MAX_ERROR_COUNT, 10) : 3
         };
         console.log('[Config] Using default configuration.');
     }
@@ -222,16 +224,23 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = args[i + 1];
                 i++;
             } else {
-               console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--qwen-oauth-creds-file') {
-           if (i + 1 < args.length) {
-               currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = args[i + 1];
-               i++;
-           } else {
-               console.warn(`[Config Warning] --qwen-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--cron-near-minutes') {
+                console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
+            }
+        } else if (args[i] === '--qwen-oauth-creds-file') {
+            if (i + 1 < args.length) {
+                currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = args[i + 1];
+                i++;
+            } else {
+                console.warn(`[Config Warning] --qwen-oauth-creds-file flag requires a value.`);
+            }
+        } else if (args[i] === '--antigravity-oauth-creds-file') {
+            if (i + 1 < args.length) {
+                currentConfig.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH = args[i + 1];
+                i++;
+            } else {
+                console.warn(`[Config Warning] --antigravity-oauth-creds-file flag requires a value.`);
+            }
+        } else if (args[i] === '--cron-near-minutes') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
                 i++;

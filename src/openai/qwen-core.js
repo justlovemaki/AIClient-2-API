@@ -23,8 +23,8 @@ const LOCK_TIMEOUT_MS = 10000;
 const CACHE_CHECK_INTERVAL_MS = 1000;
 
 const DEFAULT_LOCK_CONFIG = {
-  maxAttempts: 50,
-  attemptInterval: 200,
+    maxAttempts: 50,
+    attemptInterval: 200,
 };
 
 const QWEN_OAUTH_BASE_URL = 'https://chat.qwen.ai';
@@ -186,7 +186,7 @@ export class QwenApiService {
         if (this.isInitialized) return;
         console.log('[Qwen] Initializing Qwen API Service...');
         await this._initializeAuth();
-        
+
         const axiosConfig = {
             baseURL: DEFAULT_QWEN_BASE_URL,
             headers: {
@@ -195,12 +195,12 @@ export class QwenApiService {
             },
 
         };
-        
+
         // 禁用系统代理
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;
         }
-        
+
         this.currentAxiosInstance = axios.create(axiosConfig);
 
         this.isInitialized = true;
@@ -208,6 +208,23 @@ export class QwenApiService {
     }
 
     async _initializeAuth(forceRefresh = false) {
+        // First check for Base64 credentials configuration
+        if (this.config && this.config.QWEN_OAUTH_CREDS_BASE64) {
+            try {
+                const buffer = Buffer.from(this.config.QWEN_OAUTH_CREDS_BASE64, 'base64');
+                const credentials = JSON.parse(buffer.toString('utf-8'));
+                this.qwenClient.setCredentials(credentials);
+                console.log('[Qwen] Authentication configured successfully from Base64.');
+                // Update shared manager memory cache as well, in case we use it later?
+                // Actually if we use base64 we might skip shared manager file logic or update it loosely
+                return;
+            } catch (error) {
+                console.error('[Qwen] Invalid Base64 credentials:', error.message);
+                // Fallback to normal flow if base64 fails? or throw? 
+                // Let's fallback.
+            }
+        }
+
         try {
             const credentials = await this.sharedManager.getValidCredentials(
                 this.qwenClient,
@@ -265,7 +282,7 @@ export class QwenApiService {
             }
         }
     }
-    
+
     async _authWithQwenDeviceFlow(client, config) {
         let isCancelled = false;
         const cancelHandler = () => { isCancelled = true; };
@@ -353,7 +370,7 @@ export class QwenApiService {
                     console.warn(`Token polling threw an exception: ${error.message}`);
                     // Fall through to wait for the next attempt
                 }
-                
+
                 // Wait for the polling interval before the next attempt
                 await new Promise(resolve => {
                     const timeoutId = setTimeout(resolve, pollInterval);
@@ -363,7 +380,7 @@ export class QwenApiService {
                         resolve();
                     }
                 });
-                
+
                 // Check again after waiting
                 if (isCancelled) {
                     qwenOAuth2Events.emit(QwenOAuth2Event.AuthProgress, 'error', 'Authentication cancelled by user.');
@@ -408,7 +425,7 @@ export class QwenApiService {
         const credString = JSON.stringify(credentials, null, 2);
         await fs.writeFile(filePath, credString);
     }
-    
+
     getCurrentEndpoint(resourceUrl) {
         const baseEndpoint = resourceUrl || DEFAULT_QWEN_BASE_URL;
         const suffix = '/v1';
@@ -469,7 +486,7 @@ export class QwenApiService {
         if (!requestBody || !requestBody.messages || !Array.isArray(requestBody.messages)) {
             return requestBody;
         }
-        
+
         const processedMessages = requestBody.messages.map(message => {
             if (message.content && Array.isArray(message.content)) {
                 // Convert each item to JSON string before joining
@@ -483,7 +500,7 @@ export class QwenApiService {
             }
             return message;
         });
-        
+
         return {
             ...requestBody,
             messages: processedMessages
@@ -513,12 +530,12 @@ export class QwenApiService {
                 // 添加 HTTPS 代理修复相关配置
                 httpsAgent: undefined, // axios-https-proxy-fix 会自动处理
             };
-            
+
             // 禁用系统代理
             if (!this.useSystemProxy) {
                 axiosConfig.proxy = false;
             }
-            
+
             this.currentAxiosInstance = axios.create(axiosConfig);
 
             // Process message content before sending the request
@@ -534,14 +551,14 @@ export class QwenApiService {
                 {
                     "type": "function",
                     "function": {
-                    "name": "ext"
+                        "name": "ext"
                     }
                 }
             ];
-            
+
             // Merge tools if requestBody already has tools defined
             const mergedTools = processedBody.tools ? [...defaultTools, ...processedBody.tools] : defaultTools;
-            
+
             const requestBody = isStream ? { ...processedBody, stream: true, tools: mergedTools } : { ...processedBody, tools: mergedTools };
             const options = isStream ? { responseType: 'stream' } : {};
             const response = await this.currentAxiosInstance.post(endpoint, requestBody, options);
@@ -801,7 +818,7 @@ class SharedTokenManager {
 
         } catch (error) {
             if (error instanceof TokenManagerError) throw error;
-            
+
             // 处理 CredentialsClearRequiredError - 清除凭证文件
             if (error instanceof CredentialsClearRequiredError) {
                 try {
@@ -810,7 +827,7 @@ class SharedTokenManager {
                 } catch (_) { /* ignore */ }
                 throw error; // 重新抛出以便上层处理
             }
-            
+
             // 如果刷新令牌无效/过期,删除此上下文对应的凭证文件
             if (error && (error.status === 400 || /expired|invalid/i.test(error.message || ''))) {
                 try { await fs.unlink(context.credentialFilePath); } catch (_) { /* ignore */ }
@@ -824,7 +841,7 @@ class SharedTokenManager {
             await this.releaseLock(context);
         }
     }
-    
+
     async saveCredentialsToFile(context, credentials) {
         await fs.mkdir(path.dirname(context.credentialFilePath), { recursive: true, mode: 0o700 });
         await fs.writeFile(context.credentialFilePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
