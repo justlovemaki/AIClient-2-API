@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import path from 'node:path';
 import { promises as fs, unlinkSync } from 'node:fs';
 import * as os from 'os';
+import * as http from 'http';
+import * as https from 'https';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
@@ -187,13 +189,28 @@ export class QwenApiService {
         console.log('[Qwen] Initializing Qwen API Service...');
         await this._initializeAuth();
         
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+
         const axiosConfig = {
             baseURL: DEFAULT_QWEN_BASE_URL,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer `,
             },
-
         };
         
         // 禁用系统代理
@@ -501,8 +518,24 @@ export class QwenApiService {
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
 
+            // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+            const httpAgent = new http.Agent({
+                keepAlive: true,
+                maxSockets: 100,
+                maxFreeSockets: 5,
+                timeout: 120000,
+            });
+            const httpsAgent = new https.Agent({
+                keepAlive: true,
+                maxSockets: 100,
+                maxFreeSockets: 5,
+                timeout: 120000,
+            });
+
             const axiosConfig = {
                 baseURL: qwenBaseUrl,
+                httpAgent,
+                httpsAgent,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
@@ -510,8 +543,6 @@ export class QwenApiService {
                     'X-DashScope-UserAgent': userAgent,
                     'X-DashScope-AuthType': 'qwen-oauth',
                 },
-                // 添加 HTTPS 代理修复相关配置
-                httpsAgent: undefined, // axios-https-proxy-fix 会自动处理
             };
             
             // 禁用系统代理

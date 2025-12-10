@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import * as http from 'http';
+import * as https from 'https';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -8,6 +9,20 @@ import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
+
+// 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+const httpAgent = new http.Agent({
+    keepAlive: true,
+    maxSockets: 100,
+    maxFreeSockets: 5,
+    timeout: 120000,
+});
+const httpsAgent = new https.Agent({
+    keepAlive: true,
+    maxSockets: 100,
+    maxFreeSockets: 5,
+    timeout: 120000,
+});
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8086;
@@ -210,7 +225,14 @@ function ensureRolesInContents(requestBody) {
 
 export class AntigravityApiService {
     constructor(config) {
-        this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
+        // 配置 OAuth2Client 使用自定义的 HTTP agent
+        this.authClient = new OAuth2Client({
+            clientId: OAUTH_CLIENT_ID,
+            clientSecret: OAUTH_CLIENT_SECRET,
+            transporterOptions: {
+                agent: httpsAgent,
+            },
+        });
         this.availableModels = [];
         this.isInitialized = false;
 

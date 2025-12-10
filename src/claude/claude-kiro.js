@@ -308,15 +308,15 @@ export class KiroApiService {
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
             keepAlive: true,
-            maxSockets: 200,        // 每个主机最多 10 个连接
+            maxSockets: 100,        // 每个主机最多 10 个连接
             maxFreeSockets: 5,     // 最多保留 5 个空闲连接
-            timeout: 60000,        // 空闲连接 60 秒后关闭
+            timeout: 120000,        // 空闲连接 60 秒后关闭
         });
         const httpsAgent = new https.Agent({
             keepAlive: true,
             maxSockets: 100,
             maxFreeSockets: 5,
-            timeout: 60000,
+            timeout: 120000,
         });
         
         const axiosConfig = {

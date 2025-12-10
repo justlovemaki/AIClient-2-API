@@ -1,4 +1,6 @@
 import axios from 'axios';
+import * as http from 'http';
+import * as https from 'https';
 
 // Assumed OpenAI API specification service for interacting with third-party models
 export class OpenAIApiService {
@@ -12,8 +14,24 @@ export class OpenAIApiService {
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_OPENAI ?? false;
         console.log(`[OpenAI] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
 
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+
         const axiosConfig = {
             baseURL: this.baseUrl,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.apiKey}`
