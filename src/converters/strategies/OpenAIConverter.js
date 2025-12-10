@@ -190,12 +190,12 @@ export class OpenAIConverter extends BaseConverter {
         const mergedClaudeMessages = [];
         for (let i = 0; i < claudeMessages.length; i++) {
             const currentMessage = claudeMessages[i];
-            
+
             if (mergedClaudeMessages.length === 0) {
                 mergedClaudeMessages.push(currentMessage);
             } else {
                 const lastMessage = mergedClaudeMessages[mergedClaudeMessages.length - 1];
-                
+
                 // 如果当前消息的 role 与上一条消息的 role 相同，则合并 content 数组
                 if (lastMessage.role === currentMessage.role) {
                     lastMessage.content = lastMessage.content.concat(currentMessage.content);
@@ -346,7 +346,7 @@ export class OpenAIConverter extends BaseConverter {
         // 处理 OpenAI chunk 对象
         if (typeof openaiChunk === 'object' && !Array.isArray(openaiChunk)) {
             const choice = openaiChunk.choices?.[0];
-            if (!choice){
+            if (!choice) {
                 return null;
             }
 
@@ -400,7 +400,7 @@ export class OpenAIConverter extends BaseConverter {
             //                 }
             //             });
             //         }
-                    
+
             //         // 如果有 function.arguments，说明是参数增量
             //         if (toolCall.function?.arguments) {
             //             events.push({
@@ -445,8 +445,8 @@ export class OpenAIConverter extends BaseConverter {
             if (finishReason) {
                 // 映射 finish_reason
                 const stopReason = finishReason === "stop" ? "end_turn" :
-                                 finishReason === "length" ? "max_tokens" :
-                                 "end_turn";
+                    finishReason === "length" ? "max_tokens" :
+                        "end_turn";
 
                 events.push({
                     type: "content_block_stop",
@@ -545,20 +545,20 @@ export class OpenAIConverter extends BaseConverter {
     toGeminiRequest(openaiRequest) {
         const messages = openaiRequest.messages || [];
         const { systemInstruction, nonSystemMessages } = extractSystemMessages(messages);
-        
+
         const processedMessages = [];
         let lastMessage = null;
-        
+
         for (const message of nonSystemMessages) {
             const geminiRole = message.role === 'assistant' ? 'model' : message.role;
-            
+
             if (geminiRole === 'tool') {
                 // Save previous model response with functionCall
                 if (lastMessage) {
                     processedMessages.push(lastMessage);
                     lastMessage = null;
                 }
-                
+
                 // Get function name from message.name or via tool_call_id
                 let functionName = message.name;
                 if (!functionName && message.tool_call_id) {
@@ -574,11 +574,11 @@ export class OpenAIConverter extends BaseConverter {
                         }
                     }
                 }
-                
+
                 // Build functionResponse according to Gemini API spec
                 const parsedContent = safeParseJSON(message.content);
                 const contentStr = typeof parsedContent === 'string' ? parsedContent : JSON.stringify(parsedContent);
-                
+
                 processedMessages.push({
                     role: 'user',
                     parts: [{
@@ -594,9 +594,9 @@ export class OpenAIConverter extends BaseConverter {
                 lastMessage = null;
                 continue;
             }
-            
+
             let processedContent = this.processOpenAIContentToGeminiParts(message.content);
-            
+
             // Add tool_calls as functionCall to parts
             if (message.tool_calls && Array.isArray(message.tool_calls)) {
                 for (const toolCall of message.tool_calls) {
@@ -610,25 +610,25 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
             }
-            
+
             if (lastMessage && lastMessage.role === geminiRole && !message.tool_calls &&
                 Array.isArray(processedContent) && processedContent.every(p => p.text) &&
                 Array.isArray(lastMessage.parts) && lastMessage.parts.every(p => p.text)) {
                 lastMessage.parts.push(...processedContent);
                 continue;
             }
-            
+
             if (lastMessage) processedMessages.push(lastMessage);
             lastMessage = { role: geminiRole, parts: processedContent };
         }
         if (lastMessage) processedMessages.push(lastMessage);
-        
+
         const geminiRequest = {
             contents: processedMessages.filter(item => item.parts && item.parts.length > 0)
         };
-        
+
         if (systemInstruction) geminiRequest.systemInstruction = systemInstruction;
-        
+
         if (openaiRequest.tools?.length) {
             geminiRequest.tools = [{
                 functionDeclarations: openaiRequest.tools.map(t => {
@@ -646,14 +646,14 @@ export class OpenAIConverter extends BaseConverter {
                 delete geminiRequest.tools;
             }
         }
-        
+
         if (openaiRequest.tool_choice) {
             geminiRequest.toolConfig = this.buildGeminiToolConfig(openaiRequest.tool_choice);
         }
-        
+
         const config = this.buildGeminiGenerationConfig(openaiRequest, openaiRequest.model);
         if (Object.keys(config).length) geminiRequest.generationConfig = config;
-        
+
         return geminiRequest;
     }
 
@@ -663,20 +663,20 @@ export class OpenAIConverter extends BaseConverter {
     processOpenAIContentToGeminiParts(content) {
         if (!content) return [];
         if (typeof content === 'string') return [{ text: content }];
-        
+
         if (Array.isArray(content)) {
             const parts = [];
-            
+
             for (const item of content) {
                 if (!item) continue;
-                
+
                 if (item.type === 'text' && item.text) {
                     parts.push({ text: item.text });
                 } else if (item.type === 'image_url' && item.image_url) {
                     const imageUrl = typeof item.image_url === 'string'
                         ? item.image_url
                         : item.image_url.url;
-                        
+
                     if (imageUrl.startsWith('data:')) {
                         const [header, data] = imageUrl.split(',');
                         const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
@@ -688,10 +688,10 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
             }
-            
+
             return parts;
         }
-        
+
         return [];
     }
 
@@ -711,13 +711,25 @@ export class OpenAIConverter extends BaseConverter {
     /**
      * 构建Gemini生成配置
      */
-    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools }, model) {
+    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools, response_format }, model) {
         const config = {};
         config.temperature = checkAndAssignOrDefault(temperature, 1);
         config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, 65535);
         config.topP = checkAndAssignOrDefault(top_p, 0.95);
         if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
-        
+
+        // Handle response_format
+        if (response_format) {
+            if (response_format.type === 'json_object') {
+                config.responseMimeType = 'application/json';
+            } else if (response_format.type === 'json_schema' && response_format.json_schema) {
+                config.responseMimeType = 'application/json';
+                if (response_format.json_schema.schema) {
+                    config.responseSchema = response_format.json_schema.schema;
+                }
+            }
+        }
+
         // Gemini 2.5 and thinking models require responseModalities: ["TEXT"]
         // But this parameter cannot be added when using tools (causes 400 error)
         const hasTools = tools && Array.isArray(tools) && tools.length > 0;
@@ -727,7 +739,7 @@ export class OpenAIConverter extends BaseConverter {
         } else if (hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
             console.log(`[OpenAI->Gemini] Skipping responseModalities for model ${model} because tools are present`);
         }
-        
+
         return config;
     }
     /**
@@ -822,7 +834,7 @@ export class OpenAIConverter extends BaseConverter {
                         name: toolCall.function.name || '',
                         args: {}
                     };
-                    
+
                     if (toolCall.function.arguments) {
                         try {
                             functionCall.args = typeof toolCall.function.arguments === 'string'
@@ -833,7 +845,7 @@ export class OpenAIConverter extends BaseConverter {
                             functionCall.args = { partial: toolCall.function.arguments };
                         }
                     }
-                    
+
                     parts.push({ functionCall });
                 }
             }
@@ -894,7 +906,7 @@ export class OpenAIConverter extends BaseConverter {
         if (openaiRequest.messages && openaiRequest.messages.length > 0) {
             responsesRequest.messages = openaiRequest.messages.map(msg => ({
                 role: msg.role,
-                content: typeof msg.content === 'string' 
+                content: typeof msg.content === 'string'
                     ? [{ type: 'input_text', text: msg.content }]
                     : msg.content
             }));
@@ -1031,7 +1043,7 @@ export class OpenAIConverter extends BaseConverter {
         if (delta.tool_calls && delta.tool_calls.length > 0) {
             for (const toolCall of delta.tool_calls) {
                 const outputIndex = toolCall.index || 0;
-                
+
                 // 如果有 function.name，说明是工具调用开始
                 if (toolCall.function && toolCall.function.name) {
                     events.push({
@@ -1047,7 +1059,7 @@ export class OpenAIConverter extends BaseConverter {
                         type: "response.output_item.added"
                     });
                 }
-                
+
                 // 如果有 function.arguments，说明是参数增量
                 if (toolCall.function && toolCall.function.arguments) {
                     events.push({
@@ -1080,7 +1092,7 @@ export class OpenAIConverter extends BaseConverter {
                 generateOutputItemDone(responseId),
                 generateResponseCompleted(responseId)
             );
-            
+
             // 如果有 usage 信息，更新最后一个事件
             if (openaiChunk.usage && events.length > 0) {
                 const lastEvent = events[events.length - 1];
