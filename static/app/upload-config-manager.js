@@ -78,6 +78,14 @@ function createConfigItemElement(config, index) {
 
     // 生成关联详情HTML
     const usageInfoHtml = generateUsageInfoHtml(config);
+    
+    // 判断是否可以一键关联（未关联且路径包含支持的提供商目录）
+    const providerInfo = detectProviderFromPath(config.path);
+    const canQuickLink = !config.isUsed && providerInfo !== null;
+    const quickLinkBtnHtml = canQuickLink ?
+        `<button class="btn-quick-link" data-path="${config.path}" title="一键关联到 ${providerInfo.displayName}">
+            <i class="fas fa-link"></i> ${providerInfo.shortName}
+        </button>` : '';
 
     item.innerHTML = `
         <div class="config-item-header">
@@ -90,6 +98,7 @@ function createConfigItemElement(config, index) {
             <div class="config-item-status">
                 <i class="fas ${statusIcon}"></i>
                 ${statusText}
+                ${quickLinkBtnHtml}
             </div>
         </div>
         <div class="config-item-details">
@@ -138,6 +147,15 @@ function createConfigItemElement(config, index) {
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteConfig(config.path);
+        });
+    }
+
+    // 一键关联按钮事件
+    const quickLinkBtn = item.querySelector('.btn-quick-link');
+    if (quickLinkBtn) {
+        quickLinkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quickLinkProviderConfig(config.path);
         });
     }
 
@@ -706,6 +724,12 @@ function initUploadConfigManager() {
         refreshBtn.addEventListener('click', loadConfigList);
     }
 
+    // 批量关联配置按钮
+    const batchLinkBtn = document.getElementById('batchLinkKiroBtn') || document.getElementById('batchLinkProviderBtn');
+    if (batchLinkBtn) {
+        batchLinkBtn.addEventListener('click', batchLinkProviderConfigs);
+    }
+
     // 初始加载配置列表
     loadConfigList();
 }
@@ -735,6 +759,150 @@ async function reloadConfig() {
     } catch (error) {
         console.error('重载配置失败:', error);
         showToast('重载配置失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 根据文件路径检测对应的提供商类型
+ * @param {string} filePath - 文件路径
+ * @returns {Object|null} 提供商信息对象或null
+ */
+function detectProviderFromPath(filePath) {
+    const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase();
+    
+    // 定义目录到提供商的映射关系
+    const providerMappings = [
+        {
+            patterns: ['configs/kiro/', '/kiro/'],
+            providerType: 'claude-kiro-oauth',
+            displayName: 'Claude Kiro OAuth',
+            shortName: 'kiro-oauth'
+        },
+        {
+            patterns: ['configs/gemini/', '/gemini/', 'configs/gemini-cli/'],
+            providerType: 'gemini-cli-oauth',
+            displayName: 'Gemini CLI OAuth',
+            shortName: 'gemini-oauth'
+        },
+        {
+            patterns: ['configs/qwen/', '/qwen/'],
+            providerType: 'openai-qwen-oauth',
+            displayName: 'Qwen OAuth',
+            shortName: 'qwen-oauth'
+        },
+        {
+            patterns: ['configs/antigravity/', '/antigravity/'],
+            providerType: 'gemini-antigravity',
+            displayName: 'Gemini Antigravity',
+            shortName: 'antigravity'
+        }
+    ];
+
+    // 遍历映射关系，查找匹配的提供商
+    for (const mapping of providerMappings) {
+        for (const pattern of mapping.patterns) {
+            if (normalizedPath.includes(pattern)) {
+                return {
+                    providerType: mapping.providerType,
+                    displayName: mapping.displayName,
+                    shortName: mapping.shortName
+                };
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * 一键关联配置到对应的提供商
+ * @param {string} filePath - 配置文件路径
+ */
+async function quickLinkProviderConfig(filePath) {
+    try {
+        const providerInfo = detectProviderFromPath(filePath);
+        if (!providerInfo) {
+            showToast('无法识别配置文件对应的提供商类型', 'error');
+            return;
+        }
+        
+        showToast(`正在关联配置到 ${providerInfo.displayName}...`, 'info');
+        
+        const result = await window.apiClient.post('/quick-link-provider', {
+            filePath: filePath
+        });
+        
+        showToast(result.message || '配置关联成功', 'success');
+        
+        // 刷新配置列表
+        await loadConfigList();
+    } catch (error) {
+        console.error('一键关联失败:', error);
+        showToast('关联失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 批量关联所有支持的提供商目录下的未关联配置
+ */
+async function batchLinkProviderConfigs() {
+    // 筛选出所有支持的提供商目录下的未关联配置
+    const unlinkedConfigs = allConfigs.filter(config => {
+        if (config.isUsed) return false;
+        const providerInfo = detectProviderFromPath(config.path);
+        return providerInfo !== null;
+    });
+    
+    if (unlinkedConfigs.length === 0) {
+        showToast('没有需要关联的配置文件', 'info');
+        return;
+    }
+    
+    // 按提供商类型分组统计
+    const groupedByProvider = {};
+    unlinkedConfigs.forEach(config => {
+        const providerInfo = detectProviderFromPath(config.path);
+        if (providerInfo) {
+            if (!groupedByProvider[providerInfo.displayName]) {
+                groupedByProvider[providerInfo.displayName] = 0;
+            }
+            groupedByProvider[providerInfo.displayName]++;
+        }
+    });
+    
+    const providerSummary = Object.entries(groupedByProvider)
+        .map(([name, count]) => `${name}: ${count}个`)
+        .join(', ');
+    
+    const confirmMsg = `确定要批量关联 ${unlinkedConfigs.length} 个配置吗？\n\n${providerSummary}`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    showToast(`正在批量关联 ${unlinkedConfigs.length} 个配置...`, 'info');
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const config of unlinkedConfigs) {
+        try {
+            await window.apiClient.post('/quick-link-provider', {
+                filePath: config.path
+            });
+            successCount++;
+        } catch (error) {
+            console.error(`关联失败: ${config.path}`, error);
+            failCount++;
+        }
+    }
+    
+    // 刷新配置列表
+    await loadConfigList();
+    
+    if (failCount === 0) {
+        showToast(`成功关联 ${successCount} 个配置`, 'success');
+    } else {
+        showToast(`关联完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, 'warning');
     }
 }
 

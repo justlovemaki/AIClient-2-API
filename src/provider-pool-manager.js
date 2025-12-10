@@ -1,19 +1,22 @@
 import * as fs from 'fs'; // Import fs module
 import { getServiceAdapter } from './adapter.js';
 import { MODEL_PROVIDER } from './common.js';
+import axios from 'axios';
 
 /**
  * Manages a pool of API service providers, handling their health and selection.
  */
 export class ProviderPoolManager {
     // 默认健康检查模型配置
+    // 键名必须与 MODEL_PROVIDER 常量值一致
     static DEFAULT_HEALTH_CHECK_MODELS = {
-        'gemini-cli': 'gemini-2.5-flash',
+        'gemini-cli-oauth': 'gemini-2.5-flash',
+        'gemini-antigravity': 'gemini-2.5-flash',
         'openai-custom': 'gpt-3.5-turbo',
         'claude-custom': 'claude-3-7-sonnet-20250219',
-        'kiro-api': 'claude-3-7-sonnet-20250219',
-        'qwen-api': 'qwen3-coder-flash',
-        'openai-custom-responses': 'gpt-5-low'
+        'claude-kiro-oauth': 'claude-haiku-4-5',
+        'openai-qwen-oauth': 'qwen3-coder-flash',
+        'openaiResponses-custom': 'gpt-4o-mini'
     };
 
     constructor(providerPools, options = {}) {
@@ -81,6 +84,11 @@ export class ProviderPoolManager {
                 providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
                     ? providerConfig.lastErrorTime.toISOString()
                     : (providerConfig.lastErrorTime || null);
+                
+                // 健康检测相关字段
+                providerConfig.lastHealthCheckTime = providerConfig.lastHealthCheckTime || null;
+                providerConfig.lastHealthCheckModel = providerConfig.lastHealthCheckModel || null;
+                providerConfig.lastErrorMessage = providerConfig.lastErrorMessage || null;
 
                 this.providerStatus[providerType].push({
                     config: providerConfig,
@@ -165,8 +173,9 @@ export class ProviderPoolManager {
      * Marks a provider as unhealthy (e.g., after an API error).
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
+     * @param {string} [errorMessage] - Optional error message to store.
      */
-    markProviderUnhealthy(providerType, providerConfig) {
+    markProviderUnhealthy(providerType, providerConfig, errorMessage = null) {
         if (!providerConfig?.uuid) {
             this._log('error', 'Invalid providerConfig in markProviderUnhealthy');
             return;
@@ -176,6 +185,11 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.errorCount++;
             provider.config.lastErrorTime = new Date().toISOString();
+            
+            // 保存错误信息
+            if (errorMessage) {
+                provider.config.lastErrorMessage = errorMessage;
+            }
 
             if (provider.config.errorCount >= this.maxErrorCount) {
                 provider.config.isHealthy = false;
@@ -192,9 +206,10 @@ export class ProviderPoolManager {
      * Marks a provider as healthy.
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
-     * @param {boolean} isInit - Whether to reset usage count (optional, default: false).
+     * @param {boolean} resetUsageCount - Whether to reset usage count (optional, default: false).
+     * @param {string} [healthCheckModel] - Optional model name used for health check.
      */
-    markProviderHealthy(providerType, providerConfig, resetUsageCount = false) {
+    markProviderHealthy(providerType, providerConfig, resetUsageCount = false, healthCheckModel = null) {
         if (!providerConfig?.uuid) {
             this._log('error', 'Invalid providerConfig in markProviderHealthy');
             return;
@@ -205,6 +220,14 @@ export class ProviderPoolManager {
             provider.config.isHealthy = true;
             provider.config.errorCount = 0;
             provider.config.lastErrorTime = null;
+            provider.config.lastErrorMessage = null;
+            
+            // 更新健康检测信息
+            provider.config.lastHealthCheckTime = new Date().toISOString();
+            if (healthCheckModel) {
+                provider.config.lastHealthCheckModel = healthCheckModel;
+            }
+            
             // 只有在明确要求重置使用计数时才重置
             if (resetUsageCount) {
                 provider.config.usageCount = 0;
@@ -295,122 +318,165 @@ export class ProviderPoolManager {
 
                 try {
                     // Perform actual health check based on provider type
-                    const isHealthy = await this._checkProviderHealth(providerType, providerConfig);
+                    const healthResult = await this._checkProviderHealth(providerType, providerConfig);
                     
-                    if (isHealthy === null) {
+                    if (healthResult === null) {
                         this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}) skipped: Check not implemented.`);
                         this.resetProviderCounters(providerType, providerConfig);
                         continue;
                     }
                     
-                    if (isHealthy) {
+                    if (healthResult.success) {
                         if (!providerStatus.config.isHealthy) {
                             // Provider was unhealthy but is now healthy
                             // 恢复健康时不重置使用计数，保持原有值
-                            this.markProviderHealthy(providerType, providerConfig, true);
+                            this.markProviderHealthy(providerType, providerConfig, true, healthResult.modelName);
                             this._log('info', `Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
                         } else {
                             // Provider was already healthy and still is
                             // 只在初始化时重置使用计数
-                            this.markProviderHealthy(providerType, providerConfig, true);
+                            this.markProviderHealthy(providerType, providerConfig, true, healthResult.modelName);
                             this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
                         }
                     } else {
                         // Provider is not healthy
-                        this._log('warn', `Health check for ${providerConfig.uuid} (${providerType}) failed: Provider is not responding correctly.`);
-                        this.markProviderUnhealthy(providerType, providerConfig);
+                        this._log('warn', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${healthResult.errorMessage || 'Provider is not responding correctly.'}`);
+                        this.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
+                        
+                        // 更新健康检测时间和模型（即使失败也记录）
+                        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+                        if (healthResult.modelName) {
+                            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+                        }
                     }
 
                 } catch (error) {
                     this._log('error', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${error.message}`);
                     // If a health check fails, mark it unhealthy, which will update error count and lastErrorTime
-                    this.markProviderUnhealthy(providerType, providerConfig);
+                    this.markProviderUnhealthy(providerType, providerConfig, error.message);
                 }
             }
         }
     }
 
     /**
-     * 构建健康检查请求
+     * 构建健康检查请求（返回多种格式用于重试）
      * @private
+     * @returns {Array} 请求格式数组，按优先级排序
      */
-    _buildHealthCheckRequest(providerType, modelName) {
-        const baseMessage = { role: 'user', content: 'Hello, are you ok?' };
+    _buildHealthCheckRequests(providerType, modelName) {
+        const baseMessage = { role: 'user', content: 'Hi' };
+        const requests = [];
         
-        // Gemini 使用不同的请求格式
+        // Gemini 使用 contents 格式
         if (providerType.startsWith('gemini')) {
-            return {
+            requests.push({
                 contents: [{
                     role: 'user',
                     parts: [{ text: baseMessage.content }]
                 }]
-            };
+            });
+            return requests;
+        }
+        
+        // Kiro OAuth 同时支持 messages 和 contents 格式
+        if (providerType.startsWith('claude-kiro')) {
+            // 优先使用 messages 格式
+            requests.push({
+                messages: [baseMessage],
+                model: modelName,
+                max_tokens: 1
+            });
+            // 备用 contents 格式
+            requests.push({
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: baseMessage.content }]
+                }],
+                max_tokens: 1
+            });
+            return requests;
         }
         
         // OpenAI Custom Responses 使用特殊格式
         if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
-            return {
+            requests.push({
                 input: [baseMessage],
                 model: modelName
-            };
+            });
+            return requests;
         }
         
-        // 其他提供商（OpenAI、Claude、Kiro、Qwen）使用标准格式
-        return {
+        // 其他提供商（OpenAI、Claude、Qwen）使用标准 messages 格式
+        requests.push({
             messages: [baseMessage],
             model: modelName
-        };
+        });
+        
+        return requests;
     }
 
     /**
      * Performs an actual health check for a specific provider.
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to check.
-     * @returns {Promise<boolean|null>} - True if healthy, false if unhealthy, null if check not implemented.
+     * @param {boolean} forceCheck - If true, ignore checkHealth config and force the check.
+     * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}|null>} - Health check result object or null if check not implemented.
      */
-    async _checkProviderHealth(providerType, providerConfig) {
-        try {
-            // 如果未启用健康检查，返回 null
-            if (!providerConfig.checkHealth) {
-                return null;
-            }
-
-            // 合并全局配置和 provider 配置（简化代理配置）
-            const proxyKeys = ['GEMINI', 'OPENAI', 'CLAUDE', 'QWEN', 'KIRO'];
-            const tempConfig = {
-                ...providerConfig,
-                MODEL_PROVIDER: providerType
-            };
-            
-            // 动态添加代理配置
-            proxyKeys.forEach(key => {
-                const proxyKey = `USE_SYSTEM_PROXY_${key}`;
-                if (this.globalConfig[proxyKey] !== undefined) {
-                    tempConfig[proxyKey] = this.globalConfig[proxyKey];
-                }
-            });
-
-            const serviceAdapter = getServiceAdapter(tempConfig);
-            
-            // 确定健康检查使用的模型名称
-            const modelName = providerConfig.checkModelName ||
-                            ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
-            
-            if (!modelName) {
-                this._log('warn', `Unknown provider type for health check: ${providerType}`);
-                return false;
-            }
-            
-            // 构建健康检查请求
-            const healthCheckRequest = this._buildHealthCheckRequest(providerType, modelName);
-            
-            this._log('debug', `Health check request for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
-            await serviceAdapter.generateContent(modelName, healthCheckRequest);
-            return true;
-        } catch (error) {
-            this._log('error', `Health check failed for ${providerType}: ${error.message}`);
-            return false;
+    async _checkProviderHealth(providerType, providerConfig, forceCheck = false) {
+        // 确定健康检查使用的模型名称
+        const modelName = providerConfig.checkModelName ||
+                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
+        
+        // 如果未启用健康检查且不是强制检查，返回 null
+        if (!providerConfig.checkHealth && !forceCheck) {
+            return null;
         }
+
+        if (!modelName) {
+            this._log('warn', `Unknown provider type for health check: ${providerType}`);
+            return { success: false, modelName: null, errorMessage: 'Unknown provider type for health check' };
+        }
+
+        // 使用内部服务适配器方式进行健康检查
+        const proxyKeys = ['GEMINI', 'OPENAI', 'CLAUDE', 'QWEN', 'KIRO'];
+        const tempConfig = {
+            ...providerConfig,
+            MODEL_PROVIDER: providerType
+        };
+        
+        proxyKeys.forEach(key => {
+            const proxyKey = `USE_SYSTEM_PROXY_${key}`;
+            if (this.globalConfig[proxyKey] !== undefined) {
+                tempConfig[proxyKey] = this.globalConfig[proxyKey];
+            }
+        });
+
+        const serviceAdapter = getServiceAdapter(tempConfig);
+        
+        // 获取所有可能的请求格式
+        const healthCheckRequests = this._buildHealthCheckRequests(providerType, modelName);
+        
+        // 重试机制：尝试不同的请求格式
+        const maxRetries = healthCheckRequests.length;
+        let lastError = null;
+        
+        for (let i = 0; i < maxRetries; i++) {
+            const healthCheckRequest = healthCheckRequests[i];
+            try {
+                this._log('debug', `Health check attempt ${i + 1}/${maxRetries} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
+                await serviceAdapter.generateContent(modelName, healthCheckRequest);
+                return { success: true, modelName, errorMessage: null };
+            } catch (error) {
+                lastError = error;
+                this._log('debug', `Health check attempt ${i + 1} failed for ${providerType}: ${error.message}`);
+                // 继续尝试下一个格式
+            }
+        }
+        
+        // 所有尝试都失败
+        this._log('error', `Health check failed for ${providerType} after ${maxRetries} attempts: ${lastError?.message}`);
+        return { success: false, modelName, errorMessage: lastError?.message || 'All health check attempts failed' };
     }
 
     /**
@@ -471,6 +537,9 @@ export class ProviderPoolManager {
                         }
                         if (config.lastErrorTime instanceof Date) {
                             config.lastErrorTime = config.lastErrorTime.toISOString();
+                        }
+                        if (config.lastHealthCheckTime instanceof Date) {
+                            config.lastHealthCheckTime = config.lastHealthCheckTime.toISOString();
                         }
                         return config;
                     });

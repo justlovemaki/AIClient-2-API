@@ -9,6 +9,18 @@ import { CONFIG } from './config-manager.js';
 import { serviceInstances } from './adapter.js';
 import { initApiService } from './service-manager.js';
 import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth } from './oauth-handlers.js';
+import {
+    generateUUID,
+    normalizePath,
+    getFileName,
+    pathsEqual,
+    isPathUsed,
+    detectProviderFromPath,
+    isValidOAuthCredentials,
+    createProviderConfig,
+    addToUsedPaths,
+    formatSystemPath
+} from './provider-utils.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = 'token-store.json';
@@ -706,11 +718,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             // Generate UUID if not provided
             if (!providerConfig.uuid) {
-                providerConfig.uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                    const r = Math.random() * 16 | 0;
-                    const v = c == 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
+                providerConfig.uuid = generateUUID();
             }
 
             // Set default values
@@ -1091,6 +1099,118 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Perform health check for all providers of a specific type
+    const healthCheckMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/health-check$/);
+    if (method === 'POST' && healthCheckMatch) {
+        const providerType = decodeURIComponent(healthCheckMatch[1]);
+
+        try {
+            if (!providerPoolManager) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider pool manager not initialized' } }));
+                return true;
+            }
+
+            const providers = providerPoolManager.providerStatus[providerType] || [];
+            
+            if (providers.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
+                return true;
+            }
+
+            console.log(`[UI API] Starting health check for ${providers.length} providers in ${providerType}`);
+
+            // 执行健康检测（强制检查，忽略 checkHealth 配置）
+            const results = [];
+            for (const providerStatus of providers) {
+                const providerConfig = providerStatus.config;
+                try {
+                    // 传递 forceCheck = true 强制执行健康检查，忽略 checkHealth 配置
+                    const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig, true);
+                    
+                    if (healthResult === null) {
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: null,
+                            message: '健康检测不支持此提供商类型'
+                        });
+                        continue;
+                    }
+                    
+                    if (healthResult.success) {
+                        providerPoolManager.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: true,
+                            modelName: healthResult.modelName,
+                            message: '健康'
+                        });
+                    } else {
+                        providerPoolManager.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
+                        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+                        if (healthResult.modelName) {
+                            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+                        }
+                        results.push({
+                            uuid: providerConfig.uuid,
+                            success: false,
+                            modelName: healthResult.modelName,
+                            message: healthResult.errorMessage || '检测失败'
+                        });
+                    }
+                } catch (error) {
+                    providerPoolManager.markProviderUnhealthy(providerType, providerConfig, error.message);
+                    results.push({
+                        uuid: providerConfig.uuid,
+                        success: false,
+                        message: error.message
+                    });
+                }
+            }
+
+            // 保存更新后的状态到文件
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            
+            // 从 providerStatus 构建 providerPools 对象并保存
+            const providerPools = {};
+            for (const pType in providerPoolManager.providerStatus) {
+                providerPools[pType] = providerPoolManager.providerStatus[pType].map(ps => ps.config);
+            }
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+
+            const successCount = results.filter(r => r.success === true).length;
+            const failCount = results.filter(r => r.success === false).length;
+
+            console.log(`[UI API] Health check completed for ${providerType}: ${successCount} healthy, ${failCount} unhealthy`);
+
+            // 广播更新事件
+            broadcastEvent('config_update', {
+                action: 'health_check',
+                filePath: filePath,
+                providerType,
+                results,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `健康检测完成: ${successCount} 个健康, ${failCount} 个异常`,
+                successCount,
+                failCount,
+                totalCount: providers.length,
+                results
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Health check error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Generate OAuth authorization URL for providers
     const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
     if (method === 'POST' && generateAuthUrlMatch) {
@@ -1309,6 +1429,125 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Quick link config to corresponding provider based on directory
+    if (method === 'POST' && pathParam === '/api/quick-link-provider') {
+        try {
+            const body = await getRequestBody(req);
+            const { filePath } = body;
+
+            if (!filePath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'filePath is required' } }));
+                return true;
+            }
+
+            const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase();
+            
+            // 根据文件路径自动识别提供商类型
+            const providerMapping = detectProviderFromPath(normalizedPath);
+            
+            if (!providerMapping) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: '无法识别配置文件对应的提供商类型，请确保文件位于 configs/kiro/、configs/gemini/、configs/qwen/ 或 configs/antigravity/ 目录下'
+                    }
+                }));
+                return true;
+            }
+
+            const { providerType, credPathKey, defaultCheckModel, displayName } = providerMapping;
+            const poolsFilePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            
+            // Load existing pools
+            let providerPools = {};
+            if (existsSync(poolsFilePath)) {
+                try {
+                    const fileContent = readFileSync(poolsFilePath, 'utf8');
+                    providerPools = JSON.parse(fileContent);
+                } catch (readError) {
+                    console.warn('[UI API] Failed to read existing provider pools:', readError.message);
+                }
+            }
+
+            // Ensure provider type array exists
+            if (!providerPools[providerType]) {
+                providerPools[providerType] = [];
+            }
+
+            // Check if already linked - 使用标准化路径进行比较
+            const normalizedForComparison = filePath.replace(/\\/g, '/');
+            const isAlreadyLinked = providerPools[providerType].some(p => {
+                const existingPath = p[credPathKey];
+                if (!existingPath) return false;
+                const normalizedExistingPath = existingPath.replace(/\\/g, '/');
+                return normalizedExistingPath === normalizedForComparison ||
+                       normalizedExistingPath === './' + normalizedForComparison ||
+                       './' + normalizedExistingPath === normalizedForComparison;
+            });
+
+            if (isAlreadyLinked) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: '该配置文件已关联' } }));
+                return true;
+            }
+
+            // Create new provider config based on provider type
+            const newProvider = createProviderConfig({
+                credPathKey,
+                credPath: formatSystemPath(filePath),
+                defaultCheckModel,
+                needsProjectId: providerMapping.needsProjectId
+            });
+
+            providerPools[providerType].push(newProvider);
+
+            // Save to file
+            writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] Quick linked config: ${filePath} -> ${providerType}`);
+
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+
+            // Broadcast update event
+            broadcastEvent('config_update', {
+                action: 'quick_link',
+                filePath: poolsFilePath,
+                providerType,
+                newProvider,
+                timestamp: new Date().toISOString()
+            });
+
+            broadcastEvent('provider_update', {
+                action: 'add',
+                providerType,
+                providerConfig: newProvider,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `配置已成功关联到 ${displayName}`,
+                provider: newProvider,
+                providerType: providerType
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Quick link failed:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: '关联失败: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
     // Reload configuration files
     if (method === 'POST' && pathParam === '/api/reload-config') {
         try {
@@ -1431,30 +1670,9 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     const usedPaths = new Set(); // 存储已使用的路径，用于判断关联状态
 
     // 从配置中提取所有OAuth凭据文件路径 - 标准化路径格式
-    if (currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
-    if (currentConfig.KIRO_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.KIRO_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
-    if (currentConfig.QWEN_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.QWEN_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
+    addToUsedPaths(usedPaths, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH);
+    addToUsedPaths(usedPaths, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH);
+    addToUsedPaths(usedPaths, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH);
 
     // 使用最新的提供商池数据
     let providerPools = currentConfig.providerPools;
@@ -1466,30 +1684,10 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     if (providerPools) {
         for (const [providerType, providers] of Object.entries(providerPools)) {
             for (const provider of providers) {
-                if (provider.GEMINI_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.GEMINI_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
-                    }
-                }
-                if (provider.KIRO_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.KIRO_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
-                    }
-                }
-                if (provider.QWEN_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.QWEN_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
-                    }
-                }
+                addToUsedPaths(usedPaths, provider.GEMINI_OAUTH_CREDS_FILE_PATH);
+                addToUsedPaths(usedPaths, provider.KIRO_OAUTH_CREDS_FILE_PATH);
+                addToUsedPaths(usedPaths, provider.QWEN_OAUTH_CREDS_FILE_PATH);
+                addToUsedPaths(usedPaths, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH);
             }
         }
     }
@@ -1695,6 +1893,18 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
                 });
             }
+
+            if (provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH &&
+                (pathsEqual(relativePath, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH) ||
+                 pathsEqual(relativePath, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+                providerUsages.push({
+                    type: '提供商池',
+                    location: `Antigravity OAuth凭据 (节点${index + 1})`,
+                    providerType: providerType,
+                    providerIndex: index,
+                    configKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
+                });
+            }
             
             if (providerUsages.length > 0) {
                 usageInfo.usageType = 'provider_pool';
@@ -1754,131 +1964,5 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
 }
 
 
-/**
- * Normalize a path for cross-platform compatibility
- * @param {string} filePath - The file path to normalize
- * @returns {string} Normalized path using forward slashes
- */
-function normalizePath(filePath) {
-    if (!filePath) return filePath;
-    
-    // Use path module to normalize and then convert to forward slashes
-    const normalized = path.normalize(filePath);
-    return normalized.replace(/\\/g, '/');
-}
-
-/**
- * Extract filename from any path format
- * @param {string} filePath - The file path
- * @returns {string} Filename
- */
-function getFileName(filePath) {
-    return path.basename(filePath);
-}
-
-/**
- * Check if two paths refer to the same file (cross-platform compatible)
- * @param {string} path1 - First path
- * @param {string} path2 - Second path
- * @returns {boolean} True if paths refer to same file
- */
-function pathsEqual(path1, path2) {
-    if (!path1 || !path2) return false;
-    
-    try {
-        // Normalize both paths
-        const normalized1 = normalizePath(path1);
-        const normalized2 = normalizePath(path2);
-        
-        // Direct match
-        if (normalized1 === normalized2) {
-            return true;
-        }
-        
-        // Remove leading './' if present
-        const clean1 = normalized1.replace(/^\.\//, '');
-        const clean2 = normalized2.replace(/^\.\//, '');
-        
-        if (clean1 === clean2) {
-            return true;
-        }
-        
-        // Check if one is a subset of the other (for relative vs absolute)
-        if (normalized1.endsWith('/' + clean2) || normalized2.endsWith('/' + clean1)) {
-            return true;
-        }
-        
-        return false;
-    } catch (error) {
-        console.warn(`[Path Comparison] Error comparing paths: ${path1} vs ${path2}`, error.message);
-        return false;
-    }
-}
-
-/**
- * Check if a file path is being used (cross-platform compatible)
- * @param {string} relativePath - Relative path
- * @param {string} fileName - File name
- * @param {Set} usedPaths - Set of used paths
- * @returns {boolean} True if the file is being used
- */
-function isPathUsed(relativePath, fileName, usedPaths) {
-    if (!relativePath) return false;
-    
-    // Normalize the relative path
-    const normalizedRelativePath = normalizePath(relativePath);
-    const cleanRelativePath = normalizedRelativePath.replace(/^\.\//, '');
-    
-    // Get the filename from relative path
-    const relativeFileName = getFileName(normalizedRelativePath);
-    
-    // 遍历所有已使用路径进行匹配
-    for (const usedPath of usedPaths) {
-        if (!usedPath) continue;
-        
-        // 1. 直接路径匹配
-        if (pathsEqual(relativePath, usedPath) || pathsEqual(relativePath, './' + usedPath)) {
-            return true;
-        }
-        
-        // 2. 标准化路径匹配
-        if (pathsEqual(normalizedRelativePath, usedPath) ||
-            pathsEqual(normalizedRelativePath, './' + usedPath)) {
-            return true;
-        }
-        
-        // 3. 清理后的路径匹配
-        if (pathsEqual(cleanRelativePath, usedPath) ||
-            pathsEqual(cleanRelativePath, './' + usedPath)) {
-            return true;
-        }
-        
-        // 4. 文件名匹配（确保不是误匹配）
-        const usedFileName = getFileName(usedPath);
-        if (usedFileName === fileName || usedFileName === relativeFileName) {
-            // 确保是同一个目录下的文件
-            const usedDir = path.dirname(usedPath);
-            const relativeDir = path.dirname(normalizedRelativePath);
-            
-            if (pathsEqual(usedDir, relativeDir) ||
-                pathsEqual(usedDir, cleanRelativePath.replace(/\/[^\/]+$/, '')) ||
-                pathsEqual(relativeDir.replace(/^\.\//, ''), usedDir.replace(/^\.\//, ''))) {
-                return true;
-            }
-        }
-        
-        // 5. 绝对路径匹配（Windows和Unix）
-        try {
-            const resolvedUsedPath = path.resolve(usedPath);
-            const resolvedRelativePath = path.resolve(relativePath);
-            
-            if (resolvedUsedPath === resolvedRelativePath) {
-                return true;
-            }
-        } catch (error) {
-            // Ignore path resolution errors
-        }
-    }
-    
-    return false;
-}
+// 注意：normalizePath, getFileName, pathsEqual, isPathUsed, detectProviderFromPath
+// 已移至 provider-utils.js 公共模块
