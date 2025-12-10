@@ -3,25 +3,12 @@
 import { showToast, getFieldLabel, getProviderTypeFields } from './utils.js';
 import { handleProviderPasswordToggle } from './event-handlers.js';
 
-// 分页配置
-const PROVIDERS_PER_PAGE = 20;
-let currentPage = 1;
-let currentProviders = [];
-let currentProviderType = '';
-let cachedModels = []; // 缓存模型列表
-
 /**
  * 显示提供商管理模态框
  * @param {Object} data - 提供商数据
  */
 function showProviderManagerModal(data) {
     const { providerType, providers, totalCount, healthyCount } = data;
-    
-    // 保存当前数据用于分页
-    currentProviders = providers;
-    currentProviderType = providerType;
-    currentPage = 1;
-    cachedModels = [];
     
     // 移除已存在的模态框
     const existingModal = document.querySelector('.provider-modal');
@@ -32,8 +19,6 @@ function showProviderManagerModal(data) {
         }
         existingModal.remove();
     }
-    
-    const totalPages = Math.ceil(providers.length / PROVIDERS_PER_PAGE);
     
     // 创建模态框
     const modal = document.createElement('div');
@@ -64,19 +49,12 @@ function showProviderManagerModal(data) {
                         <button class="btn btn-warning" onclick="window.resetAllProvidersHealth('${providerType}')" title="将所有节点的健康状态重置为健康">
                             <i class="fas fa-heartbeat"></i> 重置为健康
                         </button>
-                        <button class="btn btn-info" onclick="window.performHealthCheck('${providerType}')" title="对所有节点执行健康检测">
-                            <i class="fas fa-stethoscope"></i> 健康检测
-                        </button>
                     </div>
                 </div>
                 
-                ${totalPages > 1 ? renderPagination(1, totalPages, providers.length) : ''}
-                
                 <div class="provider-list" id="providerList">
-                    ${renderProviderListPaginated(providers, 1)}
+                    ${renderProviderList(providers)}
                 </div>
-                
-                ${totalPages > 1 ? renderPagination(1, totalPages, providers.length, 'bottom') : ''}
             </div>
         </div>
     `;
@@ -88,157 +66,19 @@ function showProviderManagerModal(data) {
     addModalEventListeners(modal);
     
     // 先获取该提供商类型的模型列表（只调用一次API）
-    const pageProviders = providers.slice(0, PROVIDERS_PER_PAGE);
-    loadModelsForProviderType(providerType, pageProviders);
+    loadModelsForProviderType(providerType, providers);
 }
 
 /**
- * 渲染分页控件
- * @param {number} currentPage - 当前页码
- * @param {number} totalPages - 总页数
- * @param {number} totalItems - 总条目数
- * @param {string} position - 位置标识 (top/bottom)
- * @returns {string} HTML字符串
- */
-function renderPagination(page, totalPages, totalItems, position = 'top') {
-    const startItem = (page - 1) * PROVIDERS_PER_PAGE + 1;
-    const endItem = Math.min(page * PROVIDERS_PER_PAGE, totalItems);
-    
-    // 生成页码按钮
-    let pageButtons = '';
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage < maxVisiblePages - 1) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-    
-    if (startPage > 1) {
-        pageButtons += `<button class="page-btn" onclick="window.goToProviderPage(1)">1</button>`;
-        if (startPage > 2) {
-            pageButtons += `<span class="page-ellipsis">...</span>`;
-        }
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        pageButtons += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="window.goToProviderPage(${i})">${i}</button>`;
-    }
-    
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            pageButtons += `<span class="page-ellipsis">...</span>`;
-        }
-        pageButtons += `<button class="page-btn" onclick="window.goToProviderPage(${totalPages})">${totalPages}</button>`;
-    }
-    
-    return `
-        <div class="pagination-container ${position}" data-position="${position}">
-            <div class="pagination-info">
-                显示 ${startItem}-${endItem} / 共 ${totalItems} 条
-            </div>
-            <div class="pagination-controls">
-                <button class="page-btn nav-btn" onclick="window.goToProviderPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                ${pageButtons}
-                <button class="page-btn nav-btn" onclick="window.goToProviderPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
-            <div class="pagination-jump">
-                <span>跳转到</span>
-                <input type="number" min="1" max="${totalPages}" value="${page}" 
-                       onkeypress="if(event.key==='Enter')window.goToProviderPage(parseInt(this.value))"
-                       class="page-jump-input">
-                <span>页</span>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * 跳转到指定页
- * @param {number} page - 目标页码
- */
-function goToProviderPage(page) {
-    const totalPages = Math.ceil(currentProviders.length / PROVIDERS_PER_PAGE);
-    
-    // 验证页码范围
-    if (page < 1) page = 1;
-    if (page > totalPages) page = totalPages;
-    
-    currentPage = page;
-    
-    // 更新提供商列表
-    const providerList = document.getElementById('providerList');
-    if (providerList) {
-        providerList.innerHTML = renderProviderListPaginated(currentProviders, page);
-    }
-    
-    // 更新分页控件
-    const paginationContainers = document.querySelectorAll('.pagination-container');
-    paginationContainers.forEach(container => {
-        const position = container.getAttribute('data-position');
-        container.outerHTML = renderPagination(page, totalPages, currentProviders.length, position);
-    });
-    
-    // 滚动到顶部
-    const modalBody = document.querySelector('.provider-modal-body');
-    if (modalBody) {
-        modalBody.scrollTop = 0;
-    }
-    
-    // 为当前页的提供商加载模型列表
-    const startIndex = (page - 1) * PROVIDERS_PER_PAGE;
-    const endIndex = Math.min(startIndex + PROVIDERS_PER_PAGE, currentProviders.length);
-    const pageProviders = currentProviders.slice(startIndex, endIndex);
-    
-    // 如果已缓存模型列表，直接使用
-    if (cachedModels.length > 0) {
-        pageProviders.forEach(provider => {
-            renderNotSupportedModelsSelector(provider.uuid, cachedModels, provider.notSupportedModels || []);
-        });
-    } else {
-        loadModelsForProviderType(currentProviderType, pageProviders);
-    }
-}
-
-/**
- * 渲染分页后的提供商列表
- * @param {Array} providers - 提供商数组
- * @param {number} page - 当前页码
- * @returns {string} HTML字符串
- */
-function renderProviderListPaginated(providers, page) {
-    const startIndex = (page - 1) * PROVIDERS_PER_PAGE;
-    const endIndex = Math.min(startIndex + PROVIDERS_PER_PAGE, providers.length);
-    const pageProviders = providers.slice(startIndex, endIndex);
-    
-    return renderProviderList(pageProviders);
-}
-
-/**
- * 为提供商类型加载模型列表（优化：只调用一次API，并缓存结果）
+ * 为提供商类型加载模型列表（优化：只调用一次API）
  * @param {string} providerType - 提供商类型
  * @param {Array} providers - 提供商列表
  */
 async function loadModelsForProviderType(providerType, providers) {
     try {
-        // 如果已有缓存，直接使用
-        if (cachedModels.length > 0) {
-            providers.forEach(provider => {
-                renderNotSupportedModelsSelector(provider.uuid, cachedModels, provider.notSupportedModels || []);
-            });
-            return;
-        }
-        
         // 只调用一次API获取模型列表
         const response = await window.apiClient.get(`/provider-models/${encodeURIComponent(providerType)}`);
         const models = response.models || [];
-        
-        // 缓存模型列表
-        cachedModels = models;
         
         // 为每个提供商渲染模型选择器
         providers.forEach(provider => {
@@ -352,8 +192,6 @@ function renderProviderList(providers) {
         const isHealthy = provider.isHealthy;
         const isDisabled = provider.isDisabled || false;
         const lastUsed = provider.lastUsed ? new Date(provider.lastUsed).toLocaleString() : '从未使用';
-        const lastHealthCheckTime = provider.lastHealthCheckTime ? new Date(provider.lastHealthCheckTime).toLocaleString() : '从未检测';
-        const lastHealthCheckModel = provider.lastHealthCheckModel || '-';
         const healthClass = isHealthy ? 'healthy' : 'unhealthy';
         const disabledClass = isDisabled ? 'disabled' : '';
         const healthIcon = isHealthy ? 'fas fa-check-circle text-success' : 'fas fa-exclamation-triangle text-warning';
@@ -363,19 +201,6 @@ function renderProviderList(providers) {
         const toggleButtonText = isDisabled ? '启用' : '禁用';
         const toggleButtonIcon = isDisabled ? 'fas fa-play' : 'fas fa-ban';
         const toggleButtonClass = isDisabled ? 'btn-success' : 'btn-warning';
-        
-        // 构建错误信息显示
-        let errorInfoHtml = '';
-        if (!isHealthy && provider.lastErrorMessage) {
-            const escapedErrorMsg = provider.lastErrorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            errorInfoHtml = `
-                <div class="provider-error-info">
-                    <i class="fas fa-exclamation-circle text-danger"></i>
-                    <span class="error-label">最后错误:</span>
-                    <span class="error-message" title="${escapedErrorMsg}">${escapedErrorMsg}</span>
-                </div>
-            `;
-        }
         
         return `
             <div class="provider-item-detail ${healthClass} ${disabledClass}" data-uuid="${provider.uuid}">
@@ -395,17 +220,6 @@ function renderProviderList(providers) {
                             失败次数: ${provider.errorCount || 0} |
                             最后使用: ${lastUsed}
                         </div>
-                        <div class="provider-health-meta">
-                            <span class="health-check-time">
-                                <i class="fas fa-clock"></i>
-                                最后检测: ${lastHealthCheckTime}
-                            </span> |
-                            <span class="health-check-model">
-                                <i class="fas fa-cube"></i>
-                                检测模型: ${lastHealthCheckModel}
-                            </span>
-                        </div>
-                        ${errorInfoHtml}
                     </div>
                     <div class="provider-actions-group">
                         <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${provider.uuid}', event)" title="${toggleButtonText}此提供商">
@@ -628,15 +442,11 @@ function renderProviderConfig(provider) {
 function getFieldOrder(provider) {
     const orderedFields = ['checkModelName', 'checkHealth'];
     
-    // 需要排除的内部状态字段
-    const excludedFields = [
-        'isHealthy', 'lastUsed', 'usageCount', 'errorCount', 'lastErrorTime',
-        'uuid', 'isDisabled', 'lastHealthCheckTime', 'lastHealthCheckModel', 'lastErrorMessage'
-    ];
-    
     // 获取所有其他配置项
     const otherFields = Object.keys(provider).filter(key =>
-        !excludedFields.includes(key) && !orderedFields.includes(key)
+        key !== 'isHealthy' && key !== 'lastUsed' && key !== 'usageCount' &&
+        key !== 'errorCount' && key !== 'lastErrorTime' && key !== 'uuid' &&
+        key !== 'isDisabled' && !orderedFields.includes(key)
     );
     
     // 按字母顺序排序其他字段
@@ -877,10 +687,6 @@ async function refreshProviderConfig(providerType) {
         // 如果当前显示的是该提供商类型的模态框，则更新模态框
         const modal = document.querySelector('.provider-modal');
         if (modal && modal.getAttribute('data-provider-type') === providerType) {
-            // 更新缓存的提供商数据
-            currentProviders = data.providers;
-            currentProviderType = providerType;
-            
             // 更新统计信息
             const totalCountElement = modal.querySelector('.provider-summary-item .value');
             if (totalCountElement) {
@@ -892,46 +698,14 @@ async function refreshProviderConfig(providerType) {
                 healthyCountElement.textContent = data.healthyCount;
             }
             
-            const totalPages = Math.ceil(data.providers.length / PROVIDERS_PER_PAGE);
-            
-            // 确保当前页不超过总页数
-            if (currentPage > totalPages) {
-                currentPage = Math.max(1, totalPages);
-            }
-            
-            // 重新渲染提供商列表（分页）
+            // 重新渲染提供商列表
             const providerList = modal.querySelector('.provider-list');
             if (providerList) {
-                providerList.innerHTML = renderProviderListPaginated(data.providers, currentPage);
+                providerList.innerHTML = renderProviderList(data.providers);
             }
             
-            // 更新分页控件
-            const paginationContainers = modal.querySelectorAll('.pagination-container');
-            if (totalPages > 1) {
-                paginationContainers.forEach(container => {
-                    const position = container.getAttribute('data-position');
-                    container.outerHTML = renderPagination(currentPage, totalPages, data.providers.length, position);
-                });
-                
-                // 如果之前没有分页控件，需要添加
-                if (paginationContainers.length === 0) {
-                    const modalBody = modal.querySelector('.provider-modal-body');
-                    const providerListEl = modal.querySelector('.provider-list');
-                    if (modalBody && providerListEl) {
-                        providerListEl.insertAdjacentHTML('beforebegin', renderPagination(currentPage, totalPages, data.providers.length, 'top'));
-                        providerListEl.insertAdjacentHTML('afterend', renderPagination(currentPage, totalPages, data.providers.length, 'bottom'));
-                    }
-                }
-            } else {
-                // 如果只有一页，移除分页控件
-                paginationContainers.forEach(container => container.remove());
-            }
-            
-            // 重新加载当前页的模型列表
-            const startIndex = (currentPage - 1) * PROVIDERS_PER_PAGE;
-            const endIndex = Math.min(startIndex + PROVIDERS_PER_PAGE, data.providers.length);
-            const pageProviders = data.providers.slice(startIndex, endIndex);
-            loadModelsForProviderType(providerType, pageProviders);
+            // 重新加载模型列表
+            loadModelsForProviderType(providerType, data.providers);
         }
         
         // 同时更新主界面的提供商统计数据
@@ -1264,49 +1038,6 @@ async function resetAllProvidersHealth(providerType) {
 }
 
 /**
- * 执行健康检测
- * @param {string} providerType - 提供商类型
- */
-async function performHealthCheck(providerType) {
-    if (!confirm(`确定要对 ${providerType} 的所有节点执行健康检测吗？\n\n这将向每个节点发送测试请求来验证其可用性。`)) {
-        return;
-    }
-    
-    try {
-        showToast('正在执行健康检测，请稍候...', 'info');
-        
-        const response = await window.apiClient.post(
-            `/providers/${encodeURIComponent(providerType)}/health-check`,
-            {}
-        );
-        
-        if (response.success) {
-            const { successCount, failCount, totalCount, results } = response;
-            
-            // 统计跳过的数量（checkHealth 未启用的）
-            const skippedCount = results ? results.filter(r => r.success === null).length : 0;
-            
-            let message = `健康检测完成: ${successCount} 健康`;
-            if (failCount > 0) message += `, ${failCount} 异常`;
-            if (skippedCount > 0) message += `, ${skippedCount} 跳过(未启用)`;
-            
-            showToast(message, failCount > 0 ? 'warning' : 'success');
-            
-            // 重新加载配置
-            await window.apiClient.post('/reload-config');
-            
-            // 刷新提供商配置显示
-            await refreshProviderConfig(providerType);
-        } else {
-            showToast('健康检测失败', 'error');
-        }
-    } catch (error) {
-        console.error('健康检测失败:', error);
-        showToast(`健康检测失败: ${error.message}`, 'error');
-    }
-}
-
-/**
  * 渲染不支持的模型选择器（不调用API，直接使用传入的模型列表）
  * @param {string} uuid - 提供商UUID
  * @param {Array} models - 模型列表
@@ -1356,10 +1087,8 @@ export {
     addProvider,
     toggleProviderStatus,
     resetAllProvidersHealth,
-    performHealthCheck,
     loadModelsForProviderType,
-    renderNotSupportedModelsSelector,
-    goToProviderPage
+    renderNotSupportedModelsSelector
 };
 
 // 将函数挂载到window对象
@@ -1373,5 +1102,3 @@ window.showAddProviderForm = showAddProviderForm;
 window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;
 window.resetAllProvidersHealth = resetAllProvidersHealth;
-window.performHealthCheck = performHealthCheck;
-window.goToProviderPage = goToProviderPage;
