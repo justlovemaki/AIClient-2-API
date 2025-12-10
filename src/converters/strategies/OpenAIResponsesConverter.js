@@ -257,6 +257,10 @@ export class OpenAIResponsesConverter extends BaseConverter {
 
         // 如果有标准的 messages 字段，也支持
         if (responsesRequest.messages && Array.isArray(responsesRequest.messages)) {
+            const { systemMessages, otherMessages } = extractSystemMessages(
+                responsesRequest.messages
+            );
+            
             if (!claudeRequest.system && systemMessages.length > 0) {
                 const systemTexts = systemMessages.map(msg => extractText(msg.content));
                 claudeRequest.system = systemTexts.join('\n');

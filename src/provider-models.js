@@ -25,11 +25,11 @@ export const PROVIDER_MODELS = {
         'claude-opus-4-5',
         'claude-haiku-4-5',
         'claude-sonnet-4-5',
-        'claude-sonnet-4-5-20250929',
+        // 'claude-sonnet-4-5-20250929',
         'claude-sonnet-4-20250514',
-        'claude-3-7-sonnet-20250219',
-        'amazonq-claude-sonnet-4-20250514',
-        'amazonq-claude-3-7-sonnet-20250219'
+        // 'claude-3-7-sonnet-20250219',
+        // 'amazonq-claude-sonnet-4-20250514',
+        // 'amazonq-claude-3-7-sonnet-20250219'
     ],
     'openai-custom': [],
     'openaiResponses-custom': [],

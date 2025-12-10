@@ -78,6 +78,13 @@ function createConfigItemElement(config, index) {
 
     // 生成关联详情HTML
     const usageInfoHtml = generateUsageInfoHtml(config);
+    
+    // 判断是否可以一键关联（未关联且路径包含 configs/kiro/）
+    const canQuickLink = !config.isUsed && config.path.toLowerCase().includes('configs/kiro/');
+    const quickLinkBtnHtml = canQuickLink ? 
+        `<button class="btn-quick-link" data-path="${config.path}" title="一键关联到 claude-kiro-oauth">
+            <i class="fas fa-link"></i> kiro-oauth
+        </button>` : '';
 
     item.innerHTML = `
         <div class="config-item-header">
@@ -90,6 +97,7 @@ function createConfigItemElement(config, index) {
             <div class="config-item-status">
                 <i class="fas ${statusIcon}"></i>
                 ${statusText}
+                ${quickLinkBtnHtml}
             </div>
         </div>
         <div class="config-item-details">
@@ -138,6 +146,15 @@ function createConfigItemElement(config, index) {
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteConfig(config.path);
+        });
+    }
+
+    // 一键关联按钮事件
+    const quickLinkBtn = item.querySelector('.btn-quick-link');
+    if (quickLinkBtn) {
+        quickLinkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quickLinkKiroConfig(config.path);
         });
     }
 
@@ -706,6 +723,12 @@ function initUploadConfigManager() {
         refreshBtn.addEventListener('click', loadConfigList);
     }
 
+    // 批量关联 kiro 配置按钮
+    const batchLinkKiroBtn = document.getElementById('batchLinkKiroBtn');
+    if (batchLinkKiroBtn) {
+        batchLinkKiroBtn.addEventListener('click', batchLinkKiroConfigs);
+    }
+
     // 初始加载配置列表
     loadConfigList();
 }
@@ -735,6 +758,74 @@ async function reloadConfig() {
     } catch (error) {
         console.error('重载配置失败:', error);
         showToast('重载配置失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 一键关联 Kiro 配置到 claude-kiro-oauth
+ * @param {string} filePath - 配置文件路径
+ */
+async function quickLinkKiroConfig(filePath) {
+    try {
+        showToast('正在关联配置...', 'info');
+        
+        const result = await window.apiClient.post('/quick-link-kiro', {
+            filePath: filePath
+        });
+        
+        showToast(result.message || '配置关联成功', 'success');
+        
+        // 刷新配置列表
+        await loadConfigList();
+    } catch (error) {
+        console.error('一键关联失败:', error);
+        showToast('关联失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 批量关联 configs/kiro/ 下的未关联配置到 kiro-oauth
+ */
+async function batchLinkKiroConfigs() {
+    // 筛选出 configs/kiro/ 下的未关联配置
+    const kiroUnlinkedConfigs = allConfigs.filter(config => 
+        !config.isUsed && config.path.toLowerCase().includes('configs/kiro/')
+    );
+    
+    if (kiroUnlinkedConfigs.length === 0) {
+        showToast('没有需要关联的 configs/kiro/ 配置', 'info');
+        return;
+    }
+    
+    const confirmMsg = `确定要批量关联 ${kiroUnlinkedConfigs.length} 个 configs/kiro/ 下的配置吗？`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    showToast(`正在批量关联 ${kiroUnlinkedConfigs.length} 个配置...`, 'info');
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const config of kiroUnlinkedConfigs) {
+        try {
+            await window.apiClient.post('/quick-link-kiro', {
+                filePath: config.path
+            });
+            successCount++;
+        } catch (error) {
+            console.error(`关联失败: ${config.path}`, error);
+            failCount++;
+        }
+    }
+    
+    // 刷新配置列表
+    await loadConfigList();
+    
+    if (failCount === 0) {
+        showToast(`成功关联 ${successCount} 个配置`, 'success');
+    } else {
+        showToast(`关联完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, 'warning');
     }
 }
 
