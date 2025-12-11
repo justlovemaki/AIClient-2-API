@@ -28,7 +28,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build and Push Image
-      ues: docker/build-push-action@v6
+      uses: docker/build-push-action@v6
       with:
         context: .
         platforms: linux/amd64,linux/arm64
