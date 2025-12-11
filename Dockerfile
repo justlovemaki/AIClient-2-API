@@ -1,6 +1,6 @@
 # 使用官方Node.js运行时作为基础镜像
 # 选择20-alpine版本以满足undici包的要求（需要Node.js >=20.18.1）
-FROM node:20-alpine
+FROM node:20-bullseye
 
 # 设置标签
 LABEL maintainer="AIClient2API Team"
