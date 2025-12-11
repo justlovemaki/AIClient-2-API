@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/aiclient-2-api
 
 jobs:
   build-and-push:
