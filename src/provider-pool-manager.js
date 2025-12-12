@@ -231,6 +231,9 @@ export class ProviderPoolManager {
             // 只有在明确要求重置使用计数时才重置
             if (resetUsageCount) {
                 provider.config.usageCount = 0;
+            }else{
+                provider.config.usageCount++;
+                provider.config.lastUsed = new Date().toISOString();
             }
             this._log('info', `Marked provider as healthy: ${provider.config.uuid} for type ${providerType}${resetUsageCount ? ' (usage count reset)' : ''}`);
             

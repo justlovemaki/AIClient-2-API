@@ -233,9 +233,17 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             // console.log(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
         }
 
+        // 流式请求成功完成，统计使用次数，错误次数重置为0
+        if (providerPoolManager && pooluuid) {
+            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}) after successful stream request`);
+            providerPoolManager.markProviderHealthy(toProvider, {
+                uuid: pooluuid
+            });
+        }
+
     }  catch (error) {
         console.error('\n[Server] Error during stream processing:', error.stack);
-        if (providerPoolManager) {
+        if (providerPoolManager && pooluuid) {
             console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
@@ -279,9 +287,18 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
         // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
+        
+        // 一元请求成功完成，统计使用次数，错误次数重置为0
+        if (providerPoolManager && pooluuid) {
+            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}) after successful unary request`);
+            providerPoolManager.markProviderHealthy(toProvider, {
+                uuid: pooluuid
+            });
+        }
     } catch (error) {
         console.error('\n[Server] Error during unary processing:', error.stack);
-        if (providerPoolManager) {
+        if (providerPoolManager && pooluuid) {
+            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
                 uuid: pooluuid
@@ -398,7 +415,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
     if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
         const { getApiService } = await import('./service-manager.js');
-        service = await getApiService(CONFIG, model, { skipUsageCount: true });
+        service = await getApiService(CONFIG, model);
         console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
     }
 

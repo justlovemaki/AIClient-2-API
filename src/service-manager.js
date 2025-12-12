@@ -220,7 +220,7 @@ export async function getApiService(config, requestedModel = null, options = {})
     let serviceConfig = config;
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
-        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER, requestedModel, options);
+        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER, requestedModel, { skipUsageCount: true });
         if (selectedProviderConfig) {
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);
