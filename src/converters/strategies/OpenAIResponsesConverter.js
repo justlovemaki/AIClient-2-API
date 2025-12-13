@@ -7,7 +7,10 @@ import { BaseConverter } from '../BaseConverter.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
     extractAndProcessSystemMessages as extractSystemMessages,
-    extractTextFromMessageContent as extractText
+    extractTextFromMessageContent as extractText,
+    CLAUDE_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 
 /**
@@ -227,7 +230,7 @@ export class OpenAIResponsesConverter extends BaseConverter {
         const claudeRequest = {
             model: responsesRequest.model,
             messages: [],
-            max_tokens: responsesRequest.max_tokens || 4096,
+            max_tokens: responsesRequest.max_tokens || CLAUDE_DEFAULT_MAX_TOKENS,
             stream: responsesRequest.stream || false
         };
 
@@ -561,8 +564,8 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id || m.name,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id || m.name}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };

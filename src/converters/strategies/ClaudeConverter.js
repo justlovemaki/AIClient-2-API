@@ -8,7 +8,15 @@ import { BaseConverter } from '../BaseConverter.js';
 import {
     checkAndAssignOrDefault,
     cleanJsonSchemaProperties as cleanJsonSchema,
-    determineReasoningEffortFromBudget
+    determineReasoningEffortFromBudget,
+    OPENAI_DEFAULT_MAX_TOKENS,
+    OPENAI_DEFAULT_TEMPERATURE,
+    OPENAI_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_TEMPERATURE,
+    GEMINI_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
@@ -202,9 +210,9 @@ export class ClaudeConverter extends BaseConverter {
         const openaiRequest = {
             model: claudeRequest.model,
             messages: openaiMessages,
-            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(claudeRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(claudeRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(claudeRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(claudeRequest.top_p, OPENAI_DEFAULT_TOP_P),
             stream: claudeRequest.stream,
         };
 
@@ -619,8 +627,8 @@ export class ClaudeConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id || m.name,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id || m.name}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };
@@ -788,9 +796,9 @@ export class ClaudeConverter extends BaseConverter {
 
         // 添加生成配置
         const generationConfig = {};
-        generationConfig.maxOutputTokens = checkAndAssignOrDefault(claudeRequest.max_tokens, 65535);
-        generationConfig.temperature = checkAndAssignOrDefault(claudeRequest.temperature, 1);
-        generationConfig.topP = checkAndAssignOrDefault(claudeRequest.top_p, 0.95);
+        generationConfig.maxOutputTokens = checkAndAssignOrDefault(claudeRequest.max_tokens, GEMINI_DEFAULT_MAX_TOKENS);
+        generationConfig.temperature = checkAndAssignOrDefault(claudeRequest.temperature, GEMINI_DEFAULT_TEMPERATURE);
+        generationConfig.topP = checkAndAssignOrDefault(claudeRequest.top_p, GEMINI_DEFAULT_TOP_P);
         
         if (Object.keys(generationConfig).length > 0) {
             geminiRequest.generationConfig = generationConfig;
@@ -1119,9 +1127,9 @@ export class ClaudeConverter extends BaseConverter {
         // 转换为OpenAI Responses格式
         const responsesRequest = {
             model: claudeRequest.model,
-            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(claudeRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(claudeRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(claudeRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(claudeRequest.top_p, OPENAI_DEFAULT_TOP_P),
         };
 
         // 处理系统指令

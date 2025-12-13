@@ -12,7 +12,15 @@ import {
     checkAndAssignOrDefault,
     extractThinkingFromOpenAIText,
     mapFinishReason,
-    cleanJsonSchemaProperties as cleanJsonSchema
+    cleanJsonSchemaProperties as cleanJsonSchema,
+    CLAUDE_DEFAULT_MAX_TOKENS,
+    CLAUDE_DEFAULT_TEMPERATURE,
+    CLAUDE_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_TEMPERATURE,
+    GEMINI_DEFAULT_TOP_P,
+    OPENAI_DEFAULT_INPUT_TOKEN_LIMIT,
+    OPENAI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
@@ -225,9 +233,9 @@ export class OpenAIConverter extends BaseConverter {
         const claudeRequest = {
             model: openaiRequest.model,
             messages: mergedClaudeMessages,
-            max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(openaiRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(openaiRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, CLAUDE_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(openaiRequest.temperature, CLAUDE_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(openaiRequest.top_p, CLAUDE_DEFAULT_TOP_P),
         };
 
         if (systemInstruction) {
@@ -514,8 +522,8 @@ export class OpenAIConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || OPENAI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || OPENAI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };
@@ -713,9 +721,9 @@ export class OpenAIConverter extends BaseConverter {
      */
     buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools, response_format }, model) {
         const config = {};
-        config.temperature = checkAndAssignOrDefault(temperature, 1);
-        config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, 65535);
-        config.topP = checkAndAssignOrDefault(top_p, 0.95);
+        config.temperature = checkAndAssignOrDefault(temperature, GEMINI_DEFAULT_TEMPERATURE);
+        config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, GEMINI_DEFAULT_MAX_TOKENS);
+        config.topP = checkAndAssignOrDefault(top_p, GEMINI_DEFAULT_TOP_P);
         if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
 
         // Handle response_format
