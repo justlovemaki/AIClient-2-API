@@ -478,6 +478,46 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return true;
     }
 
+    // Update admin password
+    if (method === 'POST' && pathParam === '/api/admin-password') {
+        try {
+            const body = await getRequestBody(req);
+            const { password } = body;
+
+            if (!password || password.trim() === '') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: '密码不能为空'
+                    }
+                }));
+                return true;
+            }
+
+            // 写入密码到 pwd 文件
+            const pwdFilePath = path.join(process.cwd(), 'pwd');
+            await fs.writeFile(pwdFilePath, password.trim(), 'utf8');
+            
+            console.log('[UI API] Admin password updated successfully');
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: '后台登录密码已更新'
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to update admin password:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: '更新密码失败: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
     // Get configuration
     if (method === 'GET' && pathParam === '/api/config') {
         let systemPrompt = '';

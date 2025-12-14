@@ -711,6 +711,18 @@
                                     <label for="systemPrompt">系统提示</label>
                                     <textarea id="systemPrompt" class="form-control" rows="4" placeholder="输入系统提示..."></textarea>
                                 </div>
+                                
+                                <!-- 后台登录密码配置 -->
+                                <div class="form-group pool-section">
+                                    <label for="adminPassword">后台登录密码</label>
+                                    <div class="password-input-wrapper">
+                                        <input type="password" id="adminPassword" class="form-control" placeholder="设置后台登录密码（留空则不修改）" autocomplete="new-password">
+                                        <button type="button" class="password-toggle" data-target="adminPassword" aria-label="显示/隐藏密码">
+                                            <i class="fas fa-eye" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <small class="form-text">用于保护管理控制台的访问，修改后需要重新登录</small>
+                                </div>
                             </div>
                             
                             <div class="form-actions">
