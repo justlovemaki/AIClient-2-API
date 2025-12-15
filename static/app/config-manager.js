@@ -133,6 +133,9 @@ async function saveConfiguration() {
         systemPrompt: document.getElementById('systemPrompt')?.value || '',
     };
 
+    // 获取后台登录密码（如果有输入）
+    const adminPassword = document.getElementById('adminPassword')?.value || '';
+
     // 根据不同提供商保存不同的配置
     const provider = document.getElementById('modelProvider')?.value;
     
@@ -194,6 +197,21 @@ async function saveConfiguration() {
 
     try {
         await window.apiClient.post('/config', config);
+        
+        // 如果输入了新密码，单独保存密码
+        if (adminPassword) {
+            try {
+                await window.apiClient.post('/admin-password', { password: adminPassword });
+                // 清空密码输入框
+                const adminPasswordEl = document.getElementById('adminPassword');
+                if (adminPasswordEl) adminPasswordEl.value = '';
+                showToast('后台密码已更新，下次登录生效', 'success');
+            } catch (pwdError) {
+                console.error('Failed to save admin password:', pwdError);
+                showToast('保存后台密码失败: ' + pwdError.message, 'error');
+            }
+        }
+        
         await window.apiClient.post('/reload-config');
         showToast('配置已保存', 'success');
         

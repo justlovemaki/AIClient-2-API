@@ -12,7 +12,15 @@ import {
     checkAndAssignOrDefault,
     extractThinkingFromOpenAIText,
     mapFinishReason,
-    cleanJsonSchemaProperties as cleanJsonSchema
+    cleanJsonSchemaProperties as cleanJsonSchema,
+    CLAUDE_DEFAULT_MAX_TOKENS,
+    CLAUDE_DEFAULT_TEMPERATURE,
+    CLAUDE_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_TEMPERATURE,
+    GEMINI_DEFAULT_TOP_P,
+    OPENAI_DEFAULT_INPUT_TOKEN_LIMIT,
+    OPENAI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
@@ -138,7 +146,7 @@ export class OpenAIConverter extends BaseConverter {
                 // 普通消息
                 if (typeof message.content === 'string') {
                     if (message.content) {
-                        content.push({ type: 'text', text: message.content });
+                        content.push({ type: 'text', text: message.content.trim() });
                     }
                 } else if (Array.isArray(message.content)) {
                     message.content.forEach(item => {
@@ -146,7 +154,7 @@ export class OpenAIConverter extends BaseConverter {
                         switch (item.type) {
                             case 'text':
                                 if (item.text) {
-                                    content.push({ type: 'text', text: item.text });
+                                    content.push({ type: 'text', text: item.text.trim() });
                                 }
                                 break;
                             case 'image_url':
@@ -190,12 +198,12 @@ export class OpenAIConverter extends BaseConverter {
         const mergedClaudeMessages = [];
         for (let i = 0; i < claudeMessages.length; i++) {
             const currentMessage = claudeMessages[i];
-            
+
             if (mergedClaudeMessages.length === 0) {
                 mergedClaudeMessages.push(currentMessage);
             } else {
                 const lastMessage = mergedClaudeMessages[mergedClaudeMessages.length - 1];
-                
+
                 // 如果当前消息的 role 与上一条消息的 role 相同，则合并 content 数组
                 if (lastMessage.role === currentMessage.role) {
                     lastMessage.content = lastMessage.content.concat(currentMessage.content);
@@ -205,13 +213,29 @@ export class OpenAIConverter extends BaseConverter {
             }
         }
 
+        // 清理最后一条 assistant 消息的尾部空白
+        if (mergedClaudeMessages.length > 0) {
+            const lastMessage = mergedClaudeMessages[mergedClaudeMessages.length - 1];
+            if (lastMessage.role === 'assistant' && Array.isArray(lastMessage.content)) {
+                // 从后往前找到最后一个 text 类型的内容块
+                for (let i = lastMessage.content.length - 1; i >= 0; i--) {
+                    const contentBlock = lastMessage.content[i];
+                    if (contentBlock.type === 'text' && contentBlock.text) {
+                        // 移除尾部空白字符
+                        contentBlock.text = contentBlock.text.trimEnd();
+                        break;
+                    }
+                }
+            }
+        }
+
 
         const claudeRequest = {
             model: openaiRequest.model,
             messages: mergedClaudeMessages,
-            max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(openaiRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(openaiRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, CLAUDE_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(openaiRequest.temperature, CLAUDE_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(openaiRequest.top_p, CLAUDE_DEFAULT_TOP_P),
         };
 
         if (systemInstruction) {
@@ -311,6 +335,8 @@ export class OpenAIConverter extends BaseConverter {
             stop_sequence: null,
             usage: {
                 input_tokens: openaiResponse.usage?.prompt_tokens || 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: openaiResponse.usage?.prompt_tokens_details?.cached_tokens || 0,
                 output_tokens: openaiResponse.usage?.completion_tokens || 0
             }
         };
@@ -328,7 +354,7 @@ export class OpenAIConverter extends BaseConverter {
         // 处理 OpenAI chunk 对象
         if (typeof openaiChunk === 'object' && !Array.isArray(openaiChunk)) {
             const choice = openaiChunk.choices?.[0];
-            if (!choice){
+            if (!choice) {
                 return null;
             }
 
@@ -382,7 +408,7 @@ export class OpenAIConverter extends BaseConverter {
             //                 }
             //             });
             //         }
-                    
+
             //         // 如果有 function.arguments，说明是参数增量
             //         if (toolCall.function?.arguments) {
             //             events.push({
@@ -427,8 +453,8 @@ export class OpenAIConverter extends BaseConverter {
             if (finishReason) {
                 // 映射 finish_reason
                 const stopReason = finishReason === "stop" ? "end_turn" :
-                                 finishReason === "length" ? "max_tokens" :
-                                 "end_turn";
+                    finishReason === "length" ? "max_tokens" :
+                        "end_turn";
 
                 events.push({
                     type: "content_block_stop",
@@ -442,8 +468,10 @@ export class OpenAIConverter extends BaseConverter {
                         stop_sequence: null
                     },
                     usage: {
-                        output_tokens: openaiChunk.usage?.completion_tokens || 0,
                         input_tokens: openaiChunk.usage?.prompt_tokens || 0,
+                        cache_creation_input_tokens: 0,
+                        cache_read_input_tokens: openaiChunk.usage?.prompt_tokens_details?.cached_tokens || 0,
+                        output_tokens: openaiChunk.usage?.completion_tokens || 0
                     }
                 });
 
@@ -494,8 +522,8 @@ export class OpenAIConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || OPENAI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || OPENAI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };
@@ -525,20 +553,20 @@ export class OpenAIConverter extends BaseConverter {
     toGeminiRequest(openaiRequest) {
         const messages = openaiRequest.messages || [];
         const { systemInstruction, nonSystemMessages } = extractSystemMessages(messages);
-        
+
         const processedMessages = [];
         let lastMessage = null;
-        
+
         for (const message of nonSystemMessages) {
             const geminiRole = message.role === 'assistant' ? 'model' : message.role;
-            
+
             if (geminiRole === 'tool') {
                 // Save previous model response with functionCall
                 if (lastMessage) {
                     processedMessages.push(lastMessage);
                     lastMessage = null;
                 }
-                
+
                 // Get function name from message.name or via tool_call_id
                 let functionName = message.name;
                 if (!functionName && message.tool_call_id) {
@@ -554,11 +582,11 @@ export class OpenAIConverter extends BaseConverter {
                         }
                     }
                 }
-                
+
                 // Build functionResponse according to Gemini API spec
                 const parsedContent = safeParseJSON(message.content);
                 const contentStr = typeof parsedContent === 'string' ? parsedContent : JSON.stringify(parsedContent);
-                
+
                 processedMessages.push({
                     role: 'user',
                     parts: [{
@@ -574,9 +602,9 @@ export class OpenAIConverter extends BaseConverter {
                 lastMessage = null;
                 continue;
             }
-            
+
             let processedContent = this.processOpenAIContentToGeminiParts(message.content);
-            
+
             // Add tool_calls as functionCall to parts
             if (message.tool_calls && Array.isArray(message.tool_calls)) {
                 for (const toolCall of message.tool_calls) {
@@ -590,25 +618,25 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
             }
-            
+
             if (lastMessage && lastMessage.role === geminiRole && !message.tool_calls &&
                 Array.isArray(processedContent) && processedContent.every(p => p.text) &&
                 Array.isArray(lastMessage.parts) && lastMessage.parts.every(p => p.text)) {
                 lastMessage.parts.push(...processedContent);
                 continue;
             }
-            
+
             if (lastMessage) processedMessages.push(lastMessage);
             lastMessage = { role: geminiRole, parts: processedContent };
         }
         if (lastMessage) processedMessages.push(lastMessage);
-        
+
         const geminiRequest = {
             contents: processedMessages.filter(item => item.parts && item.parts.length > 0)
         };
-        
+
         if (systemInstruction) geminiRequest.systemInstruction = systemInstruction;
-        
+
         if (openaiRequest.tools?.length) {
             geminiRequest.tools = [{
                 functionDeclarations: openaiRequest.tools.map(t => {
@@ -626,14 +654,14 @@ export class OpenAIConverter extends BaseConverter {
                 delete geminiRequest.tools;
             }
         }
-        
+
         if (openaiRequest.tool_choice) {
             geminiRequest.toolConfig = this.buildGeminiToolConfig(openaiRequest.tool_choice);
         }
-        
+
         const config = this.buildGeminiGenerationConfig(openaiRequest, openaiRequest.model);
         if (Object.keys(config).length) geminiRequest.generationConfig = config;
-        
+
         return geminiRequest;
     }
 
@@ -643,20 +671,20 @@ export class OpenAIConverter extends BaseConverter {
     processOpenAIContentToGeminiParts(content) {
         if (!content) return [];
         if (typeof content === 'string') return [{ text: content }];
-        
+
         if (Array.isArray(content)) {
             const parts = [];
-            
+
             for (const item of content) {
                 if (!item) continue;
-                
+
                 if (item.type === 'text' && item.text) {
                     parts.push({ text: item.text });
                 } else if (item.type === 'image_url' && item.image_url) {
                     const imageUrl = typeof item.image_url === 'string'
                         ? item.image_url
                         : item.image_url.url;
-                        
+
                     if (imageUrl.startsWith('data:')) {
                         const [header, data] = imageUrl.split(',');
                         const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
@@ -668,10 +696,10 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
             }
-            
+
             return parts;
         }
-        
+
         return [];
     }
 
@@ -691,13 +719,25 @@ export class OpenAIConverter extends BaseConverter {
     /**
      * 构建Gemini生成配置
      */
-    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools }, model) {
+    buildGeminiGenerationConfig({ temperature, max_tokens, top_p, stop, tools, response_format }, model) {
         const config = {};
-        config.temperature = checkAndAssignOrDefault(temperature, 1);
-        config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, 65535);
-        config.topP = checkAndAssignOrDefault(top_p, 0.95);
+        config.temperature = checkAndAssignOrDefault(temperature, GEMINI_DEFAULT_TEMPERATURE);
+        config.maxOutputTokens = checkAndAssignOrDefault(max_tokens, GEMINI_DEFAULT_MAX_TOKENS);
+        config.topP = checkAndAssignOrDefault(top_p, GEMINI_DEFAULT_TOP_P);
         if (stop !== undefined) config.stopSequences = Array.isArray(stop) ? stop : [stop];
-        
+
+        // Handle response_format
+        if (response_format) {
+            if (response_format.type === 'json_object') {
+                config.responseMimeType = 'application/json';
+            } else if (response_format.type === 'json_schema' && response_format.json_schema) {
+                config.responseMimeType = 'application/json';
+                if (response_format.json_schema.schema) {
+                    config.responseSchema = response_format.json_schema.schema;
+                }
+            }
+        }
+
         // Gemini 2.5 and thinking models require responseModalities: ["TEXT"]
         // But this parameter cannot be added when using tools (causes 400 error)
         const hasTools = tools && Array.isArray(tools) && tools.length > 0;
@@ -707,7 +747,7 @@ export class OpenAIConverter extends BaseConverter {
         } else if (hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
             console.log(`[OpenAI->Gemini] Skipping responseModalities for model ${model} because tools are present`);
         }
-        
+
         return config;
     }
     /**
@@ -762,7 +802,17 @@ export class OpenAIConverter extends BaseConverter {
             usageMetadata: openaiResponse.usage ? {
                 promptTokenCount: openaiResponse.usage.prompt_tokens || 0,
                 candidatesTokenCount: openaiResponse.usage.completion_tokens || 0,
-                totalTokenCount: openaiResponse.usage.total_tokens || 0
+                totalTokenCount: openaiResponse.usage.total_tokens || 0,
+                cachedContentTokenCount: openaiResponse.usage.prompt_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiResponse.usage.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiResponse.usage.completion_tokens || 0
+                }],
+                thoughtsTokenCount: openaiResponse.usage.completion_tokens_details?.reasoning_tokens || 0
             } : {}
         };
     }
@@ -792,7 +842,7 @@ export class OpenAIConverter extends BaseConverter {
                         name: toolCall.function.name || '',
                         args: {}
                     };
-                    
+
                     if (toolCall.function.arguments) {
                         try {
                             functionCall.args = typeof toolCall.function.arguments === 'string'
@@ -803,7 +853,7 @@ export class OpenAIConverter extends BaseConverter {
                             functionCall.args = { partial: toolCall.function.arguments };
                         }
                     }
-                    
+
                     parts.push({ functionCall });
                 }
             }
@@ -834,7 +884,17 @@ export class OpenAIConverter extends BaseConverter {
             result.usageMetadata = {
                 promptTokenCount: openaiChunk.usage.prompt_tokens || 0,
                 candidatesTokenCount: openaiChunk.usage.completion_tokens || 0,
-                totalTokenCount: openaiChunk.usage.total_tokens || 0
+                totalTokenCount: openaiChunk.usage.total_tokens || 0,
+                cachedContentTokenCount: openaiChunk.usage.prompt_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiChunk.usage.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: openaiChunk.usage.completion_tokens || 0
+                }],
+                thoughtsTokenCount: openaiChunk.usage.completion_tokens_details?.reasoning_tokens || 0
             };
         }
 
@@ -854,7 +914,7 @@ export class OpenAIConverter extends BaseConverter {
         if (openaiRequest.messages && openaiRequest.messages.length > 0) {
             responsesRequest.messages = openaiRequest.messages.map(msg => ({
                 role: msg.role,
-                content: typeof msg.content === 'string' 
+                content: typeof msg.content === 'string'
                     ? [{ type: 'input_text', text: msg.content }]
                     : msg.content
             }));
@@ -930,11 +990,23 @@ export class OpenAIConverter extends BaseConverter {
             output: output,
             usage: openaiResponse.usage ? {
                 input_tokens: openaiResponse.usage.prompt_tokens || 0,
+                input_tokens_details: {
+                    cached_tokens: openaiResponse.usage.prompt_tokens_details?.cached_tokens || 0
+                },
                 output_tokens: openaiResponse.usage.completion_tokens || 0,
+                output_tokens_details: {
+                    reasoning_tokens: openaiResponse.usage.completion_tokens_details?.reasoning_tokens || 0
+                },
                 total_tokens: openaiResponse.usage.total_tokens || 0
             } : {
                 input_tokens: 0,
+                input_tokens_details: {
+                    cached_tokens: 0
+                },
                 output_tokens: 0,
+                output_tokens_details: {
+                    reasoning_tokens: 0
+                },
                 total_tokens: 0
             }
         };
@@ -979,7 +1051,7 @@ export class OpenAIConverter extends BaseConverter {
         if (delta.tool_calls && delta.tool_calls.length > 0) {
             for (const toolCall of delta.tool_calls) {
                 const outputIndex = toolCall.index || 0;
-                
+
                 // 如果有 function.name，说明是工具调用开始
                 if (toolCall.function && toolCall.function.name) {
                     events.push({
@@ -995,7 +1067,7 @@ export class OpenAIConverter extends BaseConverter {
                         type: "response.output_item.added"
                     });
                 }
-                
+
                 // 如果有 function.arguments，说明是参数增量
                 if (toolCall.function && toolCall.function.arguments) {
                     events.push({
@@ -1028,14 +1100,20 @@ export class OpenAIConverter extends BaseConverter {
                 generateOutputItemDone(responseId),
                 generateResponseCompleted(responseId)
             );
-            
+
             // 如果有 usage 信息，更新最后一个事件
             if (openaiChunk.usage && events.length > 0) {
                 const lastEvent = events[events.length - 1];
                 if (lastEvent.response) {
                     lastEvent.response.usage = {
                         input_tokens: openaiChunk.usage.prompt_tokens || 0,
+                        input_tokens_details: {
+                            cached_tokens: openaiChunk.usage.prompt_tokens_details?.cached_tokens || 0
+                        },
                         output_tokens: openaiChunk.usage.completion_tokens || 0,
+                        output_tokens_details: {
+                            reasoning_tokens: openaiChunk.usage.completion_tokens_details?.reasoning_tokens || 0
+                        },
                         total_tokens: openaiChunk.usage.total_tokens || 0
                     };
                 }

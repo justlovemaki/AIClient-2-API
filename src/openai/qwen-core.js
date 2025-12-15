@@ -3,17 +3,22 @@ import crypto from 'crypto';
 import path from 'node:path';
 import { promises as fs, unlinkSync } from 'node:fs';
 import * as os from 'os';
+import * as http from 'http';
+import * as https from 'https';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
+import { getProviderModels } from '../provider-models.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
-const QWEN_MODEL_LIST = [
-    { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
-    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
-];
+// 从 provider-models.js 获取支持的模型列表
+const QWEN_MODELS = getProviderModels('openai-qwen-oauth');
+const QWEN_MODEL_LIST = QWEN_MODELS.map(id => ({
+    id: id,
+    name: id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}));
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 const LOCK_TIMEOUT_MS = 10000;
@@ -184,13 +189,28 @@ export class QwenApiService {
         console.log('[Qwen] Initializing Qwen API Service...');
         await this._initializeAuth();
         
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+
         const axiosConfig = {
             baseURL: DEFAULT_QWEN_BASE_URL,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer `,
             },
-
         };
         
         // 禁用系统代理
@@ -498,8 +518,24 @@ export class QwenApiService {
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
 
+            // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+            const httpAgent = new http.Agent({
+                keepAlive: true,
+                maxSockets: 100,
+                maxFreeSockets: 5,
+                timeout: 120000,
+            });
+            const httpsAgent = new https.Agent({
+                keepAlive: true,
+                maxSockets: 100,
+                maxFreeSockets: 5,
+                timeout: 120000,
+            });
+
             const axiosConfig = {
                 baseURL: qwenBaseUrl,
+                httpAgent,
+                httpsAgent,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
@@ -507,8 +543,6 @@ export class QwenApiService {
                     'X-DashScope-UserAgent': userAgent,
                     'X-DashScope-AuthType': 'qwen-oauth',
                 },
-                // 添加 HTTPS 代理修复相关配置
-                httpsAgent: undefined, // axios-https-proxy-fix 会自动处理
             };
             
             // 禁用系统代理

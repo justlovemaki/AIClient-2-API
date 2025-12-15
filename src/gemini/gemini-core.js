@@ -1,10 +1,27 @@
 import { OAuth2Client } from 'google-auth-library';
 import * as http from 'http';
+import * as https from 'https';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
+import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { getProviderModels } from '../provider-models.js';
+
+// 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+const httpAgent = new http.Agent({
+    keepAlive: true,
+    maxSockets: 100,
+    maxFreeSockets: 5,
+    timeout: 120000,
+});
+const httpsAgent = new https.Agent({
+    keepAlive: true,
+    maxSockets: 100,
+    maxFreeSockets: 5,
+    timeout: 120000,
+});
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -14,7 +31,7 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-09-2025', 'gemini-3-pro-preview'];
+const GEMINI_MODELS = getProviderModels('gemini-cli-oauth');
 const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
 function is_anti_truncation_model(model) {
@@ -175,7 +192,14 @@ async function* apply_anti_truncation_to_stream(service, model, requestBody) {
 
 export class GeminiApiService {
     constructor(config) {
-        this.authClient = new OAuth2Client(OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET);
+        // 配置 OAuth2Client 使用自定义的 HTTP agent
+        this.authClient = new OAuth2Client({
+            clientId: OAUTH_CLIENT_ID,
+            clientSecret: OAUTH_CLIENT_SECRET,
+            transporterOptions: {
+                agent: httpsAgent,
+            },
+        });
         this.availableModels = [];
         this.isInitialized = false;
 
@@ -256,10 +280,28 @@ export class GeminiApiService {
         }
         const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
         this.authClient.redirectUri = redirectUri;
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
-            console.log('\n[Gemini Auth] Please open this URL in your browser to authenticate:');
-            console.log(authUrl, '\n');
+            console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
+            
+            // 自动打开浏览器
+            const showFallbackMessage = () => {
+                console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+            };
+            
+            if (this.config) {
+                try {
+                    const childProcess = await open(authUrl);
+                    if (childProcess) {
+                        childProcess.on('error', () => showFallbackMessage());
+                    }
+                } catch (_err) {
+                    showFallbackMessage();
+                }
+            } else {
+                showFallbackMessage();
+            }
+            console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
             const server = http.createServer(async (req, res) => {
                 try {
                     const url = new URL(req.url, redirectUri);
@@ -377,7 +419,7 @@ export class GeminiApiService {
             return {
                 name: `models/${modelId}`, version: "1.0.0", displayName: displayName,
                 description: `A generative model for text and chat generation. ID: ${modelId}`,
-                inputTokenLimit: 32768, outputTokenLimit: 8192,
+                inputTokenLimit: 1024000, outputTokenLimit: 65535,
                 supportedGenerationMethods: ["generateContent", "streamGenerateContent"],
             };
         });

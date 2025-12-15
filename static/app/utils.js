@@ -147,6 +147,20 @@ function getProviderTypeFields(providerType) {
                 type: 'text',
                 placeholder: '例如: ~/.qwen/oauth_creds.json'
             }
+        ],
+        'gemini-antigravity': [
+            {
+                id: 'ProjectId',
+                label: '项目ID (选填)',
+                type: 'text',
+                placeholder: 'Google Cloud项目ID (留空自动发现)'
+            },
+            {
+                id: 'AntigravityOauthCredsFilePath',
+                label: 'OAuth凭据文件路径',
+                type: 'text',
+                placeholder: '例如: ~/.antigravity/oauth_creds.json'
+            }
         ]
     };
     

@@ -6,7 +6,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BaseConverter } from '../BaseConverter.js';
 import {
-    checkAndAssignOrDefault
+    checkAndAssignOrDefault,
+    OPENAI_DEFAULT_MAX_TOKENS,
+    OPENAI_DEFAULT_TEMPERATURE,
+    OPENAI_DEFAULT_TOP_P,
+    CLAUDE_DEFAULT_MAX_TOKENS,
+    CLAUDE_DEFAULT_TEMPERATURE,
+    CLAUDE_DEFAULT_TOP_P
 } from '../utils.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
@@ -102,9 +108,9 @@ export class GeminiConverter extends BaseConverter {
         const openaiRequest = {
             messages: [],
             model: geminiRequest.model,
-            max_tokens: checkAndAssignOrDefault(geminiRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(geminiRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(geminiRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(geminiRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(geminiRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(geminiRequest.top_p, OPENAI_DEFAULT_TOP_P),
         };
 
         // 处理系统指令
@@ -160,10 +166,24 @@ export class GeminiConverter extends BaseConverter {
                 prompt_tokens: geminiResponse.usageMetadata.promptTokenCount || 0,
                 completion_tokens: geminiResponse.usageMetadata.candidatesTokenCount || 0,
                 total_tokens: geminiResponse.usageMetadata.totalTokenCount || 0,
+                cached_tokens: geminiResponse.usageMetadata.cachedContentTokenCount || 0,
+                prompt_tokens_details: {
+                    cached_tokens: geminiResponse.usageMetadata.cachedContentTokenCount || 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: geminiResponse.usageMetadata.thoughtsTokenCount || 0
+                }
             } : {
                 prompt_tokens: 0,
                 completion_tokens: 0,
                 total_tokens: 0,
+                cached_tokens: 0,
+                prompt_tokens_details: {
+                    cached_tokens: 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: 0
+                }
             },
         };
     }
@@ -235,10 +255,24 @@ export class GeminiConverter extends BaseConverter {
                 prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
                 completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
                 total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
+                cached_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0,
+                prompt_tokens_details: {
+                    cached_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: geminiChunk.usageMetadata.thoughtsTokenCount || 0
+                }
             } : {
                 prompt_tokens: 0,
                 completion_tokens: 0,
                 total_tokens: 0,
+                cached_tokens: 0,
+                prompt_tokens_details: {
+                    cached_tokens: 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: 0
+                }
             },
         };
     }
@@ -345,9 +379,9 @@ export class GeminiConverter extends BaseConverter {
         const claudeRequest = {
             model: geminiRequest.model || 'claude-3-opus',
             messages: [],
-            max_tokens: checkAndAssignOrDefault(geminiRequest.generationConfig?.maxOutputTokens, 8192),
-            temperature: checkAndAssignOrDefault(geminiRequest.generationConfig?.temperature, 1),
-            top_p: checkAndAssignOrDefault(geminiRequest.generationConfig?.topP, 0.95),
+            max_tokens: checkAndAssignOrDefault(geminiRequest.generationConfig?.maxOutputTokens, CLAUDE_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(geminiRequest.generationConfig?.temperature, CLAUDE_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(geminiRequest.generationConfig?.topP, CLAUDE_DEFAULT_TOP_P),
         };
 
         // 处理系统指令
@@ -447,6 +481,8 @@ export class GeminiConverter extends BaseConverter {
             stop_sequence: null,
             usage: {
                 input_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: geminiResponse.usageMetadata?.cachedContentTokenCount || 0,
                 output_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0
             }
         };
@@ -483,7 +519,7 @@ export class GeminiConverter extends BaseConverter {
                 
                 // 处理finishReason
                 if (candidate.finishReason) {
-                    return {
+                    const result = {
                         type: "message_delta",
                         delta: {
                             stop_reason: candidate.finishReason === 'STOP' ? 'end_turn' :
@@ -491,6 +527,22 @@ export class GeminiConverter extends BaseConverter {
                                        candidate.finishReason.toLowerCase()
                         }
                     };
+                    
+                    // 添加 usage 信息
+                    if (geminiChunk.usageMetadata) {
+                        result.usage = {
+                            input_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                            cache_creation_input_tokens: 0,
+                            cache_read_input_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0,
+                            output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
+                            prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                            completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
+                            total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
+                            cached_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0
+                        };
+                    }
+                    
+                    return result;
                 }
             }
         }
@@ -632,9 +684,9 @@ export class GeminiConverter extends BaseConverter {
     toOpenAIResponsesRequest(geminiRequest) {
         const responsesRequest = {
             model: geminiRequest.model,
-            max_tokens: checkAndAssignOrDefault(geminiRequest.generationConfig?.maxOutputTokens, 8192),
-            temperature: checkAndAssignOrDefault(geminiRequest.generationConfig?.temperature, 1),
-            top_p: checkAndAssignOrDefault(geminiRequest.generationConfig?.topP, 0.95),
+            max_tokens: checkAndAssignOrDefault(geminiRequest.generationConfig?.maxOutputTokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(geminiRequest.generationConfig?.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(geminiRequest.generationConfig?.topP, OPENAI_DEFAULT_TOP_P),
         };
 
         // 处理系统指令
@@ -719,13 +771,13 @@ export class GeminiConverter extends BaseConverter {
             usage: {
                 input_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0,
                 input_tokens_details: {
-                    cached_tokens: geminiResponse.usageMetadata?.cachedTokens || 0,
+                    cached_tokens: geminiResponse.usageMetadata?.cachedContentTokenCount || 0
                 },
                 output_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0,
                 output_tokens_details: {
-                    reasoning_tokens: 0
+                    reasoning_tokens: geminiResponse.usageMetadata?.thoughtsTokenCount || 0
                 },
-                total_tokens: geminiResponse.usageMetadata?.totalTokenCount || 0,
+                total_tokens: geminiResponse.usageMetadata?.totalTokenCount || 0
             },
             user: null
         };
@@ -791,7 +843,13 @@ export class GeminiConverter extends BaseConverter {
                         if (lastEvent.response) {
                             lastEvent.response.usage = {
                                 input_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                                input_tokens_details: {
+                                    cached_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0
+                                },
                                 output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
+                                output_tokens_details: {
+                                    reasoning_tokens: geminiChunk.usageMetadata.thoughtsTokenCount || 0
+                                },
                                 total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0
                             };
                         }

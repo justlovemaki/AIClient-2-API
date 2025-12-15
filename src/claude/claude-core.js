@@ -1,4 +1,6 @@
 import axios from 'axios';
+import * as http from 'http';
+import * as https from 'https';
 
 /**
  * Claude API Core Service Class.
@@ -27,8 +29,24 @@ export class ClaudeApiService {
      * @returns {object} Axios instance.
      */
     createClient() {
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+
         const axiosConfig = {
             baseURL: this.baseUrl,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'x-api-key': this.apiKey,
                 'Content-Type': 'application/json',

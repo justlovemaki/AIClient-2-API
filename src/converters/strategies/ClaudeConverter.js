@@ -8,7 +8,15 @@ import { BaseConverter } from '../BaseConverter.js';
 import {
     checkAndAssignOrDefault,
     cleanJsonSchemaProperties as cleanJsonSchema,
-    determineReasoningEffortFromBudget
+    determineReasoningEffortFromBudget,
+    OPENAI_DEFAULT_MAX_TOKENS,
+    OPENAI_DEFAULT_TEMPERATURE,
+    OPENAI_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_TEMPERATURE,
+    GEMINI_DEFAULT_TOP_P,
+    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
@@ -202,9 +210,9 @@ export class ClaudeConverter extends BaseConverter {
         const openaiRequest = {
             model: claudeRequest.model,
             messages: openaiMessages,
-            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(claudeRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(claudeRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(claudeRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(claudeRequest.top_p, OPENAI_DEFAULT_TOP_P),
             stream: claudeRequest.stream,
         };
 
@@ -355,6 +363,10 @@ export class ClaudeConverter extends BaseConverter {
                 prompt_tokens: claudeResponse.usage?.input_tokens || 0,
                 completion_tokens: claudeResponse.usage?.output_tokens || 0,
                 total_tokens: (claudeResponse.usage?.input_tokens || 0) + (claudeResponse.usage?.output_tokens || 0),
+                cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0
+                }
             },
         };
     }
@@ -388,7 +400,8 @@ export class ClaudeConverter extends BaseConverter {
                 usage: {
                     prompt_tokens: claudeChunk.message?.usage?.input_tokens || 0,
                     completion_tokens: 0,
-                    total_tokens: claudeChunk.message?.usage?.input_tokens || 0
+                    total_tokens: claudeChunk.message?.usage?.input_tokens || 0,
+                    cached_tokens: claudeChunk.message?.usage?.cache_read_input_tokens || 0
                 }
             };
         }
@@ -542,7 +555,11 @@ export class ClaudeConverter extends BaseConverter {
                 usage: claudeChunk.usage ? {
                     prompt_tokens: claudeChunk.usage.input_tokens || 0,
                     completion_tokens: claudeChunk.usage.output_tokens || 0,
-                    total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
+                    total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0),
+                    cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0,
+                    prompt_tokens_details: {
+                        cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
+                    }
                 } : undefined
             };
         }
@@ -610,8 +627,8 @@ export class ClaudeConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id || m.name,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id || m.name}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };
@@ -779,9 +796,9 @@ export class ClaudeConverter extends BaseConverter {
 
         // 添加生成配置
         const generationConfig = {};
-        generationConfig.maxOutputTokens = checkAndAssignOrDefault(claudeRequest.max_tokens, 65535);
-        generationConfig.temperature = checkAndAssignOrDefault(claudeRequest.temperature, 1);
-        generationConfig.topP = checkAndAssignOrDefault(claudeRequest.top_p, 0.95);
+        generationConfig.maxOutputTokens = checkAndAssignOrDefault(claudeRequest.max_tokens, GEMINI_DEFAULT_MAX_TOKENS);
+        generationConfig.temperature = checkAndAssignOrDefault(claudeRequest.temperature, GEMINI_DEFAULT_TEMPERATURE);
+        generationConfig.topP = checkAndAssignOrDefault(claudeRequest.top_p, GEMINI_DEFAULT_TOP_P);
         
         if (Object.keys(generationConfig).length > 0) {
             geminiRequest.generationConfig = generationConfig;
@@ -887,7 +904,16 @@ export class ClaudeConverter extends BaseConverter {
             usageMetadata: claudeResponse.usage ? {
                 promptTokenCount: claudeResponse.usage.input_tokens || 0,
                 candidatesTokenCount: claudeResponse.usage.output_tokens || 0,
-                totalTokenCount: (claudeResponse.usage.input_tokens || 0) + (claudeResponse.usage.output_tokens || 0)
+                totalTokenCount: (claudeResponse.usage.input_tokens || 0) + (claudeResponse.usage.output_tokens || 0),
+                cachedContentTokenCount: claudeResponse.usage.cache_read_input_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: claudeResponse.usage.input_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: claudeResponse.usage.output_tokens || 0
+                }]
             } : {}
         };
     }
@@ -936,13 +962,33 @@ export class ClaudeConverter extends BaseConverter {
             // message_delta 事件 - 流结束
             if (claudeChunk.type === 'message_delta') {
                 const stopReason = claudeChunk.delta?.stop_reason;
-                return {
+                const result = {
                     candidates: [{
                         finishReason: stopReason === 'end_turn' ? 'STOP' :
                                     stopReason === 'max_tokens' ? 'MAX_TOKENS' :
                                     'OTHER'
                     }]
                 };
+                
+                // 添加 usage 信息
+                if (claudeChunk.usage) {
+                    result.usageMetadata = {
+                        promptTokenCount: claudeChunk.usage.input_tokens || 0,
+                        candidatesTokenCount: claudeChunk.usage.output_tokens || 0,
+                        totalTokenCount: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0),
+                        cachedContentTokenCount: claudeChunk.usage.cache_read_input_tokens || 0,
+                        promptTokensDetails: [{
+                            modality: "TEXT",
+                            tokenCount: claudeChunk.usage.input_tokens || 0
+                        }],
+                        candidatesTokensDetails: [{
+                            modality: "TEXT",
+                            tokenCount: claudeChunk.usage.output_tokens || 0
+                        }]
+                    };
+                }
+                
+                return result;
             }
         }
 
@@ -1081,9 +1127,9 @@ export class ClaudeConverter extends BaseConverter {
         // 转换为OpenAI Responses格式
         const responsesRequest = {
             model: claudeRequest.model,
-            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, 8192),
-            temperature: checkAndAssignOrDefault(claudeRequest.temperature, 1),
-            top_p: checkAndAssignOrDefault(claudeRequest.top_p, 0.95),
+            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
+            temperature: checkAndAssignOrDefault(claudeRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
+            top_p: checkAndAssignOrDefault(claudeRequest.top_p, OPENAI_DEFAULT_TOP_P),
         };
 
         // 处理系统指令
@@ -1153,7 +1199,7 @@ export class ClaudeConverter extends BaseConverter {
             usage: {
                 input_tokens: claudeResponse.usage?.input_tokens || 0,
                 input_tokens_details: {
-                    cached_tokens: claudeResponse.usage?.cache_creation_input_tokens || 0,
+                    cached_tokens: claudeResponse.usage?.cache_read_input_tokens || 0
                 },
                 output_tokens: claudeResponse.usage?.output_tokens || 0,
                 output_tokens_details: {
@@ -1266,7 +1312,13 @@ export class ClaudeConverter extends BaseConverter {
                 if (lastEvent.response) {
                     lastEvent.response.usage = {
                         input_tokens: claudeChunk.usage.input_tokens || 0,
+                        input_tokens_details: {
+                            cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
+                        },
                         output_tokens: claudeChunk.usage.output_tokens || 0,
+                        output_tokens_details: {
+                            reasoning_tokens: 0
+                        },
                         total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
                     };
                 }

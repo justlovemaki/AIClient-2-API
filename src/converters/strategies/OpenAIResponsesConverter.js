@@ -7,7 +7,10 @@ import { BaseConverter } from '../BaseConverter.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
     extractAndProcessSystemMessages as extractSystemMessages,
-    extractTextFromMessageContent as extractText
+    extractTextFromMessageContent as extractText,
+    CLAUDE_DEFAULT_MAX_TOKENS,
+    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
 
 /**
@@ -173,10 +176,26 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 },
                 finish_reason: responsesResponse.finish_reason || 'stop'
             }],
-            usage: responsesResponse.usage || {
+            usage: responsesResponse.usage ? {
+                prompt_tokens: responsesResponse.usage.input_tokens || 0,
+                completion_tokens: responsesResponse.usage.output_tokens || 0,
+                total_tokens: responsesResponse.usage.total_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: responsesResponse.usage.input_tokens_details?.cached_tokens || 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: responsesResponse.usage.output_tokens_details?.reasoning_tokens || 0
+                }
+            } : {
                 prompt_tokens: 0,
                 completion_tokens: 0,
-                total_tokens: 0
+                total_tokens: 0,
+                prompt_tokens_details: {
+                    cached_tokens: 0
+                },
+                completion_tokens_details: {
+                    reasoning_tokens: 0
+                }
             }
         };
     }
@@ -211,7 +230,7 @@ export class OpenAIResponsesConverter extends BaseConverter {
         const claudeRequest = {
             model: responsesRequest.model,
             messages: [],
-            max_tokens: responsesRequest.max_tokens || 4096,
+            max_tokens: responsesRequest.max_tokens || CLAUDE_DEFAULT_MAX_TOKENS,
             stream: responsesRequest.stream || false
         };
 
@@ -241,6 +260,10 @@ export class OpenAIResponsesConverter extends BaseConverter {
 
         // 如果有标准的 messages 字段，也支持
         if (responsesRequest.messages && Array.isArray(responsesRequest.messages)) {
+            const { systemMessages, otherMessages } = extractSystemMessages(
+                responsesRequest.messages
+            );
+            
             if (!claudeRequest.system && systemMessages.length > 0) {
                 const systemTexts = systemMessages.map(msg => extractText(msg.content));
                 claudeRequest.system = systemTexts.join('\n');
@@ -283,8 +306,16 @@ export class OpenAIResponsesConverter extends BaseConverter {
             model: model || responsesResponse.model,
             stop_reason: responsesResponse.choices?.[0]?.finish_reason || 'end_turn',
             usage: {
-                input_tokens: responsesResponse.usage?.prompt_tokens || 0,
-                output_tokens: responsesResponse.usage?.completion_tokens || 0
+                input_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
+                output_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                prompt_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                completion_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                total_tokens: responsesResponse.usage?.total_tokens ||
+                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
+                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
+                cached_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0
             }
         };
     }
@@ -429,9 +460,21 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 index: 0
             }],
             usageMetadata: {
-                promptTokenCount: responsesResponse.usage?.prompt_tokens || 0,
-                candidatesTokenCount: responsesResponse.usage?.completion_tokens || 0,
-                totalTokenCount: responsesResponse.usage?.total_tokens || 0
+                promptTokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
+                candidatesTokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
+                totalTokenCount: responsesResponse.usage?.total_tokens ||
+                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
+                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
+                cachedContentTokenCount: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
+                promptTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0
+                }],
+                candidatesTokensDetails: [{
+                    modality: "TEXT",
+                    tokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0
+                }],
+                thoughtsTokenCount: responsesResponse.usage?.output_tokens_details?.reasoning_tokens || 0
             }
         };
     }
@@ -521,8 +564,8 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 version: m.version || "1.0.0",
                 displayName: m.displayName || m.id || m.name,
                 description: m.description || `A generative model for text and chat generation. ID: ${m.id || m.name}`,
-                inputTokenLimit: m.inputTokenLimit || 32768,
-                outputTokenLimit: m.outputTokenLimit || 8192,
+                inputTokenLimit: m.inputTokenLimit || GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+                outputTokenLimit: m.outputTokenLimit || GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT,
                 supportedGenerationMethods: m.supportedGenerationMethods || ["generateContent", "streamGenerateContent"]
             }))
         };

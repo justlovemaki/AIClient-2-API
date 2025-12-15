@@ -4,6 +4,10 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as http from 'http';
+import * as https from 'https';
+import { getProviderModels } from '../provider-models.js';
+import { countTokens } from '@anthropic-ai/tokenizer';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -20,15 +24,24 @@ const KIRO_CONSTANTS = {
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
 };
 
-const MODEL_MAPPING = {
+// 从 provider-models.js 获取支持的模型列表
+const KIRO_MODELS = getProviderModels('claude-kiro-oauth');
+
+// 完整的模型映射表
+const FULL_MODEL_MAPPING = {
     "claude-opus-4-5":"claude-opus-4.5",
+    "claude-opus-4-5-20251101":"claude-opus-4.5",
+    "claude-haiku-4-5":"claude-haiku-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
-    "claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0",
-    "amazonq-claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
-    "amazonq-claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
+    "claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
 };
+
+// 只保留 KIRO_MODELS 中存在的模型映射
+const MODEL_MAPPING = Object.fromEntries(
+    Object.entries(FULL_MODEL_MAPPING).filter(([key]) => KIRO_MODELS.includes(key))
+);
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
@@ -61,9 +74,18 @@ async function getMacAddressSha256() {
     return sha256Hash;
 }
 
-// Helper functions for tool calls
-function findMatchingBracket(text, startPos) {
-    if (!text || startPos >= text.length || text[startPos] !== '[') {
+// Helper functions for tool calls and JSON parsing
+
+/**
+ * 通用的括号匹配函数 - 支持多种括号类型
+ * @param {string} text - 要搜索的文本
+ * @param {number} startPos - 起始位置
+ * @param {string} openChar - 开括号字符 (默认 '[')
+ * @param {string} closeChar - 闭括号字符 (默认 ']')
+ * @returns {number} 匹配的闭括号位置，未找到返回 -1
+ */
+function findMatchingBracket(text, startPos, openChar = '[', closeChar = ']') {
+    if (!text || startPos >= text.length || text[startPos] !== openChar) {
         return -1;
     }
 
@@ -90,9 +112,9 @@ function findMatchingBracket(text, startPos) {
         }
 
         if (!inString) {
-            if (char === '[') {
+            if (char === openChar) {
                 bracketCount++;
-            } else if (char === ']') {
+            } else if (char === closeChar) {
                 bracketCount--;
                 if (bracketCount === 0) {
                     return i;
@@ -103,6 +125,28 @@ function findMatchingBracket(text, startPos) {
     return -1;
 }
 
+
+/**
+ * 尝试修复常见的 JSON 格式问题
+ * @param {string} jsonStr - 可能有问题的 JSON 字符串
+ * @returns {string} 修复后的 JSON 字符串
+ */
+function repairJson(jsonStr) {
+    let repaired = jsonStr;
+    // 移除尾部逗号
+    repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+    // 为未引用的键添加引号
+    repaired = repaired.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
+    // 确保字符串值被正确引用
+    repaired = repaired.replace(/:\s*([a-zA-Z0-9_]+)(?=[,\}\]])/g, ':"$1"');
+    return repaired;
+}
+
+/**
+ * 解析单个工具调用文本
+ * @param {string} toolCallText - 工具调用文本
+ * @returns {Object|null} 解析后的工具调用对象或 null
+ */
 function parseSingleToolCall(toolCallText) {
     const namePattern = /\[Called\s+(\w+)\s+with\s+args:/i;
     const nameMatch = toolCallText.match(namePattern);
@@ -129,16 +173,7 @@ function parseSingleToolCall(toolCallText) {
     const jsonCandidate = toolCallText.substring(argsStart, argsEnd).trim();
 
     try {
-        // Simple repair for common issues like trailing commas or unquoted keys
-        let repairedJson = jsonCandidate;
-        // Remove trailing comma before closing brace/bracket
-        repairedJson = repairedJson.replace(/,\s*([}\]])/g, '$1');
-        // Add quotes to unquoted keys (basic attempt)
-        repairedJson = repairedJson.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
-        // Ensure string values are properly quoted if they contain special characters and are not already quoted
-        repairedJson = repairedJson.replace(/:\s*([a-zA-Z0-9_]+)(?=[,\}\]])/g, ':"$1"');
-
-
+        const repairedJson = repairJson(jsonCandidate);
         const argumentsObj = JSON.parse(repairedJson);
 
         if (typeof argumentsObj !== 'object' || argumentsObj === null) {
@@ -268,8 +303,24 @@ export class KiroApiService {
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
         const macSha256 = await getMacAddressSha256();
+        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,        // 每个主机最多 10 个连接
+            maxFreeSockets: 5,     // 最多保留 5 个空闲连接
+            timeout: 120000,        // 空闲连接 60 秒后关闭
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        
         const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
+            httpAgent,
+            httpsAgent,
             headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'x-amz-user-agent': `aws-sdk-js/1.0.7 KiroIDE-0.1.25-${macSha256}`,
@@ -494,6 +545,52 @@ async initializeAuth(forceRefresh = false) {
             throw new Error('No user messages found');
         }
 
+        // 判断最后一条消息是否为 assistant,如果是则移除
+        const lastMessage = processedMessages[processedMessages.length - 1];
+        if (processedMessages.length > 0 && lastMessage.role === 'assistant') {
+            if (lastMessage.content[0].type === "text" && lastMessage.content[0].text === "{") {
+                console.log('[Kiro] Removing last assistant with "{" message from processedMessages');
+                processedMessages.pop();
+            }
+        }
+
+        // 合并相邻相同 role 的消息
+        const mergedMessages = [];
+        for (let i = 0; i < processedMessages.length; i++) {
+            const currentMsg = processedMessages[i];
+            
+            if (mergedMessages.length === 0) {
+                mergedMessages.push(currentMsg);
+            } else {
+                const lastMsg = mergedMessages[mergedMessages.length - 1];
+                
+                // 判断当前消息和上一条消息是否为相同 role
+                if (currentMsg.role === lastMsg.role) {
+                    // 合并消息内容
+                    if (Array.isArray(lastMsg.content) && Array.isArray(currentMsg.content)) {
+                        // 如果都是数组,合并数组内容
+                        lastMsg.content.push(...currentMsg.content);
+                    } else if (typeof lastMsg.content === 'string' && typeof currentMsg.content === 'string') {
+                        // 如果都是字符串,用换行符连接
+                        lastMsg.content += '\n' + currentMsg.content;
+                    } else if (Array.isArray(lastMsg.content) && typeof currentMsg.content === 'string') {
+                        // 上一条是数组,当前是字符串,添加为 text 类型
+                        lastMsg.content.push({ type: 'text', text: currentMsg.content });
+                    } else if (typeof lastMsg.content === 'string' && Array.isArray(currentMsg.content)) {
+                        // 上一条是字符串,当前是数组,转换为数组格式
+                        lastMsg.content = [{ type: 'text', text: lastMsg.content }, ...currentMsg.content];
+                    }
+                    console.log(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
+                } else {
+                    mergedMessages.push(currentMsg);
+                }
+            }
+        }
+        
+        // 用合并后的消息替换原消息数组
+        processedMessages.length = 0;
+        processedMessages.push(...mergedMessages);
+
         const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
         
         let toolsContext = {};
@@ -545,25 +642,23 @@ async initializeAuth(forceRefresh = false) {
                 let userInputMessage = {
                     content: '',
                     modelId: codewhispererModel,
-                    origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
-                    userInputMessageContext: {}
+                    origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR
                 };
+                let images = [];
+                let toolResults = [];
+                
                 if (Array.isArray(message.content)) {
-                    userInputMessage.images = []; // Initialize images array
                     for (const part of message.content) {
                         if (part.type === 'text') {
                             userInputMessage.content += part.text;
                         } else if (part.type === 'tool_result') {
-                            if (!userInputMessage.userInputMessageContext.toolResults) {
-                                userInputMessage.userInputMessageContext.toolResults = [];
-                            }
-                            userInputMessage.userInputMessageContext.toolResults.push({
+                            toolResults.push({
                                 content: [{ text: this.getContentText(part.content) }],
                                 status: 'success',
                                 toolUseId: part.tool_use_id
                             });
                         } else if (part.type === 'image') {
-                            userInputMessage.images.push({
+                            images.push({
                                 format: part.source.media_type.split('/')[1],
                                 source: {
                                     bytes: part.source.data
@@ -574,18 +669,37 @@ async initializeAuth(forceRefresh = false) {
                 } else {
                     userInputMessage.content = this.getContentText(message);
                 }
+                
+                // 只添加非空字段，API 不接受空数组或空对象
+                if (images.length > 0) {
+                    userInputMessage.images = images;
+                }
+                if (toolResults.length > 0) {
+                    // 去重 toolResults - Kiro API 不接受重复的 toolUseId
+                    const uniqueToolResults = [];
+                    const seenIds = new Set();
+                    for (const tr of toolResults) {
+                        if (!seenIds.has(tr.toolUseId)) {
+                            seenIds.add(tr.toolUseId);
+                            uniqueToolResults.push(tr);
+                        }
+                    }
+                    userInputMessage.userInputMessageContext = { toolResults: uniqueToolResults };
+                }
+                
                 history.push({ userInputMessage });
             } else if (message.role === 'assistant') {
                 let assistantResponseMessage = {
-                    content: '',
-                    toolUses: []
+                    content: ''
                 };
+                let toolUses = [];
+                
                 if (Array.isArray(message.content)) {
                     for (const part of message.content) {
                         if (part.type === 'text') {
                             assistantResponseMessage.content += part.text;
                         } else if (part.type === 'tool_use') {
-                            assistantResponseMessage.toolUses.push({
+                            toolUses.push({
                                 input: part.input,
                                 name: part.name,
                                 toolUseId: part.id
@@ -595,81 +709,148 @@ async initializeAuth(forceRefresh = false) {
                 } else {
                     assistantResponseMessage.content = this.getContentText(message);
                 }
+                
+                // 只添加非空字段
+                if (toolUses.length > 0) {
+                    assistantResponseMessage.toolUses = toolUses;
+                }
+                
                 history.push({ assistantResponseMessage });
             }
         }
 
         // Build current message
-        const currentMessage = processedMessages[processedMessages.length - 1];
+        let currentMessage = processedMessages[processedMessages.length - 1];
         let currentContent = '';
         let currentToolResults = [];
         let currentToolUses = [];
         let currentImages = [];
 
-        if (Array.isArray(currentMessage.content)) {
-            for (const part of currentMessage.content) {
-                if (part.type === 'text') {
-                    currentContent += part.text;
-                } else if (part.type === 'tool_result') {
-                    currentToolResults.push({
-                        content: [{ text: this.getContentText(part.content) }],
-                        status: 'success',
-                        toolUseId: part.tool_use_id
-                    });
-                } else if (part.type === 'tool_use') {
-                    currentToolUses.push({
-                        input: part.input,
-                        name: part.name,
-                        toolUseId: part.id
-                    });
-                } else if (part.type === 'image') {
-                    currentImages.push({
-                        format: part.source.media_type.split('/')[1],
-                        source: {
-                            bytes: part.source.data
-                        }
-                    });
+        // 如果最后一条消息是 assistant，需要将其加入 history，然后创建一个 user 类型的 currentMessage
+        // 因为 CodeWhisperer API 的 currentMessage 必须是 userInputMessage 类型
+        if (currentMessage.role === 'assistant') {
+            console.log('[Kiro] Last message is assistant, moving it to history and creating user currentMessage');
+            
+            // 构建 assistant 消息并加入 history
+            let assistantResponseMessage = {
+                content: '',
+                toolUses: []
+            };
+            if (Array.isArray(currentMessage.content)) {
+                for (const part of currentMessage.content) {
+                    if (part.type === 'text') {
+                        assistantResponseMessage.content += part.text;
+                    } else if (part.type === 'tool_use') {
+                        assistantResponseMessage.toolUses.push({
+                            input: part.input,
+                            name: part.name,
+                            toolUseId: part.id
+                        });
+                    }
                 }
+            } else {
+                assistantResponseMessage.content = this.getContentText(currentMessage);
             }
-        } else {
-            currentContent = this.getContentText(currentMessage);
-        }
-
-        if (!currentContent && currentToolResults.length === 0 && currentToolUses.length === 0) {
+            if (assistantResponseMessage.toolUses.length === 0) {
+                delete assistantResponseMessage.toolUses;
+            }
+            history.push({ assistantResponseMessage });
+            
+            // 设置 currentContent 为 "Continue"，因为我们需要一个 user 消息来触发 AI 继续
             currentContent = 'Continue';
+        } else {
+            // 处理 user 消息
+            if (Array.isArray(currentMessage.content)) {
+                for (const part of currentMessage.content) {
+                    if (part.type === 'text') {
+                        currentContent += part.text;
+                    } else if (part.type === 'tool_result') {
+                        currentToolResults.push({
+                            content: [{ text: this.getContentText(part.content) }],
+                            status: 'success',
+                            toolUseId: part.tool_use_id
+                        });
+                    } else if (part.type === 'tool_use') {
+                        currentToolUses.push({
+                            input: part.input,
+                            name: part.name,
+                            toolUseId: part.id
+                        });
+                    } else if (part.type === 'image') {
+                        currentImages.push({
+                            format: part.source.media_type.split('/')[1],
+                            source: {
+                                bytes: part.source.data
+                            }
+                        });
+                    }
+                }
+            } else {
+                currentContent = this.getContentText(currentMessage);
+            }
+
+            // Kiro API 要求 content 不能为空，即使有 toolResults
+            if (!currentContent) {
+                currentContent = currentToolResults.length > 0 ? 'Tool results provided.' : 'Continue';
+            }
         }
 
         const request = {
             conversationState: {
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
-                currentMessage: {}, // Will be populated based on the last message's role
-                history: history
+                currentMessage: {} // Will be populated as userInputMessage
             }
         };
-
-        if (currentMessage.role === 'user') {
-            request.conversationState.currentMessage.userInputMessage = {
-                content: currentContent,
-                modelId: codewhispererModel,
-                origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
-                images: currentImages && currentImages.length > 0 ? currentImages : null, // Add images here
-                userInputMessageContext: {
-                    toolResults: currentToolResults.length > 0 ? currentToolResults : null,
-                    tools: Object.keys(toolsContext).length > 0 ? toolsContext.tools : null
-                }
-            };
-        } else if (currentMessage.role === 'assistant') {
-            request.conversationState.currentMessage.assistantResponseMessage = {
-                content: currentContent,
-                toolUses: currentToolUses.length > 0 ? currentToolUses : undefined
-            };
+        
+        // 只有当 history 非空时才添加（API 可能不接受空数组）
+        if (history.length > 0) {
+            request.conversationState.history = history;
         }
+
+        // currentMessage 始终是 userInputMessage 类型
+        // 注意：API 不接受 null 值，空字段应该完全不包含
+        const userInputMessage = {
+            content: currentContent,
+            modelId: codewhispererModel,
+            origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR
+        };
+
+        // 只有当 images 非空时才添加
+        if (currentImages && currentImages.length > 0) {
+            userInputMessage.images = currentImages;
+        }
+
+        // 构建 userInputMessageContext，只包含非空字段
+        const userInputMessageContext = {};
+        if (currentToolResults.length > 0) {
+            // 去重 toolResults - Kiro API 不接受重复的 toolUseId
+            const uniqueToolResults = [];
+            const seenToolUseIds = new Set();
+            for (const tr of currentToolResults) {
+                if (!seenToolUseIds.has(tr.toolUseId)) {
+                    seenToolUseIds.add(tr.toolUseId);
+                    uniqueToolResults.push(tr);
+                }
+            }
+            userInputMessageContext.toolResults = uniqueToolResults;
+        }
+        if (Object.keys(toolsContext).length > 0 && toolsContext.tools) {
+            userInputMessageContext.tools = toolsContext.tools;
+        }
+
+        // 只有当 userInputMessageContext 有内容时才添加
+        if (Object.keys(userInputMessageContext).length > 0) {
+            userInputMessage.userInputMessageContext = userInputMessageContext;
+        }
+
+        request.conversationState.currentMessage.userInputMessage = userInputMessage;
 
         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
             request.profileArn = this.profileArn;
         }
         
+        // fs.writeFile('claude-kiro-request'+Date.now()+'.json', JSON.stringify(request));
         return request;
     }
 
@@ -773,6 +954,9 @@ async initializeAuth(forceRefresh = false) {
     }
  
 
+    /**
+     * 调用 API 并处理错误重试
+     */
     async callApi(method, model, body, isRetry = false, retryCount = 0) {
         if (!this.isInitialized) await this.initialize();
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
@@ -802,13 +986,13 @@ async initializeAuth(forceRefresh = false) {
                     throw refreshError;
                 }
             }
-
+            
             // Handle 429 (Too Many Requests) with exponential backoff
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -877,29 +1061,253 @@ async initializeAuth(forceRefresh = false) {
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
+        
+        // Estimate input tokens before making the API call
+        const inputTokens = this.estimateInputTokens(requestBody);
+        
         const response = await this.callApi('', finalModel, requestBody);
 
         try {
             const { responseText, toolCalls } = this._processApiResponse(response);
-            return this.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls);
+            return this.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls, inputTokens);
         } catch (error) {
             console.error('[Kiro] Error in generateContent:', error);
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
 
-    //kiro提供的接口没有流式返回
-    async streamApi(method, model, body, isRetry = false, retryCount = 0) {
+    /**
+     * 解析 AWS Event Stream 格式，提取所有完整的 JSON 事件
+     * 返回 { events: 解析出的事件数组, remaining: 未处理完的缓冲区 }
+     */
+    parseAwsEventStreamBuffer(buffer) {
+        const events = [];
+        let remaining = buffer;
+        let searchStart = 0;
+        
+        while (true) {
+            // 查找真正的 JSON payload 起始位置
+            // AWS Event Stream 包含二进制头部，我们只搜索有效的 JSON 模式
+            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...} 或 {"followupPrompt":"..."}
+            
+            // 搜索所有可能的 JSON payload 开头模式
+            // Kiro 返回的 toolUse 可能分多个事件：
+            // 1. {"name":"xxx","toolUseId":"xxx"} - 开始
+            // 2. {"input":"..."} - input 数据（可能多次）
+            // 3. {"stop":true} - 结束
+            const contentStart = remaining.indexOf('{"content":', searchStart);
+            const nameStart = remaining.indexOf('{"name":', searchStart);
+            const followupStart = remaining.indexOf('{"followupPrompt":', searchStart);
+            const inputStart = remaining.indexOf('{"input":', searchStart);
+            const stopStart = remaining.indexOf('{"stop":', searchStart);
+            
+            // 找到最早出现的有效 JSON 模式
+            const candidates = [contentStart, nameStart, followupStart, inputStart, stopStart].filter(pos => pos >= 0);
+            if (candidates.length === 0) break;
+            
+            const jsonStart = Math.min(...candidates);
+            if (jsonStart < 0) break;
+            
+            // 正确处理嵌套的 {} - 使用括号计数法
+            let braceCount = 0;
+            let jsonEnd = -1;
+            let inString = false;
+            let escapeNext = false;
+            
+            for (let i = jsonStart; i < remaining.length; i++) {
+                const char = remaining[i];
+                
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                
+                if (!inString) {
+                    if (char === '{') {
+                        braceCount++;
+                    } else if (char === '}') {
+                        braceCount--;
+                        if (braceCount === 0) {
+                            jsonEnd = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (jsonEnd < 0) {
+                // 不完整的 JSON，保留在缓冲区等待更多数据
+                remaining = remaining.substring(jsonStart);
+                break;
+            }
+            
+            const jsonStr = remaining.substring(jsonStart, jsonEnd + 1);
+            try {
+                const parsed = JSON.parse(jsonStr);
+                // 处理 content 事件
+                if (parsed.content !== undefined && !parsed.followupPrompt) {
+                    // 处理转义字符
+                    let decodedContent = parsed.content;
+                    // 无须处理转义的换行符，原来要处理是因为智能体返回的 content 需要通过换行符切割不同的json
+                    // decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
+                    events.push({ type: 'content', data: decodedContent });
+                }
+                // 处理结构化工具调用事件 - 开始事件（包含 name 和 toolUseId）
+                else if (parsed.name && parsed.toolUseId) {
+                    events.push({ 
+                        type: 'toolUse', 
+                        data: {
+                            name: parsed.name,
+                            toolUseId: parsed.toolUseId,
+                            input: parsed.input || '',
+                            stop: parsed.stop || false
+                        }
+                    });
+                }
+                // 处理工具调用的 input 续传事件（只有 input 字段）
+                else if (parsed.input !== undefined && !parsed.name) {
+                    events.push({
+                        type: 'toolUseInput',
+                        data: {
+                            input: parsed.input
+                        }
+                    });
+                }
+                // 处理工具调用的结束事件（只有 stop 字段）
+                else if (parsed.stop !== undefined) {
+                    events.push({
+                        type: 'toolUseStop',
+                        data: {
+                            stop: parsed.stop
+                        }
+                    });
+                }
+            } catch (e) {
+                // JSON 解析失败，跳过这个位置继续搜索
+            }
+            
+            searchStart = jsonEnd + 1;
+            if (searchStart >= remaining.length) {
+                remaining = '';
+                break;
+            }
+        }
+        
+        // 如果 searchStart 有进展，截取剩余部分
+        if (searchStart > 0 && remaining.length > 0) {
+            remaining = remaining.substring(searchStart);
+        }
+        
+        return { events, remaining };
+    }
+
+    /**
+     * 真正的流式 API 调用 - 使用 responseType: 'stream'
+     */
+    async * streamApiReal(method, model, body, isRetry = false, retryCount = 0) {
+        if (!this.isInitialized) await this.initialize();
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        const requestData = this.buildCodewhispererRequest(body.messages, model, body.tools, body.system);
+
+        const token = this.accessToken;
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'amz-sdk-invocation-id': `${uuidv4()}`,
+        };
+
+        const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
+
+        let stream = null;
         try {
-            // 直接调用并返回Promise，最终解析为response
-            return await this.callApi(method, model, body, isRetry, retryCount);
+            const response = await this.axiosInstance.post(requestUrl, requestData, { 
+                headers,
+                responseType: 'stream'
+            });
+
+            stream = response.data;
+            let buffer = '';
+            let lastContentEvent = null;  // 用于检测连续重复的 content 事件
+
+            for await (const chunk of stream) {
+                buffer += chunk.toString();
+                
+                // 解析缓冲区中的事件
+                const { events, remaining } = this.parseAwsEventStreamBuffer(buffer);
+                buffer = remaining;
+                
+                // yield 所有事件，但过滤连续完全相同的 content 事件（Kiro API 有时会重复发送）
+                for (const event of events) {
+                    if (event.type === 'content' && event.data) {
+                        // 检查是否与上一个 content 事件完全相同
+                        if (lastContentEvent === event.data) {
+                            // 跳过重复的内容
+                            continue;
+                        }
+                        lastContentEvent = event.data;
+                        yield { type: 'content', content: event.data };
+                    } else if (event.type === 'toolUse') {
+                        yield { type: 'toolUse', toolUse: event.data };
+                    } else if (event.type === 'toolUseInput') {
+                        yield { type: 'toolUseInput', input: event.data.input };
+                    } else if (event.type === 'toolUseStop') {
+                        yield { type: 'toolUseStop', stop: event.data.stop };
+                    }
+                }
+            }
         } catch (error) {
-            console.error('[Kiro] Error calling API:', error);
-            throw error; // 向上抛出错误
+            // 确保出错时关闭流
+            if (stream && typeof stream.destroy === 'function') {
+                stream.destroy();
+            }
+            
+            if (error.response?.status === 403 && !isRetry) {
+                console.log('[Kiro] Received 403 in stream. Attempting token refresh and retrying...');
+                await this.initializeAuth(true);
+                yield* this.streamApiReal(method, model, body, true, retryCount);
+                return;
+            }
+            
+            if (error.response?.status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            console.error('[Kiro] Stream API call failed:', error.message);
+            throw error;
+        } finally {
+            // 确保流被关闭，释放资源
+            if (stream && typeof stream.destroy === 'function') {
+                stream.destroy();
+            }
         }
     }
 
-    // 重构2: generateContentStream 调用新的普通async函数
+    // 保留旧的非流式方法用于 generateContent
+    async streamApi(method, model, body, isRetry = false, retryCount = 0) {
+        try {
+            return await this.callApi(method, model, body, isRetry, retryCount);
+        } catch (error) {
+            console.error('[Kiro] Error calling API:', error);
+            throw error;
+        }
+    }
+
+    // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
         
@@ -910,35 +1318,227 @@ async initializeAuth(forceRefresh = false) {
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel}`);
+        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
+        
+        const inputTokens = this.estimateInputTokens(requestBody);
+        const messageId = `${uuidv4()}`;
         
         try {
-            const response = await this.streamApi('', finalModel, requestBody);
-            const { responseText, toolCalls } = this._processApiResponse(response);
+            // 1. 先发送 message_start 事件
+            yield {
+                type: "message_start",
+                message: {
+                    id: messageId,
+                    type: "message",
+                    role: "assistant",
+                    model: model,
+                    usage: { input_tokens: inputTokens, output_tokens: 0 },
+                    content: []
+                }
+            };
 
-            // Pass both responseText and toolCalls to buildClaudeResponse
-            // buildClaudeResponse will handle the logic of combining them into a single stream
-            for (const chunkJson of this.buildClaudeResponse(responseText, true, 'assistant', model, toolCalls)) {
-                yield chunkJson;
+            // 2. 发送 content_block_start 事件
+            yield {
+                type: "content_block_start",
+                index: 0,
+                content_block: { type: "text", text: "" }
+            };
+
+            let totalContent = '';
+            let outputTokens = 0;
+            const toolCalls = [];
+            let currentToolCall = null;  // 用于累积结构化工具调用
+
+            // 3. 流式接收并发送每个 content_block_delta
+            for await (const event of this.streamApiReal('', finalModel, requestBody)) {
+                if (event.type === 'content' && event.content) {
+                    totalContent += event.content;
+                    // 不再每个 chunk 都计算 token，改为最后统一计算，避免阻塞事件循环
+                    
+                    yield {
+                        type: "content_block_delta",
+                        index: 0,
+                        delta: { type: "text_delta", text: event.content }
+                    };
+                } else if (event.type === 'toolUse') {
+                    const tc = event.toolUse;
+                    // 工具调用事件（包含 name 和 toolUseId）
+                    if (tc.name && tc.toolUseId) {
+                        // 检查是否是同一个工具调用的续传（相同 toolUseId）
+                        if (currentToolCall && currentToolCall.toolUseId === tc.toolUseId) {
+                            // 同一个工具调用，累积 input
+                            currentToolCall.input += tc.input || '';
+                        } else {
+                            // 不同的工具调用
+                            // 如果有未完成的工具调用，先保存它
+                            if (currentToolCall) {
+                                try {
+                                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                                } catch (e) {
+                                    // input 不是有效 JSON，保持原样
+                                }
+                                toolCalls.push(currentToolCall);
+                            }
+                            // 开始新的工具调用
+                            currentToolCall = {
+                                toolUseId: tc.toolUseId,
+                                name: tc.name,
+                                input: tc.input || ''
+                            };
+                        }
+                        // 如果这个事件包含 stop，完成工具调用
+                        if (tc.stop) {
+                            try {
+                                currentToolCall.input = JSON.parse(currentToolCall.input);
+                            } catch (e) {}
+                            toolCalls.push(currentToolCall);
+                            currentToolCall = null;
+                        }
+                    }
+                } else if (event.type === 'toolUseInput') {
+                    // 工具调用的 input 续传事件
+                    if (currentToolCall) {
+                        currentToolCall.input += event.input || '';
+                    }
+                } else if (event.type === 'toolUseStop') {
+                    // 工具调用结束事件
+                    if (currentToolCall && event.stop) {
+                        try {
+                            currentToolCall.input = JSON.parse(currentToolCall.input);
+                        } catch (e) {
+                            // input 不是有效 JSON，保持原样
+                        }
+                        toolCalls.push(currentToolCall);
+                        currentToolCall = null;
+                    }
+                }
             }
+            
+            // 处理未完成的工具调用（如果流提前结束）
+            if (currentToolCall) {
+                try {
+                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                } catch (e) {}
+                toolCalls.push(currentToolCall);
+                currentToolCall = null;
+            }
+            
+            // 检查文本内容中的 bracket 格式工具调用
+            const bracketToolCalls = parseBracketToolCalls(totalContent);
+            if (bracketToolCalls && bracketToolCalls.length > 0) {
+                for (const btc of bracketToolCalls) {
+                    toolCalls.push({
+                        toolUseId: btc.id || `tool_${uuidv4()}`,
+                        name: btc.function.name,
+                        input: JSON.parse(btc.function.arguments || '{}')
+                    });
+                }
+            }
+
+            // 4. 发送 content_block_stop 事件
+            yield { type: "content_block_stop", index: 0 };
+
+            // 5. 处理工具调用（如果有）
+            if (toolCalls.length > 0) {
+                for (let i = 0; i < toolCalls.length; i++) {
+                    const tc = toolCalls[i];
+                    const blockIndex = i + 1;
+                    
+                    yield {
+                        type: "content_block_start",
+                        index: blockIndex,
+                        content_block: {
+                            type: "tool_use",
+                            id: tc.toolUseId || `tool_${uuidv4()}`,
+                            name: tc.name,
+                            input: {}
+                        }
+                    };
+                    
+                    yield {
+                        type: "content_block_delta",
+                        index: blockIndex,
+                        delta: {
+                            type: "input_json_delta",
+                            partial_json: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input || {})
+                        }
+                    };
+                    
+                    yield { type: "content_block_stop", index: blockIndex };
+                }
+            }
+
+            // 6. 发送 message_delta 事件
+            // 在流结束后统一计算 output tokens，避免在流式循环中阻塞事件循环
+            outputTokens = this.countTextTokens(totalContent);
+            for (const tc of toolCalls) {
+                outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
+            }
+            
+            yield {
+                type: "message_delta",
+                delta: { stop_reason: toolCalls.length > 0 ? "tool_use" : "end_turn" },
+                usage: { output_tokens: outputTokens }
+            };
+
+            // 7. 发送 message_stop 事件
+            yield { type: "message_stop" };
+
         } catch (error) {
             console.error('[Kiro] Error in streaming generation:', error);
             throw new Error(`Error processing response: ${error.message}`);
-            // For Claude, we yield an array of events for streaming error
-            // Ensure error message is passed as content, not toolCalls
-            // for (const chunkJson of this.buildClaudeResponse(`Error: ${error.message}`, true, 'assistant', model, null)) {
-            //     yield chunkJson;
-            // }
         }
+    }
+
+    /**
+     * Count tokens for a given text using Claude's official tokenizer
+     */
+    countTextTokens(text) {
+        if (!text) return 0;
+        try {
+            return countTokens(text);
+        } catch (error) {
+            // Fallback to estimation if tokenizer fails
+            console.warn('[Kiro] Tokenizer error, falling back to estimation:', error.message);
+            return Math.ceil((text || '').length / 4);
+        }
+    }
+
+    /**
+     * Calculate input tokens from request body using Claude's official tokenizer
+     */
+    estimateInputTokens(requestBody) {
+        let totalTokens = 0;
+        
+        // Count system prompt tokens
+        if (requestBody.system) {
+            const systemText = this.getContentText(requestBody.system);
+            totalTokens += this.countTextTokens(systemText);
+        }
+        
+        // Count all messages tokens
+        if (requestBody.messages && Array.isArray(requestBody.messages)) {
+            for (const message of requestBody.messages) {
+                if (message.content) {
+                    const contentText = this.getContentText(message);
+                    totalTokens += this.countTextTokens(contentText);
+                }
+            }
+        }
+        
+        // Count tools definitions tokens if present
+        if (requestBody.tools && Array.isArray(requestBody.tools)) {
+            totalTokens += this.countTextTokens(JSON.stringify(requestBody.tools));
+        }
+        
+        return totalTokens;
     }
 
     /**
      * Build Claude compatible response object
      */
-    buildClaudeResponse(content, isStream = false, role = 'assistant', model, toolCalls = null) {
+    buildClaudeResponse(content, isStream = false, role = 'assistant', model, toolCalls = null, inputTokens = 0) {
         const messageId = `${uuidv4()}`;
-        // Helper to estimate tokens (simple heuristic)
-        const estimateTokens = (text) => Math.ceil((text || '').length / 4);
 
         if (isStream) {
             // Kiro API is "pseudo-streaming", so we'll send a few events to simulate
@@ -954,7 +1554,7 @@ async initializeAuth(forceRefresh = false) {
                     role: role,
                     model: model,
                     usage: {
-                        input_tokens: 0, // Kiro API doesn't provide this
+                        input_tokens: inputTokens,
                         output_tokens: 0 // Will be updated in message_delta
                     },
                     content: [] // Content will be streamed via content_block_delta
@@ -991,7 +1591,7 @@ async initializeAuth(forceRefresh = false) {
                     type: "content_block_stop",
                     index: contentBlockIndex
                 });
-                totalOutputTokens += estimateTokens(content);
+                totalOutputTokens += this.countTextTokens(content);
                 // If there are tool calls, the stop reason remains "tool_use".
                 // If only content, it's "end_turn".
                 if (!toolCalls || toolCalls.length === 0) {
@@ -1039,7 +1639,7 @@ async initializeAuth(forceRefresh = false) {
                         type: "content_block_stop",
                         index: index
                     });
-                    totalOutputTokens += estimateTokens(JSON.stringify(inputObject));
+                    totalOutputTokens += this.countTextTokens(JSON.stringify(inputObject));
                 });
                 stopReason = "tool_use"; // If there are tool calls, the stop reason is tool_use
             }
@@ -1084,7 +1684,7 @@ async initializeAuth(forceRefresh = false) {
                         name: tc.function.name,
                         input: inputObject
                     });
-                    outputTokens += estimateTokens(tc.function.arguments);
+                    outputTokens += this.countTextTokens(tc.function.arguments);
                 }
                 stopReason = "tool_use"; // Set stop_reason to "tool_use" when toolCalls exist
             } else if (content) {
@@ -1092,7 +1692,7 @@ async initializeAuth(forceRefresh = false) {
                     type: "text",
                     text: content
                 });
-                outputTokens += estimateTokens(content);
+                outputTokens += this.countTextTokens(content);
             }
 
             return {
@@ -1103,7 +1703,7 @@ async initializeAuth(forceRefresh = false) {
                 stop_reason: stopReason,
                 stop_sequence: null,
                 usage: {
-                    input_tokens: 0, // Kiro API doesn't provide this
+                    input_tokens: inputTokens,
                     output_tokens: outputTokens
                 },
                 content: contentArray
@@ -1115,7 +1715,7 @@ async initializeAuth(forceRefresh = false) {
      * List available models
      */
     async listModels() {
-        const models = Object.keys(MODEL_MAPPING).map(id => ({
+        const models = KIRO_MODELS.map(id => ({
             name: id
         }));
         

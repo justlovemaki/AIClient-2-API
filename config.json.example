@@ -1,7 +1,7 @@
 {
     "REQUIRED_API_KEY": "123456",
     "SERVER_PORT": 3000,
-    "HOST": "127.0.0.1",
+    "HOST": "0.0.0.0",
     "MODEL_PROVIDER": "gemini-cli-oauth",
     "OPENAI_API_KEY": "xxx",
     "OPENAI_BASE_URL": "https://openai/v1",
@@ -10,6 +10,7 @@
     "PROJECT_ID": null,
     "GEMINI_OAUTH_CREDS_BASE64": null,
     "GEMINI_OAUTH_CREDS_FILE_PATH": null,
+    "ANTIGRAVITY_OAUTH_CREDS_FILE_PATH": null,
     "KIRO_OAUTH_CREDS_BASE64": null,
     "KIRO_OAUTH_CREDS_FILE_PATH": null,
     "QWEN_OAUTH_CREDS_FILE_PATH": null,

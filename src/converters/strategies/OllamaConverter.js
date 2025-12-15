@@ -7,6 +7,76 @@ import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import { BaseConverter } from '../BaseConverter.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
+import {
+    OLLAMA_DEFAULT_CONTEXT_LENGTH,
+    OLLAMA_DEFAULT_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_DEFAULT_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_SONNET_45_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_SONNET_45_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_HAIKU_45_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_HAIKU_45_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_OPUS_41_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_OPUS_41_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_SONNET_40_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_SONNET_40_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_SONNET_37_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_SONNET_37_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_OPUS_40_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_OPUS_40_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_HAIKU_35_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_HAIKU_35_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_HAIKU_30_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_HAIKU_30_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_SONNET_35_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_SONNET_35_MAX_OUTPUT_TOKENS,
+    OLLAMA_CLAUDE_OPUS_30_CONTEXT_LENGTH,
+    OLLAMA_CLAUDE_OPUS_30_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_25_PRO_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_25_PRO_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_25_FLASH_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_25_FLASH_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_25_IMAGE_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_25_IMAGE_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_25_LIVE_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_25_LIVE_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_25_TTS_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_25_TTS_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_20_FLASH_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_20_FLASH_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_20_IMAGE_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_20_IMAGE_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_15_PRO_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_15_PRO_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_15_FLASH_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_15_FLASH_MAX_OUTPUT_TOKENS,
+    OLLAMA_GEMINI_DEFAULT_CONTEXT_LENGTH,
+    OLLAMA_GEMINI_DEFAULT_MAX_OUTPUT_TOKENS,
+    OLLAMA_GPT4_TURBO_CONTEXT_LENGTH,
+    OLLAMA_GPT4_TURBO_MAX_OUTPUT_TOKENS,
+    OLLAMA_GPT4_32K_CONTEXT_LENGTH,
+    OLLAMA_GPT4_32K_MAX_OUTPUT_TOKENS,
+    OLLAMA_GPT4_BASE_CONTEXT_LENGTH,
+    OLLAMA_GPT4_BASE_MAX_OUTPUT_TOKENS,
+    OLLAMA_GPT35_16K_CONTEXT_LENGTH,
+    OLLAMA_GPT35_16K_MAX_OUTPUT_TOKENS,
+    OLLAMA_GPT35_BASE_CONTEXT_LENGTH,
+    OLLAMA_GPT35_BASE_MAX_OUTPUT_TOKENS,
+    OLLAMA_QWEN_CODER_PLUS_CONTEXT_LENGTH,
+    OLLAMA_QWEN_CODER_PLUS_MAX_OUTPUT_TOKENS,
+    OLLAMA_QWEN_VL_PLUS_CONTEXT_LENGTH,
+    OLLAMA_QWEN_VL_PLUS_MAX_OUTPUT_TOKENS,
+    OLLAMA_QWEN_CODER_FLASH_CONTEXT_LENGTH,
+    OLLAMA_QWEN_CODER_FLASH_MAX_OUTPUT_TOKENS,
+    OLLAMA_QWEN_DEFAULT_CONTEXT_LENGTH,
+    OLLAMA_QWEN_DEFAULT_MAX_OUTPUT_TOKENS,
+    OLLAMA_DEFAULT_FILE_TYPE,
+    OLLAMA_DEFAULT_QUANTIZATION_VERSION,
+    OLLAMA_DEFAULT_ROPE_FREQ_BASE,
+    OLLAMA_DEFAULT_TEMPERATURE,
+    OLLAMA_DEFAULT_TOP_P,
+    OLLAMA_DEFAULT_QUANTIZATION_LEVEL,
+    OLLAMA_SHOW_QUANTIZATION_LEVEL
+} from '../utils.js';
 
 
 
@@ -360,7 +430,7 @@ export class OllamaConverter extends BaseConverter {
                         family: modelOwner,  // "Ollama" with capital O
                         families: [modelOwner],
                         parameter_size: '0B',  // As in the old patch
-                        quantization_level: 'Q4_0'
+                        quantization_level: OLLAMA_DEFAULT_QUANTIZATION_LEVEL
                     }
                 });
             });
@@ -374,8 +444,8 @@ export class OllamaConverter extends BaseConverter {
      */
     toOllamaShowResponse(modelName) {
         // Minimal implementation, as in the old patch
-        let contextLength = 8192;
-        let maxOutputTokens = 4096;
+        let contextLength = OLLAMA_DEFAULT_CONTEXT_LENGTH;
+        let maxOutputTokens = OLLAMA_DEFAULT_MAX_OUTPUT_TOKENS;
         let family = 'Ollama';  // ВАЖНО: С большой буквы, как ожидает Copilot!
         let architecture = 'transformer';
         
@@ -385,62 +455,62 @@ export class OllamaConverter extends BaseConverter {
         // Claude models
         if (lowerName.includes('claude')) {
             architecture = 'claude';
-            contextLength = 200000; // Default 200K
+            contextLength = OLLAMA_CLAUDE_DEFAULT_CONTEXT_LENGTH; // Default 200K
             
             // Claude Sonnet 4.5
             if (lowerName.includes('sonnet-4-5') || lowerName.includes('sonnet-4.5')) {
-                contextLength = 200000; // 200K (1M beta available)
-                maxOutputTokens = 64000; // 64K output
+                contextLength = OLLAMA_CLAUDE_SONNET_45_CONTEXT_LENGTH; // 200K (1M beta available)
+                maxOutputTokens = OLLAMA_CLAUDE_SONNET_45_MAX_OUTPUT_TOKENS; // 64K output
             }
             // Claude Haiku 4.5
             else if (lowerName.includes('haiku-4-5') || lowerName.includes('haiku-4.5')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 64000; // 64K output
+                contextLength = OLLAMA_CLAUDE_HAIKU_45_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_HAIKU_45_MAX_OUTPUT_TOKENS; // 64K output
             }
             // Claude Opus 4.1
             else if (lowerName.includes('opus-4-1') || lowerName.includes('opus-4.1')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 32000; // 32K output
+                contextLength = OLLAMA_CLAUDE_OPUS_41_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_OPUS_41_MAX_OUTPUT_TOKENS; // 32K output
             }
             // Claude Sonnet 4.0 (legacy)
             else if (lowerName.includes('sonnet-4-0') || lowerName.includes('sonnet-4.0') || lowerName.includes('sonnet-4-20')) {
-                contextLength = 200000; // 200K (1M beta available)
-                maxOutputTokens = 64000; // 64K output
+                contextLength = OLLAMA_CLAUDE_SONNET_40_CONTEXT_LENGTH; // 200K (1M beta available)
+                maxOutputTokens = OLLAMA_CLAUDE_SONNET_40_MAX_OUTPUT_TOKENS; // 64K output
             }
             // Claude Sonnet 3.7 (legacy)
             else if (lowerName.includes('3-7') || lowerName.includes('3.7')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 64000; // 64K output (128K beta available)
+                contextLength = OLLAMA_CLAUDE_SONNET_37_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_SONNET_37_MAX_OUTPUT_TOKENS; // 64K output (128K beta available)
             }
             // Claude Opus 4.0 (legacy)
             else if (lowerName.includes('opus-4-0') || lowerName.includes('opus-4.0') || lowerName.includes('opus-4-20')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 32000; // 32K output
+                contextLength = OLLAMA_CLAUDE_OPUS_40_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_OPUS_40_MAX_OUTPUT_TOKENS; // 32K output
             }
             // Claude Haiku 3.5 (legacy)
             else if (lowerName.includes('haiku-3-5') || lowerName.includes('haiku-3.5')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 8192; // 8K output
+                contextLength = OLLAMA_CLAUDE_HAIKU_35_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_HAIKU_35_MAX_OUTPUT_TOKENS; // 8K output
             }
             // Claude Haiku 3.0 (legacy)
             else if (lowerName.includes('haiku-3-0') || lowerName.includes('haiku-3.0') || lowerName.includes('haiku-20240307')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 4096; // 4K output
+                contextLength = OLLAMA_CLAUDE_HAIKU_30_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_HAIKU_30_MAX_OUTPUT_TOKENS; // 4K output
             }
             // Claude Sonnet 3.5 (legacy)
             else if (lowerName.includes('sonnet-3-5') || lowerName.includes('sonnet-3.5')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 8192; // 8K output
+                contextLength = OLLAMA_CLAUDE_SONNET_35_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_SONNET_35_MAX_OUTPUT_TOKENS; // 8K output
             }
             // Claude Opus 3.0 (legacy)
             else if (lowerName.includes('opus-3-0') || lowerName.includes('opus-3.0') || lowerName.includes('opus') && lowerName.includes('20240229')) {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 4096; // 4K output
+                contextLength = OLLAMA_CLAUDE_OPUS_30_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_OPUS_30_MAX_OUTPUT_TOKENS; // 4K output
             }
             // Default for Claude
             else {
-                contextLength = 200000; // 200K
-                maxOutputTokens = 8192; // 8K output
+                contextLength = OLLAMA_CLAUDE_DEFAULT_CONTEXT_LENGTH; // 200K
+                maxOutputTokens = OLLAMA_CLAUDE_HAIKU_35_MAX_OUTPUT_TOKENS; // 8K output
             }
         }
         // Gemini models
@@ -449,53 +519,53 @@ export class OllamaConverter extends BaseConverter {
             
             // Gemini 2.5 Pro
             if (lowerName.includes('2.5') && lowerName.includes('pro')) {
-                contextLength = 1048576; // 1M input tokens
-                maxOutputTokens = 65536; // 65K output tokens
+                contextLength = OLLAMA_GEMINI_25_PRO_CONTEXT_LENGTH; // 1M input tokens
+                maxOutputTokens = OLLAMA_GEMINI_25_PRO_MAX_OUTPUT_TOKENS; // 65K output tokens
             }
             // Gemini 2.5 Flash / Flash-Lite
             else if (lowerName.includes('2.5') && (lowerName.includes('flash') || lowerName.includes('lite'))) {
-                contextLength = 1048576; // 1M input tokens
-                maxOutputTokens = 65536; // 65K output tokens
+                contextLength = OLLAMA_GEMINI_25_FLASH_CONTEXT_LENGTH; // 1M input tokens
+                maxOutputTokens = OLLAMA_GEMINI_25_FLASH_MAX_OUTPUT_TOKENS; // 65K output tokens
             }
             // Gemini 2.5 Flash Image
             else if (lowerName.includes('2.5') && lowerName.includes('image')) {
-                contextLength = 65536; // 65K input tokens
-                maxOutputTokens = 32768; // 32K output tokens
+                contextLength = OLLAMA_GEMINI_25_IMAGE_CONTEXT_LENGTH; // 65K input tokens
+                maxOutputTokens = OLLAMA_GEMINI_25_IMAGE_MAX_OUTPUT_TOKENS; // 32K output tokens
             }
             // Gemini 2.5 Flash Live / Native Audio
             else if (lowerName.includes('2.5') && (lowerName.includes('live') || lowerName.includes('native-audio'))) {
-                contextLength = 131072; // 131K input tokens
-                maxOutputTokens = 8192; // 8K output tokens
+                contextLength = OLLAMA_GEMINI_25_LIVE_CONTEXT_LENGTH; // 131K input tokens
+                maxOutputTokens = OLLAMA_GEMINI_25_LIVE_MAX_OUTPUT_TOKENS; // 8K output tokens
             }
             // Gemini 2.5 TTS
             else if (lowerName.includes('2.5') && lowerName.includes('tts')) {
-                contextLength = 8192; // 8K input tokens
-                maxOutputTokens = 16384; // 16K output tokens
+                contextLength = OLLAMA_GEMINI_25_TTS_CONTEXT_LENGTH; // 8K input tokens
+                maxOutputTokens = OLLAMA_GEMINI_25_TTS_MAX_OUTPUT_TOKENS; // 16K output tokens
             }
             // Gemini 2.0 Flash
             else if (lowerName.includes('2.0') && lowerName.includes('flash')) {
-                contextLength = 1048576; // 1M input tokens
-                maxOutputTokens = 8192; // 8K output tokens
+                contextLength = OLLAMA_GEMINI_20_FLASH_CONTEXT_LENGTH; // 1M input tokens
+                maxOutputTokens = OLLAMA_GEMINI_20_FLASH_MAX_OUTPUT_TOKENS; // 8K output tokens
             }
             // Gemini 2.0 Flash Image
             else if (lowerName.includes('2.0') && lowerName.includes('image')) {
-                contextLength = 32768; // 32K input tokens
-                maxOutputTokens = 8192; // 8K output tokens
+                contextLength = OLLAMA_GEMINI_20_IMAGE_CONTEXT_LENGTH; // 32K input tokens
+                maxOutputTokens = OLLAMA_GEMINI_20_IMAGE_MAX_OUTPUT_TOKENS; // 8K output tokens
             }
             // Gemini 1.5 Pro (legacy)
             else if (lowerName.includes('1.5') && lowerName.includes('pro')) {
-                contextLength = 2097152; // 2M tokens
-                maxOutputTokens = 8192;
+                contextLength = OLLAMA_GEMINI_15_PRO_CONTEXT_LENGTH; // 2M tokens
+                maxOutputTokens = OLLAMA_GEMINI_15_PRO_MAX_OUTPUT_TOKENS;
             }
             // Gemini 1.5 Flash (legacy)
             else if (lowerName.includes('1.5') && lowerName.includes('flash')) {
-                contextLength = 1048576; // 1M tokens
-                maxOutputTokens = 8192;
+                contextLength = OLLAMA_GEMINI_15_FLASH_CONTEXT_LENGTH; // 1M tokens
+                maxOutputTokens = OLLAMA_GEMINI_15_FLASH_MAX_OUTPUT_TOKENS;
             }
             // Default for Gemini
             else {
-                contextLength = 1048576; // 1M tokens
-                maxOutputTokens = 8192;
+                contextLength = OLLAMA_GEMINI_DEFAULT_CONTEXT_LENGTH; // 1M tokens
+                maxOutputTokens = OLLAMA_GEMINI_DEFAULT_MAX_OUTPUT_TOKENS;
             }
         }
         // GPT-4 models
@@ -503,14 +573,14 @@ export class OllamaConverter extends BaseConverter {
             architecture = 'gpt';
             
             if (lowerName.includes('turbo') || lowerName.includes('preview')) {
-                contextLength = 128000; // GPT-4 Turbo
-                maxOutputTokens = 4096;
+                contextLength = OLLAMA_GPT4_TURBO_CONTEXT_LENGTH; // GPT-4 Turbo
+                maxOutputTokens = OLLAMA_GPT4_TURBO_MAX_OUTPUT_TOKENS;
             } else if (lowerName.includes('32k')) {
-                contextLength = 32768;
-                maxOutputTokens = 4096;
+                contextLength = OLLAMA_GPT4_32K_CONTEXT_LENGTH;
+                maxOutputTokens = OLLAMA_GPT4_32K_MAX_OUTPUT_TOKENS;
             } else {
-                contextLength = 8192; // GPT-4 base
-                maxOutputTokens = 4096;
+                contextLength = OLLAMA_GPT4_BASE_CONTEXT_LENGTH; // GPT-4 base
+                maxOutputTokens = OLLAMA_GPT4_BASE_MAX_OUTPUT_TOKENS;
             }
         }
         // GPT-3.5 models
@@ -518,11 +588,11 @@ export class OllamaConverter extends BaseConverter {
             architecture = 'gpt';
             
             if (lowerName.includes('16k')) {
-                contextLength = 16385;
-                maxOutputTokens = 4096;
+                contextLength = OLLAMA_GPT35_16K_CONTEXT_LENGTH;
+                maxOutputTokens = OLLAMA_GPT35_16K_MAX_OUTPUT_TOKENS;
             } else {
-                contextLength = 4096;
-                maxOutputTokens = 4096;
+                contextLength = OLLAMA_GPT35_BASE_CONTEXT_LENGTH;
+                maxOutputTokens = OLLAMA_GPT35_BASE_MAX_OUTPUT_TOKENS;
             }
         }
         // Qwen models
@@ -531,23 +601,23 @@ export class OllamaConverter extends BaseConverter {
             
             // Qwen3 Coder Plus (coder-model)
             if (lowerName.includes('coder-plus') || lowerName.includes('coder_plus') || lowerName.includes('coder-model')) {
-                contextLength = 128000; // 128K tokens
-                maxOutputTokens = 65536; // 65K output
+                contextLength = OLLAMA_QWEN_CODER_PLUS_CONTEXT_LENGTH; // 128K tokens
+                maxOutputTokens = OLLAMA_QWEN_CODER_PLUS_MAX_OUTPUT_TOKENS; // 65K output
             }
             // Qwen3 VL Plus (vision-model)
             else if (lowerName.includes('vl-plus') || lowerName.includes('vl_plus') || lowerName.includes('vision-model')) {
-                contextLength = 262144; // 256K tokens
-                maxOutputTokens = 32768; // 32K output
+                contextLength = OLLAMA_QWEN_VL_PLUS_CONTEXT_LENGTH; // 256K tokens
+                maxOutputTokens = OLLAMA_QWEN_VL_PLUS_MAX_OUTPUT_TOKENS; // 32K output
             }
             // Qwen3 Coder Flash
             else if (lowerName.includes('coder-flash') || lowerName.includes('coder_flash')) {
-                contextLength = 128000; // 128K tokens
-                maxOutputTokens = 65536; // 65K output
+                contextLength = OLLAMA_QWEN_CODER_FLASH_CONTEXT_LENGTH; // 128K tokens
+                maxOutputTokens = OLLAMA_QWEN_CODER_FLASH_MAX_OUTPUT_TOKENS; // 65K output
             }
             // Default for Qwen
             else {
-                contextLength = 32768; // 32K tokens
-                maxOutputTokens = 8192;
+                contextLength = OLLAMA_QWEN_DEFAULT_CONTEXT_LENGTH; // 32K tokens
+                maxOutputTokens = OLLAMA_QWEN_DEFAULT_MAX_OUTPUT_TOKENS;
             }
         }
         
@@ -557,7 +627,7 @@ export class OllamaConverter extends BaseConverter {
         return {
             license: '',
             modelfile: `# Modelfile for ${modelName}\nFROM ${modelName}`,
-            parameters: `num_ctx ${contextLength}\nnum_predict ${maxOutputTokens}\ntemperature 0.7\ntop_p 0.9`,
+            parameters: `num_ctx ${contextLength}\nnum_predict ${maxOutputTokens}\ntemperature ${OLLAMA_DEFAULT_TEMPERATURE}\ntop_p ${OLLAMA_DEFAULT_TOP_P}`,
             template: '{{ if .System }}{{ .System }}\n{{ end }}{{ .Prompt }}',
             details: {
                 parent_model: '',
@@ -565,16 +635,16 @@ export class OllamaConverter extends BaseConverter {
                 family: family,
                 families: [family],
                 parameter_size: parameterSize,
-                quantization_level: 'Q4_K_M'
+                quantization_level: OLLAMA_SHOW_QUANTIZATION_LEVEL
             },
             model_info: {
                 'general.architecture': architecture,
-                'general.file_type': 2,
+                'general.file_type': OLLAMA_DEFAULT_FILE_TYPE,
                 'general.parameter_count': 0,
-                'general.quantization_version': 2,
+                'general.quantization_version': OLLAMA_DEFAULT_QUANTIZATION_VERSION,
                 'general.context_length': contextLength,
                 'llama.context_length': contextLength,
-                'llama.rope.freq_base': 10000.0
+                'llama.rope.freq_base': OLLAMA_DEFAULT_ROPE_FREQ_BASE
             },
             capabilities: ['tools', 'vision', 'completion']  // Indicate that the model supports tool calling
         };
