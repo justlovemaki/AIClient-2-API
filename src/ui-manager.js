@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { getRequestBody } from './common.js';
 import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
-import { serviceInstances } from './adapter.js';
+import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
 import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth } from './oauth-handlers.js';
 import {
@@ -21,9 +21,78 @@ import {
     addToUsedPaths,
     formatSystemPath
 } from './provider-utils.js';
+import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from './usage-service.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = 'token-store.json';
+
+// 用量缓存文件路径
+const USAGE_CACHE_FILE = 'usage-cache.json';
+
+/**
+ * 读取用量缓存文件
+ * @returns {Promise<Object|null>} 缓存的用量数据，如果不存在或读取失败则返回 null
+ */
+async function readUsageCache() {
+    try {
+        if (existsSync(USAGE_CACHE_FILE)) {
+            const content = await fs.readFile(USAGE_CACHE_FILE, 'utf8');
+            return JSON.parse(content);
+        }
+        return null;
+    } catch (error) {
+        console.warn('[Usage Cache] Failed to read usage cache:', error.message);
+        return null;
+    }
+}
+
+/**
+ * 写入用量缓存文件
+ * @param {Object} usageData - 用量数据
+ */
+async function writeUsageCache(usageData) {
+    try {
+        await fs.writeFile(USAGE_CACHE_FILE, JSON.stringify(usageData, null, 2), 'utf8');
+        console.log('[Usage Cache] Usage data cached to', USAGE_CACHE_FILE);
+    } catch (error) {
+        console.error('[Usage Cache] Failed to write usage cache:', error.message);
+    }
+}
+
+/**
+ * 读取特定提供商类型的用量缓存
+ * @param {string} providerType - 提供商类型
+ * @returns {Promise<Object|null>} 缓存的用量数据
+ */
+async function readProviderUsageCache(providerType) {
+    const cache = await readUsageCache();
+    if (cache && cache.providers && cache.providers[providerType]) {
+        return {
+            ...cache.providers[providerType],
+            cachedAt: cache.timestamp,
+            fromCache: true
+        };
+    }
+    return null;
+}
+
+/**
+ * 更新特定提供商类型的用量缓存
+ * @param {string} providerType - 提供商类型
+ * @param {Object} usageData - 用量数据
+ */
+async function updateProviderUsageCache(providerType, usageData) {
+    let cache = await readUsageCache();
+    if (!cache) {
+        cache = {
+            timestamp: new Date().toISOString(),
+            providers: {}
+        };
+    }
+    cache.providers[providerType] = usageData;
+    cache.timestamp = new Date().toISOString();
+    await writeUsageCache(cache);
+}
 
 /**
  * 读取token存储文件
@@ -1588,6 +1657,90 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Get usage limits for all providers
+    if (method === 'GET' && pathParam === '/api/usage') {
+        try {
+            // 解析查询参数，检查是否需要强制刷新
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            const refresh = url.searchParams.get('refresh') === 'true';
+            
+            let usageResults;
+            
+            if (!refresh) {
+                // 优先读取缓存
+                const cachedData = await readUsageCache();
+                if (cachedData) {
+                    console.log('[Usage API] Returning cached usage data');
+                    usageResults = { ...cachedData, fromCache: true };
+                }
+            }
+            
+            if (!usageResults) {
+                // 缓存不存在或需要刷新，重新查询
+                console.log('[Usage API] Fetching fresh usage data');
+                usageResults = await getAllProvidersUsage(currentConfig, providerPoolManager);
+                // 写入缓存
+                await writeUsageCache(usageResults);
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(usageResults));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to get usage:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: '获取用量信息失败: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Get usage limits for a specific provider type
+    const usageProviderMatch = pathParam.match(/^\/api\/usage\/([^\/]+)$/);
+    if (method === 'GET' && usageProviderMatch) {
+        const providerType = decodeURIComponent(usageProviderMatch[1]);
+        try {
+            // 解析查询参数，检查是否需要强制刷新
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            const refresh = url.searchParams.get('refresh') === 'true';
+            
+            let usageResults;
+            
+            if (!refresh) {
+                // 优先读取缓存
+                const cachedData = await readProviderUsageCache(providerType);
+                if (cachedData) {
+                    console.log(`[Usage API] Returning cached usage data for ${providerType}`);
+                    usageResults = cachedData;
+                }
+            }
+            
+            if (!usageResults) {
+                // 缓存不存在或需要刷新，重新查询
+                console.log(`[Usage API] Fetching fresh usage data for ${providerType}`);
+                usageResults = await getProviderTypeUsage(providerType, currentConfig, providerPoolManager);
+                // 更新缓存
+                await updateProviderUsageCache(providerType, usageResults);
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(usageResults));
+            return true;
+        } catch (error) {
+            console.error(`[UI API] Failed to get usage for ${providerType}:`, error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: `获取 ${providerType} 用量信息失败: ` + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
     // Reload configuration files
     if (method === 'POST' && pathParam === '/api/reload-config') {
         try {
@@ -2006,3 +2159,196 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
 
 // 注意：normalizePath, getFileName, pathsEqual, isPathUsed, detectProviderFromPath
 // 已移至 provider-utils.js 公共模块
+
+/**
+ * 获取所有支持用量查询的提供商的用量信息
+ * @param {Object} currentConfig - 当前配置
+ * @param {Object} providerPoolManager - 提供商池管理器
+ * @returns {Promise<Object>} 所有提供商的用量信息
+ */
+async function getAllProvidersUsage(currentConfig, providerPoolManager) {
+    const results = {
+        timestamp: new Date().toISOString(),
+        providers: {}
+    };
+
+    // 支持用量查询的提供商列表
+    const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity'];
+
+    // 并发获取所有提供商的用量数据
+    const usagePromises = supportedProviders.map(async (providerType) => {
+        try {
+            const providerUsage = await getProviderTypeUsage(providerType, currentConfig, providerPoolManager);
+            return { providerType, data: providerUsage, success: true };
+        } catch (error) {
+            return {
+                providerType,
+                data: {
+                    error: error.message,
+                    instances: []
+                },
+                success: false
+            };
+        }
+    });
+
+    // 等待所有并发请求完成
+    const usageResults = await Promise.all(usagePromises);
+
+    // 将结果整合到 results.providers 中
+    for (const result of usageResults) {
+        results.providers[result.providerType] = result.data;
+    }
+
+    return results;
+}
+
+/**
+ * 获取指定提供商类型的用量信息
+ * @param {string} providerType - 提供商类型
+ * @param {Object} currentConfig - 当前配置
+ * @param {Object} providerPoolManager - 提供商池管理器
+ * @returns {Promise<Object>} 提供商用量信息
+ */
+async function getProviderTypeUsage(providerType, currentConfig, providerPoolManager) {
+    const result = {
+        providerType,
+        instances: [],
+        totalCount: 0,
+        successCount: 0,
+        errorCount: 0
+    };
+
+    // 获取提供商池中的所有实例
+    let providers = [];
+    if (providerPoolManager && providerPoolManager.providerPools && providerPoolManager.providerPools[providerType]) {
+        providers = providerPoolManager.providerPools[providerType];
+    } else if (currentConfig.providerPools && currentConfig.providerPools[providerType]) {
+        providers = currentConfig.providerPools[providerType];
+    }
+
+    result.totalCount = providers.length;
+
+    // 遍历所有提供商实例获取用量
+    for (const provider of providers) {
+        const providerKey = providerType + (provider.uuid || '');
+        let adapter = serviceInstances[providerKey];
+        
+        const instanceResult = {
+            uuid: provider.uuid || 'unknown',
+            name: getProviderDisplayName(provider, providerType),
+            isHealthy: provider.isHealthy !== false,
+            isDisabled: provider.isDisabled === true,
+            success: false,
+            usage: null,
+            error: null
+        };
+
+        // 首先检查是否已禁用，已禁用的提供商跳过初始化
+        if (provider.isDisabled) {
+            instanceResult.error = '提供商已禁用';
+            result.errorCount++;
+        } else if (!adapter) {
+            // 服务实例未初始化，尝试自动初始化
+            try {
+                console.log(`[Usage API] Auto-initializing service adapter for ${providerType}: ${provider.uuid}`);
+                // 构建配置对象
+                const serviceConfig = {
+                    ...CONFIG,
+                    ...provider,
+                    MODEL_PROVIDER: providerType
+                };
+                adapter = getServiceAdapter(serviceConfig);
+            } catch (initError) {
+                console.error(`[Usage API] Failed to initialize adapter for ${providerType}: ${provider.uuid}:`, initError.message);
+                instanceResult.error = `服务实例初始化失败: ${initError.message}`;
+                result.errorCount++;
+            }
+        }
+        
+        // 如果适配器存在（包括刚初始化的），且没有错误，尝试获取用量
+        if (adapter && !instanceResult.error) {
+            try {
+                const usage = await getAdapterUsage(adapter, providerType);
+                instanceResult.success = true;
+                instanceResult.usage = usage;
+                result.successCount++;
+            } catch (error) {
+                instanceResult.error = error.message;
+                result.errorCount++;
+            }
+        }
+
+        result.instances.push(instanceResult);
+    }
+
+    return result;
+}
+
+/**
+ * 从适配器获取用量信息
+ * @param {Object} adapter - 服务适配器
+ * @param {string} providerType - 提供商类型
+ * @returns {Promise<Object>} 用量信息
+ */
+async function getAdapterUsage(adapter, providerType) {
+    if (providerType === 'claude-kiro-oauth') {
+        if (typeof adapter.getUsageLimits === 'function') {
+            const rawUsage = await adapter.getUsageLimits();
+            return formatKiroUsage(rawUsage);
+        } else if (adapter.kiroApiService && typeof adapter.kiroApiService.getUsageLimits === 'function') {
+            const rawUsage = await adapter.kiroApiService.getUsageLimits();
+            return formatKiroUsage(rawUsage);
+        }
+        throw new Error('该适配器不支持用量查询');
+    }
+    
+    if (providerType === 'gemini-cli-oauth') {
+        if (typeof adapter.getUsageLimits === 'function') {
+            const rawUsage = await adapter.getUsageLimits();
+            return formatGeminiUsage(rawUsage);
+        } else if (adapter.geminiApiService && typeof adapter.geminiApiService.getUsageLimits === 'function') {
+            const rawUsage = await adapter.geminiApiService.getUsageLimits();
+            return formatGeminiUsage(rawUsage);
+        }
+        throw new Error('该适配器不支持用量查询');
+    }
+    
+    if (providerType === 'gemini-antigravity') {
+        if (typeof adapter.getUsageLimits === 'function') {
+            const rawUsage = await adapter.getUsageLimits();
+            return formatAntigravityUsage(rawUsage);
+        } else if (adapter.antigravityApiService && typeof adapter.antigravityApiService.getUsageLimits === 'function') {
+            const rawUsage = await adapter.antigravityApiService.getUsageLimits();
+            return formatAntigravityUsage(rawUsage);
+        }
+        throw new Error('该适配器不支持用量查询');
+    }
+    
+    throw new Error(`不支持的提供商类型: ${providerType}`);
+}
+
+/**
+ * 获取提供商显示名称
+ * @param {Object} provider - 提供商配置
+ * @param {string} providerType - 提供商类型
+ * @returns {string} 显示名称
+ */
+function getProviderDisplayName(provider, providerType) {
+    // 尝试从凭据文件路径提取名称
+    const credPathKey = {
+        'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
+        'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
+        'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
+        'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH'
+    }[providerType];
+
+    if (credPathKey && provider[credPathKey]) {
+        const filePath = provider[credPathKey];
+        const fileName = path.basename(filePath);
+        const dirName = path.basename(path.dirname(filePath));
+        return `${dirName}/${fileName}`;
+    }
+
+    return provider.uuid || '未命名';
+}

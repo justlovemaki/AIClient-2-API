@@ -95,6 +95,18 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
         }
         return Promise.resolve();
     }
+
+    /**
+     * 获取用量限制信息
+     * @returns {Promise<Object>} 用量限制信息
+     */
+    async getUsageLimits() {
+        if (!this.geminiApiService.isInitialized) {
+            console.warn("geminiApiService not initialized, attempting to re-initialize...");
+            await this.geminiApiService.initialize();
+        }
+        return this.geminiApiService.getUsageLimits();
+    }
 }
 
 // Antigravity API 服务适配器
@@ -134,6 +146,18 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
             return this.antigravityApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    /**
+     * 获取用量限制信息
+     * @returns {Promise<Object>} 用量限制信息
+     */
+    async getUsageLimits() {
+        if (!this.antigravityApiService.isInitialized) {
+            console.warn("antigravityApiService not initialized, attempting to re-initialize...");
+            await this.antigravityApiService.initialize();
+        }
+        return this.antigravityApiService.getUsageLimits();
     }
 }
 
@@ -269,6 +293,18 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
             return this.kiroApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    /**
+     * 获取用量限制信息
+     * @returns {Promise<Object>} 用量限制信息
+     */
+    async getUsageLimits() {
+        if (!this.kiroApiService.isInitialized) {
+            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            await this.kiroApiService.initialize();
+        }
+        return this.kiroApiService.getUsageLimits();
     }
 }
 

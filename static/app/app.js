@@ -63,6 +63,11 @@ import {
     reloadConfig
 } from './upload-config-manager.js';
 
+import {
+    initUsageManager,
+    refreshUsage
+} from './usage-manager.js';
+
 /**
  * 加载初始数据
  */
@@ -96,6 +101,7 @@ function initApp() {
     initFileUpload(); // 初始化文件上传功能
     initRoutingExamples(); // 初始化路径路由示例功能
     initUploadConfigManager(); // 初始化上传配置管理功能
+    initUsageManager(); // 初始化用量管理功能
     loadInitialData();
     
     // 显示欢迎消息
@@ -143,6 +149,9 @@ window.loadConfigList = loadConfigList;
 window.closeConfigModal = closeConfigModal;
 window.copyConfigContent = copyConfigContent;
 window.reloadConfig = reloadConfig;
+
+// 用量管理相关全局函数
+window.refreshUsage = refreshUsage;
 
 // 导出调试函数
 window.getProviderStats = () => getProviderStats(providerStats);

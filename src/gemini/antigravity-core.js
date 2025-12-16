@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
-import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
@@ -45,7 +45,8 @@ const MODEL_ALIAS_MAP = {
     'gemini-3-pro-image-preview': 'gemini-3-pro-image',
     'gemini-3-pro-preview': 'gemini-3-pro-high',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
-    'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking'
+    'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
+    'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking'
 };
 
 const MODEL_NAME_MAP = {
@@ -53,27 +54,22 @@ const MODEL_NAME_MAP = {
     'gemini-3-pro-image': 'gemini-3-pro-image-preview',
     'gemini-3-pro-high': 'gemini-3-pro-preview',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
-    'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking'
+    'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking',
+    'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking'
 };
-
-// 不支持的模型列表
-const UNSUPPORTED_MODELS = ['chat_20706', 'chat_23310', 'gemini-2.5-flash-thinking', 'gemini-3-pro-low', 'gemini-2.5-pro'];
 
 /**
  * 将别名转换为真实模型名
  */
 function alias2ModelName(modelName) {
-    return MODEL_ALIAS_MAP[modelName] || modelName;
+    return MODEL_ALIAS_MAP[modelName];
 }
 
 /**
  * 将真实模型名转换为别名
  */
 function modelName2Alias(modelName) {
-    if (UNSUPPORTED_MODELS.includes(modelName)) {
-        return '';
-    }
-    return MODEL_NAME_MAP[modelName] || modelName;
+    return MODEL_NAME_MAP[modelName];
 }
 
 /**
@@ -152,8 +148,8 @@ function geminiToAntigravity(modelName, payload, projectId) {
         }
     }
 
-    // 处理 Claude Sonnet 模型的工具声明
-    if (modelName.startsWith('claude-sonnet-')) {
+    // 处理 Claude 模型的工具声明 (包括 sonnet 和 opus)
+    if (modelName.startsWith('claude-sonnet-') || modelName.startsWith('claude-opus-')) {
         if (template.request.tools && Array.isArray(template.request.tools)) {
             template.request.tools.forEach(tool => {
                 if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
@@ -499,7 +495,7 @@ export class AntigravityApiService {
                     const models = Object.keys(res.data.models);
                     this.availableModels = models
                         .map(modelName2Alias)
-                        .filter(alias => alias !== '');
+                        .filter(alias => alias !== undefined && alias !== '' && alias !== null);
 
                     console.log(`[Antigravity] Available models: [${this.availableModels.join(', ')}]`);
                     return;
@@ -777,4 +773,102 @@ export class AntigravityApiService {
             return false;
         }
     }
+
+    /**
+     * 获取模型配额信息
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期，如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Antigravity] Token is near expiry, refreshing before getUsageLimits request...');
+            await this.initializeAuth(true);
+        }
+
+        try {
+            const modelsWithQuotas = await this.getModelsWithQuotas();
+            return modelsWithQuotas;
+        } catch (error) {
+            console.error('[Antigravity] Failed to get usage limits:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取带配额信息的模型列表
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getModelsWithQuotas() {
+        try {
+            // 解析模型配额信息
+            const result = {
+                lastUpdated: Date.now(),
+                models: {}
+            };
+
+            // 调用 fetchAvailableModels 接口获取模型和配额信息
+            for (const baseURL of this.baseURLs) {
+                try {
+                    const modelsURL = `${baseURL}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
+                    const requestOptions = {
+                        url: modelsURL,
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': this.userAgent
+                        },
+                        responseType: 'json',
+                        body: JSON.stringify({})
+                    };
+
+                    const res = await this.authClient.request(requestOptions);
+                    console.log(`[Antigravity] fetchAvailableModels success`);
+                    if (res.data && res.data.models) {
+                        const modelsData = res.data.models;
+                        
+                        // 遍历模型数据，提取配额信息
+                        for (const [modelId, modelData] of Object.entries(modelsData)) {
+                            const aliasName = modelName2Alias(modelId);
+                            if (aliasName == null ||aliasName === '') continue; // 跳过不支持的模型
+                            
+                            const modelInfo = {
+                                remaining: 0,
+                                resetTime: null,
+                                resetTimeRaw: null
+                            };
+                            
+                            // 从 quotaInfo 中提取配额信息
+                            if (modelData.quotaInfo) {
+                                modelInfo.remaining = modelData.quotaInfo.remainingFraction || modelData.quotaInfo.remaining || 0;
+                                modelInfo.resetTime = modelData.quotaInfo.resetTime || null;
+                                modelInfo.resetTimeRaw = modelData.quotaInfo.resetTime;
+                            }
+                            
+                            result.models[aliasName] = modelInfo;
+                        }
+
+                        // 对模型按名称排序
+                        const sortedModels = {};
+                        Object.keys(result.models).sort().forEach(key => {
+                            sortedModels[key] = result.models[key];
+                        });
+                        result.models = sortedModels;
+                        // console.log(`[Antigravity] Sorted Models:`, sortedModels);
+                        console.log(`[Antigravity] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
+                        break; // 成功获取后退出循环
+                    }
+                } catch (error) {
+                    console.error(`[Antigravity] Failed to fetch models with quotas from ${baseURL}:`, error.message);
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[Antigravity] Failed to get models with quotas:', error.message);
+            throw error;
+        }
+    }
+
 }

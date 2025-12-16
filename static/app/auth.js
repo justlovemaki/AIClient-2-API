@@ -291,9 +291,21 @@ async function login(password, rememberMe = false) {
     }
 }
 
-// 导出实例
-window.authManager = new AuthManager();
-window.apiClient = new ApiClient();
+// 创建单例实例
+const authManager = new AuthManager();
+const apiClient = new ApiClient();
+
+/**
+ * 获取带认证的请求头（便捷函数）
+ * @returns {Object} 包含认证信息的请求头
+ */
+function getAuthHeaders() {
+    return apiClient.getAuthHeaders();
+}
+
+// 导出实例到 window（兼容旧代码）
+window.authManager = authManager;
+window.apiClient = apiClient;
 window.initAuth = initAuth;
 window.logout = logout;
 window.login = login;
@@ -301,5 +313,17 @@ window.login = login;
 // 导出认证管理器类和API客户端类供其他模块使用
 window.AuthManager = AuthManager;
 window.ApiClient = ApiClient;
+
+// ES6 模块导出
+export {
+    AuthManager,
+    ApiClient,
+    authManager,
+    apiClient,
+    initAuth,
+    logout,
+    login,
+    getAuthHeaders
+};
 
 console.log('认证模块已加载');
