@@ -592,4 +592,104 @@ export class GeminiApiService {
             return false;
         }
     }
+
+    /**
+     * 获取模型配额信息
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期，如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
+            await this.initializeAuth(true);
+        }
+
+        try {
+            const modelsWithQuotas = await this.getModelsWithQuotas();
+            return modelsWithQuotas;
+        } catch (error) {
+            console.error('[Gemini] Failed to get usage limits:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取带配额信息的模型列表
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getModelsWithQuotas() {
+        try {
+            // 解析模型配额信息
+            const result = {
+                lastUpdated: Date.now(),
+                models: {}
+            };
+
+            // 调用 retrieveUserQuota 接口获取用户配额信息
+            try {
+                const quotaURL = `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:retrieveUserQuota`;
+                const requestBody = {
+                    project: `projects/${this.projectId}`
+                };
+                const requestOptions = {
+                    url: quotaURL,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'json',
+                    body: JSON.stringify(requestBody)
+                };
+
+                const res = await this.authClient.request(requestOptions);
+                console.log(`[Gemini] retrieveUserQuota success`);
+                if (res.data && res.data.buckets) {
+                    const buckets = res.data.buckets;
+                    
+                    // 遍历 buckets 数组，提取配额信息
+                    for (const bucket of buckets) {
+                        const modelId = bucket.modelId;
+                        
+                        // 检查模型是否在支持的模型列表中
+                        if (!GEMINI_MODELS.includes(modelId)) continue;
+                        
+                        const modelInfo = {
+                            remaining: bucket.remainingFraction || 0,
+                            resetTime: bucket.resetTime || null,
+                            resetTimeRaw: bucket.resetTime
+                        };
+                        
+                        result.models[modelId] = modelInfo;
+                    }
+
+                    // 对模型按名称排序
+                    const sortedModels = {};
+                    Object.keys(result.models).sort().forEach(key => {
+                        sortedModels[key] = result.models[key];
+                    });
+                    result.models = sortedModels;
+                    // console.log(`[Gemini] Sorted Models:`, sortedModels);
+                    console.log(`[Gemini] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
+                }
+            } catch (fetchError) {
+                console.error(`[Gemini] Failed to fetch user quota:`, fetchError.message);
+                
+                // 如果 retrieveUserQuota 失败，回退到使用固定模型列表
+                for (const modelId of GEMINI_MODELS) {
+                    result.models[modelId] = {
+                        remaining: 0,
+                        resetTime: null,
+                        resetTimeRaw: null
+                    };
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[Gemini] Failed to get models with quotas:', error.message);
+            throw error;
+        }
+    }
 }
