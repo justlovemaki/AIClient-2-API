@@ -17,7 +17,7 @@ const KIRO_CONSTANTS = {
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
     USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
     DEFAULT_MODEL_NAME: 'claude-opus-4-5',
-    AXIOS_TIMEOUT: 120000, // 2 minutes timeout
+    AXIOS_TIMEOUT: 300000, // 5 minutes timeout (increased from 2 minutes)
     USER_AGENT: 'KiroIDE',
     KIRO_VERSION: '0.7.5',
     CONTENT_TYPE_JSON: 'application/json',
@@ -312,13 +312,13 @@ export class KiroApiService {
             keepAlive: true,
             maxSockets: 100,        // 每个主机最多 10 个连接
             maxFreeSockets: 5,     // 最多保留 5 个空闲连接
-            timeout: 120000,        // 空闲连接 60 秒后关闭
+            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
         const httpsAgent = new https.Agent({
             keepAlive: true,
             maxSockets: 100,
             maxFreeSockets: 5,
-            timeout: 120000,
+            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
         
         const axiosConfig = {

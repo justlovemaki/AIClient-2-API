@@ -8,6 +8,7 @@ import * as readline from 'readline';
 import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
+import { handleGeminiCliOAuth } from '../oauth-handlers.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -274,75 +275,51 @@ export class GeminiApiService {
     }
 
     async getNewToken(credPath) {
-        let host = this.host;
-        if (!host || host === 'undefined') {
-            host = '127.0.0.1';
-        }
-        const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
-        this.authClient.redirectUri = redirectUri;
-        return new Promise(async (resolve, reject) => {
-            const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
-            console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
-            
-            // 自动打开浏览器
-            const showFallbackMessage = () => {
-                console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
-            };
-            
-            if (this.config) {
-                try {
-                    const childProcess = await open(authUrl);
-                    if (childProcess) {
-                        childProcess.on('error', () => showFallbackMessage());
-                    }
-                } catch (_err) {
-                    showFallbackMessage();
+        // 使用统一的 OAuth 处理方法
+        const { authUrl, authInfo } = await handleGeminiCliOAuth(this.config);
+        
+        console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
+        console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
+
+        // 自动打开浏览器
+        const showFallbackMessage = () => {
+            console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+        };
+
+        if (this.config) {
+            try {
+                const childProcess = await open(authUrl);
+                if (childProcess) {
+                    childProcess.on('error', () => showFallbackMessage());
                 }
-            } else {
+            } catch (_err) {
                 showFallbackMessage();
             }
-            console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
-            const server = http.createServer(async (req, res) => {
+        } else {
+            showFallbackMessage();
+        }
+
+        // 等待 OAuth 回调完成并读取保存的凭据
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(async () => {
                 try {
-                    const url = new URL(req.url, redirectUri);
-                    const code = url.searchParams.get('code');
-                    const errorParam = url.searchParams.get('error');
-                    if (code) {
-                        console.log(`[Gemini Auth] Received successful callback from Google: ${req.url}`);
-                        res.writeHead(200, { 'Content-Type': 'text/plain' });
-                        res.end('Authentication successful! You can close this browser tab.');
-                        server.close();
-                        const { tokens } = await this.authClient.getToken(code);
-                        await fs.mkdir(path.dirname(credPath), { recursive: true });
-                        await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log('[Gemini Auth] New token received and saved to file.');
-                        resolve(tokens);
-                    } else if (errorParam) {
-                        const errorMessage = `Authentication failed. Google returned an error: ${errorParam}.`;
-                        res.writeHead(400, { 'Content-Type': 'text/plain' });
-                        res.end(errorMessage);
-                        server.close();
-                        reject(new Error(errorMessage));
-                    } else {
-                        console.log(`[Gemini Auth] Ignoring irrelevant request: ${req.url}`);
-                        res.writeHead(204);
-                        res.end();
+                    const data = await fs.readFile(credPath, 'utf8');
+                    const credentials = JSON.parse(data);
+                    if (credentials.access_token) {
+                        clearInterval(checkInterval);
+                        console.log('[Gemini Auth] New token obtained successfully.');
+                        resolve(credentials);
                     }
-                } catch (e) {
-                    if (server.listening) server.close();
-                    reject(e);
+                } catch (error) {
+                    // 文件尚未创建或无效，继续等待
                 }
-            });
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE') {
-                    const errorMessage = `[Gemini Auth] Port ${AUTH_REDIRECT_PORT} on ${this.host} is already in use.`;
-                    console.error(errorMessage);
-                    reject(new Error(errorMessage));
-                } else {
-                    reject(err);
-                }
-            });
-            server.listen(AUTH_REDIRECT_PORT, this.host);
+            }, 1000);
+
+            // 设置超时（5分钟）
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('[Gemini Auth] OAuth 授权超时'));
+            }, 5 * 60 * 1000);
         });
     }
 

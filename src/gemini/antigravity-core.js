@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
 import { formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
+import { handleGeminiAntigravityOAuth } from '../oauth-handlers.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -305,85 +306,51 @@ export class AntigravityApiService {
     }
 
     async getNewToken(credPath) {
-        let host = this.host;
-        if (!host || host === 'undefined') {
-            host = '127.0.0.1';
-        }
-        const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
-        this.authClient.redirectUri = redirectUri;
+        // 使用统一的 OAuth 处理方法
+        const { authUrl, authInfo } = await handleGeminiAntigravityOAuth(this.config);
+        
+        console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
+        console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
 
-        return new Promise(async (resolve, reject) => {
-            const authUrl = this.authClient.generateAuthUrl({
-                access_type: 'offline',
-                scope: ['https://www.googleapis.com/auth/cloud-platform']
-            });
+        // 自动打开浏览器
+        const showFallbackMessage = () => {
+            console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+        };
 
-            console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
-            console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
-
-            // 自动打开浏览器
-            const showFallbackMessage = () => {
-                console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
-            };
-
-            if (this.config) {
-                try {
-                    const childProcess = await open(authUrl);
-                    if (childProcess) {
-                        childProcess.on('error', () => showFallbackMessage());
-                    }
-                } catch (_err) {
-                    showFallbackMessage();
+        if (this.config) {
+            try {
+                const childProcess = await open(authUrl);
+                if (childProcess) {
+                    childProcess.on('error', () => showFallbackMessage());
                 }
-            } else {
+            } catch (_err) {
                 showFallbackMessage();
             }
+        } else {
+            showFallbackMessage();
+        }
 
-            const server = http.createServer(async (req, res) => {
+        // 等待 OAuth 回调完成并读取保存的凭据
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(async () => {
                 try {
-                    const url = new URL(req.url, redirectUri);
-                    const code = url.searchParams.get('code');
-                    const errorParam = url.searchParams.get('error');
-
-                    if (code) {
-                        console.log(`[Antigravity Auth] Received successful callback from Google: ${req.url}`);
-                        res.writeHead(200, { 'Content-Type': 'text/plain' });
-                        res.end('Authentication successful! You can close this browser tab.');
-                        server.close();
-
-                        const { tokens } = await this.authClient.getToken(code);
-                        await fs.mkdir(path.dirname(credPath), { recursive: true });
-                        await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log('[Antigravity Auth] New token received and saved to file.');
-                        resolve(tokens);
-                    } else if (errorParam) {
-                        const errorMessage = `Authentication failed. Google returned an error: ${errorParam}.`;
-                        res.writeHead(400, { 'Content-Type': 'text/plain' });
-                        res.end(errorMessage);
-                        server.close();
-                        reject(new Error(errorMessage));
-                    } else {
-                        console.log(`[Antigravity Auth] Ignoring irrelevant request: ${req.url}`);
-                        res.writeHead(204);
-                        res.end();
+                    const data = await fs.readFile(credPath, 'utf8');
+                    const credentials = JSON.parse(data);
+                    if (credentials.access_token) {
+                        clearInterval(checkInterval);
+                        console.log('[Antigravity Auth] New token obtained successfully.');
+                        resolve(credentials);
                     }
-                } catch (e) {
-                    if (server.listening) server.close();
-                    reject(e);
+                } catch (error) {
+                    // 文件尚未创建或无效，继续等待
                 }
-            });
+            }, 1000);
 
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE') {
-                    const errorMessage = `[Antigravity Auth] Port ${AUTH_REDIRECT_PORT} on ${host} is already in use.`;
-                    console.error(errorMessage);
-                    reject(new Error(errorMessage));
-                } else {
-                    reject(err);
-                }
-            });
-
-            server.listen(AUTH_REDIRECT_PORT, host);
+            // 设置超时（5分钟）
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('[Antigravity Auth] OAuth 授权超时'));
+            }, 5 * 60 * 1000);
         });
     }
 

@@ -1,6 +1,7 @@
 {
   "openai-custom": [
     {
+      "customName": "OpenAI节点1",
       "OPENAI_API_KEY": "sk-openai-key1",
       "OPENAI_BASE_URL": "https://api.openai.com/v1",
       "checkModelName": null,
@@ -15,6 +16,7 @@
       "lastErrorTime": null
     },
     {
+      "customName": "OpenAI节点2",
       "OPENAI_API_KEY": "sk-openai-key2",
       "OPENAI_BASE_URL": "https://api.openai.com/v1",
       "checkModelName": null,
@@ -31,6 +33,7 @@
   ],
   "openaiResponses-custom": [
     {
+      "customName": "OpenAI Responses节点",
       "OPENAI_API_KEY": "sk-openai-key",
       "OPENAI_BASE_URL": "https://api.openai.com/v1",
       "checkModelName": null,
@@ -46,6 +49,7 @@
   ],
   "gemini-cli-oauth": [
     {
+      "customName": "Gemini OAuth节点1",
       "GEMINI_OAUTH_CREDS_FILE_PATH": "./credentials1.json",
       "PROJECT_ID": "your-project-id-1",
       "checkModelName": null,
@@ -59,6 +63,7 @@
       "lastErrorTime": null
     },
     {
+      "customName": "Gemini OAuth节点2",
       "GEMINI_OAUTH_CREDS_FILE_PATH": "./credentials2.json",
       "PROJECT_ID": "your-project-id-2",
       "checkModelName": null,
@@ -74,6 +79,7 @@
   ],
   "claude-custom": [
     {
+      "customName": "Claude节点1",
       "CLAUDE_API_KEY": "sk-claude-key1",
       "CLAUDE_BASE_URL": "https://api.anthropic.com",
       "checkModelName": null,
@@ -87,6 +93,7 @@
       "lastErrorTime": null
     },
     {
+      "customName": "Claude节点2",
       "CLAUDE_API_KEY": "sk-claude-key2",
       "CLAUDE_BASE_URL": "https://api.anthropic.com",
       "checkModelName": null,
@@ -102,6 +109,7 @@
   ],
   "claude-kiro-oauth": [
     {
+      "customName": "Kiro OAuth节点1",
       "KIRO_OAUTH_CREDS_FILE_PATH": "./kiro_creds1.json",
       "uuid": "2c69d0ac-b86f-43d8-9d17-0d300afc5cfd",
       "checkModelName": null,
@@ -114,6 +122,7 @@
       "lastErrorTime": null
     },
     {
+      "customName": "Kiro OAuth节点2",
       "KIRO_OAUTH_CREDS_FILE_PATH": "./kiro_creds2.json",
       "uuid": "7482abe6-8083-4288-bb7d-d8ecb7c461e2",
       "checkModelName": null,
@@ -128,6 +137,7 @@
   ],
   "openai-qwen-oauth": [
     {
+      "customName": "Qwen OAuth节点",
       "QWEN_OAUTH_CREDS_FILE_PATH": "./qwen_creds.json",
       "uuid": "658a2114-c4c9-d713-b8d4-ceabf0e0bf18",
       "checkModelName": null,
@@ -142,6 +152,7 @@
   ],
   "gemini-antigravity": [
     {
+      "customName": "Antigravity节点1",
       "ANTIGRAVITY_OAUTH_CREDS_FILE_PATH": "./antigravity_creds1.json",
       "PROJECT_ID": "antigravity-project-1",
       "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -155,6 +166,7 @@
       "lastErrorTime": null
     },
     {
+      "customName": "Antigravity节点2",
       "ANTIGRAVITY_OAUTH_CREDS_FILE_PATH": "./antigravity_creds2.json",
       "PROJECT_ID": "antigravity-project-2",
       "uuid": "f0e9d8c7-b6a5-4321-fedc-ba9876543210",

@@ -54,6 +54,7 @@ function showToast(message, type = 'info') {
  */
 function getFieldLabel(key) {
     const labelMap = {
+        'customName': '自定义名称 (选填)',
         'checkModelName': '检查模型名称 (选填)',
         'checkHealth': '健康检查',
         'OPENAI_API_KEY': 'OpenAI API Key',
@@ -63,7 +64,8 @@ function getFieldLabel(key) {
         'PROJECT_ID': '项目ID',
         'GEMINI_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
         'KIRO_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径'
+        'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
+        'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径'
     };
     
     return labelMap[key] || key;

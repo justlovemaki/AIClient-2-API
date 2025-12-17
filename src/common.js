@@ -2,8 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
 import * as crypto from 'crypto'; // Import crypto for MD5 hashing
-import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
-import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
+import { convertData, getOpenAIStreamChunkStop } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 
 export const API_ACTIONS = {
@@ -317,7 +316,6 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
  * and sends the JSON response.
  * @param {http.IncomingMessage} req The HTTP request object.
  * @param {http.ServerResponse} res The HTTP response object.
- * @param {ApiServiceAdapter} service The API service adapter.
  * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_MODEL_LIST).
  * @param {Object} CONFIG - The server configuration object.
  */
@@ -368,7 +366,6 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
  * logging, and dispatching to the appropriate stream or unary handler.
  * @param {http.IncomingMessage} req The HTTP request object.
  * @param {http.ServerResponse} res The HTTP response object.
- * @param {ApiServiceAdapter} service The API service adapter.
  * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_CHAT).
  * @param {Object} CONFIG - The server configuration object.
  * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
