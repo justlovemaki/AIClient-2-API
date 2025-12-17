@@ -381,7 +381,7 @@ function renderProviderList(providers) {
             <div class="provider-item-detail ${healthClass} ${disabledClass}" data-uuid="${provider.uuid}">
                 <div class="provider-item-header" onclick="window.toggleProviderDetails('${provider.uuid}')">
                     <div class="provider-info">
-                        <div class="provider-name">${provider.uuid}</div>
+                        <div class="provider-name">${provider.customName || provider.uuid}</div>
                         <div class="provider-meta">
                             <span class="health-status">
                                 <i class="${healthIcon}"></i>
@@ -438,17 +438,29 @@ function renderProviderConfig(provider) {
     // 获取字段映射，确保顺序一致
     const fieldOrder = getFieldOrder(provider);
     
-    // 先渲染基础配置字段（checkModelName 和 checkHealth）
+    // 先渲染基础配置字段（customName、checkModelName 和 checkHealth）
     let html = '<div class="form-grid">';
-    const baseFields = ['checkModelName', 'checkHealth'];
+    const baseFields = ['customName', 'checkModelName', 'checkHealth'];
     
     baseFields.forEach(fieldKey => {
         const displayLabel = getFieldLabel(fieldKey);
         const value = provider[fieldKey];
         const displayValue = value || '';
         
-        // 如果是 checkHealth 字段，使用下拉选择框
-        if (fieldKey === 'checkHealth') {
+        // 如果是 customName 字段，使用普通文本输入框
+        if (fieldKey === 'customName') {
+            html += `
+                <div class="config-item">
+                    <label>${displayLabel}</label>
+                    <input type="text"
+                           value="${displayValue}"
+                           readonly
+                           data-config-key="${fieldKey}"
+                           data-config-value="${value || ''}"
+                           placeholder="节点自定义名称">
+                </div>
+            `;
+        } else if (fieldKey === 'checkHealth') {
             // 如果没有值，默认为 false
             const actualValue = value !== undefined ? value : false;
             const isEnabled = actualValue === true || actualValue === 'true';
@@ -626,22 +638,71 @@ function renderProviderConfig(provider) {
  * @returns {Array} 字段键数组
  */
 function getFieldOrder(provider) {
-    const orderedFields = ['checkModelName', 'checkHealth'];
+    const orderedFields = ['customName', 'checkModelName', 'checkHealth'];
     
     // 需要排除的内部状态字段
     const excludedFields = [
         'isHealthy', 'lastUsed', 'usageCount', 'errorCount', 'lastErrorTime',
-        'uuid', 'isDisabled', 'lastHealthCheckTime', 'lastHealthCheckModel', 'lastErrorMessage'
+        'uuid', 'isDisabled', 'lastHealthCheckTime', 'lastHealthCheckModel', 'lastErrorMessage',
+        'notSupportedModels'
     ];
+    
+    // 从 getProviderTypeFields 获取字段顺序映射
+    const fieldOrderMap = {
+        'openai-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
+        'openaiResponses-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
+        'claude-custom': ['CLAUDE_API_KEY', 'CLAUDE_BASE_URL'],
+        'gemini-cli-oauth': ['PROJECT_ID', 'GEMINI_OAUTH_CREDS_FILE_PATH'],
+        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH'],
+        'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH'],
+        'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH']
+    };
     
     // 获取所有其他配置项
     const otherFields = Object.keys(provider).filter(key =>
         !excludedFields.includes(key) && !orderedFields.includes(key)
     );
     
-    // 按字母顺序排序其他字段
-    otherFields.sort();
+    // 尝试从 provider 中推断提供商类型
+    let providerType = null;
+    if (provider.OPENAI_API_KEY && provider.OPENAI_BASE_URL) {
+        providerType = 'openai-custom'; // 或 openaiResponses-custom，顺序相同
+    } else if (provider.CLAUDE_API_KEY && provider.CLAUDE_BASE_URL) {
+        providerType = 'claude-custom';
+    } else if (provider.GEMINI_OAUTH_CREDS_FILE_PATH) {
+        providerType = 'gemini-cli-oauth';
+    } else if (provider.KIRO_OAUTH_CREDS_FILE_PATH) {
+        providerType = 'claude-kiro-oauth';
+    } else if (provider.QWEN_OAUTH_CREDS_FILE_PATH) {
+        providerType = 'openai-qwen-oauth';
+    } else if (provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH) {
+        providerType = 'gemini-antigravity';
+    }
     
+    // 如果能识别提供商类型，使用预定义的顺序
+    if (providerType && fieldOrderMap[providerType]) {
+        const predefinedOrder = fieldOrderMap[providerType];
+        const orderedOtherFields = [];
+        const remainingFields = [...otherFields];
+        
+        // 先按预定义顺序添加字段
+        predefinedOrder.forEach(fieldKey => {
+            const index = remainingFields.indexOf(fieldKey);
+            if (index !== -1) {
+                orderedOtherFields.push(fieldKey);
+                remainingFields.splice(index, 1);
+            }
+        });
+        
+        // 剩余字段按字母顺序添加
+        remainingFields.sort();
+        orderedOtherFields.push(...remainingFields);
+        
+        return [...orderedFields, ...orderedOtherFields].filter(key => provider.hasOwnProperty(key));
+    }
+    
+    // 如果无法识别提供商类型，按字母顺序排序
+    otherFields.sort();
     return [...orderedFields, ...otherFields].filter(key => provider.hasOwnProperty(key));
 }
 
@@ -963,6 +1024,10 @@ function showAddProviderForm(providerType) {
         <h4><i class="fas fa-plus"></i> 添加新提供商配置</h4>
         <div class="form-grid">
             <div class="form-group">
+                <label>自定义名称 <span class="optional-mark">(选填)</span></label>
+                <input type="text" id="newCustomName" placeholder="例如: 我的节点1">
+            </div>
+            <div class="form-group">
                 <label>检查模型名称 <span class="optional-mark">(选填)</span></label>
                 <input type="text" id="newCheckModelName" placeholder="例如: gpt-3.5-turbo">
             </div>
@@ -1140,10 +1205,12 @@ function bindAddFormPasswordToggleListeners(form) {
  * @param {string} providerType - 提供商类型
  */
 async function addProvider(providerType) {
+    const customName = document.getElementById('newCustomName')?.value;
     const checkModelName = document.getElementById('newCheckModelName')?.value;
     const checkHealth = document.getElementById('newCheckHealth')?.value === 'true';
     
     const providerConfig = {
+        customName: customName || '', // 允许为空
         checkModelName: checkModelName || '', // 允许为空
         checkHealth
     };
