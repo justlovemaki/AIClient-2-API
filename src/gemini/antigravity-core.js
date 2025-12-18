@@ -45,6 +45,8 @@ const MODEL_ALIAS_MAP = {
     'gemini-2.5-computer-use-preview-10-2025': 'rev19-uic3-1p',
     'gemini-3-pro-image-preview': 'gemini-3-pro-image',
     'gemini-3-pro-preview': 'gemini-3-pro-high',
+    'gemini-3-flash-preview': 'gemini-3-flash',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
     'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
     'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking'
@@ -54,6 +56,8 @@ const MODEL_NAME_MAP = {
     'rev19-uic3-1p': 'gemini-2.5-computer-use-preview-10-2025',
     'gemini-3-pro-image': 'gemini-3-pro-image-preview',
     'gemini-3-pro-high': 'gemini-3-pro-preview',
+    'gemini-3-flash': 'gemini-3-flash-preview',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
     'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking',
     'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking'
@@ -356,7 +360,7 @@ export class AntigravityApiService {
 
     isTokenExpiringSoon() {
         if (!this.authClient.credentials.expiry_date) {
-            return true;
+            return false;
         }
         const currentTime = Date.now();
         const expiryTime = this.authClient.credentials.expiry_date;
@@ -457,7 +461,7 @@ export class AntigravityApiService {
                 };
 
                 const res = await this.authClient.request(requestOptions);
-
+                console.log(`[Antigravity] Raw response from ${baseURL}:`, Object.keys(res.data.models));
                 if (res.data && res.data.models) {
                     const models = Object.keys(res.data.models);
                     this.availableModels = models
