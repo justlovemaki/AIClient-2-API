@@ -435,7 +435,10 @@ function renderProviderList(providers) {
  * @returns {string} HTML字符串
  */
 function renderProviderConfig(provider) {
-    // 获取字段映射，确保顺序一致
+    // 获取该提供商类型的所有字段定义（从 utils.js）
+    const fieldConfigs = getProviderTypeFields(currentProviderType);
+    
+    // 获取字段显示顺序
     const fieldOrder = getFieldOrder(provider);
     
     // 先渲染基础配置字段（customName、checkModelName 和 checkHealth）
@@ -447,6 +450,10 @@ function renderProviderConfig(provider) {
         const value = provider[fieldKey];
         const displayValue = value || '';
         
+        // 查找字段定义以获取 placeholder
+        const fieldDef = fieldConfigs.find(f => f.id === fieldKey) || fieldConfigs.find(f => f.id.toUpperCase() === fieldKey.toUpperCase()) || {};
+        const placeholder = fieldDef.placeholder || (fieldKey === 'customName' ? '节点自定义名称' : (fieldKey === 'checkModelName' ? '例如: gpt-3.5-turbo' : ''));
+        
         // 如果是 customName 字段，使用普通文本输入框
         if (fieldKey === 'customName') {
             html += `
@@ -457,7 +464,7 @@ function renderProviderConfig(provider) {
                            readonly
                            data-config-key="${fieldKey}"
                            data-config-value="${value || ''}"
-                           placeholder="节点自定义名称">
+                           placeholder="${placeholder}">
                 </div>
             `;
         } else if (fieldKey === 'checkHealth') {
@@ -485,7 +492,8 @@ function renderProviderConfig(provider) {
                            value="${displayValue}"
                            readonly
                            data-config-key="${fieldKey}"
-                           data-config-value="${value || ''}">
+                           data-config-value="${value || ''}"
+                           placeholder="${placeholder}">
                 </div>
             `;
         }
@@ -504,6 +512,7 @@ function renderProviderConfig(provider) {
         const field1IsPassword = field1Key.toLowerCase().includes('key') || field1Key.toLowerCase().includes('password');
         const field1IsOAuthFilePath = field1Key.includes('OAUTH_CREDS_FILE_PATH');
         const field1DisplayValue = field1IsPassword && field1Value ? '••••••••' : (field1Value || '');
+        const field1Def = fieldConfigs.find(f => f.id === field1Key) || fieldConfigs.find(f => f.id.toUpperCase() === field1Key.toUpperCase()) || {};
         
         if (field1IsPassword) {
             html += `
@@ -514,8 +523,9 @@ function renderProviderConfig(provider) {
                                value="${field1DisplayValue}"
                                readonly
                                data-config-key="${field1Key}"
-                               data-config-value="${field1Value || ''}">
-                        <button type="button" class="password-toggle" data-target="${field1Key}">
+                               data-config-value="${field1Value || ''}"
+                               placeholder="${field1Def.placeholder || ''}">
+                       <button type="button" class="password-toggle" data-target="${field1Key}">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
@@ -532,8 +542,9 @@ function renderProviderConfig(provider) {
                                value="${field1Value || ''}"
                                readonly
                                data-config-key="${field1Key}"
-                               data-config-value="${field1Value || ''}">
-                        <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field1Key}" aria-label="上传文件" disabled>
+                               data-config-value="${field1Value || ''}"
+                               placeholder="${field1Def.placeholder || ''}">
+                       <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field1Key}" aria-label="上传文件" disabled>
                             <i class="fas fa-upload"></i>
                         </button>
                     </div>
@@ -547,7 +558,8 @@ function renderProviderConfig(provider) {
                            value="${field1DisplayValue}"
                            readonly
                            data-config-key="${field1Key}"
-                           data-config-value="${field1Value || ''}">
+                           data-config-value="${field1Value || ''}"
+                           placeholder="${field1Def.placeholder || ''}">
                 </div>
             `;
         }
@@ -560,6 +572,7 @@ function renderProviderConfig(provider) {
             const field2IsPassword = field2Key.toLowerCase().includes('key') || field2Key.toLowerCase().includes('password');
             const field2IsOAuthFilePath = field2Key.includes('OAUTH_CREDS_FILE_PATH');
             const field2DisplayValue = field2IsPassword && field2Value ? '••••••••' : (field2Value || '');
+            const field2Def = fieldConfigs.find(f => f.id === field2Key) || fieldConfigs.find(f => f.id.toUpperCase() === field2Key.toUpperCase()) || {};
             
             if (field2IsPassword) {
                 html += `
@@ -570,7 +583,8 @@ function renderProviderConfig(provider) {
                                    value="${field2DisplayValue}"
                                    readonly
                                    data-config-key="${field2Key}"
-                                   data-config-value="${field2Value || ''}">
+                                   data-config-value="${field2Value || ''}"
+                                   placeholder="${field2Def.placeholder || ''}">
                             <button type="button" class="password-toggle" data-target="${field2Key}">
                                 <i class="fas fa-eye"></i>
                             </button>
@@ -588,7 +602,8 @@ function renderProviderConfig(provider) {
                                    value="${field2Value || ''}"
                                    readonly
                                    data-config-key="${field2Key}"
-                                   data-config-value="${field2Value || ''}">
+                                   data-config-value="${field2Value || ''}"
+                                   placeholder="${field2Def.placeholder || ''}">
                             <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field2Key}" aria-label="上传文件" disabled>
                                 <i class="fas fa-upload"></i>
                             </button>
@@ -603,7 +618,8 @@ function renderProviderConfig(provider) {
                                value="${field2DisplayValue}"
                                readonly
                                data-config-key="${field2Key}"
-                               data-config-value="${field2Value || ''}">
+                               data-config-value="${field2Value || ''}"
+                               placeholder="${field2Def.placeholder || ''}">
                     </div>
                 `;
             }
@@ -652,54 +668,48 @@ function getFieldOrder(provider) {
         'openai-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
         'openaiResponses-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
         'claude-custom': ['CLAUDE_API_KEY', 'CLAUDE_BASE_URL'],
-        'gemini-cli-oauth': ['PROJECT_ID', 'GEMINI_OAUTH_CREDS_FILE_PATH'],
-        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH'],
-        'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH'],
-        'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH']
+        'gemini-cli-oauth': ['PROJECT_ID', 'GEMINI_OAUTH_CREDS_FILE_PATH', 'GEMINI_BASE_URL'],
+        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH', 'KIRO_BASE_URL', 'KIRO_REFRESH_URL'],
+        'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH', 'QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL'],
+        'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH', 'ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH']
     };
     
-    // 获取所有其他配置项
+    // 尝试从全局或当前模态框上下文中推断提供商类型
+    let providerType = currentProviderType;
+    if (!providerType) {
+        if (provider.OPENAI_API_KEY && provider.OPENAI_BASE_URL) {
+            providerType = 'openai-custom';
+        } else if (provider.CLAUDE_API_KEY && provider.CLAUDE_BASE_URL) {
+            providerType = 'claude-custom';
+        } else if (provider.GEMINI_OAUTH_CREDS_FILE_PATH) {
+            providerType = 'gemini-cli-oauth';
+        } else if (provider.KIRO_OAUTH_CREDS_FILE_PATH) {
+            providerType = 'claude-kiro-oauth';
+        } else if (provider.QWEN_OAUTH_CREDS_FILE_PATH) {
+            providerType = 'openai-qwen-oauth';
+        } else if (provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH) {
+            providerType = 'gemini-antigravity';
+        }
+    }
+
+    // 获取该类型应该具有的所有字段（预定义顺序）
+    const predefinedOrder = providerType ? (fieldOrderMap[providerType] || []) : [];
+    
+    // 获取当前对象中存在且不在预定义列表中的其他字段
     const otherFields = Object.keys(provider).filter(key =>
-        !excludedFields.includes(key) && !orderedFields.includes(key)
+        !excludedFields.includes(key) &&
+        !orderedFields.includes(key) &&
+        !predefinedOrder.includes(key)
     );
+    otherFields.sort();
+
+    // 合并所有要显示的字段
+    const allExpectedFields = [...orderedFields, ...predefinedOrder, ...otherFields];
     
-    // 尝试从 provider 中推断提供商类型
-    let providerType = null;
-    if (provider.OPENAI_API_KEY && provider.OPENAI_BASE_URL) {
-        providerType = 'openai-custom'; // 或 openaiResponses-custom，顺序相同
-    } else if (provider.CLAUDE_API_KEY && provider.CLAUDE_BASE_URL) {
-        providerType = 'claude-custom';
-    } else if (provider.GEMINI_OAUTH_CREDS_FILE_PATH) {
-        providerType = 'gemini-cli-oauth';
-    } else if (provider.KIRO_OAUTH_CREDS_FILE_PATH) {
-        providerType = 'claude-kiro-oauth';
-    } else if (provider.QWEN_OAUTH_CREDS_FILE_PATH) {
-        providerType = 'openai-qwen-oauth';
-    } else if (provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH) {
-        providerType = 'gemini-antigravity';
-    }
-    
-    // 如果能识别提供商类型，使用预定义的顺序
-    if (providerType && fieldOrderMap[providerType]) {
-        const predefinedOrder = fieldOrderMap[providerType];
-        const orderedOtherFields = [];
-        const remainingFields = [...otherFields];
-        
-        // 先按预定义顺序添加字段
-        predefinedOrder.forEach(fieldKey => {
-            const index = remainingFields.indexOf(fieldKey);
-            if (index !== -1) {
-                orderedOtherFields.push(fieldKey);
-                remainingFields.splice(index, 1);
-            }
-        });
-        
-        // 剩余字段按字母顺序添加
-        remainingFields.sort();
-        orderedOtherFields.push(...remainingFields);
-        
-        return [...orderedFields, ...orderedOtherFields].filter(key => provider.hasOwnProperty(key));
-    }
+    // 只有在字段确实存在于 provider 中，或者它是该提供商类型的预定义字段时才显示
+    return allExpectedFields.filter(key =>
+        provider.hasOwnProperty(key) || predefinedOrder.includes(key)
+    );
     
     // 如果无法识别提供商类型，按字母顺序排序
     otherFields.sort();
@@ -1071,16 +1081,21 @@ function showAddProviderForm(providerType) {
 function addDynamicConfigFields(form, providerType) {
     const configFields = form.querySelector('#dynamicConfigFields');
     
-    // 获取该提供商类型的字段配置
-    const providerFields = getProviderTypeFields(providerType);
+    // 获取该提供商类型的字段配置（已经在 utils.js 中包含了 URL 字段）
+    const allFields = getProviderTypeFields(providerType);
+    
+    // 过滤掉已经在 form-grid 中硬编码显示的三个基础字段，避免重复
+    const baseFields = ['customName', 'checkModelName', 'checkHealth'];
+    const filteredFields = allFields.filter(f => !baseFields.some(bf => f.id.toLowerCase().includes(bf.toLowerCase())));
+
     let fields = '';
     
-    if (providerFields.length > 0) {
+    if (filteredFields.length > 0) {
         // 分组显示，每行两个字段
-        for (let i = 0; i < providerFields.length; i += 2) {
+        for (let i = 0; i < filteredFields.length; i += 2) {
             fields += '<div class="form-grid">';
             
-            const field1 = providerFields[i];
+            const field1 = filteredFields[i];
             // 检查是否为密码类型字段
             const isPassword1 = field1.type === 'password';
             // 检查是否为OAuth凭据文件路径字段
@@ -1122,7 +1137,7 @@ function addDynamicConfigFields(form, providerType) {
                 `;
             }
             
-            const field2 = providerFields[i + 1];
+            const field2 = filteredFields[i + 1];
             if (field2) {
                 // 检查是否为密码类型字段
                 const isPassword2 = field2.type === 'password';
@@ -1215,35 +1230,14 @@ async function addProvider(providerType) {
         checkHealth
     };
     
-    // 根据提供商类型收集配置
-    switch (providerType) {
-        case 'openai-custom':
-            providerConfig.OPENAI_API_KEY = document.getElementById('newOpenaiApiKey')?.value || '';
-            providerConfig.OPENAI_BASE_URL = document.getElementById('newOpenaiBaseUrl')?.value || '';
-            break;
-        case 'openaiResponses-custom':
-            providerConfig.OPENAI_API_KEY = document.getElementById('newOpenaiApiKey')?.value || '';
-            providerConfig.OPENAI_BASE_URL = document.getElementById('newOpenaiBaseUrl')?.value || '';
-            break;
-        case 'claude-custom':
-            providerConfig.CLAUDE_API_KEY = document.getElementById('newClaudeApiKey')?.value || '';
-            providerConfig.CLAUDE_BASE_URL = document.getElementById('newClaudeBaseUrl')?.value || '';
-            break;
-        case 'gemini-cli-oauth':
-            providerConfig.PROJECT_ID = document.getElementById('newProjectId')?.value || '';
-            providerConfig.GEMINI_OAUTH_CREDS_FILE_PATH = document.getElementById('newGeminiOauthCredsFilePath')?.value || '';
-            break;
-        case 'claude-kiro-oauth':
-            providerConfig.KIRO_OAUTH_CREDS_FILE_PATH = document.getElementById('newKiroOauthCredsFilePath')?.value || '';
-            break;
-        case 'openai-qwen-oauth':
-            providerConfig.QWEN_OAUTH_CREDS_FILE_PATH = document.getElementById('newQwenOauthCredsFilePath')?.value || '';
-            break;
-        case 'gemini-antigravity':
-            providerConfig.PROJECT_ID = document.getElementById('newProjectId')?.value || '';
-            providerConfig.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH = document.getElementById('newAntigravityOauthCredsFilePath')?.value || '';
-            break;
-    }
+    // 根据提供商类型动态收集配置字段（自动匹配 utils.js 中的定义）
+    const allFields = getProviderTypeFields(providerType);
+    allFields.forEach(field => {
+        const element = document.getElementById(`new${field.id}`);
+        if (element) {
+            providerConfig[field.id] = element.value || '';
+        }
+    });
     
     try {
         await window.apiClient.post('/providers', {

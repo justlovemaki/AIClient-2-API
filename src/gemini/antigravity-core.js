@@ -29,8 +29,8 @@ const httpsAgent = new https.Agent({
 const AUTH_REDIRECT_PORT = 8086;
 const CREDENTIALS_DIR = '.antigravity';
 const CREDENTIALS_FILE = 'oauth_creds.json';
-const ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
-const ANTIGRAVITY_BASE_URL_AUTOPUSH = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
+const DEFAULT_ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
+const DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
 const ANTIGRAVITY_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
@@ -240,14 +240,18 @@ export class AntigravityApiService {
         this.config = config;
         this.host = config.HOST;
         this.oauthCredsFilePath = config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH;
-        this.baseURL = ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
+        this.baseURL = DEFAULT_ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
         this.projectId = config.PROJECT_ID;
 
+        // Initialize instance-specific endpoints
+        this.baseUrlDaily = config.ANTIGRAVITY_BASE_URL_DAILY || DEFAULT_ANTIGRAVITY_BASE_URL_DAILY;
+        this.baseUrlAutopush = config.ANTIGRAVITY_BASE_URL_AUTOPUSH || DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH;
+
         // 多环境降级顺序
         this.baseURLs = this.baseURL ? [this.baseURL] : [
-            ANTIGRAVITY_BASE_URL_DAILY,
-            ANTIGRAVITY_BASE_URL_AUTOPUSH
+            this.baseUrlDaily,
+            this.baseUrlAutopush
             // ANTIGRAVITY_BASE_URL_PROD // 生产环境已注释
         ];
     }

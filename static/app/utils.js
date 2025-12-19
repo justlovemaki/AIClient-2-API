@@ -65,7 +65,14 @@ function getFieldLabel(key) {
         'GEMINI_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
         'KIRO_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
         'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径'
+        'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
+        'GEMINI_BASE_URL': 'Gemini Base URL',
+        'KIRO_BASE_URL': 'Base URL',
+        'KIRO_REFRESH_URL': 'Refresh URL',
+        'QWEN_BASE_URL': 'Qwen Base URL',
+        'QWEN_OAUTH_BASE_URL': 'OAuth Base URL',
+        'ANTIGRAVITY_BASE_URL_DAILY': 'Daily Base URL',
+        'ANTIGRAVITY_BASE_URL_AUTOPUSH': 'Autopush Base URL'
     };
     
     return labelMap[key] || key;
@@ -80,88 +87,136 @@ function getProviderTypeFields(providerType) {
     const fieldConfigs = {
         'openai-custom': [
             {
-                id: 'OpenaiApiKey',
+                id: 'OPENAI_API_KEY',
                 label: 'OpenAI API Key',
                 type: 'password',
                 placeholder: 'sk-...'
             },
             {
-                id: 'OpenaiBaseUrl',
+                id: 'OPENAI_BASE_URL',
                 label: 'OpenAI Base URL',
                 type: 'text',
-                value: 'https://api.openai.com/v1'
+                placeholder: 'https://api.openai.com/v1'
             }
         ],
         'openaiResponses-custom': [
             {
-                id: 'OpenaiApiKey',
+                id: 'OPENAI_API_KEY',
                 label: 'OpenAI API Key',
                 type: 'password',
                 placeholder: 'sk-...'
             },
             {
-                id: 'OpenaiBaseUrl',
+                id: 'OPENAI_BASE_URL',
                 label: 'OpenAI Base URL',
                 type: 'text',
-                value: 'https://api.openai.com/v1'
+                placeholder: 'https://api.openai.com/v1'
             }
         ],
         'claude-custom': [
             {
-                id: 'ClaudeApiKey',
+                id: 'CLAUDE_API_KEY',
                 label: 'Claude API Key',
                 type: 'password',
                 placeholder: 'sk-ant-...'
             },
             {
-                id: 'ClaudeBaseUrl',
+                id: 'CLAUDE_BASE_URL',
                 label: 'Claude Base URL',
                 type: 'text',
-                value: 'https://api.anthropic.com'
+                placeholder: 'https://api.anthropic.com'
             }
         ],
         'gemini-cli-oauth': [
             {
-                id: 'ProjectId',
+                id: 'PROJECT_ID',
                 label: '项目ID',
                 type: 'text',
                 placeholder: 'Google Cloud项目ID'
             },
             {
-                id: 'GeminiOauthCredsFilePath',
+                id: 'GEMINI_OAUTH_CREDS_FILE_PATH',
                 label: 'OAuth凭据文件路径',
                 type: 'text',
                 placeholder: '例如: ~/.gemini/oauth_creds.json'
+            },
+            {
+                id: 'GEMINI_BASE_URL',
+                label: 'Gemini Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://cloudcode-pa.googleapis.com'
             }
         ],
         'claude-kiro-oauth': [
             {
-                id: 'KiroOauthCredsFilePath',
+                id: 'KIRO_OAUTH_CREDS_FILE_PATH',
                 label: 'OAuth凭据文件路径',
                 type: 'text',
                 placeholder: '例如: ~/.aws/sso/cache/kiro-auth-token.json'
+            },
+            {
+                id: 'KIRO_BASE_URL',
+                label: 'Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse'
+            },
+            {
+                id: 'KIRO_REFRESH_URL',
+                label: 'Refresh URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken'
+            },
+            {
+                id: 'KIRO_REFRESH_IDC_URL',
+                label: 'Refresh IDC URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://oidc.{{region}}.amazonaws.com/token'
             }
         ],
         'openai-qwen-oauth': [
             {
-                id: 'QwenOauthCredsFilePath',
+                id: 'QWEN_OAUTH_CREDS_FILE_PATH',
                 label: 'OAuth凭据文件路径',
                 type: 'text',
                 placeholder: '例如: ~/.qwen/oauth_creds.json'
+            },
+            {
+                id: 'QWEN_BASE_URL',
+                label: 'Qwen Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://portal.qwen.ai/v1'
+            },
+            {
+                id: 'QWEN_OAUTH_BASE_URL',
+                label: 'OAuth Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://chat.qwen.ai'
             }
         ],
         'gemini-antigravity': [
             {
-                id: 'ProjectId',
+                id: 'PROJECT_ID',
                 label: '项目ID (选填)',
                 type: 'text',
                 placeholder: 'Google Cloud项目ID (留空自动发现)'
             },
             {
-                id: 'AntigravityOauthCredsFilePath',
+                id: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
                 label: 'OAuth凭据文件路径',
                 type: 'text',
                 placeholder: '例如: ~/.antigravity/oauth_creds.json'
+            },
+            {
+                id: 'ANTIGRAVITY_BASE_URL_DAILY',
+                label: 'Daily Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://daily-cloudcode-pa.sandbox.googleapis.com'
+            },
+            {
+                id: 'ANTIGRAVITY_BASE_URL_AUTOPUSH',
+                label: 'Autopush Base URL <span class="optional-tag">(选填)</span>',
+                type: 'text',
+                placeholder: 'https://autopush-cloudcode-pa.sandbox.googleapis.com'
             }
         ]
     };

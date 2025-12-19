@@ -28,8 +28,8 @@ const httpsAgent = new https.Agent({
 const AUTH_REDIRECT_PORT = 8085;
 const CREDENTIALS_DIR = '.gemini';
 const CREDENTIALS_FILE = 'oauth_creds.json';
-const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
-const CODE_ASSIST_API_VERSION = 'v1internal';
+const DEFAULT_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
+const DEFAULT_CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
 const GEMINI_MODELS = getProviderModels('gemini-cli-oauth');
@@ -209,6 +209,9 @@ export class GeminiApiService {
         this.oauthCredsBase64 = config.GEMINI_OAUTH_CREDS_BASE64;
         this.oauthCredsFilePath = config.GEMINI_OAUTH_CREDS_FILE_PATH;
         this.projectId = config.PROJECT_ID;
+
+        this.codeAssistEndpoint = config.GEMINI_BASE_URL || DEFAULT_CODE_ASSIST_ENDPOINT;
+        this.apiVersion = DEFAULT_CODE_ASSIST_API_VERSION;
     }
 
     async initialize() {
@@ -409,7 +412,7 @@ export class GeminiApiService {
 
         try {
             const requestOptions = {
-                url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+                url: `${this.codeAssistEndpoint}/${this.apiVersion}:${method}`,
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 responseType: "json",
@@ -453,7 +456,7 @@ export class GeminiApiService {
 
         try {
             const requestOptions = {
-                url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+                url: `${this.codeAssistEndpoint}/${this.apiVersion}:${method}`,
                 method: "POST",
                 params: { alt: "sse" },
                 headers: { "Content-Type": "application/json" },
@@ -606,7 +609,7 @@ export class GeminiApiService {
 
             // 调用 retrieveUserQuota 接口获取用户配额信息
             try {
-                const quotaURL = `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:retrieveUserQuota`;
+                const quotaURL = `${this.codeAssistEndpoint}/${this.apiVersion}:retrieveUserQuota`;
                 const requestBody = {
                     project: `projects/${this.projectId}`
                 };

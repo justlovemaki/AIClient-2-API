@@ -19,7 +19,8 @@ export const PROVIDER_MAPPINGS = [
         credPathKey: 'KIRO_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'claude-haiku-4-5',
         displayName: 'Claude Kiro OAuth',
-        needsProjectId: false
+        needsProjectId: false,
+        urlKeys: ['KIRO_BASE_URL', 'KIRO_REFRESH_URL', 'KIRO_REFRESH_IDC_URL']
     },
     {
         // Gemini CLI OAuth 配置
@@ -29,7 +30,8 @@ export const PROVIDER_MAPPINGS = [
         credPathKey: 'GEMINI_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'gemini-2.5-flash',
         displayName: 'Gemini CLI OAuth',
-        needsProjectId: true
+        needsProjectId: true,
+        urlKeys: ['GEMINI_BASE_URL']
     },
     {
         // Qwen OAuth 配置
@@ -39,7 +41,8 @@ export const PROVIDER_MAPPINGS = [
         credPathKey: 'QWEN_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'qwen3-coder-plus',
         displayName: 'Qwen OAuth',
-        needsProjectId: false
+        needsProjectId: false,
+        urlKeys: ['QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL']
     },
     {
         // Antigravity OAuth 配置
@@ -49,7 +52,8 @@ export const PROVIDER_MAPPINGS = [
         credPathKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'gemini-2.5-computer-use-preview-10-2025',
         displayName: 'Gemini Antigravity',
-        needsProjectId: true
+        needsProjectId: true,
+        urlKeys: ['ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH']
     }
 ];
 
@@ -282,10 +286,11 @@ export async function isValidOAuthCredentials(filePath) {
  * @param {string} options.credPath - 凭据文件路径
  * @param {string} options.defaultCheckModel - 默认检测模型
  * @param {boolean} options.needsProjectId - 是否需要 PROJECT_ID
+ * @param {Array} options.urlKeys - 可选的 URL 配置项键名列表
  * @returns {Object} 新的提供商配置对象
  */
 export function createProviderConfig(options) {
-    const { credPathKey, credPath, defaultCheckModel, needsProjectId } = options;
+    const { credPathKey, credPath, defaultCheckModel, needsProjectId, urlKeys } = options;
     
     const newProvider = {
         [credPathKey]: credPath,
@@ -306,6 +311,13 @@ export function createProviderConfig(options) {
     // 如果需要 PROJECT_ID，添加空字符串占位
     if (needsProjectId) {
         newProvider.PROJECT_ID = '';
+    }
+
+    // 初始化可选的 URL 配置项
+    if (urlKeys && Array.isArray(urlKeys)) {
+        urlKeys.forEach(key => {
+            newProvider[key] = '';
+        });
     }
     
     return newProvider;
