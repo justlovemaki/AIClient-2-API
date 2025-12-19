@@ -30,15 +30,11 @@ const DEFAULT_LOCK_CONFIG = {
   attemptInterval: 200,
 };
 
-const QWEN_OAUTH_BASE_URL = 'https://chat.qwen.ai';
-const QWEN_OAUTH_DEVICE_CODE_ENDPOINT = `${QWEN_OAUTH_BASE_URL}/api/v1/oauth2/device/code`;
-const QWEN_OAUTH_TOKEN_ENDPOINT = `${QWEN_OAUTH_BASE_URL}/api/v1/oauth2/token`;
+const DEFAULT_QWEN_OAUTH_BASE_URL = 'https://chat.qwen.ai';
+const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
 const QWEN_OAUTH_CLIENT_ID = 'f0304373b74a44d2b584a3fb70ca9e56';
 const QWEN_OAUTH_SCOPE = 'openid profile email model.completion';
 const QWEN_OAUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
-
-// const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
 
 export const QwenOAuth2Event = {
     AuthUri: 'auth-uri',
@@ -181,6 +177,13 @@ export class QwenApiService {
         this.currentAxiosInstance = null;
         this.tokenManagerOptions = { credentialFilePath: this._getQwenCachedCredentialPath() };
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_QWEN ?? false;
+        
+        // Initialize instance-specific endpoints
+        this.baseUrl = config.QWEN_BASE_URL || DEFAULT_QWEN_BASE_URL;
+        const oauthBaseUrl = config.QWEN_OAUTH_BASE_URL || DEFAULT_QWEN_OAUTH_BASE_URL;
+        this.oauthDeviceCodeEndpoint = `${oauthBaseUrl}/api/v1/oauth2/device/code`;
+        this.oauthTokenEndpoint = `${oauthBaseUrl}/api/v1/oauth2/token`;
+
         console.log(`[Qwen] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         this.qwenClient = new QwenOAuth2Client(config, this.useSystemProxy);
     }
@@ -205,7 +208,7 @@ export class QwenApiService {
         });
 
         const axiosConfig = {
-            baseURL: DEFAULT_QWEN_BASE_URL,
+            baseURL: this.baseUrl,
             httpAgent,
             httpsAgent,
             headers: {
@@ -386,7 +389,7 @@ export class QwenApiService {
     }
     
     getCurrentEndpoint(resourceUrl) {
-        const baseEndpoint = resourceUrl || DEFAULT_QWEN_BASE_URL;
+        const baseEndpoint = resourceUrl || this.baseUrl;
         const suffix = '/v1';
 
         const normalizedUrl = baseEndpoint.startsWith('http') ?
@@ -887,7 +890,8 @@ class QwenOAuth2Client {
             client_id: QWEN_OAUTH_CLIENT_ID,
         };
         try {
-            const response = await commonFetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
+            const endpoint = this.oauthTokenEndpoint;
+            const response = await commonFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
                 body: objectToUrlEncoded(bodyData),
@@ -917,7 +921,8 @@ class QwenOAuth2Client {
             code_challenge_method: options.code_challenge_method,
         };
         try {
-            const response = await commonFetch(QWEN_OAUTH_DEVICE_CODE_ENDPOINT, {
+            const endpoint = this.oauthDeviceCodeEndpoint;
+            const response = await commonFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
                 body: objectToUrlEncoded(bodyData),
@@ -936,7 +941,8 @@ class QwenOAuth2Client {
             code_verifier: options.code_verifier,
         };
         try {
-            const response = await commonFetch(QWEN_OAUTH_TOKEN_ENDPOINT, {
+            const endpoint = this.oauthTokenEndpoint;
+            const response = await commonFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
                 body: objectToUrlEncoded(bodyData),

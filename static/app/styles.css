@@ -309,11 +309,12 @@ body {
     color: var(--text-primary);
 }
 
-.form-group label .optional-mark {
+.optional-tag, .form-group label .optional-mark {
     font-size: 0.75rem;
     color: var(--text-secondary);
     font-weight: 400;
     margin-left: 0.25rem;
+    opacity: 0.8;
 }
 
 .form-control {

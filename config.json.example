@@ -23,5 +23,15 @@
     "CRON_NEAR_MINUTES": 1,
     "CRON_REFRESH_TOKEN": false,
     "PROVIDER_POOLS_FILE_PATH": "provider_pools.json",
-    "MAX_ERROR_COUNT": 3
-}
+    "MAX_ERROR_COUNT": 3,
+    "QWEN_BASE_URL": "https://portal.qwen.ai/v1",
+    "QWEN_OAUTH_BASE_URL": "https://chat.qwen.ai",
+    "GEMINI_BASE_URL": "https://cloudcode-pa.googleapis.com",
+    "ANTIGRAVITY_BASE_URL_DAILY": "https://daily-cloudcode-pa.sandbox.googleapis.com",
+    "ANTIGRAVITY_BASE_URL_AUTOPUSH": "https://autopush-cloudcode-pa.sandbox.googleapis.com",
+    "KIRO_REFRESH_URL": "https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken",
+    "KIRO_REFRESH_IDC_URL": "https://oidc.{{region}}.amazonaws.com/token",
+    "KIRO_BASE_URL": "https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse",
+    "KIRO_AMAZON_Q_URL": "https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming",
+    "KIRO_USAGE_LIMITS_URL": "https://q.{{region}}.amazonaws.com/getUsageLimits"
+  }

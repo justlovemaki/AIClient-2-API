@@ -488,8 +488,104 @@ function showAuthModal(authUrl, authInfo) {
     // 在浏览器中打开按钮
     const openBtn = modal.querySelector('.open-auth-btn');
     openBtn.addEventListener('click', () => {
-        window.open(authUrl, '_blank');
-        showToast('已在新标签页中打开授权页面', 'success');
+        // 使用子窗口打开，以便监听 URL 变化
+        const width = 600;
+        const height = 700;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        
+        const authWindow = window.open(
+            authUrl,
+            'OAuthAuthWindow',
+            `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+        );
+        
+        if (authWindow) {
+            showToast('已打开授权窗口，请在窗口中完成操作', 'info');
+            
+            // 添加手动输入回调 URL 的 UI
+            const urlSection = modal.querySelector('.auth-url-section');
+            const manualInputHtml = `
+                <div class="manual-callback-section" style="margin-top: 20px; padding: 15px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px;">
+                    <h4 style="color: #92400e; margin-bottom: 8px;"><i class="fas fa-exclamation-circle"></i> 自动监听受阻？</h4>
+                    <p style="font-size: 0.875rem; color: #b45309; margin-bottom: 10px;">如果授权窗口重定向后显示“无法访问”，请将该窗口地址栏的 <strong>完整 URL</strong> 粘贴到下方：</p>
+                    <div class="auth-url-container" style="display: flex; gap: 5px;">
+                        <input type="text" class="manual-callback-input" placeholder="粘贴回调 URL (包含 code=...)" style="flex: 1; padding: 8px; border: 1px solid #fcd34d; border-radius: 4px; background: white; color: black;">
+                        <button class="btn btn-success apply-callback-btn" style="padding: 8px 15px; white-space: nowrap; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-check"></i> 提交
+                        </button>
+                    </div>
+                </div>
+            `;
+            urlSection.insertAdjacentHTML('afterend', manualInputHtml);
+
+            const manualInput = modal.querySelector('.manual-callback-input');
+            const applyBtn = modal.querySelector('.apply-callback-btn');
+
+            // 处理回调 URL 的核心逻辑
+            const processCallback = (urlStr) => {
+                try {
+                    // 尝试清理 URL（有些用户可能会复制多余的文字）
+                    const cleanUrlStr = urlStr.trim().match(/https?:\/\/[^\s]+/)?.[0] || urlStr.trim();
+                    const url = new URL(cleanUrlStr);
+                    
+                    if (url.searchParams.has('code') || url.searchParams.has('token')) {
+                        clearInterval(pollTimer);
+                        // 构造本地可处理的 URL，只修改 hostname，保持原始 URL 的端口号不变
+                        const localUrl = new URL(url.href);
+                        localUrl.hostname = window.location.hostname;
+                        localUrl.protocol = window.location.protocol;
+                        
+                        showToast('正在完成授权...', 'info');
+                        
+                        // 优先在子窗口中跳转（如果没关）
+                        if (authWindow && !authWindow.closed) {
+                            authWindow.location.href = localUrl.href;
+                        } else {
+                            // 备选方案：通过隐藏 iframe 或者是 fetch
+                            const img = new Image();
+                            img.src = localUrl.href;
+                        }
+                        
+                        setTimeout(() => {
+                            showToast('授权完成！', 'success');
+                            if (authWindow && !authWindow.closed) authWindow.close();
+                            modal.remove();
+                            // 刷新列表以显示新状态
+                            loadProviders();
+                        }, 2500);
+                    } else {
+                        showToast('该 URL 似乎不包含有效的授权代码', 'warning');
+                    }
+                } catch (err) {
+                    console.error('处理回调失败:', err);
+                    showToast('无效的 URL 格式', 'error');
+                }
+            };
+
+            applyBtn.addEventListener('click', () => {
+                processCallback(manualInput.value);
+            });
+
+            // 启动定时器轮询子窗口 URL
+            const pollTimer = setInterval(() => {
+                try {
+                    if (authWindow.closed) {
+                        clearInterval(pollTimer);
+                        return;
+                    }
+                    // 如果能读到说明回到了同域
+                    const currentUrl = authWindow.location.href;
+                    if (currentUrl && (currentUrl.includes('code=') || currentUrl.includes('token='))) {
+                        processCallback(currentUrl);
+                    }
+                } catch (e) {
+                    // 跨域受限是正常的
+                }
+            }, 1000);
+        } else {
+            showToast('授权窗口被浏览器拦截，请允许弹出窗口', 'error');
+        }
     });
     
     // 点击遮罩层关闭

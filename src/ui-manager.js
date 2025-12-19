@@ -628,6 +628,16 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.KIRO_OAUTH_CREDS_BASE64 !== undefined) currentConfig.KIRO_OAUTH_CREDS_BASE64 = newConfig.KIRO_OAUTH_CREDS_BASE64;
             if (newConfig.KIRO_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = newConfig.KIRO_OAUTH_CREDS_FILE_PATH;
             if (newConfig.QWEN_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = newConfig.QWEN_OAUTH_CREDS_FILE_PATH;
+            
+            // New Provider URLs
+            if (newConfig.QWEN_BASE_URL !== undefined) currentConfig.QWEN_BASE_URL = newConfig.QWEN_BASE_URL;
+            if (newConfig.QWEN_OAUTH_BASE_URL !== undefined) currentConfig.QWEN_OAUTH_BASE_URL = newConfig.QWEN_OAUTH_BASE_URL;
+            if (newConfig.GEMINI_BASE_URL !== undefined) currentConfig.GEMINI_BASE_URL = newConfig.GEMINI_BASE_URL;
+            if (newConfig.ANTIGRAVITY_BASE_URL_DAILY !== undefined) currentConfig.ANTIGRAVITY_BASE_URL_DAILY = newConfig.ANTIGRAVITY_BASE_URL_DAILY;
+            if (newConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH !== undefined) currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH = newConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH;
+            if (newConfig.KIRO_REFRESH_URL !== undefined) currentConfig.KIRO_REFRESH_URL = newConfig.KIRO_REFRESH_URL;
+            if (newConfig.KIRO_REFRESH_IDC_URL !== undefined) currentConfig.KIRO_REFRESH_IDC_URL = newConfig.KIRO_REFRESH_IDC_URL;
+            if (newConfig.KIRO_BASE_URL !== undefined) currentConfig.KIRO_BASE_URL = newConfig.KIRO_BASE_URL;
             if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) currentConfig.SYSTEM_PROMPT_FILE_PATH = newConfig.SYSTEM_PROMPT_FILE_PATH;
             if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
             if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
@@ -680,6 +690,17 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     KIRO_OAUTH_CREDS_BASE64: currentConfig.KIRO_OAUTH_CREDS_BASE64,
                     KIRO_OAUTH_CREDS_FILE_PATH: currentConfig.KIRO_OAUTH_CREDS_FILE_PATH,
                     QWEN_OAUTH_CREDS_FILE_PATH: currentConfig.QWEN_OAUTH_CREDS_FILE_PATH,
+                    // Provider URLs
+                    QWEN_BASE_URL: currentConfig.QWEN_BASE_URL,
+                    QWEN_OAUTH_BASE_URL: currentConfig.QWEN_OAUTH_BASE_URL,
+                    GEMINI_BASE_URL: currentConfig.GEMINI_BASE_URL,
+                    ANTIGRAVITY_BASE_URL_DAILY: currentConfig.ANTIGRAVITY_BASE_URL_DAILY,
+                    ANTIGRAVITY_BASE_URL_AUTOPUSH: currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH,
+                    KIRO_REFRESH_URL: currentConfig.KIRO_REFRESH_URL,
+                    KIRO_REFRESH_IDC_URL: currentConfig.KIRO_REFRESH_IDC_URL,
+                    KIRO_BASE_URL: currentConfig.KIRO_BASE_URL,
+                    KIRO_AMAZON_Q_URL: currentConfig.KIRO_AMAZON_Q_URL,
+                    KIRO_USAGE_LIMITS_URL: currentConfig.KIRO_USAGE_LIMITS_URL,
                     SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
                     SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
                     PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,

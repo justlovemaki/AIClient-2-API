@@ -77,6 +77,15 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             KIRO_OAUTH_CREDS_FILE_PATH: null,
             QWEN_OAUTH_CREDS_FILE_PATH: null,
             PROJECT_ID: null,
+            // Provider URLs
+            QWEN_BASE_URL: null,
+            QWEN_OAUTH_BASE_URL: null,
+            GEMINI_BASE_URL: null,
+            ANTIGRAVITY_BASE_URL_DAILY: null,
+            ANTIGRAVITY_BASE_URL_AUTOPUSH: null,
+            KIRO_REFRESH_URL: null,
+            KIRO_REFRESH_IDC_URL: null,
+            KIRO_BASE_URL: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'append',
             PROMPT_LOG_BASE_NAME: "prompt_log",
@@ -153,6 +162,48 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 i++;
             } else {
                 console.warn(`[Config Warning] --claude-base-url flag requires a value.`);
+            }
+        }
+        // Provider URL arguments
+        else if (args[i] === '--qwen-base-url') {
+            if (i + 1 < args.length) {
+                currentConfig.QWEN_BASE_URL = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--qwen-oauth-base-url') {
+            if (i + 1 < args.length) {
+                currentConfig.QWEN_OAUTH_BASE_URL = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--gemini-base-url') {
+            if (i + 1 < args.length) {
+                currentConfig.GEMINI_BASE_URL = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--antigravity-base-url-daily') {
+            if (i + 1 < args.length) {
+                currentConfig.ANTIGRAVITY_BASE_URL_DAILY = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--antigravity-base-url-autopush') {
+            if (i + 1 < args.length) {
+                currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--kiro-refresh-url') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_REFRESH_URL = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--kiro-refresh-idc-url') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_REFRESH_IDC_URL = args[i + 1];
+                i++;
+            }
+        } else if (args[i] === '--kiro-base-url') {
+            if (i + 1 < args.length) {
+                currentConfig.KIRO_BASE_URL = args[i + 1];
+                i++;
             }
         }
         // Gemini-specific arguments

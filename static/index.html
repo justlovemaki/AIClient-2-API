@@ -496,7 +496,11 @@
                             <!-- Gemini CLI OAuth 配置 -->
                             <div class="provider-config" data-provider="gemini-cli-oauth">
                                 <div class="form-group">
-                                    <label for="projectId">项目ID</label>
+                                    <label for="geminiBaseUrl">Gemini Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="geminiBaseUrl" class="form-control" placeholder="https://cloudcode-pa.googleapis.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="projectId">项目ID <span class="optional-tag">(选填)</span></label>
                                     <input type="text" id="projectId" class="form-control" placeholder="Google Cloud项目ID">
                                 </div>
                                 <div class="form-group">
@@ -529,6 +533,14 @@
                             
                             <!-- Gemini Antigravity 配置 -->
                             <div class="provider-config" data-provider="gemini-antigravity" style="display: none;">
+                                <div class="form-group">
+                                    <label for="antigravityBaseUrlDaily">Daily Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="antigravityBaseUrlDaily" class="form-control" placeholder="https://daily-cloudcode-pa.sandbox.googleapis.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="antigravityBaseUrlAutopush">Autopush Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="antigravityBaseUrlAutopush" class="form-control" placeholder="https://autopush-cloudcode-pa.sandbox.googleapis.com">
+                                </div>
                                 <div class="form-group">
                                     <label for="antigravityOauthCredsFilePath">OAuth凭据文件路径</label>
                                     <div class="file-input-group">
@@ -577,6 +589,20 @@
                             
                             <!-- Claude Kiro OAuth 配置 -->
                             <div class="provider-config" data-provider="claude-kiro-oauth" style="display: none;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="kiroBaseUrl">Base URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroBaseUrl" class="form-control" placeholder="https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="kiroRefreshUrl">Refresh URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroRefreshUrl" class="form-control" placeholder="https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="kiroRefreshIdcUrl">Refresh IDC URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroRefreshIdcUrl" class="form-control" placeholder="https://oidc.{{region}}.amazonaws.com/token">
+                                    </div>
+                                </div>
                                 <div class="form-group">
                                     <label>OAuth凭据</label>
                                     <div class="radio-group">
@@ -611,6 +637,14 @@
                             
                             <!-- Qwen OAuth 配置 -->
                             <div class="provider-config" data-provider="openai-qwen-oauth" style="display: none;">
+                                <div class="form-group">
+                                    <label for="qwenBaseUrl">Qwen Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="qwenBaseUrl" class="form-control" placeholder="https://portal.qwen.ai/v1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="qwenOauthBaseUrl">OAuth Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="qwenOauthBaseUrl" class="form-control" placeholder="https://chat.qwen.ai">
+                                </div>
                                 <div class="form-group">
                                     <label for="qwenOauthCredsFilePath">OAuth凭据文件路径</label>
                                     <div class="file-input-group">
