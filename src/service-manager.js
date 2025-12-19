@@ -21,7 +21,7 @@ let providerPoolManager = null;
  * @param {Object} config - 服务器配置对象
  * @returns {Promise<Object>} 更新后的 providerPools 对象
  */
-async function autoLinkProviderConfigs(config) {
+export async function autoLinkProviderConfigs(config) {
     // 确保 providerPools 对象存在
     if (!config.providerPools) {
         config.providerPools = {};
@@ -159,9 +159,6 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
  * @returns {Promise<Object>} The initialized services
  */
 export async function initApiService(config) {
-    // 自动关联 configs 目录中的配置文件到对应的提供商
-    console.log('[Initialization] Checking for unlinked provider configs...');
-    await autoLinkProviderConfigs(config);
     
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, {

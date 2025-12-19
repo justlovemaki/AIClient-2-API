@@ -418,33 +418,38 @@ textarea.form-control {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 0.5rem;
 }
 
 .file-input-group .form-control {
     flex: 1;
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    padding-right: 3rem;
+    padding-right: 0.75rem;
 }
 
-.upload-btn {
-    position: absolute;
-    right: 0;
-    top: 0;
-    height: 100%;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    border-left: none;
-    padding: 0.75rem 1rem;
+.file-input-group .btn-outline {
+    height: 38px;
+    width: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
-    border-left: none;
-    cursor: pointer;
-    transition: var(--transition);
-    white-space: nowrap;
-    z-index: 1;
-    background: bottom;
+}
+
+.file-input-group .btn-outline:hover {
+    background: var(--bg-secondary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* 兼容旧的 class 名 */
+.upload-btn {
+    /* 移除之前的 position: absolute 等样式，改为 inline-flex 配合父级 flex 布局 */
+    display: inline-flex;
 }
 
 .upload-btn:hover {
@@ -1616,14 +1621,12 @@ input:checked + .toggle-slider:before {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 0.5rem;
 }
 
 .config-item .file-input-group input {
     flex: 1;
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    padding-right: 3rem;
+    padding-right: 0.75rem;
     box-sizing: border-box;
 }
 
