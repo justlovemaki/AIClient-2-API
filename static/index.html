@@ -527,6 +527,9 @@
                                         <button type="button" class="btn btn-outline upload-btn" data-target="geminiOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
                                         </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="geminiOauthCredsFilePath" data-provider="gemini-cli-oauth" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -547,6 +550,9 @@
                                         <input type="text" id="antigravityOauthCredsFilePath" class="form-control" placeholder="例如: ~/.antigravity/oauth_creds.json">
                                         <button type="button" class="btn btn-outline upload-btn" data-target="antigravityOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="antigravityOauthCredsFilePath" data-provider="gemini-antigravity" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
                                         </button>
                                     </div>
                                     <small class="form-text">Antigravity 使用 Google OAuth 认证，需要提供凭据文件路径</small>
@@ -651,6 +657,9 @@
                                         <input type="text" id="qwenOauthCredsFilePath" class="form-control" placeholder="例如: ~/.qwen/oauth_creds.json">
                                         <button type="button" class="btn btn-outline upload-btn" data-target="qwenOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="qwenOauthCredsFilePath" data-provider="openai-qwen-oauth" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -929,8 +938,11 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="app/auth.js"></script>
-    <script>
+    <script type="module" src="app/auth.js"></script>
+    <script type="module">
+        // 导入认证函数
+        import { initAuth, logout } from './app/auth.js';
+        
         // 页面加载时检查登录状态
         (async function() {
             const isAuthenticated = await initAuth();
@@ -983,6 +995,10 @@
                 element.textContent = updatedCommand;
             });
         }
+        
+        // 导出到 window 供其他脚本使用
+        window.initAuth = initAuth;
+        window.logout = logout;
     </script>
     <script type="module" src="app/app.js"></script>
 </body>

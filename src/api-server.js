@@ -1,6 +1,6 @@
 import * as http from 'http';
 import { initializeConfig, CONFIG, logProviderSpecificDetails } from './config-manager.js';
-import { initApiService } from './service-manager.js';
+import { initApiService, autoLinkProviderConfigs } from './service-manager.js';
 import { initializeUIManagement } from './ui-manager.js';
 import { initializeAPIManagement } from './api-manager.js';
 import { createRequestHandler } from './request-handler.js';
@@ -119,6 +119,10 @@ async function startServer() {
     // Initialize configuration
     await initializeConfig();
     
+    // 自动关联 configs 目录中的配置文件到对应的提供商
+    console.log('[Initialization] Checking for unlinked provider configs...');
+    await autoLinkProviderConfigs(CONFIG);
+
     // Initialize API services
     const services = await initApiService(CONFIG);
     

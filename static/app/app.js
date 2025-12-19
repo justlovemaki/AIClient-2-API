@@ -36,7 +36,8 @@ import {
     loadSystemInfo,
     updateTimeDisplay,
     loadProviders,
-    openProviderManager
+    openProviderManager,
+    showAuthModal
 } from './provider-manager.js';
 
 import {
@@ -141,6 +142,7 @@ window.openProviderManager = openProviderManager;
 window.showProviderManagerModal = showProviderManagerModal;
 window.refreshProviderConfig = refreshProviderConfig;
 window.fileUploadHandler = fileUploadHandler;
+window.showAuthModal = showAuthModal;
 
 // 上传配置管理相关全局函数
 window.viewConfig = viewConfig;

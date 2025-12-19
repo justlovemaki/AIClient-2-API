@@ -1350,17 +1350,25 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             let authUrl = '';
             let authInfo = {};
             
+            // 解析 options
+            let options = {};
+            try {
+                options = await getRequestBody(req);
+            } catch (e) {
+                // 如果没有请求体，使用默认空对象
+            }
+
             // 根据提供商类型生成授权链接并启动回调服务器
             if (providerType === 'gemini-cli-oauth') {
-                const result = await handleGeminiCliOAuth(currentConfig);
+                const result = await handleGeminiCliOAuth(currentConfig, options);
                 authUrl = result.authUrl;
                 authInfo = result.authInfo;
             } else if (providerType === 'gemini-antigravity') {
-                const result = await handleGeminiAntigravityOAuth(currentConfig);
+                const result = await handleGeminiAntigravityOAuth(currentConfig, options);
                 authUrl = result.authUrl;
                 authInfo = result.authInfo;
             } else if (providerType === 'openai-qwen-oauth') {
-                const result = await handleQwenOAuth(currentConfig);
+                const result = await handleQwenOAuth(currentConfig, options);
                 authUrl = result.authUrl;
                 authInfo = result.authInfo;
             } else {

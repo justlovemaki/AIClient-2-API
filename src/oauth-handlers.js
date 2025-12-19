@@ -107,7 +107,7 @@ async function closeActiveServer(port) {
  * @param {string} provider - 提供商标识
  * @returns {Promise<http.Server>} HTTP 服务器实例
  */
-async function createOAuthCallbackServer(config, redirectUri, authClient, credPath, provider) {
+async function createOAuthCallbackServer(config, redirectUri, authClient, credPath, provider, options = {}) {
     // 先关闭该端口上的旧服务器
     await closeActiveServer(config.port);
     
@@ -123,14 +123,29 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                     
                     try {
                         const { tokens } = await authClient.getToken(code);
-                        await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
-                        await fs.promises.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log(`${config.logPrefix} 新令牌已接收并保存到文件`);
+                        let finalCredPath = credPath;
                         
+                        // 如果指定了保存到 configs 目录
+                        if (options.saveToConfigs) {
+                            const providerDir = options.providerDir;
+                            const targetDir = path.join(process.cwd(), 'configs', providerDir);
+                            await fs.promises.mkdir(targetDir, { recursive: true });
+                            const timestamp = Date.now();
+                            const filename = `${timestamp}_oauth_creds.json`;
+                            finalCredPath = path.join(targetDir, filename);
+                        }
+
+                        await fs.promises.mkdir(path.dirname(finalCredPath), { recursive: true });
+                        await fs.promises.writeFile(finalCredPath, JSON.stringify(tokens, null, 2));
+                        console.log(`${config.logPrefix} 新令牌已接收并保存到文件: ${finalCredPath}`);
+                        
+                        const relativePath = path.relative(process.cwd(), finalCredPath);
+
                         // 广播授权成功事件
                         broadcastEvent('oauth_success', {
                             provider: provider,
-                            credPath: credPath,
+                            credPath: finalCredPath,
+                            relativePath: relativePath,
                             timestamp: new Date().toISOString()
                         });
                         
@@ -195,9 +210,10 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
  * 处理 Google OAuth 授权（通用函数）
  * @param {string} providerKey - 提供商键名
  * @param {Object} currentConfig - 当前配置对象
+ * @param {Object} options - 额外选项
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
-async function handleGoogleOAuth(providerKey, currentConfig) {
+async function handleGoogleOAuth(providerKey, currentConfig, options = {}) {
     const config = OAUTH_PROVIDERS[providerKey];
     if (!config) {
         throw new Error(`未知的提供商: ${providerKey}`);
@@ -211,6 +227,7 @@ async function handleGoogleOAuth(providerKey, currentConfig) {
     
     const authUrl = authClient.generateAuthUrl({
         access_type: 'offline',
+        prompt: 'select_account',
         scope: config.scope
     });
     
@@ -218,7 +235,7 @@ async function handleGoogleOAuth(providerKey, currentConfig) {
     const credPath = path.join(os.homedir(), config.credentialsDir, config.credentialsFile);
     
     try {
-        await createOAuthCallbackServer(config, redirectUri, authClient, credPath, providerKey);
+        await createOAuthCallbackServer(config, redirectUri, authClient, credPath, providerKey, options);
     } catch (error) {
         throw new Error(`启动回调服务器失败: ${error.message}`);
     }
@@ -237,19 +254,21 @@ async function handleGoogleOAuth(providerKey, currentConfig) {
 /**
  * 处理 Gemini CLI OAuth 授权
  * @param {Object} currentConfig - 当前配置对象
+ * @param {Object} options - 额外选项
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
-export async function handleGeminiCliOAuth(currentConfig) {
-    return handleGoogleOAuth('gemini-cli-oauth', currentConfig);
+export async function handleGeminiCliOAuth(currentConfig, options = {}) {
+    return handleGoogleOAuth('gemini-cli-oauth', currentConfig, options);
 }
 
 /**
  * 处理 Gemini Antigravity OAuth 授权
  * @param {Object} currentConfig - 当前配置对象
+ * @param {Object} options - 额外选项
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
-export async function handleGeminiAntigravityOAuth(currentConfig) {
-    return handleGoogleOAuth('gemini-antigravity', currentConfig);
+export async function handleGeminiAntigravityOAuth(currentConfig, options = {}) {
+    return handleGoogleOAuth('gemini-antigravity', currentConfig, options);
 }
 
 /**
@@ -291,10 +310,11 @@ function stopPollingTask(taskId) {
  * @param {number} interval - 轮询间隔（秒）
  * @param {number} expiresIn - 过期时间（秒）
  * @param {string} taskId - 任务标识符
+ * @param {Object} options - 额外选项
  * @returns {Promise<Object>} 返回令牌信息
  */
-async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn = 300, taskId = 'default') {
-    const credPath = path.join(os.homedir(), QWEN_OAUTH_CONFIG.credentialsDir, QWEN_OAUTH_CONFIG.credentialsFile);
+async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn = 300, taskId = 'default', options = {}) {
+    let credPath = path.join(os.homedir(), QWEN_OAUTH_CONFIG.credentialsDir, QWEN_OAUTH_CONFIG.credentialsFile);
     const maxAttempts = Math.floor(expiresIn / interval);
     let attempts = 0;
     
@@ -345,11 +365,22 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
                 // 成功获取令牌
                 console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 成功获取令牌 [${taskId}]`);
                 
+                // 如果指定了保存到 configs 目录
+                if (options.saveToConfigs) {
+                    const targetDir = path.join(process.cwd(), 'configs', options.providerDir);
+                    await fs.promises.mkdir(targetDir, { recursive: true });
+                    const timestamp = Date.now();
+                    const filename = `${timestamp}_oauth_creds.json`;
+                    credPath = path.join(targetDir, filename);
+                }
+
                 // 保存令牌到文件
                 await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
                 await fs.promises.writeFile(credPath, JSON.stringify(data, null, 2));
                 console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 令牌已保存到 ${credPath}`);
                 
+                const relativePath = path.relative(process.cwd(), credPath);
+
                 // 清理任务
                 activePollingTasks.delete(taskId);
                 
@@ -357,6 +388,7 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
                 broadcastEvent('oauth_success', {
                     provider: 'openai-qwen-oauth',
                     credPath: credPath,
+                    relativePath: relativePath,
                     timestamp: new Date().toISOString()
                 });
                 
@@ -401,9 +433,10 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
 /**
  * 处理 Qwen OAuth 授权（设备授权流程）
  * @param {Object} currentConfig - 当前配置对象
+ * @param {Object} options - 额外选项
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
-export async function handleQwenOAuth(currentConfig) {
+export async function handleQwenOAuth(currentConfig, options = {}) {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
     
@@ -454,7 +487,7 @@ export async function handleQwenOAuth(currentConfig) {
         }
         
         // 不等待轮询完成，立即返回授权信息
-        pollQwenToken(deviceAuth.device_code, codeVerifier, interval, expiresIn, taskId)
+        pollQwenToken(deviceAuth.device_code, codeVerifier, interval, expiresIn, taskId, options)
             .catch(error => {
                 console.error(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
                 // 广播授权失败事件

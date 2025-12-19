@@ -1,7 +1,8 @@
 // 提供商管理功能模块
 
 import { providerStats, updateProviderStats } from './constants.js';
-import { showToast } from './utils.js';
+import { showToast, formatUptime } from './utils.js';
+import { fileUploadHandler } from './file-upload.js';
 
 // 保存初始服务器时间和运行时间
 let initialServerTime = null;
@@ -342,9 +343,15 @@ async function handleGenerateAuthUrl(providerType) {
     try {
         showToast('正在生成授权链接...', 'info');
         
+        // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
+        const providerDir = fileUploadHandler.getProviderKey(providerType);
+
         const response = await window.apiClient.post(
             `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
-            {}
+            {
+                saveToConfigs: true,
+                providerDir: providerDir
+            }
         );
         
         if (response.success && response.authUrl) {
@@ -394,7 +401,6 @@ function showAuthModal(authUrl, authInfo) {
                 <h4>授权步骤：</h4>
                 <ol>
                     <li>点击下方按钮在浏览器中打开授权页面</li>
-                    <li>在授权页面输入用户码: <strong>${authInfo.userCode}</strong></li>
                     <li>完成授权后，系统会自动获取访问令牌</li>
                     <li>授权有效期: ${Math.floor(authInfo.expiresIn / 60)} 分钟</li>
                 </ol>
@@ -491,7 +497,7 @@ function showAuthModal(authUrl, authInfo) {
         // 使用子窗口打开，以便监听 URL 变化
         const width = 600;
         const height = 700;
-        const left = (window.screen.width - width) / 2;
+        const left = (window.screen.width - width) / 2 + 600;
         const top = (window.screen.height - height) / 2;
         
         const authWindow = window.open(
@@ -499,6 +505,16 @@ function showAuthModal(authUrl, authInfo) {
             'OAuthAuthWindow',
             `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
         );
+        
+        // 监听 OAuth 成功事件，自动关闭窗口和模态框
+        const handleOAuthSuccess = () => {
+            if (authWindow && !authWindow.closed) {
+                authWindow.close();
+            }
+            modal.remove();
+            window.removeEventListener('oauth_success_event', handleOAuthSuccess);
+        };
+        window.addEventListener('oauth_success_event', handleOAuthSuccess);
         
         if (authWindow) {
             showToast('已打开授权窗口，请在窗口中完成操作', 'info');
@@ -547,13 +563,6 @@ function showAuthModal(authUrl, authInfo) {
                             img.src = localUrl.href;
                         }
                         
-                        setTimeout(() => {
-                            showToast('授权完成！', 'success');
-                            if (authWindow && !authWindow.closed) authWindow.close();
-                            modal.remove();
-                            // 刷新列表以显示新状态
-                            loadProviders();
-                        }, 2500);
                     } else {
                         showToast('该 URL 似乎不包含有效的授权代码', 'warning');
                     }
@@ -596,14 +605,12 @@ function showAuthModal(authUrl, authInfo) {
     });
 }
 
-// 导入工具函数
-import { formatUptime } from './utils.js';
-
 export {
     loadSystemInfo,
     updateTimeDisplay,
     loadProviders,
     renderProviders,
     updateProviderStatsDisplay,
-    openProviderManager
+    openProviderManager,
+    showAuthModal
 };
