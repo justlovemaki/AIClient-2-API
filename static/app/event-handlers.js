@@ -2,6 +2,7 @@
 
 import { elements, autoScroll, setAutoScroll, clearLogs } from './constants.js';
 import { showToast } from './utils.js';
+import { fileUploadHandler } from './file-upload.js';
 
 /**
  * 初始化所有事件监听器
@@ -64,6 +65,11 @@ function initEventListeners() {
     // 密码显示/隐藏切换
     document.querySelectorAll('.password-toggle').forEach(button => {
         button.addEventListener('click', handlePasswordToggle);
+    });
+
+    // 生成凭据按钮监听
+    document.querySelectorAll('.generate-creds-btn').forEach(button => {
+        button.addEventListener('click', handleGenerateCreds);
     });
 
     // 提供商池配置监听
@@ -168,6 +174,65 @@ function handlePasswordToggle(event) {
     } else {
         input.type = 'password';
         icon.className = 'fas fa-eye';
+    }
+}
+
+/**
+ * 处理生成凭据逻辑
+ * @param {Event} event - 事件对象
+ */
+async function handleGenerateCreds(event) {
+    const button = event.target.closest('.generate-creds-btn');
+    if (!button) return;
+
+    const providerType = button.getAttribute('data-provider');
+    const targetInputId = button.getAttribute('data-target');
+
+    try {
+        showToast('正在初始化凭据生成...', 'info');
+        
+        // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
+        const providerDir = fileUploadHandler.getProviderKey(providerType);
+
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
+            {
+                saveToConfigs: true,
+                providerDir: providerDir
+            }
+        );
+
+        if (response.success && response.authUrl) {
+            // 使用自定义事件监听授权成功，以便自动填充路径
+            const handleSuccess = (e) => {
+                const data = e.detail;
+                if (data.provider === providerType && data.relativePath) {
+                    const input = document.getElementById(targetInputId);
+                    if (input) {
+                        input.value = data.relativePath;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        showToast('凭据已生成并自动填充路径', 'success');
+                    }
+                    window.removeEventListener('oauth_success_event', handleSuccess);
+                }
+            };
+            window.addEventListener('oauth_success_event', handleSuccess);
+            
+            // 调用 provider-manager.js 中的 showAuthModal (假设已在全局作用域或通过某种方式可用)
+            // 如果不可用，我们需要在 app.js 中导出它
+            if (window.showAuthModal) {
+                window.showAuthModal(response.authUrl, response.authInfo);
+            } else {
+                // 降级处理：如果在 app.js 中没导出，尝试直接打开
+                window.open(response.authUrl, '_blank');
+                showToast('请在打开的窗口中完成授权', 'info');
+            }
+        } else {
+            showToast('初始化凭据生成失败', 'error');
+        }
+    } catch (error) {
+        console.error('生成凭据失败:', error);
+        showToast(`生成凭据失败: ${error.message}`, 'error');
     }
 }
 

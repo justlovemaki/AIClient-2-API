@@ -7,8 +7,9 @@ import * as os from 'os';
 import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
-import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
+import { handleGeminiAntigravityOAuth } from '../oauth-handlers.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -28,8 +29,8 @@ const httpsAgent = new https.Agent({
 const AUTH_REDIRECT_PORT = 8086;
 const CREDENTIALS_DIR = '.antigravity';
 const CREDENTIALS_FILE = 'oauth_creds.json';
-const ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
-const ANTIGRAVITY_BASE_URL_AUTOPUSH = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
+const DEFAULT_ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
+const DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
 const ANTIGRAVITY_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
@@ -44,36 +45,36 @@ const MODEL_ALIAS_MAP = {
     'gemini-2.5-computer-use-preview-10-2025': 'rev19-uic3-1p',
     'gemini-3-pro-image-preview': 'gemini-3-pro-image',
     'gemini-3-pro-preview': 'gemini-3-pro-high',
+    'gemini-3-flash-preview': 'gemini-3-flash',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
-    'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking'
+    'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
+    'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking'
 };
 
 const MODEL_NAME_MAP = {
     'rev19-uic3-1p': 'gemini-2.5-computer-use-preview-10-2025',
     'gemini-3-pro-image': 'gemini-3-pro-image-preview',
     'gemini-3-pro-high': 'gemini-3-pro-preview',
+    'gemini-3-flash': 'gemini-3-flash-preview',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
-    'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking'
+    'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking',
+    'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking'
 };
-
-// 不支持的模型列表
-const UNSUPPORTED_MODELS = ['chat_20706', 'chat_23310', 'gemini-2.5-flash-thinking', 'gemini-3-pro-low', 'gemini-2.5-pro'];
 
 /**
  * 将别名转换为真实模型名
  */
 function alias2ModelName(modelName) {
-    return MODEL_ALIAS_MAP[modelName] || modelName;
+    return MODEL_ALIAS_MAP[modelName];
 }
 
 /**
  * 将真实模型名转换为别名
  */
 function modelName2Alias(modelName) {
-    if (UNSUPPORTED_MODELS.includes(modelName)) {
-        return '';
-    }
-    return MODEL_NAME_MAP[modelName] || modelName;
+    return MODEL_NAME_MAP[modelName];
 }
 
 /**
@@ -152,8 +153,8 @@ function geminiToAntigravity(modelName, payload, projectId) {
         }
     }
 
-    // 处理 Claude Sonnet 模型的工具声明
-    if (modelName.startsWith('claude-sonnet-')) {
+    // 处理 Claude 模型的工具声明 (包括 sonnet 和 opus)
+    if (modelName.startsWith('claude-sonnet-') || modelName.startsWith('claude-opus-')) {
         if (template.request.tools && Array.isArray(template.request.tools)) {
             template.request.tools.forEach(tool => {
                 if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
@@ -239,14 +240,18 @@ export class AntigravityApiService {
         this.config = config;
         this.host = config.HOST;
         this.oauthCredsFilePath = config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH;
-        this.baseURL = ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
+        this.baseURL = DEFAULT_ANTIGRAVITY_BASE_URL_DAILY; // 使用通用 GEMINI_BASE_URL 配置
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
         this.projectId = config.PROJECT_ID;
 
+        // Initialize instance-specific endpoints
+        this.baseUrlDaily = config.ANTIGRAVITY_BASE_URL_DAILY || DEFAULT_ANTIGRAVITY_BASE_URL_DAILY;
+        this.baseUrlAutopush = config.ANTIGRAVITY_BASE_URL_AUTOPUSH || DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH;
+
         // 多环境降级顺序
         this.baseURLs = this.baseURL ? [this.baseURL] : [
-            ANTIGRAVITY_BASE_URL_DAILY,
-            ANTIGRAVITY_BASE_URL_AUTOPUSH
+            this.baseUrlDaily,
+            this.baseUrlAutopush
             // ANTIGRAVITY_BASE_URL_PROD // 生产环境已注释
         ];
     }
@@ -309,91 +314,57 @@ export class AntigravityApiService {
     }
 
     async getNewToken(credPath) {
-        let host = this.host;
-        if (!host || host === 'undefined') {
-            host = '127.0.0.1';
-        }
-        const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
-        this.authClient.redirectUri = redirectUri;
+        // 使用统一的 OAuth 处理方法
+        const { authUrl, authInfo } = await handleGeminiAntigravityOAuth(this.config);
+        
+        console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
+        console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
 
-        return new Promise(async (resolve, reject) => {
-            const authUrl = this.authClient.generateAuthUrl({
-                access_type: 'offline',
-                scope: ['https://www.googleapis.com/auth/cloud-platform']
-            });
+        // 自动打开浏览器
+        const showFallbackMessage = () => {
+            console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+        };
 
-            console.log('\n[Antigravity Auth] 正在自动打开浏览器进行授权...');
-            console.log('[Antigravity Auth] 授权链接:', authUrl, '\n');
-
-            // 自动打开浏览器
-            const showFallbackMessage = () => {
-                console.log('[Antigravity Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
-            };
-
-            if (this.config) {
-                try {
-                    const childProcess = await open(authUrl);
-                    if (childProcess) {
-                        childProcess.on('error', () => showFallbackMessage());
-                    }
-                } catch (_err) {
-                    showFallbackMessage();
+        if (this.config) {
+            try {
+                const childProcess = await open(authUrl);
+                if (childProcess) {
+                    childProcess.on('error', () => showFallbackMessage());
                 }
-            } else {
+            } catch (_err) {
                 showFallbackMessage();
             }
+        } else {
+            showFallbackMessage();
+        }
 
-            const server = http.createServer(async (req, res) => {
+        // 等待 OAuth 回调完成并读取保存的凭据
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(async () => {
                 try {
-                    const url = new URL(req.url, redirectUri);
-                    const code = url.searchParams.get('code');
-                    const errorParam = url.searchParams.get('error');
-
-                    if (code) {
-                        console.log(`[Antigravity Auth] Received successful callback from Google: ${req.url}`);
-                        res.writeHead(200, { 'Content-Type': 'text/plain' });
-                        res.end('Authentication successful! You can close this browser tab.');
-                        server.close();
-
-                        const { tokens } = await this.authClient.getToken(code);
-                        await fs.mkdir(path.dirname(credPath), { recursive: true });
-                        await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log('[Antigravity Auth] New token received and saved to file.');
-                        resolve(tokens);
-                    } else if (errorParam) {
-                        const errorMessage = `Authentication failed. Google returned an error: ${errorParam}.`;
-                        res.writeHead(400, { 'Content-Type': 'text/plain' });
-                        res.end(errorMessage);
-                        server.close();
-                        reject(new Error(errorMessage));
-                    } else {
-                        console.log(`[Antigravity Auth] Ignoring irrelevant request: ${req.url}`);
-                        res.writeHead(204);
-                        res.end();
+                    const data = await fs.readFile(credPath, 'utf8');
+                    const credentials = JSON.parse(data);
+                    if (credentials.access_token) {
+                        clearInterval(checkInterval);
+                        console.log('[Antigravity Auth] New token obtained successfully.');
+                        resolve(credentials);
                     }
-                } catch (e) {
-                    if (server.listening) server.close();
-                    reject(e);
+                } catch (error) {
+                    // 文件尚未创建或无效，继续等待
                 }
-            });
+            }, 1000);
 
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE') {
-                    const errorMessage = `[Antigravity Auth] Port ${AUTH_REDIRECT_PORT} on ${host} is already in use.`;
-                    console.error(errorMessage);
-                    reject(new Error(errorMessage));
-                } else {
-                    reject(err);
-                }
-            });
-
-            server.listen(AUTH_REDIRECT_PORT, host);
+            // 设置超时（5分钟）
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('[Antigravity Auth] OAuth 授权超时'));
+            }, 5 * 60 * 1000);
         });
     }
 
     isTokenExpiringSoon() {
         if (!this.authClient.credentials.expiry_date) {
-            return true;
+            return false;
         }
         const currentTime = Date.now();
         const expiryTime = this.authClient.credentials.expiry_date;
@@ -494,12 +465,12 @@ export class AntigravityApiService {
                 };
 
                 const res = await this.authClient.request(requestOptions);
-
+                console.log(`[Antigravity] Raw response from ${baseURL}:`, Object.keys(res.data.models));
                 if (res.data && res.data.models) {
                     const models = Object.keys(res.data.models);
                     this.availableModels = models
                         .map(modelName2Alias)
-                        .filter(alias => alias !== '');
+                        .filter(alias => alias !== undefined && alias !== '' && alias !== null);
 
                     console.log(`[Antigravity] Available models: [${this.availableModels.join(', ')}]`);
                     return;
@@ -777,4 +748,102 @@ export class AntigravityApiService {
             return false;
         }
     }
+
+    /**
+     * 获取模型配额信息
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期，如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Antigravity] Token is near expiry, refreshing before getUsageLimits request...');
+            await this.initializeAuth(true);
+        }
+
+        try {
+            const modelsWithQuotas = await this.getModelsWithQuotas();
+            return modelsWithQuotas;
+        } catch (error) {
+            console.error('[Antigravity] Failed to get usage limits:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取带配额信息的模型列表
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getModelsWithQuotas() {
+        try {
+            // 解析模型配额信息
+            const result = {
+                lastUpdated: Date.now(),
+                models: {}
+            };
+
+            // 调用 fetchAvailableModels 接口获取模型和配额信息
+            for (const baseURL of this.baseURLs) {
+                try {
+                    const modelsURL = `${baseURL}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
+                    const requestOptions = {
+                        url: modelsURL,
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': this.userAgent
+                        },
+                        responseType: 'json',
+                        body: JSON.stringify({})
+                    };
+
+                    const res = await this.authClient.request(requestOptions);
+                    console.log(`[Antigravity] fetchAvailableModels success`);
+                    if (res.data && res.data.models) {
+                        const modelsData = res.data.models;
+                        
+                        // 遍历模型数据，提取配额信息
+                        for (const [modelId, modelData] of Object.entries(modelsData)) {
+                            const aliasName = modelName2Alias(modelId);
+                            if (aliasName == null ||aliasName === '') continue; // 跳过不支持的模型
+                            
+                            const modelInfo = {
+                                remaining: 0,
+                                resetTime: null,
+                                resetTimeRaw: null
+                            };
+                            
+                            // 从 quotaInfo 中提取配额信息
+                            if (modelData.quotaInfo) {
+                                modelInfo.remaining = modelData.quotaInfo.remainingFraction || modelData.quotaInfo.remaining || 0;
+                                modelInfo.resetTime = modelData.quotaInfo.resetTime || null;
+                                modelInfo.resetTimeRaw = modelData.quotaInfo.resetTime;
+                            }
+                            
+                            result.models[aliasName] = modelInfo;
+                        }
+
+                        // 对模型按名称排序
+                        const sortedModels = {};
+                        Object.keys(result.models).sort().forEach(key => {
+                            sortedModels[key] = result.models[key];
+                        });
+                        result.models = sortedModels;
+                        // console.log(`[Antigravity] Sorted Models:`, sortedModels);
+                        console.log(`[Antigravity] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
+                        break; // 成功获取后退出循环
+                    }
+                } catch (error) {
+                    console.error(`[Antigravity] Failed to fetch models with quotas from ${baseURL}:`, error.message);
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[Antigravity] Failed to get models with quotas:', error.message);
+            throw error;
+        }
+    }
+
 }

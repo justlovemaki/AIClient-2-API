@@ -8,6 +8,7 @@ import * as readline from 'readline';
 import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
+import { handleGeminiCliOAuth } from '../oauth-handlers.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -27,8 +28,8 @@ const httpsAgent = new https.Agent({
 const AUTH_REDIRECT_PORT = 8085;
 const CREDENTIALS_DIR = '.gemini';
 const CREDENTIALS_FILE = 'oauth_creds.json';
-const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
-const CODE_ASSIST_API_VERSION = 'v1internal';
+const DEFAULT_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
+const DEFAULT_CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
 const GEMINI_MODELS = getProviderModels('gemini-cli-oauth');
@@ -208,6 +209,9 @@ export class GeminiApiService {
         this.oauthCredsBase64 = config.GEMINI_OAUTH_CREDS_BASE64;
         this.oauthCredsFilePath = config.GEMINI_OAUTH_CREDS_FILE_PATH;
         this.projectId = config.PROJECT_ID;
+
+        this.codeAssistEndpoint = config.GEMINI_BASE_URL || DEFAULT_CODE_ASSIST_ENDPOINT;
+        this.apiVersion = DEFAULT_CODE_ASSIST_API_VERSION;
     }
 
     async initialize() {
@@ -274,75 +278,51 @@ export class GeminiApiService {
     }
 
     async getNewToken(credPath) {
-        let host = this.host;
-        if (!host || host === 'undefined') {
-            host = '127.0.0.1';
-        }
-        const redirectUri = `http://${host}:${AUTH_REDIRECT_PORT}`;
-        this.authClient.redirectUri = redirectUri;
-        return new Promise(async (resolve, reject) => {
-            const authUrl = this.authClient.generateAuthUrl({ access_type: 'offline', scope: ['https://www.googleapis.com/auth/cloud-platform'] });
-            console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
-            
-            // 自动打开浏览器
-            const showFallbackMessage = () => {
-                console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
-            };
-            
-            if (this.config) {
-                try {
-                    const childProcess = await open(authUrl);
-                    if (childProcess) {
-                        childProcess.on('error', () => showFallbackMessage());
-                    }
-                } catch (_err) {
-                    showFallbackMessage();
+        // 使用统一的 OAuth 处理方法
+        const { authUrl, authInfo } = await handleGeminiCliOAuth(this.config);
+        
+        console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
+        console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
+
+        // 自动打开浏览器
+        const showFallbackMessage = () => {
+            console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+        };
+
+        if (this.config) {
+            try {
+                const childProcess = await open(authUrl);
+                if (childProcess) {
+                    childProcess.on('error', () => showFallbackMessage());
                 }
-            } else {
+            } catch (_err) {
                 showFallbackMessage();
             }
-            console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
-            const server = http.createServer(async (req, res) => {
+        } else {
+            showFallbackMessage();
+        }
+
+        // 等待 OAuth 回调完成并读取保存的凭据
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(async () => {
                 try {
-                    const url = new URL(req.url, redirectUri);
-                    const code = url.searchParams.get('code');
-                    const errorParam = url.searchParams.get('error');
-                    if (code) {
-                        console.log(`[Gemini Auth] Received successful callback from Google: ${req.url}`);
-                        res.writeHead(200, { 'Content-Type': 'text/plain' });
-                        res.end('Authentication successful! You can close this browser tab.');
-                        server.close();
-                        const { tokens } = await this.authClient.getToken(code);
-                        await fs.mkdir(path.dirname(credPath), { recursive: true });
-                        await fs.writeFile(credPath, JSON.stringify(tokens, null, 2));
-                        console.log('[Gemini Auth] New token received and saved to file.');
-                        resolve(tokens);
-                    } else if (errorParam) {
-                        const errorMessage = `Authentication failed. Google returned an error: ${errorParam}.`;
-                        res.writeHead(400, { 'Content-Type': 'text/plain' });
-                        res.end(errorMessage);
-                        server.close();
-                        reject(new Error(errorMessage));
-                    } else {
-                        console.log(`[Gemini Auth] Ignoring irrelevant request: ${req.url}`);
-                        res.writeHead(204);
-                        res.end();
+                    const data = await fs.readFile(credPath, 'utf8');
+                    const credentials = JSON.parse(data);
+                    if (credentials.access_token) {
+                        clearInterval(checkInterval);
+                        console.log('[Gemini Auth] New token obtained successfully.');
+                        resolve(credentials);
                     }
-                } catch (e) {
-                    if (server.listening) server.close();
-                    reject(e);
+                } catch (error) {
+                    // 文件尚未创建或无效，继续等待
                 }
-            });
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE') {
-                    const errorMessage = `[Gemini Auth] Port ${AUTH_REDIRECT_PORT} on ${this.host} is already in use.`;
-                    console.error(errorMessage);
-                    reject(new Error(errorMessage));
-                } else {
-                    reject(err);
-                }
-            });
-            server.listen(AUTH_REDIRECT_PORT, this.host);
+            }, 1000);
+
+            // 设置超时（5分钟）
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('[Gemini Auth] OAuth 授权超时'));
+            }, 5 * 60 * 1000);
         });
     }
 
@@ -432,7 +412,7 @@ export class GeminiApiService {
 
         try {
             const requestOptions = {
-                url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+                url: `${this.codeAssistEndpoint}/${this.apiVersion}:${method}`,
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 responseType: "json",
@@ -476,7 +456,7 @@ export class GeminiApiService {
 
         try {
             const requestOptions = {
-                url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+                url: `${this.codeAssistEndpoint}/${this.apiVersion}:${method}`,
                 method: "POST",
                 params: { alt: "sse" },
                 headers: { "Content-Type": "application/json" },
@@ -590,6 +570,106 @@ export class GeminiApiService {
         } catch (error) {
             console.error(`[Gemini] Error checking expiry date: ${error.message}`);
             return false;
+        }
+    }
+
+    /**
+     * 获取模型配额信息
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期，如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
+            await this.initializeAuth(true);
+        }
+
+        try {
+            const modelsWithQuotas = await this.getModelsWithQuotas();
+            return modelsWithQuotas;
+        } catch (error) {
+            console.error('[Gemini] Failed to get usage limits:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取带配额信息的模型列表
+     * @returns {Promise<Object>} 模型配额信息
+     */
+    async getModelsWithQuotas() {
+        try {
+            // 解析模型配额信息
+            const result = {
+                lastUpdated: Date.now(),
+                models: {}
+            };
+
+            // 调用 retrieveUserQuota 接口获取用户配额信息
+            try {
+                const quotaURL = `${this.codeAssistEndpoint}/${this.apiVersion}:retrieveUserQuota`;
+                const requestBody = {
+                    project: `projects/${this.projectId}`
+                };
+                const requestOptions = {
+                    url: quotaURL,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'json',
+                    body: JSON.stringify(requestBody)
+                };
+
+                const res = await this.authClient.request(requestOptions);
+                console.log(`[Gemini] retrieveUserQuota success`);
+                if (res.data && res.data.buckets) {
+                    const buckets = res.data.buckets;
+                    
+                    // 遍历 buckets 数组，提取配额信息
+                    for (const bucket of buckets) {
+                        const modelId = bucket.modelId;
+                        
+                        // 检查模型是否在支持的模型列表中
+                        if (!GEMINI_MODELS.includes(modelId)) continue;
+                        
+                        const modelInfo = {
+                            remaining: bucket.remainingFraction || 0,
+                            resetTime: bucket.resetTime || null,
+                            resetTimeRaw: bucket.resetTime
+                        };
+                        
+                        result.models[modelId] = modelInfo;
+                    }
+
+                    // 对模型按名称排序
+                    const sortedModels = {};
+                    Object.keys(result.models).sort().forEach(key => {
+                        sortedModels[key] = result.models[key];
+                    });
+                    result.models = sortedModels;
+                    // console.log(`[Gemini] Sorted Models:`, sortedModels);
+                    console.log(`[Gemini] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
+                }
+            } catch (fetchError) {
+                console.error(`[Gemini] Failed to fetch user quota:`, fetchError.message);
+                
+                // 如果 retrieveUserQuota 失败，回退到使用固定模型列表
+                for (const modelId of GEMINI_MODELS) {
+                    result.models[modelId] = {
+                        remaining: 0,
+                        resetTime: null,
+                        resetTimeRaw: null
+                    };
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[Gemini] Failed to get models with quotas:', error.message);
+            throw error;
         }
     }
 }

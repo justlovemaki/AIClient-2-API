@@ -48,6 +48,9 @@
                     <a href="#upload-config" class="nav-item" data-section="upload-config" aria-label="上传配置管理">
                         <i class="fas fa-upload" aria-hidden="true"></i> <span>上传配置管理</span>
                     </a>
+                    <a href="#usage" class="nav-item" data-section="usage" aria-label="用量查询">
+                        <i class="fas fa-chart-bar" aria-hidden="true"></i> <span>用量查询</span>
+                    </a>
                     <a href="#logs" class="nav-item" data-section="logs" aria-label="实时日志">
                         <i class="fas fa-file-alt" aria-hidden="true"></i> <span>实时日志</span>
                     </a>
@@ -493,7 +496,11 @@
                             <!-- Gemini CLI OAuth 配置 -->
                             <div class="provider-config" data-provider="gemini-cli-oauth">
                                 <div class="form-group">
-                                    <label for="projectId">项目ID</label>
+                                    <label for="geminiBaseUrl">Gemini Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="geminiBaseUrl" class="form-control" placeholder="https://cloudcode-pa.googleapis.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="projectId">项目ID <span class="optional-tag">(选填)</span></label>
                                     <input type="text" id="projectId" class="form-control" placeholder="Google Cloud项目ID">
                                 </div>
                                 <div class="form-group">
@@ -520,6 +527,9 @@
                                         <button type="button" class="btn btn-outline upload-btn" data-target="geminiOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
                                         </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="geminiOauthCredsFilePath" data-provider="gemini-cli-oauth" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -527,11 +537,22 @@
                             <!-- Gemini Antigravity 配置 -->
                             <div class="provider-config" data-provider="gemini-antigravity" style="display: none;">
                                 <div class="form-group">
+                                    <label for="antigravityBaseUrlDaily">Daily Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="antigravityBaseUrlDaily" class="form-control" placeholder="https://daily-cloudcode-pa.sandbox.googleapis.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="antigravityBaseUrlAutopush">Autopush Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="antigravityBaseUrlAutopush" class="form-control" placeholder="https://autopush-cloudcode-pa.sandbox.googleapis.com">
+                                </div>
+                                <div class="form-group">
                                     <label for="antigravityOauthCredsFilePath">OAuth凭据文件路径</label>
                                     <div class="file-input-group">
                                         <input type="text" id="antigravityOauthCredsFilePath" class="form-control" placeholder="例如: ~/.antigravity/oauth_creds.json">
                                         <button type="button" class="btn btn-outline upload-btn" data-target="antigravityOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="antigravityOauthCredsFilePath" data-provider="gemini-antigravity" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
                                         </button>
                                     </div>
                                     <small class="form-text">Antigravity 使用 Google OAuth 认证，需要提供凭据文件路径</small>
@@ -574,6 +595,20 @@
                             
                             <!-- Claude Kiro OAuth 配置 -->
                             <div class="provider-config" data-provider="claude-kiro-oauth" style="display: none;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="kiroBaseUrl">Base URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroBaseUrl" class="form-control" placeholder="https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="kiroRefreshUrl">Refresh URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroRefreshUrl" class="form-control" placeholder="https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="kiroRefreshIdcUrl">Refresh IDC URL <span class="optional-tag">(选填)</span></label>
+                                        <input type="text" id="kiroRefreshIdcUrl" class="form-control" placeholder="https://oidc.{{region}}.amazonaws.com/token">
+                                    </div>
+                                </div>
                                 <div class="form-group">
                                     <label>OAuth凭据</label>
                                     <div class="radio-group">
@@ -609,11 +644,22 @@
                             <!-- Qwen OAuth 配置 -->
                             <div class="provider-config" data-provider="openai-qwen-oauth" style="display: none;">
                                 <div class="form-group">
+                                    <label for="qwenBaseUrl">Qwen Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="qwenBaseUrl" class="form-control" placeholder="https://portal.qwen.ai/v1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="qwenOauthBaseUrl">OAuth Base URL <span class="optional-tag">(选填)</span></label>
+                                    <input type="text" id="qwenOauthBaseUrl" class="form-control" placeholder="https://chat.qwen.ai">
+                                </div>
+                                <div class="form-group">
                                     <label for="qwenOauthCredsFilePath">OAuth凭据文件路径</label>
                                     <div class="file-input-group">
                                         <input type="text" id="qwenOauthCredsFilePath" class="form-control" placeholder="例如: ~/.qwen/oauth_creds.json">
                                         <button type="button" class="btn btn-outline upload-btn" data-target="qwenOauthCredsFilePath" aria-label="上传文件">
                                             <i class="fas fa-upload"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="qwenOauthCredsFilePath" data-provider="openai-qwen-oauth" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -838,6 +884,36 @@
                     </div>
                 </section>
 
+                <!-- Usage Section -->
+                <section id="usage" class="section" aria-labelledby="usage-title">
+                    <h2 id="usage-title">用量查询</h2>
+                    <div class="usage-panel">
+                        <div class="usage-controls">
+                            <button class="btn btn-primary" id="refreshUsageBtn" aria-label="刷新用量数据">
+                                <i class="fas fa-sync-alt"></i> 刷新用量
+                            </button>
+                            <span class="usage-last-update" id="usageLastUpdate">上次更新: --</span>
+                        </div>
+                        
+                        <div class="usage-loading" id="usageLoading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> 正在加载用量数据...
+                        </div>
+                        
+                        <div class="usage-error" id="usageError" style="display: none;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span id="usageErrorMessage"></span>
+                        </div>
+                        
+                        <div class="usage-content" id="usageContent">
+                            <!-- 用量数据将在这里动态生成 -->
+                            <div class="usage-empty" id="usageEmpty">
+                                <i class="fas fa-chart-bar"></i>
+                                <p>点击"刷新用量"按钮获取授权文件用量信息</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Logs Section -->
                 <section id="logs" class="section" aria-labelledby="logs-title">
                     <h2 id="logs-title">实时日志</h2>
@@ -862,8 +938,11 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="app/auth.js"></script>
-    <script>
+    <script type="module" src="app/auth.js"></script>
+    <script type="module">
+        // 导入认证函数
+        import { initAuth, logout } from './app/auth.js';
+        
         // 页面加载时检查登录状态
         (async function() {
             const isAuthenticated = await initAuth();
@@ -916,6 +995,10 @@
                 element.textContent = updatedCommand;
             });
         }
+        
+        // 导出到 window 供其他脚本使用
+        window.initAuth = initAuth;
+        window.logout = logout;
     </script>
     <script type="module" src="app/app.js"></script>
 </body>

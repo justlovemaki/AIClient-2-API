@@ -8,15 +8,18 @@ import * as http from 'http';
 import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
+import { json } from 'stream/consumers';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse',
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
+    USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
     DEFAULT_MODEL_NAME: 'claude-opus-4-5',
-    AXIOS_TIMEOUT: 120000, // 2 minutes timeout
+    AXIOS_TIMEOUT: 300000, // 5 minutes timeout (increased from 2 minutes)
     USER_AGENT: 'KiroIDE',
+    KIRO_VERSION: '0.7.5',
     CONTENT_TYPE_JSON: 'application/json',
     ACCEPT_JSON: 'application/json',
     AUTH_METHOD_SOCIAL: 'social',
@@ -303,18 +306,19 @@ export class KiroApiService {
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
         const macSha256 = await getMacAddressSha256();
+        const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
             keepAlive: true,
             maxSockets: 100,        // 每个主机最多 10 个连接
             maxFreeSockets: 5,     // 最多保留 5 个空闲连接
-            timeout: 120000,        // 空闲连接 60 秒后关闭
+            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
         const httpsAgent = new https.Agent({
             keepAlive: true,
             maxSockets: 100,
             maxFreeSockets: 5,
-            timeout: 120000,
+            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
         
         const axiosConfig = {
@@ -323,11 +327,11 @@ export class KiroApiService {
             httpsAgent,
             headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
-                'x-amz-user-agent': `aws-sdk-js/1.0.7 KiroIDE-0.1.25-${macSha256}`,
-                'user-agent': `aws-sdk-js/1.0.7 ua/2.1 os/win32#10.0.26100 lang/js md/nodejs#20.16.0 api/codewhispererstreaming#1.0.7 m/E KiroIDE-0.1.25-${macSha256}`,
+                'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
                 'amz-sdk-request': 'attempt=1; max=1',
                 'x-amzn-kiro-agent-mode': 'vibe',
-                'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
+                'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${macSha256}`,
+                'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/win32#10.0.26100 lang/js md/nodejs#22.21.1 api/codewhispererruntime#1.0.0 m/N,E KiroIDE-${kiroVersion}-${macSha256}`
             },
         };
         
@@ -447,10 +451,10 @@ async initializeAuth(forceRefresh = false) {
             this.region = 'us-east-1'; // Set default region
         }
 
-        this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL.replace("{{region}}", this.region);
-        this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL.replace("{{region}}", this.region);
-        this.baseUrl = KIRO_CONSTANTS.BASE_URL.replace("{{region}}", this.region);
-        this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL.replace("{{region}}", this.region);
+        this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
+        this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.region);
+        this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
+        this.amazonQUrl = (KIRO_CONSTANTS.AMAZON_Q_URL).replace("{{region}}", this.region);
     } catch (error) {
         console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
@@ -1737,6 +1741,66 @@ async initializeAuth(forceRefresh = false) {
         } catch (error) {
             console.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
             return false; // Treat as expired if parsing fails
+        }
+    }
+
+    /**
+     * 获取用量限制信息
+     * @returns {Promise<Object>} 用量限制信息
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) await this.initialize();
+        
+        // 检查 token 是否即将过期，如果是则先刷新
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, refreshing before getUsageLimits request...');
+            await this.initializeAuth(true);
+        }
+        
+        // 内部固定的资源类型
+        const resourceType = 'AGENTIC_REQUEST';
+        
+        // 构建请求 URL
+        const usageLimitsUrl = KIRO_CONSTANTS.USAGE_LIMITS_URL.replace('{{region}}', this.region);
+        const params = new URLSearchParams({
+            isEmailRequired: 'true',
+            origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
+            resourceType: resourceType
+        });
+         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+            params.append('profileArn', this.profileArn);
+        }
+        const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
+
+        // 构建请求头
+        const headers = {
+            'amz-sdk-invocation-id': uuidv4(),
+            'Authorization': `Bearer ${this.accessToken}`,
+        };
+
+        try {
+            const response = await this.axiosInstance.get(fullUrl, { headers });
+            console.log('[Kiro] Usage limits fetched successfully');
+            return response.data;
+        } catch (error) {
+            // 如果是 403 错误，尝试刷新 token 后重试
+            if (error.response?.status === 403) {
+                console.log('[Kiro] Received 403 on getUsageLimits. Attempting token refresh and retrying...');
+                try {
+                    await this.initializeAuth(true);
+                    // 更新 Authorization header
+                    headers['Authorization'] = `Bearer ${this.accessToken}`;
+                    headers['amz-sdk-invocation-id'] = uuidv4();
+                    const retryResponse = await this.axiosInstance.get(fullUrl, { headers });
+                    console.log('[Kiro] Usage limits fetched successfully after token refresh');
+                    return retryResponse.data;
+                } catch (refreshError) {
+                    console.error('[Kiro] Token refresh failed during getUsageLimits retry:', refreshError.message);
+                    throw refreshError;
+                }
+            }
+            console.error('[Kiro] Failed to fetch usage limits:', error.message);
+            throw error;
         }
     }
 }
