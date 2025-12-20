@@ -1,6 +1,7 @@
 // Server-Sent Events处理模块
 
 import { eventSource, setEventSource, elements, addLog, autoScroll } from './constants.js';
+import { t } from './i18n.js';
 
 /**
  * Server-Sent Events初始化
@@ -35,7 +36,7 @@ function initEventStream() {
 
     newEventSource.addEventListener('oauth_success', (event) => {
         const data = JSON.parse(event.data);
-        showToast(`授权成功 (${data.provider})`, 'success');
+        showToast(t('common.success'), `${t('common.success')} (${data.provider})`, 'success');
         // 发送自定义事件，以便其他模块（如生成凭据逻辑）可以接收到详细信息
         window.dispatchEvent(new CustomEvent('oauth_success_event', { detail: data }));
         
@@ -102,11 +103,11 @@ function updateServerStatus(connected) {
     if (connected) {
         statusBadge.classList.remove('error');
         icon.style.color = 'var(--success-color)';
-        statusBadge.innerHTML = '<i class="fas fa-circle"></i> 已连接';
+        statusBadge.innerHTML = `<i class="fas fa-circle"></i> <span data-i18n="header.status.connected">${t('header.status.connected')}</span>`;
     } else {
         statusBadge.classList.add('error');
         icon.style.color = 'var(--danger-color)';
-        statusBadge.innerHTML = '<i class="fas fa-circle"></i> 连接断开';
+        statusBadge.innerHTML = `<i class="fas fa-circle"></i> <span data-i18n="header.status.disconnected">${t('header.status.disconnected')}</span>`;
     }
 }
 

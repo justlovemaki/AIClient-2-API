@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import multer from 'multer';
 import crypto from 'crypto';
+import AdmZip from 'adm-zip';
 import { getRequestBody } from './common.js';
 import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
@@ -1561,6 +1562,60 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.end(JSON.stringify({
                 error: {
                     message: 'Failed to delete config file: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Download all configs as zip
+    if (method === 'GET' && pathParam === '/api/upload-configs/download-all') {
+        try {
+            const configsPath = path.join(process.cwd(), 'configs');
+            if (!existsSync(configsPath)) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'configs目录不存在' } }));
+                return true;
+            }
+
+            const zip = new AdmZip();
+            
+            // 递归添加目录函数
+            const addDirectoryToZip = async (dirPath, zipPath = '') => {
+                const items = await fs.readdir(dirPath, { withFileTypes: true });
+                for (const item of items) {
+                    const fullPath = path.join(dirPath, item.name);
+                    const itemZipPath = zipPath ? path.join(zipPath, item.name) : item.name;
+                    
+                    if (item.isFile()) {
+                        const content = await fs.readFile(fullPath);
+                        zip.addFile(itemZipPath.replace(/\\/g, '/'), content);
+                    } else if (item.isDirectory()) {
+                        await addDirectoryToZip(fullPath, itemZipPath);
+                    }
+                }
+            };
+
+            await addDirectoryToZip(configsPath);
+            
+            const zipBuffer = zip.toBuffer();
+            const filename = `configs_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+
+            res.writeHead(200, {
+                'Content-Type': 'application/zip',
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Length': zipBuffer.length
+            });
+            res.end(zipBuffer);
+            
+            console.log(`[UI API] All configs downloaded as zip: ${filename}`);
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to download all configs:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: '打包下载失败: ' + error.message
                 }
             }));
             return true;

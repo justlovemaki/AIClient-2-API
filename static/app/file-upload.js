@@ -1,6 +1,7 @@
 // 文件上传功能模块
 
 import { showToast } from './utils.js';
+import { t } from './i18n.js';
 
 /**
  * 文件上传处理器类
@@ -113,14 +114,14 @@ class FileUploadHandler {
         try {
             // 验证文件类型
             if (!this.validateFileType(file)) {
-                showToast('不支持的文件类型，请选择 JSON、TXT、KEY、PEM、P12 或 PFX 文件', 'error');
+                showToast(t('common.error'), t('common.fileType'), 'error');
                 this.setButtonLoading(button, false);
                 return;
             }
 
             // 验证文件大小 (5MB 限制)
             if (file.size > 5 * 1024 * 1024) {
-                showToast('文件大小不能超过 5MB', 'error');
+                showToast(t('common.error'), t('common.fileSize'), 'error');
                 this.setButtonLoading(button, false);
                 return;
             }
@@ -139,11 +140,11 @@ class FileUploadHandler {
             
             // 成功上传，设置文件路径到输入框
             this.setFilePathToInput(targetInputId, result.filePath);
-            showToast('文件上传成功', 'success');
+            showToast(t('common.success'), t('common.uploadSuccess'), 'success');
 
         } catch (error) {
             console.error('文件上传错误:', error);
-            showToast('文件上传失败: ' + error.message, 'error');
+            showToast(t('common.error'), t('common.uploadFailed') + ': ' + error.message, 'error');
         } finally {
             this.setButtonLoading(button, false);
         }

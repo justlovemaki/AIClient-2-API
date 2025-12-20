@@ -3,6 +3,7 @@
 import { showToast, formatUptime } from './utils.js';
 import { handleProviderChange, handleGeminiCredsTypeChange, handleKiroCredsTypeChange } from './event-handlers.js';
 import { loadProviders } from './provider-manager.js';
+import { t } from './i18n.js';
 
 /**
  * 加载配置
@@ -233,26 +234,26 @@ async function saveConfiguration() {
                 // 清空密码输入框
                 const adminPasswordEl = document.getElementById('adminPassword');
                 if (adminPasswordEl) adminPasswordEl.value = '';
-                showToast('后台密码已更新，下次登录生效', 'success');
+                showToast(t('common.success'), t('common.passwordUpdated'), 'success');
             } catch (pwdError) {
                 console.error('Failed to save admin password:', pwdError);
-                showToast('保存后台密码失败: ' + pwdError.message, 'error');
+                showToast(t('common.error'), t('common.error') + ': ' + pwdError.message, 'error');
             }
         }
         
         await window.apiClient.post('/reload-config');
-        showToast('配置已保存', 'success');
+        showToast(t('common.success'), t('common.configSaved'), 'success');
         
         // 检查当前是否在提供商池管理页面，如果是则刷新数据
         const providersSection = document.getElementById('providers');
         if (providersSection && providersSection.classList.contains('active')) {
             // 当前在提供商池页面，刷新数据
             await loadProviders();
-            showToast('提供商池数据已刷新', 'success');
+            showToast(t('common.success'), t('common.providerPoolRefreshed'), 'success');
         }
     } catch (error) {
         console.error('Failed to save configuration:', error);
-        showToast('保存配置失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
     }
 }
 

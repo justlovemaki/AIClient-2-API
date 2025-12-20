@@ -1,6 +1,7 @@
 // 上传配置管理功能模块
 
 import { showToast } from './utils.js';
+import { t } from './i18n.js';
 
 let allConfigs = []; // 存储所有配置数据
 let filteredConfigs = []; // 存储过滤后的配置数据
@@ -45,7 +46,7 @@ function renderConfigList() {
     container.innerHTML = '';
 
     if (!filteredConfigs.length) {
-        container.innerHTML = '<div class="no-configs"><p>未找到匹配的配置文件</p></div>';
+        container.innerHTML = `<div class="no-configs"><p data-i18n="upload.noConfigs">${t('upload.noConfigs')}</p></div>`;
         return;
     }
 
@@ -69,7 +70,7 @@ function createConfigItemElement(config, index) {
     item.dataset.index = index;
 
     const statusIcon = config.isUsed ? 'fa-check-circle' : 'fa-circle';
-    const statusText = config.isUsed ? '已关联' : '未关联';
+    const statusText = config.isUsed ? t('upload.statusFilter.used') : t('upload.statusFilter.unused');
 
     const typeIcon = config.type === 'oauth' ? 'fa-key' :
                     config.type === 'api-key' ? 'fa-lock' :
@@ -97,36 +98,36 @@ function createConfigItemElement(config, index) {
             <div class="config-item-modified">${formatDate(config.modified)}</div>
             <div class="config-item-status">
                 <i class="fas ${statusIcon}"></i>
-                ${statusText}
+                <span data-i18n="${config.isUsed ? 'upload.statusFilter.used' : 'upload.statusFilter.unused'}">${statusText}</span>
                 ${quickLinkBtnHtml}
             </div>
         </div>
         <div class="config-item-details">
             <div class="config-details-grid">
                 <div class="config-detail-item">
-                    <div class="config-detail-label">文件路径</div>
+                    <div class="config-detail-label" data-i18n="upload.detail.path">文件路径</div>
                     <div class="config-detail-value">${config.path}</div>
                 </div>
                 <div class="config-detail-item">
-                    <div class="config-detail-label">文件大小</div>
+                    <div class="config-detail-label" data-i18n="upload.detail.size">文件大小</div>
                     <div class="config-detail-value">${formatFileSize(config.size)}</div>
                 </div>
                 <div class="config-detail-item">
-                    <div class="config-detail-label">最后修改</div>
+                    <div class="config-detail-label" data-i18n="upload.detail.modified">最后修改</div>
                     <div class="config-detail-value">${formatDate(config.modified)}</div>
                 </div>
                 <div class="config-detail-item">
-                    <div class="config-detail-label">关联状态</div>
-                    <div class="config-detail-value">${statusText}</div>
+                    <div class="config-detail-label" data-i18n="upload.detail.status">关联状态</div>
+                    <div class="config-detail-value" data-i18n="${config.isUsed ? 'upload.statusFilter.used' : 'upload.statusFilter.unused'}">${statusText}</div>
                 </div>
             </div>
             ${usageInfoHtml}
             <div class="config-item-actions">
                 <button class="btn-small btn-view" data-path="${config.path}">
-                    <i class="fas fa-eye"></i> 查看
+                    <i class="fas fa-eye"></i> <span data-i18n="upload.action.view">${t('upload.action.view')}</span>
                 </button>
                 <button class="btn-small btn-delete-small" data-path="${config.path}">
-                    <i class="fas fa-trash"></i> 删除
+                    <i class="fas fa-trash"></i> <span data-i18n="upload.action.delete">${t('upload.action.delete')}</span>
                 </button>
             </div>
         </div>
@@ -186,17 +187,18 @@ function generateUsageInfoHtml(config) {
     }
 
     const typeLabels = {
-        'main_config': '主要配置',
-        'provider_pool': '提供商池',
-        'multiple': '多种用途'
+        'main_config': t('upload.usage.mainConfig'),
+        'provider_pool': t('upload.usage.providerPool'),
+        'multiple': t('upload.usage.multiple')
     };
 
-    const typeLabel = typeLabels[usageType] || '未知用途';
+    const typeLabel = typeLabels[usageType] || (t('common.info') === 'Info' ? 'Unknown' : '未知用途');
 
     let detailsHtml = '';
     usageDetails.forEach(detail => {
-        const icon = detail.type === '主要配置' ? 'fa-cog' : 'fa-network-wired';
-        const usageTypeKey = detail.type === '主要配置' ? 'main_config' : 'provider_pool';
+        const isMain = detail.type === '主要配置' || detail.type === 'Main Config';
+        const icon = isMain ? 'fa-cog' : 'fa-network-wired';
+        const usageTypeKey = isMain ? 'main_config' : 'provider_pool';
         detailsHtml += `
             <div class="usage-detail-item" data-usage-type="${usageTypeKey}">
                 <i class="fas ${icon}"></i>
@@ -210,7 +212,7 @@ function generateUsageInfoHtml(config) {
         <div class="config-usage-info">
             <div class="usage-info-header">
                 <i class="fas fa-link"></i>
-                <span class="usage-info-title">关联详情 (${typeLabel})</span>
+                <span class="usage-info-title" data-i18n="upload.usage.title" data-i18n-params='{"type":"${typeLabel}"}'>关联详情 (${typeLabel})</span>
             </div>
             <div class="usage-details-list">
                 ${detailsHtml}
@@ -260,9 +262,18 @@ function updateStats() {
     const usedEl = document.getElementById('usedConfigCount');
     const unusedEl = document.getElementById('unusedConfigCount');
 
-    if (totalEl) totalEl.textContent = `共 ${totalCount} 个配置文件`;
-    if (usedEl) usedEl.textContent = `已关联: ${usedCount}`;
-    if (unusedEl) unusedEl.textContent = `未关联: ${unusedCount}`;
+    if (totalEl) {
+        totalEl.textContent = t('upload.count', { count: totalCount });
+        totalEl.setAttribute('data-i18n-params', JSON.stringify({ count: totalCount.toString() }));
+    }
+    if (usedEl) {
+        usedEl.textContent = t('upload.usedCount', { count: usedCount });
+        usedEl.setAttribute('data-i18n-params', JSON.stringify({ count: usedCount.toString() }));
+    }
+    if (unusedEl) {
+        unusedEl.textContent = t('upload.unusedCount', { count: unusedCount });
+        unusedEl.setAttribute('data-i18n-params', JSON.stringify({ count: unusedCount.toString() }));
+    }
 }
 
 /**
@@ -285,10 +296,10 @@ async function loadConfigList() {
         renderConfigList();
         updateStats();
         console.log('配置列表加载成功，共', allConfigs.length, '个项目');
-        // showToast('配置文件列表已刷新', 'success');
+        // showToast(t('common.success'), t('upload.refresh') + '成功', 'success');
     } catch (error) {
         console.error('加载配置列表失败:', error);
-        showToast('加载配置列表失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
         
         // 使用模拟数据作为示例
         allConfigs = generateMockConfigData();
@@ -375,7 +386,7 @@ async function viewConfig(path) {
         showConfigModal(fileData);
     } catch (error) {
         console.error('查看配置失败:', error);
-        showToast('查看配置失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('upload.action.view.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -390,7 +401,7 @@ function showConfigModal(fileData) {
     modal.innerHTML = `
         <div class="config-modal-content">
             <div class="config-modal-header">
-                <h3>配置文件: ${fileData.name}</h3>
+                <h3><span data-i18n="nav.config">${t('nav.config')}</span>: ${fileData.name}</h3>
                 <button class="modal-close">
                     <i class="fas fa-times"></i>
                 </button>
@@ -398,27 +409,27 @@ function showConfigModal(fileData) {
             <div class="config-modal-body">
                 <div class="config-file-info">
                     <div class="file-info-item">
-                        <span class="info-label">文件路径:</span>
+                        <span class="info-label" data-i18n="upload.detail.path">${t('upload.detail.path')}:</span>
                         <span class="info-value">${fileData.path}</span>
                     </div>
                     <div class="file-info-item">
-                        <span class="info-label">文件大小:</span>
+                        <span class="info-label" data-i18n="upload.detail.size">${t('upload.detail.size')}:</span>
                         <span class="info-value">${formatFileSize(fileData.size)}</span>
                     </div>
                     <div class="file-info-item">
-                        <span class="info-label">最后修改:</span>
+                        <span class="info-label" data-i18n="upload.detail.modified">${t('upload.detail.modified')}:</span>
                         <span class="info-value">${formatDate(fileData.modified)}</span>
                     </div>
                 </div>
                 <div class="config-content">
-                    <label>文件内容:</label>
+                    <label data-i18n="common.info">文件内容:</label>
                     <pre class="config-content-display">${escapeHtml(fileData.content)}</pre>
                 </div>
             </div>
             <div class="config-modal-footer">
-                <button class="btn btn-secondary btn-close-modal">关闭</button>
+                <button class="btn btn-secondary btn-close-modal" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
                 <button class="btn btn-primary btn-copy-content" data-path="${fileData.path}">
-                    <i class="fas fa-copy"></i> 复制内容
+                    <i class="fas fa-copy"></i> <span data-i18n="oauth.modal.copyTitle">${t('oauth.modal.copyTitle')}</span>
                 </button>
             </div>
         </div>
@@ -477,7 +488,7 @@ async function copyConfigContent(path) {
         // 尝试使用现代 Clipboard API
         if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(fileData.content);
-            showToast('内容已复制到剪贴板', 'success');
+            showToast(t('common.success'), t('oauth.success.msg'), 'success');
         } else {
             // 降级方案：使用传统的 document.execCommand
             const textarea = document.createElement('textarea');
@@ -490,20 +501,20 @@ async function copyConfigContent(path) {
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
-                    showToast('内容已复制到剪贴板', 'success');
+                    showToast(t('common.copy.success'), 'success');
                 } else {
-                    showToast('复制失败，请手动复制', 'error');
+                    showToast(t('common.copy.failed'), 'error');
                 }
             } catch (err) {
                 console.error('复制失败:', err);
-                showToast('复制失败，请手动复制', 'error');
+                showToast(t('common.copy.failed'), 'error');
             } finally {
                 document.body.removeChild(textarea);
             }
         }
     } catch (error) {
         console.error('复制失败:', error);
-        showToast('复制失败: ' + error.message, 'error');
+        showToast(t('common.copy.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -525,7 +536,7 @@ function escapeHtml(text) {
 function showDeleteConfirmModal(config) {
     const isUsed = config.isUsed;
     const modalClass = isUsed ? 'delete-confirm-modal used' : 'delete-confirm-modal unused';
-    const title = isUsed ? '删除已关联配置' : '删除配置文件';
+    const title = isUsed ? t('upload.delete.confirmTitleUsed') : t('upload.delete.confirmTitle');
     const icon = isUsed ? 'fas fa-exclamation-triangle' : 'fas fa-trash';
     const buttonClass = isUsed ? 'btn btn-danger' : 'btn btn-warning';
     
@@ -535,7 +546,7 @@ function showDeleteConfirmModal(config) {
     modal.innerHTML = `
         <div class="delete-modal-content">
             <div class="delete-modal-header">
-                <h3><i class="${icon}"></i> ${title}</h3>
+                <h3 data-i18n="${isUsed ? 'upload.delete.confirmTitleUsed' : 'upload.delete.confirmTitle'}"><i class="${icon}"></i> ${title}</h3>
                 <button class="modal-close">
                     <i class="fas fa-times"></i>
                 </button>
@@ -547,29 +558,29 @@ function showDeleteConfirmModal(config) {
                     </div>
                     <div class="warning-content">
                         ${isUsed ?
-                            '<h4>⚠️ 此配置已被系统使用</h4><p>删除已关联的配置文件可能会影响系统正常运行。请确保您了解删除的后果。</p>' :
-                            '<h4>🗑️ 确认删除配置文件</h4><p>此操作将永久删除配置文件，且无法撤销。</p>'
+                            `<h4 data-i18n="upload.delete.warningUsedTitle">${t('upload.delete.warningUsedTitle')}</h4><p data-i18n="upload.delete.warningUsedDesc">${t('upload.delete.warningUsedDesc')}</p>` :
+                            `<h4 data-i18n="upload.delete.warningUnusedTitle">${t('upload.delete.warningUnusedTitle')}</h4><p data-i18n="upload.delete.warningUnusedDesc">${t('upload.delete.warningUnusedDesc')}</p>`
                         }
                     </div>
                 </div>
                 
                 <div class="config-info">
                     <div class="config-info-item">
-                        <span class="info-label">文件名:</span>
+                        <span class="info-label" data-i18n="upload.delete.fileName">文件名:</span>
                         <span class="info-value">${config.name}</span>
                     </div>
                     <div class="config-info-item">
-                        <span class="info-label">文件路径:</span>
+                        <span class="info-label" data-i18n="upload.detail.path">文件路径:</span>
                         <span class="info-value">${config.path}</span>
                     </div>
                     <div class="config-info-item">
-                        <span class="info-label">文件大小:</span>
+                        <span class="info-label" data-i18n="upload.detail.size">文件大小:</span>
                         <span class="info-value">${formatFileSize(config.size)}</span>
                     </div>
                     <div class="config-info-item">
-                        <span class="info-label">关联状态:</span>
-                        <span class="info-value status-${isUsed ? 'used' : 'unused'}">
-                            ${isUsed ? '已关联' : '未关联'}
+                        <span class="info-label" data-i18n="upload.detail.status">关联状态:</span>
+                        <span class="info-value status-${isUsed ? 'used' : 'unused'}" data-i18n="${isUsed ? 'upload.statusFilter.used' : 'upload.statusFilter.unused'}">
+                            ${isUsed ? t('upload.statusFilter.used') : t('upload.statusFilter.unused')}
                         </span>
                     </div>
                 </div>
@@ -580,23 +591,23 @@ function showDeleteConfirmModal(config) {
                             <i class="fas fa-info-circle"></i>
                         </div>
                         <div class="alert-content">
-                            <h5>关联详情</h5>
-                            <p>此配置文件正在被系统使用，删除后可能会导致:</p>
+                            <h5 data-i18n="upload.delete.usageAlertTitle">${t('upload.delete.usageAlertTitle')}</h5>
+                            <p data-i18n="upload.delete.usageAlertDesc">${t('upload.delete.usageAlertDesc')}</p>
                             <ul>
-                                <li>相关的AI服务无法正常工作</li>
-                                <li>配置管理中的设置失效</li>
-                                <li>提供商池配置丢失</li>
+                                <li data-i18n="upload.delete.usageAlertItem1">${t('upload.delete.usageAlertItem1')}</li>
+                                <li data-i18n="upload.delete.usageAlertItem2">${t('upload.delete.usageAlertItem2')}</li>
+                                <li data-i18n="upload.delete.usageAlertItem3">${t('upload.delete.usageAlertItem3')}</li>
                             </ul>
-                            <p><strong>建议：</strong>请先在配置管理中解除文件引用后再删除。</p>
+                            <p data-i18n-html="upload.delete.usageAlertAdvice">${t('upload.delete.usageAlertAdvice')}</p>
                         </div>
                     </div>
                 ` : ''}
             </div>
             <div class="delete-modal-footer">
-                <button class="btn btn-secondary btn-cancel-delete">取消</button>
+                <button class="btn btn-secondary btn-cancel-delete" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
                 <button class="${buttonClass} btn-confirm-delete" data-path="${config.path}">
                     <i class="fas fa-${isUsed ? 'exclamation-triangle' : 'trash'}"></i>
-                    ${isUsed ? '强制删除' : '确认删除'}
+                    <span data-i18n="${isUsed ? 'upload.delete.forceDelete' : 'upload.delete.confirmDelete'}">${isUsed ? t('upload.delete.forceDelete') : t('upload.delete.confirmDelete')}</span>
                 </button>
             </div>
         </div>
@@ -658,7 +669,7 @@ function showDeleteConfirmModal(config) {
 async function performDelete(path) {
     try {
         const result = await window.apiClient.delete(`/upload-configs/delete/${encodeURIComponent(path)}`);
-        showToast(result.message, 'success');
+        showToast(t('common.success'), result.message, 'success');
         
         // 从本地列表中移除
         allConfigs = allConfigs.filter(c => c.path !== path);
@@ -667,7 +678,7 @@ async function performDelete(path) {
         updateStats();
     } catch (error) {
         console.error('删除配置失败:', error);
-        showToast('删除配置失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('upload.action.delete.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -678,7 +689,7 @@ async function performDelete(path) {
 async function deleteConfig(path) {
     const config = filteredConfigs.find(c => c.path === path) || allConfigs.find(c => c.path === path);
     if (!config) {
-        showToast('配置文件不存在', 'error');
+        showToast(t('common.error'), t('upload.config.notExist'), 'error');
         return;
     }
     
@@ -695,6 +706,7 @@ function initUploadConfigManager() {
     const searchBtn = document.getElementById('searchConfigBtn');
     const statusFilter = document.getElementById('configStatusFilter');
     const refreshBtn = document.getElementById('refreshConfigList');
+    const downloadAllBtn = document.getElementById('downloadAllConfigs');
 
     if (searchInput) {
         searchInput.addEventListener('input', debounce(() => {
@@ -724,6 +736,10 @@ function initUploadConfigManager() {
         refreshBtn.addEventListener('click', loadConfigList);
     }
 
+    if (downloadAllBtn) {
+        downloadAllBtn.addEventListener('click', downloadAllConfigs);
+    }
+
     // 批量关联配置按钮
     const batchLinkBtn = document.getElementById('batchLinkKiroBtn') || document.getElementById('batchLinkProviderBtn');
     if (batchLinkBtn) {
@@ -746,7 +762,7 @@ async function reloadConfig() {
 
     try {
         const result = await window.apiClient.post('/reload-config');
-        showToast(result.message, 'success');
+        showToast(t('common.success'), result.message, 'success');
         
         // 重新加载配置列表以反映最新的关联状态
         await loadConfigList();
@@ -758,7 +774,7 @@ async function reloadConfig() {
         
     } catch (error) {
         console.error('重载配置失败:', error);
-        showToast('重载配置失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -822,23 +838,23 @@ async function quickLinkProviderConfig(filePath) {
     try {
         const providerInfo = detectProviderFromPath(filePath);
         if (!providerInfo) {
-            showToast('无法识别配置文件对应的提供商类型', 'error');
+            showToast(t('common.error'), t('upload.link.failed.identify'), 'error');
             return;
         }
         
-        showToast(`正在关联配置到 ${providerInfo.displayName}...`, 'info');
+        showToast(t('common.info'), t('upload.link.processing', { name: providerInfo.displayName }), 'info');
         
         const result = await window.apiClient.post('/quick-link-provider', {
             filePath: filePath
         });
         
-        showToast(result.message || '配置关联成功', 'success');
+        showToast(t('common.success'), result.message || t('upload.link.success'), 'success');
         
         // 刷新配置列表
         await loadConfigList();
     } catch (error) {
         console.error('一键关联失败:', error);
-        showToast('关联失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('upload.link.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -854,7 +870,7 @@ async function batchLinkProviderConfigs() {
     });
     
     if (unlinkedConfigs.length === 0) {
-        showToast('没有需要关联的配置文件', 'info');
+        showToast(t('common.info'), t('upload.batchLink.none'), 'info');
         return;
     }
     
@@ -874,12 +890,12 @@ async function batchLinkProviderConfigs() {
         .map(([name, count]) => `${name}: ${count}个`)
         .join(', ');
     
-    const confirmMsg = `确定要批量关联 ${unlinkedConfigs.length} 个配置吗？\n\n${providerSummary}`;
+    const confirmMsg = t('upload.batchLink.confirm', { count: unlinkedConfigs.length, summary: providerSummary });
     if (!confirm(confirmMsg)) {
         return;
     }
     
-    showToast(`正在批量关联 ${unlinkedConfigs.length} 个配置...`, 'info');
+    showToast(t('common.info'), t('upload.batchLink.processing', { count: unlinkedConfigs.length }), 'info');
     
     let successCount = 0;
     let failCount = 0;
@@ -900,9 +916,9 @@ async function batchLinkProviderConfigs() {
     await loadConfigList();
     
     if (failCount === 0) {
-        showToast(`成功关联 ${successCount} 个配置`, 'success');
+        showToast(t('common.success'), t('upload.batchLink.success', { count: successCount }), 'success');
     } else {
-        showToast(`关联完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, 'warning');
+        showToast(t('common.warning'), t('upload.batchLink.partial', { success: successCount, fail: failCount }), 'warning');
     }
 }
 
@@ -922,6 +938,53 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+/**
+ * 打包下载所有配置文件
+ */
+async function downloadAllConfigs() {
+    try {
+        showToast(t('common.info'), t('common.loading'), 'info');
+        
+        // 使用 window.apiClient.get 获取 Blob 数据
+        // 由于 apiClient 默认可能是处理 JSON 的，我们需要直接调用 fetch 或者确保 apiClient 支持返回原始响应
+        const token = localStorage.getItem('authToken');
+        const headers = {
+            'Authorization': token ? `Bearer ${token}` : ''
+        };
+
+        const response = await fetch('/api/upload-configs/download-all', { headers });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || '下载失败');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // 从 Content-Disposition 中提取文件名，或者使用默认名
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `configs_backup_${new Date().toISOString().slice(0, 10)}.zip`;
+        if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
+            const matches = /filename="([^"]+)"/.exec(contentDisposition);
+            if (matches && matches[1]) filename = matches[1];
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast(t('common.success'), t('common.success'), 'success');
+    } catch (error) {
+        console.error('打包下载失败:', error);
+        showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
+    }
 }
 
 // 导出函数
