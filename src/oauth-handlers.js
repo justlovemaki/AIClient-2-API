@@ -245,8 +245,7 @@ async function handleGoogleOAuth(providerKey, currentConfig, options = {}) {
         authInfo: {
             provider: providerKey,
             redirectUri: redirectUri,
-            port: config.port,
-            instructions: '请在浏览器中打开此链接进行授权，授权完成后会自动保存凭据文件'
+            port: config.port
         }
     };
 }
@@ -508,8 +507,7 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
                 verificationUriComplete: deviceAuth.verification_uri_complete,
                 expiresIn: expiresIn,
                 interval: interval,
-                codeVerifier: codeVerifier,
-                instructions: '请在浏览器中打开此链接并输入用户码进行授权。授权完成后，系统会自动轮询获取访问令牌。'
+                codeVerifier: codeVerifier
             }
         };
     } catch (error) {

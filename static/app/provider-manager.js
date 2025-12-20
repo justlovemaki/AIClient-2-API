@@ -401,41 +401,22 @@ function showAuthModal(authUrl, authInfo) {
                 <h4>授权步骤：</h4>
                 <ol>
                     <li>点击下方按钮在浏览器中打开授权页面</li>
-                    <li>完成授权后，系统会自动获取访问令牌</li>
+                    <li>完成授权后，系统会自动获取凭据文件</li>
+                    <li>凭据文件可在上传配置管理中查看和管理</li>
                     <li>授权有效期: ${Math.floor(authInfo.expiresIn / 60)} 分钟</li>
                 </ol>
-                <p class="auth-note">${authInfo.instructions}</p>
-                <div class="auth-file-path" style="margin-top: 15px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; border-left: 4px solid var(--primary-color);">
-                    <strong style="color: var(--text-primary);"><i class="fas fa-folder-open" style="margin-right: 5px; color: var(--primary-color);"></i>授权文件路径：</strong>
-                    <code style="display: block; margin-top: 5px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-all; font-family: 'Courier New', monospace; color: var(--text-primary);">${authFilePath}</code>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">注：<code style="background: var(--bg-tertiary); padding: 0.125rem 0.25rem; border-radius: 0.25rem;">~</code> 表示用户主目录（Windows: C:\\Users\\用户名，Linux/macOS: /home/用户名 或 /Users/用户名）</small>
-                </div>
             </div>
         `;
     } else {
         instructionsHtml = `
             <div class="auth-instructions">
-                <div class="auth-warning" style="margin-bottom: 15px;">
-                    <div>
-                        <strong>⚠️ 重要提醒：回调地址限制</strong>
-                        <p>OAuth回调地址的 host 必须是 <code>localhost</code> 或 <code>127.0.0.1</code>，否则授权将无法完成！</p>
-                        <p style="margin-top: 8px;">当前回调地址: <code>${authInfo.redirectUri}</code></p>
-                        <p style="margin-top: 8px; color: #d97706;">如果当前配置的 host 不是 localhost 或 127.0.0.1，请先修改配置后重新生成授权链接。</p>
-                    </div>
-                </div>
                 <h4>授权步骤：</h4>
                 <ol>
-                    <li>确认上方回调地址的 host 是 localhost 或 127.0.0.1</li>
                     <li>点击下方按钮在浏览器中打开授权页面</li>
                     <li>使用您的Google账号登录并授权</li>
                     <li>授权完成后，凭据文件会自动保存</li>
+                    <li>凭据文件可在上传配置管理中查看和管理</li>
                 </ol>
-                <p class="auth-note">${authInfo.instructions}</p>
-                <div class="auth-file-path" style="margin-top: 15px; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; border-left: 4px solid var(--primary-color);">
-                    <strong style="color: var(--text-primary);"><i class="fas fa-folder-open" style="margin-right: 5px; color: var(--primary-color);"></i>授权文件路径：</strong>
-                    <code style="display: block; margin-top: 5px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px; word-break: break-all; font-family: 'Courier New', monospace; color: var(--text-primary);">${authFilePath}</code>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">注：<code style="background: var(--bg-tertiary); padding: 0.125rem 0.25rem; border-radius: 0.25rem;">~</code> 表示用户主目录（Windows: C:\\Users\\用户名，Linux/macOS: /home/用户名 或 /Users/用户名）</small>
-                </div>
             </div>
         `;
     }
@@ -521,6 +502,7 @@ function showAuthModal(authUrl, authInfo) {
             
             // 添加手动输入回调 URL 的 UI
             const urlSection = modal.querySelector('.auth-url-section');
+            if (urlSection && !modal.querySelector('.manual-callback-section')) {
             const manualInputHtml = `
                 <div class="manual-callback-section" style="margin-top: 20px; padding: 15px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px;">
                     <h4 style="color: #92400e; margin-bottom: 8px;"><i class="fas fa-exclamation-circle"></i> 自动监听受阻？</h4>
@@ -534,6 +516,7 @@ function showAuthModal(authUrl, authInfo) {
                 </div>
             `;
             urlSection.insertAdjacentHTML('afterend', manualInputHtml);
+            }
 
             const manualInput = modal.querySelector('.manual-callback-input');
             const applyBtn = modal.querySelector('.apply-callback-btn');
@@ -597,12 +580,6 @@ function showAuthModal(authUrl, authInfo) {
         }
     });
     
-    // 点击遮罩层关闭
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
-    });
 }
 
 export {

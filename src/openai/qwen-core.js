@@ -877,6 +877,11 @@ class QwenOAuth2Client {
     constructor(config, useSystemProxy = false) {
         this.config = config;
         this.useSystemProxy = useSystemProxy;
+
+        // Initialize OAuth endpoints
+        const oauthBaseUrl = config.QWEN_OAUTH_BASE_URL || DEFAULT_QWEN_OAUTH_BASE_URL;
+        this.oauthDeviceCodeEndpoint = `${oauthBaseUrl}/api/v1/oauth2/device/code`;
+        this.oauthTokenEndpoint = `${oauthBaseUrl}/api/v1/oauth2/token`;
     }
 
     setCredentials(credentials) { this.credentials = credentials; }

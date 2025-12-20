@@ -53,28 +53,36 @@ const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
  * Provides OpenAI-compatible API for Claude Sonnet 4 via Kiro/CodeWhisperer
  */
 
-async function getMacAddressSha256() {
-    const networkInterfaces = os.networkInterfaces();
-    let macAddress = '';
+/**
+ * 根据当前配置生成唯一的机器码（Machine ID）
+ * 确保每个配置对应一个唯一且不变的 ID
+ * @param {Object} credentials - 当前凭证信息
+ * @returns {string} SHA256 格式的机器码
+ */
+function generateMachineIdFromConfig(credentials) {
+    // 优先级：节点UUID > profileArn > clientId > fallback
+    const uniqueKey = credentials.uuid || credentials.profileArn || credentials.clientId || "KIRO_DEFAULT_MACHINE";
+    return crypto.createHash('sha256').update(uniqueKey).digest('hex');
+}
 
-    for (const interfaceName in networkInterfaces) {
-        const networkInterface = networkInterfaces[interfaceName];
-        for (const iface of networkInterface) {
-            if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
-                macAddress = iface.mac;
-                break;
-            }
-        }
-        if (macAddress) break;
-    }
+/**
+ * 实时获取系统配置信息，用于生成 User-Agent
+ * @returns {Object} 包含 osName, nodeVersion 等信息
+ */
+function getSystemRuntimeInfo() {
+    const osPlatform = os.platform();
+    const osRelease = os.release();
+    const nodeVersion = process.version.replace('v', '');
+    
+    let osName = osPlatform;
+    if (osPlatform === 'win32') osName = `windows#${osRelease}`;
+    else if (osPlatform === 'darwin') osName = `macos#${osRelease}`;
+    else osName = `${osPlatform}#${osRelease}`;
 
-    if (!macAddress) {
-        console.warn("无法获取MAC地址，将使用默认值。");
-        macAddress = '00:00:00:00:00:00'; // Fallback if no MAC address is found
-    }
-
-    const sha256Hash = crypto.createHash('sha256').update(macAddress).digest('hex');
-    return sha256Hash;
+    return {
+        osName,
+        nodeVersion
+    };
 }
 
 // Helper functions for tool calls and JSON parsing
@@ -271,6 +279,7 @@ export class KiroApiService {
         this.credPath = config.KIRO_OAUTH_CREDS_DIR_PATH || path.join(os.homedir(), ".aws", "sso", "cache");
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_KIRO ?? false;
+        this.uuid = config?.uuid; // 获取多节点配置的 uuid
         console.log(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         // this.accessToken = config.KIRO_ACCESS_TOKEN;
         // this.refreshToken = config.KIRO_REFRESH_TOKEN;
@@ -305,8 +314,15 @@ export class KiroApiService {
         if (this.isInitialized) return;
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
-        const macSha256 = await getMacAddressSha256();
+        // 根据当前加载的凭证生成唯一的 Machine ID
+        const machineId = generateMachineIdFromConfig({
+            uuid: this.uuid,
+            profileArn: this.profileArn,
+            clientId: this.clientId
+        });
         const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
+        const { osName, nodeVersion } = getSystemRuntimeInfo();
+
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
             keepAlive: true,
@@ -330,8 +346,9 @@ export class KiroApiService {
                 'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
                 'amz-sdk-request': 'attempt=1; max=1',
                 'x-amzn-kiro-agent-mode': 'vibe',
-                'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${macSha256}`,
-                'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/win32#10.0.26100 lang/js md/nodejs#22.21.1 api/codewhispererruntime#1.0.0 m/N,E KiroIDE-${kiroVersion}-${macSha256}`
+                'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
+                'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
+                'Connection': 'close'
             },
         };
         
@@ -1773,9 +1790,21 @@ async initializeAuth(forceRefresh = false) {
         const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
 
         // 构建请求头
+        const machineId = generateMachineIdFromConfig({
+            uuid: this.uuid,
+            profileArn: this.profileArn,
+            clientId: this.clientId
+        });
+        const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
+        const { osName, nodeVersion } = getSystemRuntimeInfo();
+
         const headers = {
-            'amz-sdk-invocation-id': uuidv4(),
             'Authorization': `Bearer ${this.accessToken}`,
+            'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
+            'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
+            'amz-sdk-invocation-id': uuidv4(),
+            'amz-sdk-request': 'attempt=1; max=1',
+            'Connection': 'close'
         };
 
         try {

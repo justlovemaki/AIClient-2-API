@@ -228,6 +228,7 @@ export async function getApiService(config, requestedModel = null, options = {})
             console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
         }
     }
+    // 号池不可用时降级，直接使用当前请求的 config 初始化服务适配器
     return getServiceAdapter(serviceConfig);
 }
 
