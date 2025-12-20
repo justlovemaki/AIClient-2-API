@@ -144,17 +144,16 @@ export class ProviderPoolManager {
             return null;
         }
 
-        // 为每个提供商类型和模型组合维护独立的轮询索引
-        // 使用组合键：providerType 或 providerType:model
-        const indexKey = requestedModel ? `${providerType}:${requestedModel}` : providerType;
-        const currentIndex = this.roundRobinIndex[indexKey] || 0;
-        
-        // 使用取模确保索引始终在有效范围内，即使列表长度变化
-        const providerIndex = currentIndex % availableAndHealthyProviders.length;
-        const selected = availableAndHealthyProviders[providerIndex];
-        
-        // 更新下次轮询的索引
-        this.roundRobinIndex[indexKey] = (currentIndex + 1) % availableAndHealthyProviders.length;
+        // 改进：使用“最久未被使用”策略（LRU）代替取模轮询
+        // 这样即使可用列表长度动态变化，也能确保每个账号被平均轮到
+        const selected = availableAndHealthyProviders.sort((a, b) => {
+            const timeA = a.config.lastUsed ? new Date(a.config.lastUsed).getTime() : 0;
+            const timeB = b.config.lastUsed ? new Date(b.config.lastUsed).getTime() : 0;
+            // 优先选择从未用过的，或者最久没用的
+            if (timeA !== timeB) return timeA - timeB;
+            // 如果时间相同，使用使用次数辅助判断
+            return (a.config.usageCount || 0) - (b.config.usageCount || 0);
+        })[0];
         
         // 更新使用信息（除非明确跳过）
         if (!options.skipUsageCount) {
