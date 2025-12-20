@@ -1,4 +1,5 @@
 // 工具函数
+import { t, getCurrentLanguage } from './i18n.js';
 
 /**
  * 格式化运行时间
@@ -10,6 +11,10 @@ function formatUptime(seconds) {
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
+    
+    if (getCurrentLanguage() === 'en-US') {
+        return `${days}d ${hours}h ${minutes}m ${secs}s`;
+    }
     return `${days}天 ${hours}小时 ${minutes}分 ${secs}秒`;
 }
 
@@ -26,13 +31,22 @@ function escapeHtml(text) {
 
 /**
  * 显示提示消息
+ * @param {string} title - 提示标题 (可选，旧接口为 message)
  * @param {string} message - 提示消息
  * @param {string} type - 消息类型 (info, success, error)
  */
-function showToast(message, type = 'info') {
+function showToast(title, message, type = 'info') {
+    // 兼容旧接口 (message, type)
+    if (arguments.length === 2 && (message === 'success' || message === 'error' || message === 'info' || message === 'warning')) {
+        type = message;
+        message = title;
+        title = t(`common.${type}`);
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
         <div>${escapeHtml(message)}</div>
     `;
 
@@ -53,19 +67,20 @@ function showToast(message, type = 'info') {
  * @returns {string} 显示文案
  */
 function getFieldLabel(key) {
+    const isEn = getCurrentLanguage() === 'en-US';
     const labelMap = {
-        'customName': '自定义名称 (选填)',
-        'checkModelName': '检查模型名称 (选填)',
-        'checkHealth': '健康检查',
+        'customName': t('modal.provider.customName') + ' ' + t('config.optional'),
+        'checkModelName': t('modal.provider.checkModelName') + ' ' + t('config.optional'),
+        'checkHealth': t('modal.provider.healthCheckLabel'),
         'OPENAI_API_KEY': 'OpenAI API Key',
         'OPENAI_BASE_URL': 'OpenAI Base URL',
         'CLAUDE_API_KEY': 'Claude API Key',
         'CLAUDE_BASE_URL': 'Claude Base URL',
-        'PROJECT_ID': '项目ID',
-        'GEMINI_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'KIRO_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
+        'PROJECT_ID': isEn ? 'Project ID' : '项目ID',
+        'GEMINI_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+        'KIRO_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+        'QWEN_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+        'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'GEMINI_BASE_URL': 'Gemini Base URL',
         'KIRO_BASE_URL': 'Base URL',
         'KIRO_REFRESH_URL': 'Refresh URL',
@@ -84,6 +99,7 @@ function getFieldLabel(key) {
  * @returns {Array} 字段配置数组
  */
 function getProviderTypeFields(providerType) {
+    const isEn = getCurrentLanguage() === 'en-US';
     const fieldConfigs = {
         'openai-custom': [
             {
@@ -130,19 +146,19 @@ function getProviderTypeFields(providerType) {
         'gemini-cli-oauth': [
             {
                 id: 'PROJECT_ID',
-                label: '项目ID',
+                label: isEn ? 'Project ID' : '项目ID',
                 type: 'text',
-                placeholder: 'Google Cloud项目ID'
+                placeholder: isEn ? 'Google Cloud Project ID' : 'Google Cloud项目ID'
             },
             {
                 id: 'GEMINI_OAUTH_CREDS_FILE_PATH',
-                label: 'OAuth凭据文件路径',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
                 type: 'text',
-                placeholder: '例如: ~/.gemini/oauth_creds.json'
+                placeholder: isEn ? 'e.g.: ~/.gemini/oauth_creds.json' : '例如: ~/.gemini/oauth_creds.json'
             },
             {
                 id: 'GEMINI_BASE_URL',
-                label: 'Gemini Base URL <span class="optional-tag">(选填)</span>',
+                label: `Gemini Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://cloudcode-pa.googleapis.com'
             }
@@ -150,25 +166,25 @@ function getProviderTypeFields(providerType) {
         'claude-kiro-oauth': [
             {
                 id: 'KIRO_OAUTH_CREDS_FILE_PATH',
-                label: 'OAuth凭据文件路径',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
                 type: 'text',
-                placeholder: '例如: ~/.aws/sso/cache/kiro-auth-token.json'
+                placeholder: isEn ? 'e.g.: ~/.aws/sso/cache/kiro-auth-token.json' : '例如: ~/.aws/sso/cache/kiro-auth-token.json'
             },
             {
                 id: 'KIRO_BASE_URL',
-                label: 'Base URL <span class="optional-tag">(选填)</span>',
+                label: `Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse'
             },
             {
                 id: 'KIRO_REFRESH_URL',
-                label: 'Refresh URL <span class="optional-tag">(选填)</span>',
+                label: `Refresh URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken'
             },
             {
                 id: 'KIRO_REFRESH_IDC_URL',
-                label: 'Refresh IDC URL <span class="optional-tag">(选填)</span>',
+                label: `Refresh IDC URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://oidc.{{region}}.amazonaws.com/token'
             }
@@ -176,19 +192,19 @@ function getProviderTypeFields(providerType) {
         'openai-qwen-oauth': [
             {
                 id: 'QWEN_OAUTH_CREDS_FILE_PATH',
-                label: 'OAuth凭据文件路径',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
                 type: 'text',
-                placeholder: '例如: ~/.qwen/oauth_creds.json'
+                placeholder: isEn ? 'e.g.: ~/.qwen/oauth_creds.json' : '例如: ~/.qwen/oauth_creds.json'
             },
             {
                 id: 'QWEN_BASE_URL',
-                label: 'Qwen Base URL <span class="optional-tag">(选填)</span>',
+                label: `Qwen Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://portal.qwen.ai/v1'
             },
             {
                 id: 'QWEN_OAUTH_BASE_URL',
-                label: 'OAuth Base URL <span class="optional-tag">(选填)</span>',
+                label: `OAuth Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://chat.qwen.ai'
             }
@@ -196,25 +212,25 @@ function getProviderTypeFields(providerType) {
         'gemini-antigravity': [
             {
                 id: 'PROJECT_ID',
-                label: '项目ID (选填)',
+                label: isEn ? 'Project ID (Optional)' : '项目ID (选填)',
                 type: 'text',
-                placeholder: 'Google Cloud项目ID (留空自动发现)'
+                placeholder: isEn ? 'Google Cloud Project ID (Leave blank for discovery)' : 'Google Cloud项目ID (留空自动发现)'
             },
             {
                 id: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
-                label: 'OAuth凭据文件路径',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
                 type: 'text',
-                placeholder: '例如: ~/.antigravity/oauth_creds.json'
+                placeholder: isEn ? 'e.g.: ~/.antigravity/oauth_creds.json' : '例如: ~/.antigravity/oauth_creds.json'
             },
             {
                 id: 'ANTIGRAVITY_BASE_URL_DAILY',
-                label: 'Daily Base URL <span class="optional-tag">(选填)</span>',
+                label: `Daily Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://daily-cloudcode-pa.sandbox.googleapis.com'
             },
             {
                 id: 'ANTIGRAVITY_BASE_URL_AUTOPUSH',
-                label: 'Autopush Base URL <span class="optional-tag">(选填)</span>',
+                label: `Autopush Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://autopush-cloudcode-pa.sandbox.googleapis.com'
             }

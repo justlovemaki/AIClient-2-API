@@ -1495,7 +1495,7 @@ input:checked + .toggle-slider:before {
 }
 
 .btn-quick-link {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
     color: white;
     border: none;
     border-radius: 4px;
@@ -1513,15 +1513,15 @@ input:checked + .toggle-slider:before {
 .btn-quick-link:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #047857 0%, var(--primary-color) 100%);
 }
 
 .btn-quick-link i {
     font-size: 10px;
 }
 
-.btn-batch-link-kiro {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+.btn-batch-link {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
     color: white;
     border: none;
     border-radius: 6px;
@@ -1537,13 +1537,13 @@ input:checked + .toggle-slider:before {
     font-weight: 500;
 }
 
-.btn-batch-link-kiro:hover {
+.btn-batch-link:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #047857 0%, var(--primary-color) 100%);
 }
 
-.btn-batch-link-kiro i {
+.btn-batch-link i {
     font-size: 11px;
 }
 
@@ -4357,5 +4357,123 @@ input:checked + .toggle-slider:before {
     
     .usage-instance-content {
         padding: 0.5rem;
+    }
+}
+
+/* ==================== 语言切换器样式 ==================== */
+.language-switcher {
+    position: relative;
+    display: inline-block;
+}
+
+.language-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.language-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.language-btn i {
+    font-size: 1rem;
+}
+
+.current-lang {
+    font-weight: 600;
+}
+
+.language-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-lg);
+    min-width: 150px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.language-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.language-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    transition: var(--transition);
+    position: relative;
+}
+
+.language-option:first-child {
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.language-option:last-child {
+    border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.language-option:hover {
+    background: var(--bg-secondary);
+}
+
+.language-option i {
+    font-size: 0.875rem;
+    color: var(--primary-color);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.language-option.active i {
+    opacity: 1;
+}
+
+.language-option span {
+    flex: 1;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .language-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .language-btn .current-lang {
+        display: none;
+    }
+    
+    .language-dropdown {
+        right: auto;
+        left: 0;
     }
 }

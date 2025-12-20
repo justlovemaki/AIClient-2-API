@@ -2,6 +2,7 @@
 
 import { showToast } from './utils.js';
 import { getAuthHeaders } from './auth.js';
+import { t, getCurrentLanguage } from './i18n.js';
 
 /**
  * 初始化用量管理功能
@@ -52,10 +53,15 @@ export async function loadUsage() {
         
         // 更新最后更新时间
         if (lastUpdateEl) {
+            const timeStr = new Date(data.timestamp || Date.now()).toLocaleString(getCurrentLanguage());
             if (data.fromCache && data.timestamp) {
-                lastUpdateEl.textContent = `缓存时间: ${new Date(data.timestamp).toLocaleString()}`;
+                lastUpdateEl.textContent = t('usage.lastUpdateCache', { time: timeStr });
+                lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdateCache');
+                lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
             } else {
-                lastUpdateEl.textContent = `上次更新: ${new Date().toLocaleString()}`;
+                lastUpdateEl.textContent = t('usage.lastUpdate', { time: timeStr });
+                lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdate');
+                lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
             }
         }
     } catch (error) {
@@ -66,7 +72,7 @@ export async function loadUsage() {
             errorEl.style.display = 'block';
             const errorMsgEl = document.getElementById('usageErrorMessage');
             if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || '获取用量数据失败';
+                errorMsgEl.textContent = error.message || t('usage.title') + '失败';
             }
         }
     }
@@ -110,10 +116,13 @@ export async function refreshUsage() {
         
         // 更新最后更新时间
         if (lastUpdateEl) {
-            lastUpdateEl.textContent = `上次更新: ${new Date().toLocaleString()}`;
+            const timeStr = new Date().toLocaleString(getCurrentLanguage());
+            lastUpdateEl.textContent = t('usage.lastUpdate', { time: timeStr });
+            lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdate');
+            lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
         }
 
-        showToast('用量数据已刷新', 'success');
+        showToast(t('common.success'), t('common.refresh.success'), 'success');
     } catch (error) {
         console.error('获取用量数据失败:', error);
         
@@ -122,11 +131,11 @@ export async function refreshUsage() {
             errorEl.style.display = 'block';
             const errorMsgEl = document.getElementById('usageErrorMessage');
             if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || '获取用量数据失败';
+                errorMsgEl.textContent = error.message || t('usage.title') + '失败';
             }
         }
         
-        showToast('获取用量数据失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
     } finally {
         if (refreshBtn) refreshBtn.disabled = false;
     }
@@ -147,7 +156,7 @@ function renderUsageData(data, container) {
         container.innerHTML = `
             <div class="usage-empty">
                 <i class="fas fa-chart-bar"></i>
-                <p>暂无用量数据</p>
+                <p data-i18n="usage.noData">${t('usage.noData')}</p>
             </div>
         `;
         return;
@@ -180,7 +189,7 @@ function renderUsageData(data, container) {
         container.innerHTML = `
             <div class="usage-empty">
                 <i class="fas fa-chart-bar"></i>
-                <p>暂无已初始化的服务实例</p>
+                <p data-i18n="usage.noInstances">${t('usage.noInstances')}</p>
             </div>
         `;
         return;
@@ -216,8 +225,8 @@ function createProviderGroup(providerType, instances) {
             <i class="fas fa-chevron-right toggle-icon"></i>
             <i class="${providerIcon} provider-icon"></i>
             <span class="provider-name">${providerDisplayName}</span>
-            <span class="instance-count">${instanceCount} 个实例</span>
-            <span class="success-count ${successCount === instanceCount ? 'all-success' : ''}">${successCount}/${instanceCount} 成功</span>
+            <span class="instance-count" data-i18n="usage.group.instances" data-i18n-params='{"count":"${instanceCount}"}'>${t('usage.group.instances', { count: instanceCount })}</span>
+            <span class="success-count ${successCount === instanceCount ? 'all-success' : ''}" data-i18n="usage.group.success" data-i18n-params='{"count":"${successCount}","total":"${instanceCount}"}'>${t('usage.group.success', { count: successCount, total: instanceCount })}</span>
         </div>
     `;
     
@@ -268,10 +277,10 @@ function createInstanceUsageCard(instance, providerType) {
         : '<i class="fas fa-times-circle status-error"></i>';
     
     const healthBadge = instance.isDisabled
-        ? '<span class="badge badge-disabled">已禁用</span>'
+        ? `<span class="badge badge-disabled" data-i18n="usage.card.status.disabled">${t('usage.card.status.disabled')}</span>`
         : (instance.isHealthy
-            ? '<span class="badge badge-healthy">健康</span>'
-            : '<span class="badge badge-unhealthy">异常</span>');
+            ? `<span class="badge badge-healthy" data-i18n="usage.card.status.healthy">${t('usage.card.status.healthy')}</span>`
+            : `<span class="badge badge-unhealthy" data-i18n="usage.card.status.unhealthy">${t('usage.card.status.unhealthy')}</span>`);
 
     // 获取用户邮箱和订阅信息
     const userEmail = instance.usage?.user?.email || '';
@@ -343,7 +352,7 @@ function renderUsageDetails(usage) {
         
         totalSection.innerHTML = `
             <div class="total-usage-header">
-                <span class="total-label"><i class="fas fa-chart-pie"></i> 总用量</span>
+                <span class="total-label"><i class="fas fa-chart-pie"></i> <span data-i18n="usage.card.totalUsage">${t('usage.card.totalUsage')}</span></span>
                 <span class="total-value">${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}</span>
             </div>
             <div class="progress-bar ${progressClass}">
@@ -399,9 +408,9 @@ function createUsageBreakdownHTML(breakdown) {
     if (breakdown.freeTrial && breakdown.freeTrial.status === 'ACTIVE') {
         html += `
             <div class="extra-usage-info free-trial">
-                <span class="extra-label"><i class="fas fa-gift"></i> 免费试用</span>
+                <span class="extra-label"><i class="fas fa-gift"></i> <span data-i18n="usage.card.freeTrial">${t('usage.card.freeTrial')}</span></span>
                 <span class="extra-value">${formatNumber(breakdown.freeTrial.currentUsage)} / ${formatNumber(breakdown.freeTrial.usageLimit)}</span>
-                <span class="extra-expires">到期: ${formatDate(breakdown.freeTrial.expiresAt)}</span>
+                <span class="extra-expires" data-i18n="usage.card.expires" data-i18n-params='{"time":"${formatDate(breakdown.freeTrial.expiresAt)}"}'>${t('usage.card.expires', { time: formatDate(breakdown.freeTrial.expiresAt) })}</span>
             </div>
         `;
     }
@@ -414,7 +423,7 @@ function createUsageBreakdownHTML(breakdown) {
                     <div class="extra-usage-info bonus">
                         <span class="extra-label"><i class="fas fa-star"></i> ${bonus.displayName || bonus.code}</span>
                         <span class="extra-value">${formatNumber(bonus.currentUsage)} / ${formatNumber(bonus.usageLimit)}</span>
-                        <span class="extra-expires">到期: ${formatDate(bonus.expiresAt)}</span>
+                        <span class="extra-expires" data-i18n="usage.card.expires" data-i18n-params='{"time":"${formatDate(bonus.expiresAt)}"}'>${t('usage.card.expires', { time: formatDate(bonus.expiresAt) })}</span>
                     </div>
                 `;
             }
@@ -522,7 +531,7 @@ function formatDate(dateStr) {
     if (!dateStr) return '--';
     try {
         const date = new Date(dateStr);
-        return date.toLocaleString('zh-CN', {
+        return date.toLocaleString(getCurrentLanguage(), {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',

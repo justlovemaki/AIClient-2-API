@@ -3,6 +3,7 @@
 import { elements, autoScroll, setAutoScroll, clearLogs } from './constants.js';
 import { showToast } from './utils.js';
 import { fileUploadHandler } from './file-upload.js';
+import { t } from './i18n.js';
 
 /**
  * 初始化所有事件监听器
@@ -20,7 +21,7 @@ function initEventListeners() {
             if (elements.logsContainer) {
                 elements.logsContainer.innerHTML = '';
             }
-            showToast('日志已清空', 'success');
+            showToast(t('common.success'), t('common.refresh.success'), 'success');
         });
     }
 
@@ -30,9 +31,10 @@ function initEventListeners() {
             const newAutoScroll = !autoScroll;
             setAutoScroll(newAutoScroll);
             elements.toggleAutoScrollBtn.dataset.enabled = newAutoScroll;
+            const statusText = newAutoScroll ? t('logs.autoScroll.on') : t('logs.autoScroll.off');
             elements.toggleAutoScrollBtn.innerHTML = `
                 <i class="fas fa-arrow-down"></i>
-                自动滚动: ${newAutoScroll ? '开' : '关'}
+                <span data-i18n="${newAutoScroll ? 'logs.autoScroll.on' : 'logs.autoScroll.off'}">${statusText}</span>
             `;
         });
     }
@@ -89,7 +91,7 @@ function initEventListeners() {
                     elements.toggleAutoScrollBtn.dataset.enabled = false;
                     elements.toggleAutoScrollBtn.innerHTML = `
                         <i class="fas fa-arrow-down"></i>
-                        自动滚动: 关
+                        <span data-i18n="logs.autoScroll.off">${t('logs.autoScroll.off')}</span>
                     `;
                 }
             }
@@ -189,7 +191,7 @@ async function handleGenerateCreds(event) {
     const targetInputId = button.getAttribute('data-target');
 
     try {
-        showToast('正在初始化凭据生成...', 'info');
+        showToast(t('common.info'), t('modal.provider.auth.initializing'), 'info');
         
         // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
         const providerDir = fileUploadHandler.getProviderKey(providerType);
@@ -211,7 +213,7 @@ async function handleGenerateCreds(event) {
                     if (input) {
                         input.value = data.relativePath;
                         input.dispatchEvent(new Event('input', { bubbles: true }));
-                        showToast('凭据已生成并自动填充路径', 'success');
+                        showToast(t('common.success'), t('modal.provider.auth.success'), 'success');
                     }
                     window.removeEventListener('oauth_success_event', handleSuccess);
                 }
@@ -225,14 +227,14 @@ async function handleGenerateCreds(event) {
             } else {
                 // 降级处理：如果在 app.js 中没导出，尝试直接打开
                 window.open(response.authUrl, '_blank');
-                showToast('请在打开的窗口中完成授权', 'info');
+                showToast(t('common.info'), t('modal.provider.auth.window'), 'info');
             }
         } else {
-            showToast('初始化凭据生成失败', 'error');
+            showToast(t('common.error'), t('modal.provider.auth.failed'), 'error');
         }
     } catch (error) {
         console.error('生成凭据失败:', error);
-        showToast(`生成凭据失败: ${error.message}`, 'error');
+        showToast(t('common.error'), t('modal.provider.auth.failed') + `: ${error.message}`, 'error');
     }
 }
 
@@ -305,7 +307,7 @@ async function handleRefresh() {
         }
     } catch (error) {
         console.error('刷新失败:', error);
-        showToast('刷新失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
     }
 }
 

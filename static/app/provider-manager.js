@@ -3,6 +3,7 @@
 import { providerStats, updateProviderStats } from './constants.js';
 import { showToast, formatUptime } from './utils.js';
 import { fileUploadHandler } from './file-upload.js';
+import { t, getCurrentLanguage } from './i18n.js';
 
 // 保存初始服务器时间和运行时间
 let initialServerTime = null;
@@ -57,7 +58,7 @@ function updateTimeDisplay() {
     // 更新服务器时间
     if (serverTimeEl) {
         const currentServerTime = new Date(initialServerTime.getTime() + elapsedSeconds * 1000);
-        serverTimeEl.textContent = currentServerTime.toLocaleString('zh-CN', {
+        serverTimeEl.textContent = currentServerTime.toLocaleString(getCurrentLanguage(), {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -170,7 +171,7 @@ function renderProviders(providers) {
         const isEmptyState = !hasProviders || totalCount === 0;
         const statusClass = isEmptyState ? 'status-empty' : (healthyCount === totalCount ? 'status-healthy' : 'status-unhealthy');
         const statusIcon = isEmptyState ? 'fa-info-circle' : (healthyCount === totalCount ? 'fa-check-circle' : 'fa-exclamation-triangle');
-        const statusText = isEmptyState ? '0/0 节点' : `${healthyCount}/${totalCount} 健康`;
+        const statusText = isEmptyState ? t('providers.status.empty') : t('providers.status.healthy', { healthy: healthyCount, total: totalCount });
 
         providerDiv.innerHTML = `
             <div class="provider-header">
@@ -187,19 +188,19 @@ function renderProviders(providers) {
             </div>
             <div class="provider-stats">
                 <div class="provider-stat">
-                    <span class="provider-stat-label">总账户</span>
+                    <span class="provider-stat-label" data-i18n="providers.stat.totalAccounts">${t('providers.stat.totalAccounts')}</span>
                     <span class="provider-stat-value">${totalCount}</span>
                 </div>
                 <div class="provider-stat">
-                    <span class="provider-stat-label">健康账户</span>
+                    <span class="provider-stat-label" data-i18n="providers.stat.healthyAccounts">${t('providers.stat.healthyAccounts')}</span>
                     <span class="provider-stat-value">${healthyCount}</span>
                 </div>
                 <div class="provider-stat">
-                    <span class="provider-stat-label">使用次数</span>
+                    <span class="provider-stat-label" data-i18n="providers.stat.usageCount">${t('providers.stat.usageCount')}</span>
                     <span class="provider-stat-value">${usageCount}</span>
                 </div>
                 <div class="provider-stat">
-                    <span class="provider-stat-label">错误次数</span>
+                    <span class="provider-stat-label" data-i18n="providers.stat.errorCount">${t('providers.stat.errorCount')}</span>
                     <span class="provider-stat-value">${errorCount}</span>
                 </div>
             </div>
@@ -310,7 +311,7 @@ async function openProviderManager(providerType) {
         showProviderManagerModal(data);
     } catch (error) {
         console.error('Failed to load provider details:', error);
-        showToast('加载提供商详情失败', 'error');
+        showToast(t('common.error'), t('modal.provider.load.failed'), 'error');
     }
 }
 
@@ -330,7 +331,7 @@ function generateAuthButton(providerType) {
     return `
         <button class="generate-auth-btn" title="生成OAuth授权链接">
             <i class="fas fa-key"></i>
-            <span>生成授权</span>
+            <span data-i18n="providers.auth.generate">${t('providers.auth.generate')}</span>
         </button>
     `;
 }
@@ -341,7 +342,7 @@ function generateAuthButton(providerType) {
  */
 async function handleGenerateAuthUrl(providerType) {
     try {
-        showToast('正在生成授权链接...', 'info');
+        showToast(t('common.info'), t('modal.provider.auth.initializing'), 'info');
         
         // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
         const providerDir = fileUploadHandler.getProviderKey(providerType);
@@ -358,11 +359,11 @@ async function handleGenerateAuthUrl(providerType) {
             // 显示授权信息模态框
             showAuthModal(response.authUrl, response.authInfo);
         } else {
-            showToast('生成授权链接失败', 'error');
+            showToast(t('common.error'), t('modal.provider.auth.failed'), 'error');
         }
     } catch (error) {
         console.error('生成授权链接失败:', error);
-        showToast(`生成授权链接失败: ${error.message}`, 'error');
+        showToast(t('common.error'), t('modal.provider.auth.failed') + `: ${error.message}`, 'error');
     }
 }
 
@@ -378,7 +379,7 @@ function getAuthFilePath(provider) {
         'openai-qwen-oauth': '~/.qwen/oauth_creds.json',
         'claude-kiro-oauth': '~/.aws/sso/cache/kiro-auth-token.json'
     };
-    return authFilePaths[provider] || '未知路径';
+    return authFilePaths[provider] || (getCurrentLanguage() === 'en-US' ? 'Unknown Path' : '未知路径');
 }
 
 /**
@@ -398,24 +399,24 @@ function showAuthModal(authUrl, authInfo) {
     if (authInfo.provider === 'openai-qwen-oauth') {
         instructionsHtml = `
             <div class="auth-instructions">
-                <h4>授权步骤：</h4>
+                <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
                 <ol>
-                    <li>点击下方按钮在浏览器中打开授权页面</li>
-                    <li>完成授权后，系统会自动获取凭据文件</li>
-                    <li>凭据文件可在上传配置管理中查看和管理</li>
-                    <li>授权有效期: ${Math.floor(authInfo.expiresIn / 60)} 分钟</li>
+                    <li data-i18n="oauth.modal.step1">${t('oauth.modal.step1')}</li>
+                    <li data-i18n="oauth.modal.step2.qwen">${t('oauth.modal.step2.qwen')}</li>
+                    <li data-i18n="oauth.modal.step3">${t('oauth.modal.step3')}</li>
+                    <li data-i18n="oauth.modal.step4.qwen" data-i18n-params='{"min":"${Math.floor(authInfo.expiresIn / 60)}"}'>${t('oauth.modal.step4.qwen', { min: Math.floor(authInfo.expiresIn / 60) })}</li>
                 </ol>
             </div>
         `;
     } else {
         instructionsHtml = `
             <div class="auth-instructions">
-                <h4>授权步骤：</h4>
+                <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
                 <ol>
-                    <li>点击下方按钮在浏览器中打开授权页面</li>
-                    <li>使用您的Google账号登录并授权</li>
-                    <li>授权完成后，凭据文件会自动保存</li>
-                    <li>凭据文件可在上传配置管理中查看和管理</li>
+                    <li data-i18n="oauth.modal.step1">${t('oauth.modal.step1')}</li>
+                    <li data-i18n="oauth.modal.step2.google">${t('oauth.modal.step2.google')}</li>
+                    <li data-i18n="oauth.modal.step4.google">${t('oauth.modal.step4.google')}</li>
+                    <li data-i18n="oauth.modal.step3">${t('oauth.modal.step3')}</li>
                 </ol>
             </div>
         `;
@@ -424,18 +425,18 @@ function showAuthModal(authUrl, authInfo) {
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h3><i class="fas fa-key"></i>OAuth 授权</h3>
+                <h3><i class="fas fa-key"></i> <span data-i18n="oauth.modal.title">${t('oauth.modal.title')}</span></h3>
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="auth-info">
-                    <p><strong>提供商:</strong> ${authInfo.provider}</p>
+                    <p><strong data-i18n="oauth.modal.provider">${t('oauth.modal.provider')}</strong> ${authInfo.provider}</p>
                     ${instructionsHtml}
                     <div class="auth-url-section">
-                        <label>授权链接:</label>
+                        <label data-i18n="oauth.modal.urlLabel">${t('oauth.modal.urlLabel')}</label>
                         <div class="auth-url-container">
                             <input type="text" readonly value="${authUrl}" class="auth-url-input">
-                            <button class="copy-btn" title="复制链接">
+                            <button class="copy-btn" data-i18n="oauth.modal.copyTitle" title="复制链接">
                                 <i class="fas fa-copy"></i>
                             </button>
                         </div>
@@ -443,10 +444,10 @@ function showAuthModal(authUrl, authInfo) {
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="modal-cancel">关闭</button>
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
                 <button class="open-auth-btn">
                     <i class="fas fa-external-link-alt"></i>
-                    在浏览器中打开
+                    <span data-i18n="oauth.modal.openInBrowser">${t('oauth.modal.openInBrowser')}</span>
                 </button>
             </div>
         </div>
@@ -469,7 +470,7 @@ function showAuthModal(authUrl, authInfo) {
         const input = modal.querySelector('.auth-url-input');
         input.select();
         document.execCommand('copy');
-        showToast('授权链接已复制到剪贴板', 'success');
+        showToast(t('common.success'), t('oauth.success.msg'), 'success');
     });
     
     // 在浏览器中打开按钮
@@ -498,19 +499,19 @@ function showAuthModal(authUrl, authInfo) {
         window.addEventListener('oauth_success_event', handleOAuthSuccess);
         
         if (authWindow) {
-            showToast('已打开授权窗口，请在窗口中完成操作', 'info');
+            showToast(t('common.info'), t('oauth.window.opened'), 'info');
             
             // 添加手动输入回调 URL 的 UI
             const urlSection = modal.querySelector('.auth-url-section');
             if (urlSection && !modal.querySelector('.manual-callback-section')) {
             const manualInputHtml = `
                 <div class="manual-callback-section" style="margin-top: 20px; padding: 15px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px;">
-                    <h4 style="color: #92400e; margin-bottom: 8px;"><i class="fas fa-exclamation-circle"></i> 自动监听受阻？</h4>
-                    <p style="font-size: 0.875rem; color: #b45309; margin-bottom: 10px;">如果授权窗口重定向后显示“无法访问”，请将该窗口地址栏的 <strong>完整 URL</strong> 粘贴到下方：</p>
+                    <h4 style="color: #92400e; margin-bottom: 8px;"><i class="fas fa-exclamation-circle"></i> <span data-i18n="oauth.manual.title">${t('oauth.manual.title')}</span></h4>
+                    <p style="font-size: 0.875rem; color: #b45309; margin-bottom: 10px;" data-i18n-html="oauth.manual.desc">${t('oauth.manual.desc')}</p>
                     <div class="auth-url-container" style="display: flex; gap: 5px;">
-                        <input type="text" class="manual-callback-input" placeholder="粘贴回调 URL (包含 code=...)" style="flex: 1; padding: 8px; border: 1px solid #fcd34d; border-radius: 4px; background: white; color: black;">
+                        <input type="text" class="manual-callback-input" data-i18n="oauth.manual.placeholder" placeholder="粘贴回调 URL (包含 code=...)" style="flex: 1; padding: 8px; border: 1px solid #fcd34d; border-radius: 4px; background: white; color: black;">
                         <button class="btn btn-success apply-callback-btn" style="padding: 8px 15px; white-space: nowrap; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            <i class="fas fa-check"></i> 提交
+                            <i class="fas fa-check"></i> <span data-i18n="oauth.manual.submit">${t('oauth.manual.submit')}</span>
                         </button>
                     </div>
                 </div>
@@ -535,7 +536,7 @@ function showAuthModal(authUrl, authInfo) {
                         localUrl.hostname = window.location.hostname;
                         localUrl.protocol = window.location.protocol;
                         
-                        showToast('正在完成授权...', 'info');
+                        showToast(t('common.info'), t('oauth.processing'), 'info');
                         
                         // 优先在子窗口中跳转（如果没关）
                         if (authWindow && !authWindow.closed) {
@@ -547,11 +548,11 @@ function showAuthModal(authUrl, authInfo) {
                         }
                         
                     } else {
-                        showToast('该 URL 似乎不包含有效的授权代码', 'warning');
+                        showToast(t('common.warning'), t('oauth.invalid.url'), 'warning');
                     }
                 } catch (err) {
                     console.error('处理回调失败:', err);
-                    showToast('无效的 URL 格式', 'error');
+                    showToast(t('common.error'), t('oauth.error.format'), 'error');
                 }
             };
 
@@ -576,7 +577,7 @@ function showAuthModal(authUrl, authInfo) {
                 }
             }, 1000);
         } else {
-            showToast('授权窗口被浏览器拦截，请允许弹出窗口', 'error');
+            showToast(t('common.error'), t('oauth.window.blocked'), 'error');
         }
     });
     

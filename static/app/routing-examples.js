@@ -1,6 +1,7 @@
 // 路径路由示例功能模块
 
 import { showToast } from './utils.js';
+import { t } from './i18n.js';
 
 /**
  * 初始化路径路由示例功能
@@ -67,7 +68,7 @@ function initCopyButtons() {
             
             try {
                 await navigator.clipboard.writeText(path);
-                showToast(`路径已复制: ${path}`, 'success');
+                showToast(t('common.success'), `${t('common.success')}: ${path}`, 'success');
                 
                 // 临时更改按钮图标
                 const icon = button.querySelector('i');
@@ -84,7 +85,7 @@ function initCopyButtons() {
                 
             } catch (error) {
                 console.error('Failed to copy to clipboard:', error);
-                showToast('复制失败', 'error');
+                showToast(t('common.error'), t('common.error'), 'error');
             }
         }
     });
@@ -124,8 +125,8 @@ function getAvailableRoutes() {
                 openai: '/claude-custom/v1/chat/completions',
                 claude: '/claude-custom/v1/messages'
             },
-            description: '官方Claude API',
-            badge: '官方API',
+            description: t('dashboard.routing.official'),
+            badge: t('dashboard.routing.official'),
             badgeClass: 'official'
         },
         {
@@ -135,8 +136,8 @@ function getAvailableRoutes() {
                 openai: '/claude-kiro-oauth/v1/chat/completions',
                 claude: '/claude-kiro-oauth/v1/messages'
             },
-            description: '免费使用Claude Sonnet 4.5',
-            badge: '免费使用',
+            description: t('dashboard.routing.free'),
+            badge: t('dashboard.routing.free'),
             badgeClass: 'oauth'
         },
         {
@@ -146,8 +147,8 @@ function getAvailableRoutes() {
                 openai: '/openai-custom/v1/chat/completions',
                 claude: '/openai-custom/v1/messages'
             },
-            description: '官方OpenAI API',
-            badge: '官方API',
+            description: t('dashboard.routing.official'),
+            badge: t('dashboard.routing.official'),
             badgeClass: 'official'
         },
         {
@@ -157,8 +158,8 @@ function getAvailableRoutes() {
                 openai: '/gemini-cli-oauth/v1/chat/completions',
                 claude: '/gemini-cli-oauth/v1/messages'
             },
-            description: '突破Gemini免费限制',
-            badge: '突破限制',
+            description: t('dashboard.routing.oauth'),
+            badge: t('dashboard.routing.oauth'),
             badgeClass: 'oauth'
         },
         {
@@ -169,7 +170,7 @@ function getAvailableRoutes() {
                 claude: '/openai-qwen-oauth/v1/messages'
             },
             description: 'Qwen Code Plus',
-            badge: '代码专用',
+            badge: t('dashboard.routing.oauth'),
             badgeClass: 'oauth'
         },
         {
@@ -180,7 +181,7 @@ function getAvailableRoutes() {
                 claude: '/openaiResponses-custom/v1/messages'
             },
             description: '结构化对话API',
-            badge: '结构化对话',
+            badge: 'Responses',
             badgeClass: 'responses'
         }
     ];
@@ -202,7 +203,7 @@ function highlightProviderRoute(provider) {
             card.style.boxShadow = '';
         }, 3000);
         
-        showToast(`已定位到: ${provider}`, 'success');
+        showToast(t('common.success'), t('common.success') + `: ${provider}`, 'success');
     }
 }
 
@@ -216,7 +217,7 @@ async function copyCurlExample(provider, options = {}) {
     const route = routes.find(r => r.provider === provider);
     
     if (!route) {
-        showToast('未找到对应的路由', 'error');
+        showToast(t('common.error'), t('common.error'), 'error');
         return;
     }
     
@@ -224,7 +225,7 @@ async function copyCurlExample(provider, options = {}) {
     const path = route.paths[protocol];
     
     if (!path) {
-        showToast('未找到对应的协议路径', 'error');
+        showToast(t('common.error'), t('common.error'), 'error');
         return;
     }
     
@@ -322,10 +323,10 @@ async function copyCurlExample(provider, options = {}) {
     
     try {
         await navigator.clipboard.writeText(curlCommand);
-        showToast('curl命令已复制到剪贴板', 'success');
+        showToast(t('common.success'), t('oauth.success.msg'), 'success');
     } catch (error) {
         console.error('Failed to copy curl command:', error);
-        showToast('复制失败', 'error');
+        showToast(t('common.error'), t('common.error'), 'error');
     }
 }
 

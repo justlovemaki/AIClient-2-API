@@ -2,6 +2,7 @@
 
 import { showToast, getFieldLabel, getProviderTypeFields } from './utils.js';
 import { handleProviderPasswordToggle } from './event-handlers.js';
+import { t } from './i18n.js';
 
 // 分页配置
 const PROVIDERS_PER_PAGE = 5;
@@ -42,7 +43,7 @@ function showProviderManagerModal(data) {
     modal.innerHTML = `
         <div class="provider-modal-content">
             <div class="provider-modal-header">
-                <h3><i class="fas fa-cogs"></i> 管理 ${providerType} 提供商配置</h3>
+                <h3 data-i18n="modal.provider.manage" data-i18n-params='{"type":"${providerType}"}'><i class="fas fa-cogs"></i> 管理 ${providerType} 提供商配置</h3>
                 <button class="modal-close" onclick="window.closeProviderModal(this)">
                     <i class="fas fa-times"></i>
                 </button>
@@ -50,21 +51,21 @@ function showProviderManagerModal(data) {
             <div class="provider-modal-body">
                 <div class="provider-summary">
                     <div class="provider-summary-item">
-                        <span class="label">总账户数:</span>
+                        <span class="label" data-i18n="modal.provider.totalAccounts">总账户数:</span>
                         <span class="value">${totalCount}</span>
                     </div>
                     <div class="provider-summary-item">
-                        <span class="label">健康账户:</span>
+                        <span class="label" data-i18n="modal.provider.healthyAccounts">健康账户:</span>
                         <span class="value">${healthyCount}</span>
                     </div>
                     <div class="provider-summary-actions">
                         <button class="btn btn-success" onclick="window.showAddProviderForm('${providerType}')">
-                            <i class="fas fa-plus"></i> 添加新提供商
+                            <i class="fas fa-plus"></i> <span data-i18n="modal.provider.add">添加新提供商</span>
                         </button>
-                        <button class="btn btn-warning" onclick="window.resetAllProvidersHealth('${providerType}')" title="将所有节点的健康状态重置为健康">
+                        <button class="btn btn-warning" onclick="window.resetAllProvidersHealth('${providerType}')" data-i18n="modal.provider.resetHealth" title="将所有节点的健康状态重置为健康">
                             <i class="fas fa-heartbeat"></i> 重置为健康
                         </button>
-                        <button class="btn btn-info" onclick="window.performHealthCheck('${providerType}')" title="对所有节点执行健康检测">
+                        <button class="btn btn-info" onclick="window.performHealthCheck('${providerType}')" data-i18n="modal.provider.healthCheck" title="对所有节点执行健康检测">
                             <i class="fas fa-stethoscope"></i> 健康检测
                         </button>
                     </div>
@@ -135,7 +136,7 @@ function renderPagination(page, totalPages, totalItems, position = 'top') {
     return `
         <div class="pagination-container ${position}" data-position="${position}">
             <div class="pagination-info">
-                显示 ${startItem}-${endItem} / 共 ${totalItems} 条
+                <span data-i18n="pagination.showing" data-i18n-params='{"start":"${startItem}","end":"${endItem}","total":"${totalItems}"}'>显示 ${startItem}-${endItem} / 共 ${totalItems} 条</span>
             </div>
             <div class="pagination-controls">
                 <button class="page-btn nav-btn" onclick="window.goToProviderPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>
@@ -147,11 +148,11 @@ function renderPagination(page, totalPages, totalItems, position = 'top') {
                 </button>
             </div>
             <div class="pagination-jump">
-                <span>跳转到</span>
-                <input type="number" min="1" max="${totalPages}" value="${page}" 
+                <span data-i18n="pagination.jumpTo">跳转到</span>
+                <input type="number" min="1" max="${totalPages}" value="${page}"
                        onkeypress="if(event.key==='Enter')window.goToProviderPage(parseInt(this.value))"
                        class="page-jump-input">
-                <span>页</span>
+                <span data-i18n="pagination.page">页</span>
             </div>
         </div>
     `;
@@ -250,7 +251,7 @@ async function loadModelsForProviderType(providerType, providers) {
         providers.forEach(provider => {
             const container = document.querySelector(`.not-supported-models-container[data-uuid="${provider.uuid}"]`);
             if (container) {
-                container.innerHTML = '<div class="error-message">加载模型列表失败</div>';
+                container.innerHTML = `<div class="error-message">${t('common.error')}: 加载模型列表失败</div>`;
             }
         });
     }
@@ -351,16 +352,16 @@ function renderProviderList(providers) {
     return providers.map(provider => {
         const isHealthy = provider.isHealthy;
         const isDisabled = provider.isDisabled || false;
-        const lastUsed = provider.lastUsed ? new Date(provider.lastUsed).toLocaleString() : '从未使用';
-        const lastHealthCheckTime = provider.lastHealthCheckTime ? new Date(provider.lastHealthCheckTime).toLocaleString() : '从未检测';
+        const lastUsed = provider.lastUsed ? new Date(provider.lastUsed).toLocaleString() : t('modal.provider.neverUsed');
+        const lastHealthCheckTime = provider.lastHealthCheckTime ? new Date(provider.lastHealthCheckTime).toLocaleString() : t('modal.provider.neverChecked');
         const lastHealthCheckModel = provider.lastHealthCheckModel || '-';
         const healthClass = isHealthy ? 'healthy' : 'unhealthy';
         const disabledClass = isDisabled ? 'disabled' : '';
         const healthIcon = isHealthy ? 'fas fa-check-circle text-success' : 'fas fa-exclamation-triangle text-warning';
-        const healthText = isHealthy ? '正常' : '异常';
-        const disabledText = isDisabled ? '已禁用' : '已启用';
+        const healthText = isHealthy ? t('modal.provider.status.healthy') : t('modal.provider.status.unhealthy');
+        const disabledText = isDisabled ? t('modal.provider.status.disabled') : t('modal.provider.status.enabled');
         const disabledIcon = isDisabled ? 'fas fa-ban text-muted' : 'fas fa-play text-success';
-        const toggleButtonText = isDisabled ? '启用' : '禁用';
+        const toggleButtonText = isDisabled ? t('modal.provider.enabled') : t('modal.provider.disabled');
         const toggleButtonIcon = isDisabled ? 'fas fa-play' : 'fas fa-ban';
         const toggleButtonClass = isDisabled ? 'btn-success' : 'btn-warning';
         
@@ -371,7 +372,7 @@ function renderProviderList(providers) {
             errorInfoHtml = `
                 <div class="provider-error-info">
                     <i class="fas fa-exclamation-circle text-danger"></i>
-                    <span class="error-label">最后错误:</span>
+                    <span class="error-label" data-i18n="modal.provider.lastError">最后错误:</span>
                     <span class="error-message" title="${escapedErrorMsg}">${escapedErrorMsg}</span>
                 </div>
             `;
@@ -385,24 +386,24 @@ function renderProviderList(providers) {
                         <div class="provider-meta">
                             <span class="health-status">
                                 <i class="${healthIcon}"></i>
-                                健康状态: ${healthText}
+                                <span data-i18n="modal.provider.healthCheckLabel">健康状态</span>: <span data-i18n="${isHealthy ? 'modal.provider.status.healthy' : 'modal.provider.status.unhealthy'}">${healthText}</span>
                             </span> |
                             <span class="disabled-status">
                                 <i class="${disabledIcon}"></i>
-                                状态: ${disabledText}
+                                <span data-i18n="upload.detail.status">状态</span>: <span data-i18n="${isDisabled ? 'modal.provider.status.disabled' : 'modal.provider.status.enabled'}">${disabledText}</span>
                             </span> |
-                            使用次数: ${provider.usageCount || 0} |
-                            失败次数: ${provider.errorCount || 0} |
-                            最后使用: ${lastUsed}
+                            <span data-i18n="modal.provider.usageCount">使用次数</span>: ${provider.usageCount || 0} |
+                            <span data-i18n="modal.provider.errorCount">失败次数</span>: ${provider.errorCount || 0} |
+                            <span data-i18n="modal.provider.lastUsed">最后使用</span>: ${lastUsed}
                         </div>
                         <div class="provider-health-meta">
                             <span class="health-check-time">
                                 <i class="fas fa-clock"></i>
-                                最后检测: ${lastHealthCheckTime}
+                                <span data-i18n="modal.provider.lastCheck">最后检测</span>: ${lastHealthCheckTime}
                             </span> |
                             <span class="health-check-model">
                                 <i class="fas fa-cube"></i>
-                                检测模型: ${lastHealthCheckModel}
+                                <span data-i18n="modal.provider.checkModel">检测模型</span>: ${lastHealthCheckModel}
                             </span>
                         </div>
                         ${errorInfoHtml}
@@ -412,10 +413,10 @@ function renderProviderList(providers) {
                             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
                         </button>
                         <button class="btn-small btn-edit" onclick="window.editProvider('${provider.uuid}', event)">
-                            <i class="fas fa-edit"></i> 编辑
+                            <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">编辑</span>
                         </button>
                         <button class="btn-small btn-delete" onclick="window.deleteProvider('${provider.uuid}', event)">
-                            <i class="fas fa-trash"></i> 删除
+                            <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">删除</span>
                         </button>
                     </div>
                 </div>
@@ -478,8 +479,8 @@ function renderProviderConfig(provider) {
                             data-config-key="${fieldKey}"
                             data-config-value="${actualValue}"
                             disabled>
-                        <option value="true" ${isEnabled ? 'selected' : ''}>启用</option>
-                        <option value="false" ${!isEnabled ? 'selected' : ''}>禁用</option>
+                        <option value="true" ${isEnabled ? 'selected' : ''} data-i18n="modal.provider.enabled">启用</option>
+                        <option value="false" ${!isEnabled ? 'selected' : ''} data-i18n="modal.provider.disabled">禁用</option>
                     </select>
                 </div>
             `;
@@ -633,12 +634,12 @@ function renderProviderConfig(provider) {
     html += `
         <div class="config-item not-supported-models-section">
             <label>
-                <i class="fas fa-ban"></i> 不支持的模型
-                <span class="help-text">选择此提供商不支持的模型，系统会自动排除这些模型</span>
+                <i class="fas fa-ban"></i> <span data-i18n="modal.provider.unsupportedModels">不支持的模型</span>
+                <span class="help-text" data-i18n="modal.provider.unsupportedModelsHelp">选择此提供商不支持的模型，系统会自动排除这些模型</span>
             </label>
             <div class="not-supported-models-container" data-uuid="${provider.uuid}">
                 <div class="models-loading">
-                    <i class="fas fa-spinner fa-spin"></i> 加载模型列表...
+                    <i class="fas fa-spinner fa-spin"></i> <span data-i18n="modal.provider.loadingModels">加载模型列表...</span>
                 </div>
             </div>
         </div>
@@ -790,10 +791,10 @@ function editProvider(uuid, event) {
                 <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
             </button>
             <button class="btn-small btn-save" onclick="window.saveProvider('${uuid}', event)">
-                <i class="fas fa-save"></i> 保存
+                <i class="fas fa-save"></i> <span data-i18n="modal.provider.save">保存</span>
             </button>
             <button class="btn-small btn-cancel" onclick="window.cancelEdit('${uuid}', event)">
-                <i class="fas fa-times"></i> 取消
+                <i class="fas fa-times"></i> <span data-i18n="modal.provider.cancel">取消</span>
             </button>
         `;
     }, 100);
@@ -857,10 +858,10 @@ function cancelEdit(uuid, event) {
             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
         </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
-            <i class="fas fa-edit"></i> 编辑
+            <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">编辑</span>
         </button>
         <button class="btn-small btn-delete" onclick="window.deleteProvider('${uuid}', event)">
-            <i class="fas fa-trash"></i> 删除
+            <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">删除</span>
         </button>
     `;
 }
@@ -900,12 +901,12 @@ async function saveProvider(uuid, event) {
     try {
         await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
         await window.apiClient.post('/reload-config');
-        showToast('提供商配置更新成功', 'success');
+        showToast(t('common.success'), t('modal.provider.save.success'), 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to update provider:', error);
-        showToast('更新失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('modal.provider.save.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -917,7 +918,7 @@ async function saveProvider(uuid, event) {
 async function deleteProvider(uuid, event) {
     event.stopPropagation();
     
-    if (!confirm('确定要删除这个提供商配置吗？此操作不可恢复。')) {
+    if (!confirm(t('modal.provider.deleteConfirm'))) {
         return;
     }
     
@@ -927,12 +928,12 @@ async function deleteProvider(uuid, event) {
     try {
         await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${uuid}`);
         await window.apiClient.post('/reload-config');
-        showToast('提供商配置删除成功', 'success');
+        showToast(t('common.success'), t('modal.provider.delete.success'), 'success');
         // 重新获取最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to delete provider:', error);
-        showToast('删除失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('modal.provider.delete.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -1031,21 +1032,21 @@ function showAddProviderForm(providerType) {
     const form = document.createElement('div');
     form.className = 'add-provider-form';
     form.innerHTML = `
-        <h4><i class="fas fa-plus"></i> 添加新提供商配置</h4>
+        <h4 data-i18n="modal.provider.addTitle"><i class="fas fa-plus"></i> 添加新提供商配置</h4>
         <div class="form-grid">
             <div class="form-group">
-                <label>自定义名称 <span class="optional-mark">(选填)</span></label>
-                <input type="text" id="newCustomName" placeholder="例如: 我的节点1">
+                <label><span data-i18n="modal.provider.customName">自定义名称</span> <span class="optional-mark" data-i18n="config.optional">(选填)</span></label>
+                <input type="text" id="newCustomName" data-i18n="modal.provider.customName" placeholder="例如: 我的节点1">
             </div>
             <div class="form-group">
-                <label>检查模型名称 <span class="optional-mark">(选填)</span></label>
-                <input type="text" id="newCheckModelName" placeholder="例如: gpt-3.5-turbo">
+                <label><span data-i18n="modal.provider.checkModelName">检查模型名称</span> <span class="optional-mark" data-i18n="config.optional">(选填)</span></label>
+                <input type="text" id="newCheckModelName" data-i18n="modal.provider.checkModelName" placeholder="例如: gpt-3.5-turbo">
             </div>
             <div class="form-group">
-                <label>健康检查</label>
+                <label data-i18n="modal.provider.healthCheckLabel">健康检查</label>
                 <select id="newCheckHealth">
-                    <option value="false">禁用</option>
-                    <option value="true">启用</option>
+                    <option value="false" data-i18n="modal.provider.disabled">禁用</option>
+                    <option value="true" data-i18n="modal.provider.enabled">启用</option>
                 </select>
             </div>
         </div>
@@ -1054,10 +1055,10 @@ function showAddProviderForm(providerType) {
         </div>
         <div class="form-actions" style="margin-top: 15px;">
             <button class="btn btn-success" onclick="window.addProvider('${providerType}')">
-                <i class="fas fa-save"></i> 保存
+                <i class="fas fa-save"></i> <span data-i18n="modal.provider.save">保存</span>
             </button>
             <button class="btn btn-secondary" onclick="this.closest('.add-provider-form').remove()">
-                <i class="fas fa-times"></i> 取消
+                <i class="fas fa-times"></i> <span data-i18n="modal.provider.cancel">取消</span>
             </button>
         </div>
     `;
@@ -1184,7 +1185,7 @@ function addDynamicConfigFields(form, providerType) {
             fields += '</div>';
         }
     } else {
-        fields = '<p>不支持的提供商类型</p>';
+        fields = `<p data-i18n="modal.provider.noProviderType">${t('modal.provider.noProviderType')}</p>`;
     }
     
     configFields.innerHTML = fields;
@@ -1245,7 +1246,7 @@ async function addProvider(providerType) {
             providerConfig
         });
         await window.apiClient.post('/reload-config');
-        showToast('提供商配置添加成功', 'success');
+        showToast(t('common.success'), t('modal.provider.add.success'), 'success');
         // 移除添加表单
         const form = document.querySelector('.add-provider-form');
         if (form) {
@@ -1255,7 +1256,7 @@ async function addProvider(providerType) {
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to add provider:', error);
-        showToast('添加失败: ' + error.message, 'error');
+        showToast(t('common.error'), t('modal.provider.add.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -1275,8 +1276,8 @@ async function toggleProviderStatus(uuid, event) {
     const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
     const action = isCurrentlyDisabled ? 'enable' : 'disable';
     const confirmMessage = isCurrentlyDisabled ?
-        `确定要启用这个提供商配置吗？` :
-        `确定要禁用这个提供商配置吗？禁用后该提供商将不会被选中使用。`;
+        t('modal.provider.enableConfirm') :
+        t('modal.provider.disableConfirm');
     
     if (!confirm(confirmMessage)) {
         return;
@@ -1285,12 +1286,12 @@ async function toggleProviderStatus(uuid, event) {
     try {
         await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${uuid}/${action}`, { action });
         await window.apiClient.post('/reload-config');
-        showToast(`提供商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
+        showToast(t('common.success'), t('common.success'), 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to toggle provider status:', error);
-        showToast(`操作失败: ${error.message}`, 'error');
+        showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
     }
 }
 
@@ -1299,12 +1300,12 @@ async function toggleProviderStatus(uuid, event) {
  * @param {string} providerType - 提供商类型
  */
 async function resetAllProvidersHealth(providerType) {
-    if (!confirm(`确定要将 ${providerType} 的所有节点重置为健康状态吗？\n\n这将清除所有节点的错误计数和错误时间。`)) {
+    if (!confirm(t('modal.provider.resetHealthConfirm', {type: providerType}))) {
         return;
     }
     
     try {
-        showToast('正在重置健康状态...', 'info');
+        showToast(t('common.info'), t('modal.provider.resetHealth') + '...', 'info');
         
         const response = await window.apiClient.post(
             `/providers/${encodeURIComponent(providerType)}/reset-health`,
@@ -1312,7 +1313,7 @@ async function resetAllProvidersHealth(providerType) {
         );
         
         if (response.success) {
-            showToast(`成功重置 ${response.resetCount} 个节点的健康状态`, 'success');
+            showToast(t('common.success'), t('modal.provider.resetHealth.success', { count: response.resetCount }), 'success');
             
             // 重新加载配置
             await window.apiClient.post('/reload-config');
@@ -1320,11 +1321,11 @@ async function resetAllProvidersHealth(providerType) {
             // 刷新提供商配置显示
             await refreshProviderConfig(providerType);
         } else {
-            showToast('重置健康状态失败', 'error');
+            showToast(t('common.error'), t('modal.provider.resetHealth.failed'), 'error');
         }
     } catch (error) {
         console.error('重置健康状态失败:', error);
-        showToast(`重置健康状态失败: ${error.message}`, 'error');
+        showToast(t('common.error'), t('modal.provider.resetHealth.failed') + ': ' + error.message, 'error');
     }
 }
 
@@ -1333,12 +1334,12 @@ async function resetAllProvidersHealth(providerType) {
  * @param {string} providerType - 提供商类型
  */
 async function performHealthCheck(providerType) {
-    if (!confirm(`确定要对 ${providerType} 的所有节点执行健康检测吗？\n\n这将向每个节点发送测试请求来验证其可用性。`)) {
+    if (!confirm(t('modal.provider.healthCheckConfirm', {type: providerType}))) {
         return;
     }
     
     try {
-        showToast('正在执行健康检测，请稍候...', 'info');
+        showToast(t('common.info'), t('modal.provider.healthCheck') + '...', 'info');
         
         const response = await window.apiClient.post(
             `/providers/${encodeURIComponent(providerType)}/health-check`,
@@ -1351,11 +1352,11 @@ async function performHealthCheck(providerType) {
             // 统计跳过的数量（checkHealth 未启用的）
             const skippedCount = results ? results.filter(r => r.success === null).length : 0;
             
-            let message = `健康检测完成: ${successCount} 健康`;
+            let message = `${t('modal.provider.healthCheck')}完成: ${successCount} 健康`;
             if (failCount > 0) message += `, ${failCount} 异常`;
             if (skippedCount > 0) message += `, ${skippedCount} 跳过(未启用)`;
             
-            showToast(message, failCount > 0 ? 'warning' : 'success');
+            showToast(t('common.info'), message, failCount > 0 ? 'warning' : 'success');
             
             // 重新加载配置
             await window.apiClient.post('/reload-config');
@@ -1363,11 +1364,11 @@ async function performHealthCheck(providerType) {
             // 刷新提供商配置显示
             await refreshProviderConfig(providerType);
         } else {
-            showToast('健康检测失败', 'error');
+            showToast(t('common.error'), t('modal.provider.healthCheck') + ' ' + t('common.error'), 'error');
         }
     } catch (error) {
         console.error('健康检测失败:', error);
-        showToast(`健康检测失败: ${error.message}`, 'error');
+        showToast(t('common.error'), t('modal.provider.healthCheck') + ' ' + t('common.error') + ': ' + error.message, 'error');
     }
 }
 
@@ -1382,7 +1383,7 @@ function renderNotSupportedModelsSelector(uuid, models, notSupportedModels = [])
     if (!container) return;
     
     if (models.length === 0) {
-        container.innerHTML = '<div class="no-models">该提供商类型暂无可用模型列表</div>';
+        container.innerHTML = `<div class="no-models" data-i18n="modal.provider.noModels">${t('modal.provider.noModels')}</div>`;
         return;
     }
     
