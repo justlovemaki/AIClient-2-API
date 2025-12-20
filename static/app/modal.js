@@ -1098,8 +1098,8 @@ function addDynamicConfigFields(form, providerType) {
             const field1 = filteredFields[i];
             // 检查是否为密码类型字段
             const isPassword1 = field1.type === 'password';
-            // 检查是否为OAuth凭据文件路径字段
-            const isOAuthFilePath1 = field1.id.includes('OauthCredsFilePath');
+            // 检查是否为OAuth凭据文件路径字段（兼容两种命名方式）
+            const isOAuthFilePath1 = field1.id.includes('OAUTH_CREDS_FILE_PATH') || field1.id.includes('OauthCredsFilePath');
             
             if (isPassword1) {
                 fields += `
@@ -1141,8 +1141,8 @@ function addDynamicConfigFields(form, providerType) {
             if (field2) {
                 // 检查是否为密码类型字段
                 const isPassword2 = field2.type === 'password';
-                // 检查是否为OAuth凭据文件路径字段
-                const isOAuthFilePath2 = field2.id.includes('OauthCredsFilePath');
+                // 检查是否为OAuth凭据文件路径字段（兼容两种命名方式）
+                const isOAuthFilePath2 = field2.id.includes('OAUTH_CREDS_FILE_PATH') || field2.id.includes('OauthCredsFilePath');
                 
                 if (isPassword2) {
                     fields += `
