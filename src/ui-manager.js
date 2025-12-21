@@ -1881,7 +1881,17 @@ export function initializeUIManagement() {
     const originalLog = console.log;
     console.log = function(...args) {
         originalLog.apply(console, args);
-        const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+        const message = args.map(arg => {
+            if (typeof arg === 'string') return arg;
+            try {
+                return JSON.stringify(arg);
+            } catch (e) {
+                if (arg instanceof Error) {
+                    return `[Error: ${arg.message}] ${arg.stack || ''}`;
+                }
+                return `[Object: ${Object.prototype.toString.call(arg)}] (Circular or too complex to stringify)`;
+            }
+        }).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'info',
@@ -1898,7 +1908,17 @@ export function initializeUIManagement() {
     const originalError = console.error;
     console.error = function(...args) {
         originalError.apply(console, args);
-        const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+        const message = args.map(arg => {
+            if (typeof arg === 'string') return arg;
+            try {
+                return JSON.stringify(arg);
+            } catch (e) {
+                if (arg instanceof Error) {
+                    return `[Error: ${arg.message}] ${arg.stack || ''}`;
+                }
+                return `[Object: ${Object.prototype.toString.call(arg)}] (Circular or too complex to stringify)`;
+            }
+        }).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'error',
