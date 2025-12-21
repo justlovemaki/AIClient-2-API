@@ -9,7 +9,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
-import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth } from './oauth-handlers.js';
+import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth } from './oauth-handlers.js';
 import {
     generateUUID,
     normalizePath,
@@ -1370,6 +1370,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 authInfo = result.authInfo;
             } else if (providerType === 'openai-qwen-oauth') {
                 const result = await handleQwenOAuth(currentConfig, options);
+                authUrl = result.authUrl;
+                authInfo = result.authInfo;
+            } else if (providerType === 'claude-kiro-oauth') {
+                // Kiro OAuth 支持多种认证方式
+                // options.method 可以是: 'google' | 'github' | 'builder-id'
+                const result = await handleKiroOAuth(currentConfig, options);
                 authUrl = result.authUrl;
                 authInfo = result.authInfo;
             } else {

@@ -322,7 +322,7 @@ async function openProviderManager(providerType) {
  */
 function generateAuthButton(providerType) {
     // 只为支持OAuth的提供商显示授权按钮
-    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth'];
+    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'claude-kiro-oauth'];
     
     if (!oauthProviders.includes(providerType)) {
         return '';
@@ -341,6 +341,97 @@ function generateAuthButton(providerType) {
  * @param {string} providerType - 提供商类型
  */
 async function handleGenerateAuthUrl(providerType) {
+    // 如果是 Kiro OAuth，先显示认证方式选择对话框
+    if (providerType === 'claude-kiro-oauth') {
+        showKiroAuthMethodSelector(providerType);
+        return;
+    }
+    
+    await executeGenerateAuthUrl(providerType, {});
+}
+
+/**
+ * 显示 Kiro OAuth 认证方式选择对话框
+ * @param {string} providerType - 提供商类型
+ */
+function showKiroAuthMethodSelector(providerType) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-key"></i> 选择认证方式</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-method-options" style="display: flex; flex-direction: column; gap: 12px;">
+                    <button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fab fa-google" style="font-size: 24px; color: #4285f4;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;">Google 账号登录</div>
+                            <div style="font-size: 12px; color: #666;">使用 Google 账号进行社交登录</div>
+                        </div>
+                    </button>
+                    <button class="auth-method-btn" data-method="github" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fab fa-github" style="font-size: 24px; color: #333;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;">GitHub 账号登录</div>
+                            <div style="font-size: 12px; color: #666;">使用 GitHub 账号进行社交登录</div>
+                        </div>
+                    </button>
+                    <button class="auth-method-btn" data-method="builder-id" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fab fa-aws" style="font-size: 24px; color: #ff9900;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;">AWS Builder ID</div>
+                            <div style="font-size: 12px; color: #666;">使用 AWS Builder ID 进行设备码授权</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel">${t('modal.provider.cancel')}</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 关闭按钮事件
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    [closeBtn, cancelBtn].forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+    
+    // 认证方式选择按钮事件
+    const methodBtns = modal.querySelectorAll('.auth-method-btn');
+    methodBtns.forEach(btn => {
+        btn.addEventListener('mouseenter', () => {
+            btn.style.borderColor = '#00a67e';
+            btn.style.background = '#f8fffe';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.borderColor = '#e0e0e0';
+            btn.style.background = 'white';
+        });
+        btn.addEventListener('click', async () => {
+            const method = btn.dataset.method;
+            modal.remove();
+            await executeGenerateAuthUrl(providerType, { method });
+        });
+    });
+}
+
+/**
+ * 执行生成授权链接
+ * @param {string} providerType - 提供商类型
+ * @param {Object} extraOptions - 额外选项
+ */
+async function executeGenerateAuthUrl(providerType, extraOptions = {}) {
     try {
         showToast(t('common.info'), t('modal.provider.auth.initializing'), 'info');
         
@@ -351,7 +442,8 @@ async function handleGenerateAuthUrl(providerType) {
             `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
             {
                 saveToConfigs: true,
-                providerDir: providerDir
+                providerDir: providerDir,
+                ...extraOptions
             }
         );
         
@@ -405,6 +497,20 @@ function showAuthModal(authUrl, authInfo) {
                     <li data-i18n="oauth.modal.step2.qwen">${t('oauth.modal.step2.qwen')}</li>
                     <li data-i18n="oauth.modal.step3">${t('oauth.modal.step3')}</li>
                     <li data-i18n="oauth.modal.step4.qwen" data-i18n-params='{"min":"${Math.floor(authInfo.expiresIn / 60)}"}'>${t('oauth.modal.step4.qwen', { min: Math.floor(authInfo.expiresIn / 60) })}</li>
+                </ol>
+            </div>
+        `;
+    } else if (authInfo.provider === 'claude-kiro-oauth') {
+        const methodDisplay = authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : `Social (${authInfo.socialProvider || 'Google'})`;
+        instructionsHtml = `
+            <div class="auth-instructions">
+                <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
+                <p><strong>认证方式:</strong> ${methodDisplay}</p>
+                <ol>
+                    <li>点击下方按钮在浏览器中打开授权链接</li>
+                    <li>使用您的 ${authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : authInfo.socialProvider || 'Google'} 账号登录</li>
+                    <li>授权完成后页面会自动关闭</li>
+                    <li>刷新本页面查看凭据文件</li>
                 </ol>
             </div>
         `;
