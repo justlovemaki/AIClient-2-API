@@ -1784,7 +1784,7 @@ async initializeAuth(forceRefresh = false) {
             origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
             resourceType: resourceType
         });
-         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL && this.profileArn) {
             params.append('profileArn', this.profileArn);
         }
         const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
@@ -1828,7 +1828,7 @@ async initializeAuth(forceRefresh = false) {
                     throw refreshError;
                 }
             }
-            console.error('[Kiro] Failed to fetch usage limits:', error.message);
+            console.error('[Kiro] Failed to fetch usage limits:', error.message, error);
             throw error;
         }
     }
