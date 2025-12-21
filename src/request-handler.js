@@ -2,7 +2,7 @@ import deepmerge from 'deepmerge';
 import { handleError, isAuthorized } from './common.js';
 import { handleUIApiRequests, serveStaticFiles } from './ui-manager.js';
 import { handleAPIRequests } from './api-manager.js';
-import { getApiService } from './service-manager.js';
+import { getApiService, getProviderStatus } from './service-manager.js';
 import { getProviderPoolManager } from './service-manager.js';
 import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
@@ -60,6 +60,38 @@ export function createRequestHandler(config, providerPoolManager) {
                 provider: currentConfig.MODEL_PROVIDER
             }));
             return true;
+        }
+
+        // providers health endpoint
+        // url params: provider[string], customName[string], unhealthRatioThreshold[float]
+        // 支持provider, customName过滤记录 
+        // 支持unhealthRatioThreshold控制不健康比例的阈值, 当unhealthyRatio超过阈值返回summaryHealthy: false
+        if (method === 'GET' && path === '/provider_health') {
+            try {
+                const provider = requestUrl.searchParams.get('provider');
+                const customName = requestUrl.searchParams.get('customName');
+                const unhealthRatioThreshold = parseFloat(requestUrl.searchParams.get('unhealthRatioThreshold'));
+                let provideStatus = await getProviderStatus(currentConfig, null, { provider, customName });
+                let summaryHealthy = true;
+                if (!isNaN(unhealthRatioThreshold)) {
+                    summaryHealthy = provideStatus.unhealthyRatio <= unhealthRatioThreshold;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    items: provideStatus.providerPoolsSlim,
+                    count: provideStatus.count,
+                    unhealthyCount: provideStatus.unhealthyCount,
+                    unhealthyRatio: provideStatus.unhealthyRatio,
+                    unhealthySummeryMessage: provideStatus.unhealthySummeryMessage,
+                    summaryHealthy
+                }));
+                return true;
+            } catch (error) {
+                console.log(`[Server] req provider_health error: ${error.message}`);
+                handleError(res, { statusCode: 500, message: `Failed to get providers health: ${error.message}` });
+                return;
+            }
         }
 
         // Ignore count_tokens requests

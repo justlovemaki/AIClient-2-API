@@ -250,3 +250,97 @@ export function markProviderUnhealthy(provider, providerInfo) {
         providerPoolManager.markProviderUnhealthy(provider, providerInfo);
     }
 }
+
+/**
+ * Get providers status
+ * @param {Object} config - The current request configuration
+ * @param {Object} [options] - Optional. Additional options.
+ * @param {boolean} [options.provider] - Optional.provider filter by provider type
+ * @param {boolean} [options.customName] - Optional.customName filter by customName
+ * @returns {Promise<Object>} The API service adapter
+ */
+export async function getProviderStatus(config, options = {}) {
+    let providerPools = {};
+    const filePath = config.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+    try {
+        if (providerPoolManager && providerPoolManager.providerPools) {
+            providerPools = providerPoolManager.providerPools;
+        } else if (filePath && fs.existsSync(filePath)) {
+            const poolsData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+            providerPools = poolsData;
+        }
+    } catch (error) {
+        console.warn('[API Service] Failed to load provider pools:', error.message);
+    }
+
+    // providerPoolsSlim 只保留顶级 key 及部分字段，过滤 isDisabled 为 true 的元素
+    const slimFields = [
+        'customName',
+        'isHealthy',
+        'lastErrorTime',
+        'lastErrorMessage'
+    ];
+    // identify 字段映射表
+    const identifyFieldMap = {
+        'openai-custom': 'OPENAI_BASE_URL',
+        'openaiResponses-custom': 'OPENAI_BASE_URL',
+        'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
+        'claude-custom': 'CLAUDE_BASE_URL',
+        'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
+        'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
+        'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
+    };
+    let providerPoolsSlim = [];
+    let unhealthyProvideIdentifyList = [];
+    let count = 0;
+    let unhealthyCount = 0;
+    let unhealthyRatio = 0;
+    const filterProvider = options && options.provider;
+    const filterCustomName = options && options.customName;
+    for (const key of Object.keys(providerPools)) {
+        if (!Array.isArray(providerPools[key])) continue;
+        if (filterProvider && key !== filterProvider) continue;
+        const identifyField = identifyFieldMap[key] || null;
+        const slimArr = providerPools[key]
+            .filter(item => {
+                if (item.isDisabled) return false;
+                if (filterCustomName && item.customName !== filterCustomName) return false;
+                return true;
+            })
+            .map(item => {
+                const slim = {};
+                for (const f of slimFields) {
+                    slim[f] = item.hasOwnProperty(f) ? item[f] : null;
+                }
+                // identify 字段
+                if (identifyField && item.hasOwnProperty(identifyField)) {
+                    let tmpCustomName = item.customName ? `${item.customName}` : 'NoCustomName';
+                    let identifyStr = `${tmpCustomName}::${key}::${item[identifyField]}`;
+                    slim.identify = identifyStr;
+                } else {
+                    slim.identify = null;
+                }
+                slim.provider = key;
+                // 统计
+                count++;
+                if (slim.isHealthy === false) {
+                    unhealthyCount++;
+                    if (slim.identify) unhealthyProvideIdentifyList.push(slim.identify);
+                }
+                return slim;
+            });
+        providerPoolsSlim.push(...slimArr);
+    }
+    if (count > 0) {
+        unhealthyRatio = Number((unhealthyCount / count).toFixed(2));
+    }
+        let unhealthySummeryMessage = unhealthyProvideIdentifyList.join('\n');
+        if (unhealthySummeryMessage === '') unhealthySummeryMessage = null;
+    return {
+        providerPoolsSlim,
+        unhealthySummeryMessage,
+        count,
+        unhealthyCount,
+        unhealthyRatio
+    };
+}
