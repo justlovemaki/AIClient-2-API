@@ -362,36 +362,36 @@ function showKiroAuthMethodSelector(providerType) {
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h3><i class="fas fa-key"></i> 选择认证方式</h3>
+                <h3><i class="fas fa-key"></i> <span data-i18n="oauth.kiro.selectMethod">${t('oauth.kiro.selectMethod')}</span></h3>
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="auth-method-options" style="display: flex; flex-direction: column; gap: 12px;">
-                    <button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                    <!-- <button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fab fa-google" style="font-size: 24px; color: #4285f4;"></i>
                         <div style="text-align: left;">
-                            <div style="font-weight: 600; color: #333;">Google 账号登录</div>
-                            <div style="font-size: 12px; color: #666;">使用 Google 账号进行社交登录</div>
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.google">${t('oauth.kiro.google')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.googleDesc">${t('oauth.kiro.googleDesc')}</div>
                         </div>
                     </button>
                     <button class="auth-method-btn" data-method="github" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fab fa-github" style="font-size: 24px; color: #333;"></i>
                         <div style="text-align: left;">
-                            <div style="font-weight: 600; color: #333;">GitHub 账号登录</div>
-                            <div style="font-size: 12px; color: #666;">使用 GitHub 账号进行社交登录</div>
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.github">${t('oauth.kiro.github')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.githubDesc">${t('oauth.kiro.githubDesc')}</div>
                         </div>
-                    </button>
+                    </button> -->
                     <button class="auth-method-btn" data-method="builder-id" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fab fa-aws" style="font-size: 24px; color: #ff9900;"></i>
                         <div style="text-align: left;">
-                            <div style="font-weight: 600; color: #333;">AWS Builder ID</div>
-                            <div style="font-size: 12px; color: #666;">使用 AWS Builder ID 进行设备码授权</div>
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.awsBuilder">${t('oauth.kiro.awsBuilder')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsBuilderDesc">${t('oauth.kiro.awsBuilderDesc')}</div>
                         </div>
                     </button>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="modal-cancel">${t('modal.provider.cancel')}</button>
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
             </div>
         </div>
     `;
@@ -502,15 +502,16 @@ function showAuthModal(authUrl, authInfo) {
         `;
     } else if (authInfo.provider === 'claude-kiro-oauth') {
         const methodDisplay = authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : `Social (${authInfo.socialProvider || 'Google'})`;
+        const methodAccount = authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : authInfo.socialProvider || 'Google';
         instructionsHtml = `
             <div class="auth-instructions">
                 <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
-                <p><strong>认证方式:</strong> ${methodDisplay}</p>
+                <p><strong data-i18n="oauth.kiro.authMethodLabel">${t('oauth.kiro.authMethodLabel')}</strong> ${methodDisplay}</p>
                 <ol>
-                    <li>点击下方按钮在浏览器中打开授权链接</li>
-                    <li>使用您的 ${authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : authInfo.socialProvider || 'Google'} 账号登录</li>
-                    <li>授权完成后页面会自动关闭</li>
-                    <li>刷新本页面查看凭据文件</li>
+                    <li data-i18n="oauth.kiro.step1">${t('oauth.kiro.step1')}</li>
+                    <li data-i18n="oauth.kiro.step2" data-i18n-params='{"method":"${methodAccount}"}'>${t('oauth.kiro.step2', { method: methodAccount })}</li>
+                    <li data-i18n="oauth.kiro.step3">${t('oauth.kiro.step3')}</li>
+                    <li data-i18n="oauth.kiro.step4">${t('oauth.kiro.step4')}</li>
                 </ol>
             </div>
         `;
