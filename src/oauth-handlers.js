@@ -6,6 +6,8 @@ import os from 'os';
 import crypto from 'crypto';
 import open from 'open';
 import { broadcastEvent } from './ui-manager.js';
+import { autoLinkProviderConfigs } from './service-manager.js';
+import { CONFIG } from './config-manager.js';
 
 /**
  * OAuth 提供商配置
@@ -196,6 +198,9 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                             relativePath: relativePath,
                             timestamp: new Date().toISOString()
                         });
+                        
+                        // 自动关联新生成的凭据到 Pools
+                        await autoLinkProviderConfigs(CONFIG);
                         
                         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(true, '您可以关闭此页面'));
@@ -439,6 +444,9 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
                     timestamp: new Date().toISOString()
                 });
                 
+                // 自动关联新生成的凭据到 Pools
+                await autoLinkProviderConfigs(CONFIG);
+                
                 return data;
             }
             
@@ -519,7 +527,7 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
         }
         
         // 启动后台轮询获取令牌
-        const interval = deviceAuth.interval || 5;
+        const interval = 5;
         // const expiresIn = deviceAuth.expires_in || 1800;
         const expiresIn = 300;
         
@@ -630,6 +638,13 @@ async function handleKiroSocialAuth(provider, currentConfig, options = {}) {
  * Kiro Builder ID - Device Code Flow（类似 Qwen OAuth 模式）
  */
 async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
+    // 停止之前的轮询任务
+    for (const [existingTaskId] of activeKiroPollingTasks.entries()) {
+        if (existingTaskId.startsWith('kiro-')) {
+            stopKiroPollingTask(existingTaskId);
+        }
+    }
+
     // 1. 注册 OIDC 客户端
     const regResponse = await fetch(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/client/register`, {
         method: 'POST',
@@ -673,22 +688,16 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
     
     // 3. 启动后台轮询（类似 Qwen OAuth 的模式）
     const taskId = `kiro-${deviceAuth.deviceCode.substring(0, 8)}-${Date.now()}`;
-    
-    // 停止之前的轮询任务
-    for (const [existingTaskId] of activeKiroPollingTasks.entries()) {
-        if (existingTaskId.startsWith('kiro-')) {
-            stopKiroPollingTask(existingTaskId);
-        }
-    }
+
     
     // 异步轮询
     pollKiroBuilderIDToken(
-        regData.clientId, 
-        regData.clientSecret, 
-        deviceAuth.deviceCode, 
-        deviceAuth.interval || 5, 
-        deviceAuth.expiresIn || 300, 
-        taskId, 
+        regData.clientId,
+        regData.clientSecret,
+        deviceAuth.deviceCode,
+        5, 
+        300, 
+        taskId,
         options
     ).catch(error => {
         console.error(`${KIRO_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
@@ -761,10 +770,11 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                 
                 // 保存令牌（符合现有规范）
                 if (options.saveToConfigs) {
-                    const targetDir = path.join(process.cwd(), 'configs', 'kiro');
-                    await fs.promises.mkdir(targetDir, { recursive: true });
                     const timestamp = Date.now();
-                    credPath = path.join(targetDir, `${timestamp}_oauth_creds.json`);
+                    const folderName = `${timestamp}_kiro-auth-token`;
+                    const targetDir = path.join(process.cwd(), 'configs', 'kiro', folderName);
+                    await fs.promises.mkdir(targetDir, { recursive: true });
+                    credPath = path.join(targetDir, `${folderName}.json`);
                 }
                 
                 const tokenData = {
@@ -789,6 +799,9 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                     relativePath: path.relative(process.cwd(), credPath),
                     timestamp: new Date().toISOString()
                 });
+                
+                // 自动关联新生成的凭据到 Pools
+                await autoLinkProviderConfigs(CONFIG);
                 
                 return tokenData;
             }
@@ -837,17 +850,17 @@ async function startKiroCallbackServer(codeVerifier, expectedState, options = {}
     const portEnd = KIRO_OAUTH_CONFIG.callbackPortEnd;
     
     for (let port = portStart; port <= portEnd; port++) {
-        // 关闭已存在的服务器
-        await closeKiroServer(port);
-        
-        try {
-            const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
-            activeKiroServers.set(port, server);
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
-            return port;
-        } catch (err) {
+    // 关闭已存在的服务器
+    await closeKiroServer(port);
+    
+    try {
+        const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
+        activeKiroServers.set(port, server);
+        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
+        return port;
+    } catch (err) {
             console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用，尝试下一个...`);
-        }
+    }
     }
     
     throw new Error('所有端口都被占用');
@@ -925,10 +938,11 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     let credPath = path.join(os.homedir(), KIRO_OAUTH_CONFIG.credentialsDir, KIRO_OAUTH_CONFIG.credentialsFile);
                     
                     if (options.saveToConfigs) {
-                        const targetDir = path.join(process.cwd(), 'configs', 'kiro');
-                        await fs.promises.mkdir(targetDir, { recursive: true });
                         const timestamp = Date.now();
-                        credPath = path.join(targetDir, `${timestamp}_oauth_creds.json`);
+                        const folderName = `${timestamp}_kiro-auth-token`;
+                        const targetDir = path.join(process.cwd(), 'configs', 'kiro', folderName);
+                        await fs.promises.mkdir(targetDir, { recursive: true });
+                        credPath = path.join(targetDir, `${folderName}.json`);
                     }
                     
                     const saveData = {
@@ -952,6 +966,9 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                         relativePath: path.relative(process.cwd(), credPath),
                         timestamp: new Date().toISOString()
                     });
+                    
+                    // 自动关联新生成的凭据到 Pools
+                    await autoLinkProviderConfigs(CONFIG);
                     
                     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                     res.end(generateResponsePage(true, '授权成功！您可以关闭此页面'));

@@ -62,17 +62,40 @@
                 <!-- Dashboard Section -->
                 <section id="dashboard" class="section active" aria-labelledby="dashboard-title">
                     <h2 id="dashboard-title" data-i18n="dashboard.title">系统概览</h2>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-clock"></i>
+                    <div class="dashboard-top-row">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="uptime">--</h3>
+                                    <p data-i18n="dashboard.uptime">运行时间</p>
+                                </div>
                             </div>
-                            <div class="stat-info">
-                                <h3 id="uptime">--</h3>
-                                <p data-i18n="dashboard.uptime">运行时间</p>
+                        </div>
+                        
+                        <!-- Contact and Sponsor Section -->
+                        <div class="contact-section dashboard-contact">
+                            <div class="contact-grid">
+                                <div class="contact-card">
+                                    <h3><i id="wechat-icon" class="fab fa-weixin"></i> <span id="wechat-title" data-i18n="dashboard.contact.wechat">扫码进群，注明来意</span></h3>
+                                    <div class="qr-container">
+                                        <img src="static/wechat.png" id="wechat-img" alt="微信二维码" class="qr-code clickable-qr">
+                                    </div>
+                                    <p class="qr-description" id="wechat-desc" data-i18n="dashboard.contact.wechatDesc">添加微信获取更多技术支持和交流</p>
+                                </div>
+                                <div class="contact-card" id="sponsor-card">
+                                    <h3><i class="fas fa-heart"></i> <span id="sponsor-title" data-i18n="dashboard.contact.sponsor">扫码赞助</span></h3>
+                                    <div class="qr-container">
+                                        <img src="static/sponsor.png" id="sponsor-img" alt="赞助二维码" class="qr-code clickable-qr">
+                                    </div>
+                                    <p class="qr-description" id="sponsor-desc" data-i18n="dashboard.contact.sponsorDesc">您的赞助是项目持续发展的动力</p>
+                                </div>
                             </div>
                         </div>
                     </div>
+
                     <!-- System Information Panel -->
                     <div class="system-info-panel">
                         <h3 data-i18n="dashboard.systemInfo">系统信息</h3>
@@ -434,26 +457,6 @@
                         </div>
                     </div>
                     
-                    <!-- Contact and Sponsor Section -->
-                    <div class="contact-section">
-                        <h3><i class="fas fa-qrcode"></i> <span data-i18n="dashboard.contact.title">联系与赞助</span></h3>
-                        <div class="contact-grid">
-                            <div class="contact-card">
-                                <h3><i class="fab fa-weixin"></i> <span data-i18n="dashboard.contact.wechat">扫码进群，注明来意</span></h3>
-                                <div class="qr-container">
-                                    <img src="static/wechat.png" alt="微信二维码" class="qr-code">
-                                </div>
-                                <p class="qr-description" data-i18n="dashboard.contact.wechatDesc">添加微信获取更多技术支持和交流</p>
-                            </div>
-                            <div class="contact-card">
-                                <h3><i class="fas fa-heart"></i> <span data-i18n="dashboard.contact.sponsor">扫码赞助</span></h3>
-                                <div class="qr-container">
-                                    <img src="static/sponsor.png" alt="赞助二维码" class="qr-code">
-                                </div>
-                                <p class="qr-description" data-i18n="dashboard.contact.sponsorDesc">您的赞助是项目持续发展的动力</p>
-                            </div>
-                        </div>
-                    </div>
                 </section>
 
                 <!-- Configuration Section -->
@@ -632,6 +635,9 @@
                                         <input type="text" id="kiroOauthCredsFilePath" class="form-control" data-i18n-placeholder="config.kiro.credsFilePathPlaceholder" placeholder="例如: ~/.aws/sso/cache/kiro-auth-token.json">
                                         <button type="button" class="btn btn-outline upload-btn" data-target="kiroOauthCredsFilePath" data-i18n-title="common.upload" title="上传文件" aria-label="上传文件" data-i18n-aria-label="common.upload">
                                             <i class="fas fa-upload"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="kiroOauthCredsFilePath" data-provider="claude-kiro-oauth" data-i18n-title="common.generate" title="生成凭据文件">
+                                            <i class="fas fa-magic"></i>
                                         </button>
                                     </div>
                                     <small class="form-text">

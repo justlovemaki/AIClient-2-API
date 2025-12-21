@@ -2990,6 +2990,66 @@ input:checked + .toggle-slider:before {
     }
 }
 
+/* Dashboard Top Row Layout */
+.dashboard-top-row {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.dashboard-top-row .stats-grid {
+    flex: 1;
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-top-row .stats-grid .stat-card {
+    flex: 1;
+    height: 100%;
+}
+
+.dashboard-top-row .dashboard-contact {
+    flex: 1;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.dashboard-top-row .dashboard-contact .contact-grid {
+    margin-top: 0;
+    height: 100%;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.dashboard-top-row .dashboard-contact .contact-card {
+    padding: 1.25rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.dashboard-top-row .dashboard-contact .qr-container {
+    margin: 0.75rem 0;
+}
+
+.dashboard-top-row .dashboard-contact .qr-code {
+    width: 100px;
+    height: 100px;
+}
+
+.dashboard-top-row .dashboard-contact .contact-card h3 {
+    font-size: 1rem;
+}
+
+.dashboard-top-row .dashboard-contact .qr-description {
+    font-size: 0.75rem;
+}
+
 /* Contact and Sponsor Section */
 .contact-grid {
     display: grid;
@@ -3051,6 +3111,45 @@ input:checked + .toggle-slider:before {
     transform: scale(1.05);
 }
 
+.clickable-qr {
+    cursor: zoom-in;
+}
+
+/* Image Zoom Overlay */
+.image-zoom-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-zoom-overlay.show {
+    display: flex;
+    opacity: 1;
+}
+
+.image-zoom-overlay img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.image-zoom-overlay.show img {
+    transform: scale(1);
+}
+
 .qr-description {
     font-size: 0.875rem;
     color: var(--text-secondary);
@@ -3059,6 +3158,21 @@ input:checked + .toggle-slider:before {
 }
 
 /* 响应式调整 */
+@media (max-width: 1024px) {
+    .dashboard-top-row {
+        flex-direction: column;
+    }
+    
+    .dashboard-top-row .stats-grid {
+        flex: none;
+    }
+    
+    .dashboard-top-row .dashboard-contact .qr-code {
+        width: 160px;
+        height: 160px;
+    }
+}
+
 @media (max-width: 768px) {
     .contact-grid {
         grid-template-columns: 1fr;

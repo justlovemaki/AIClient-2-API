@@ -71,6 +71,10 @@ import {
     refreshUsage
 } from './usage-manager.js';
 
+import {
+    initImageZoom
+} from './image-zoom.js';
+
 /**
  * 加载初始数据
  */
@@ -105,6 +109,7 @@ function initApp() {
     initRoutingExamples(); // 初始化路径路由示例功能
     initUploadConfigManager(); // 初始化上传配置管理功能
     initUsageManager(); // 初始化用量管理功能
+    initImageZoom(); // 初始化图片放大功能
     loadInitialData();
     
     // 显示欢迎消息

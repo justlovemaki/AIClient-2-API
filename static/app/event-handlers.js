@@ -191,6 +191,77 @@ async function handleGenerateCreds(event) {
     const targetInputId = button.getAttribute('data-target');
 
     try {
+        // 如果是 Kiro OAuth，先显示认证方式选择对话框
+        if (providerType === 'claude-kiro-oauth') {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.style.display = 'flex';
+            
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-key"></i> <span data-i18n="oauth.kiro.selectMethod">${t('oauth.kiro.selectMethod')}</span></h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="auth-method-options" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!--<button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                <i class="fab fa-google" style="font-size: 24px; color: #4285f4;"></i>
+                                <div style="text-align: left;">
+                                    <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.google">${t('oauth.kiro.google')}</div>
+                                    <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.googleDesc">${t('oauth.kiro.googleDesc')}</div>
+                                </div>
+                            </button>
+                            <button class="auth-method-btn" data-method="github" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                <i class="fab fa-github" style="font-size: 24px; color: #333;"></i>
+                                <div style="text-align: left;">
+                                    <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.github">${t('oauth.kiro.github')}</div>
+                                    <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.githubDesc">${t('oauth.kiro.githubDesc')}</div>
+                                </div>
+                            </button> -->
+                            <button class="auth-method-btn" data-method="builder-id" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                <i class="fab fa-aws" style="font-size: 24px; color: #ff9900;"></i>
+                                <div style="text-align: left;">
+                                    <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.awsBuilder">${t('oauth.kiro.awsBuilder')}</div>
+                                    <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsBuilderDesc">${t('oauth.kiro.awsBuilderDesc')}</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            const closeModal = () => modal.remove();
+            modal.querySelector('.modal-close').onclick = closeModal;
+            modal.querySelector('.modal-cancel').onclick = closeModal;
+            
+            modal.querySelectorAll('.auth-method-btn').forEach(btn => {
+                btn.onclick = async () => {
+                    const method = btn.dataset.method;
+                    closeModal();
+                    await proceedWithAuth(providerType, targetInputId, { method });
+                };
+            });
+            return;
+        }
+
+        await proceedWithAuth(providerType, targetInputId, {});
+    } catch (error) {
+        console.error('生成凭据失败:', error);
+        showToast(t('common.error'), t('modal.provider.auth.failed') + `: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * 实际执行授权逻辑
+ */
+async function proceedWithAuth(providerType, targetInputId, extraOptions = {}) {
+    try {
         showToast(t('common.info'), t('modal.provider.auth.initializing'), 'info');
         
         // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
@@ -200,7 +271,8 @@ async function handleGenerateCreds(event) {
             `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
             {
                 saveToConfigs: true,
-                providerDir: providerDir
+                providerDir: providerDir,
+                ...extraOptions
             }
         );
 

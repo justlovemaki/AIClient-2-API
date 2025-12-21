@@ -50,8 +50,12 @@ const translations = {
         'dashboard.contact.title': '联系与赞助',
         'dashboard.contact.wechat': '扫码进群，注明来意',
         'dashboard.contact.wechatDesc': '添加微信获取更多技术支持和交流',
+        'dashboard.contact.x': '关注 X.com',
+        'dashboard.contact.xDesc': '在 X 上关注我们获取最新动态',
         'dashboard.contact.sponsor': '扫码赞助',
         'dashboard.contact.sponsorDesc': '您的赞助是项目持续发展的动力',
+        'dashboard.contact.coffee': 'Buy me a coffee',
+        'dashboard.contact.coffeeDesc': 'If you like this project, buy me a coffee!',
         
         // OAuth
         'oauth.modal.title': 'OAuth 授权',
@@ -76,6 +80,18 @@ const translations = {
         'oauth.processing': '正在完成授权...',
         'oauth.invalid.url': '该 URL 似乎不包含有效的授权代码',
         'oauth.error.format': '无效的 URL 格式',
+        'oauth.kiro.selectMethod': '选择认证方式',
+        'oauth.kiro.google': 'Google 账号登录',
+        'oauth.kiro.googleDesc': '使用 Google 账号进行社交登录',
+        'oauth.kiro.github': 'GitHub 账号登录',
+        'oauth.kiro.githubDesc': '使用 GitHub 账号进行社交登录',
+        'oauth.kiro.awsBuilder': 'AWS Builder ID',
+        'oauth.kiro.awsBuilderDesc': '使用 AWS Builder ID 进行设备码授权',
+        'oauth.kiro.authMethodLabel': '认证方式:',
+        'oauth.kiro.step1': '点击下方按钮在浏览器中打开授权链接',
+        'oauth.kiro.step2': '使用您的 {method} 账号登录',
+        'oauth.kiro.step3': '授权完成后页面会自动关闭',
+        'oauth.kiro.step4': '刷新本页面查看凭据文件',
 
         // Config
         'config.title': '配置管理',
@@ -396,11 +412,15 @@ const translations = {
         'dashboard.routing.nodeName.kiro': 'Claude Kiro OAuth',
         'dashboard.routing.nodeName.openai': 'OpenAI Custom',
         'dashboard.routing.nodeName.qwen': 'Qwen OAuth',
-        'dashboard.contact.title': 'Contact & Sponsor',
+        'dashboard.contact.title': 'Contact & Support',
         'dashboard.contact.wechat': 'Scan to Join Group',
         'dashboard.contact.wechatDesc': 'Add WeChat for more technical support and communication',
-        'dashboard.contact.sponsor': 'Scan to Sponsor',
-        'dashboard.contact.sponsorDesc': 'Your sponsorship is the driving force for the project\'s continuous development',
+        'dashboard.contact.x': 'Follow on X.com',
+        'dashboard.contact.xDesc': 'Follow us on X for latest updates',
+        'dashboard.contact.sponsor': 'Scan to Support',
+        'dashboard.contact.sponsorDesc': 'Your support is the driving force for the project\'s continuous development',
+        'dashboard.contact.coffee': 'Buy me a coffee',
+        'dashboard.contact.coffeeDesc': 'If you like this project, buy me a coffee!',
         
         // OAuth
         'oauth.modal.title': 'OAuth Authorization',
@@ -425,6 +445,18 @@ const translations = {
         'oauth.processing': 'Completing authorization...',
         'oauth.invalid.url': 'This URL does not seem to contain a valid auth code',
         'oauth.error.format': 'Invalid URL format',
+        'oauth.kiro.selectMethod': 'Select Authentication Method',
+        'oauth.kiro.google': 'Google Account Login',
+        'oauth.kiro.googleDesc': 'Login with Google account',
+        'oauth.kiro.github': 'GitHub Account Login',
+        'oauth.kiro.githubDesc': 'Login with GitHub account',
+        'oauth.kiro.awsBuilder': 'AWS Builder ID',
+        'oauth.kiro.awsBuilderDesc': 'Device code authorization via AWS Builder ID',
+        'oauth.kiro.authMethodLabel': 'Auth Method:',
+        'oauth.kiro.step1': 'Click the button below to open the authorization link in your browser',
+        'oauth.kiro.step2': 'Log in with your {method} account',
+        'oauth.kiro.step3': 'The page will close automatically after authorization',
+        'oauth.kiro.step4': 'Refresh this page to view the credentials file',
 
         // Config
         'config.title': 'Configuration Management',
@@ -721,8 +753,86 @@ export function setLanguage(lang) {
         currentLanguage = lang;
         localStorage.setItem('language', lang);
         updatePageLanguage();
+        // 更新图片
+        updateDashboardImages(lang);
         // 触发语言切换事件
         window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
+    }
+}
+
+// 更新仪表盘图片
+function updateDashboardImages(lang) {
+    const sponsorImg = document.getElementById('sponsor-img');
+    const sponsorTitle = document.getElementById('sponsor-title');
+    const sponsorDesc = document.getElementById('sponsor-desc');
+    
+    const wechatImg = document.getElementById('wechat-img');
+    const wechatIcon = document.getElementById('wechat-icon');
+    const wechatTitle = document.getElementById('wechat-title');
+    const wechatDesc = document.getElementById('wechat-desc');
+
+    if (lang === 'en-US') {
+        // 更新赞助图片
+        if (sponsorImg) {
+            sponsorImg.src = 'static/coffee.png';
+            sponsorImg.alt = 'Buy me a coffee';
+            if (sponsorTitle) {
+                sponsorTitle.setAttribute('data-i18n', 'dashboard.contact.coffee');
+                sponsorTitle.textContent = translations['en-US']['dashboard.contact.coffee'];
+            }
+            if (sponsorDesc) {
+                sponsorDesc.setAttribute('data-i18n', 'dashboard.contact.coffeeDesc');
+                sponsorDesc.textContent = translations['en-US']['dashboard.contact.coffeeDesc'];
+            }
+        }
+        
+        // 更新联系方式图片 (WeChat -> X.com)
+        if (wechatImg) {
+            wechatImg.src = 'static/x.com.png';
+            wechatImg.alt = 'X.com';
+            if (wechatIcon) {
+                wechatIcon.className = 'fab fa-x-twitter';
+            }
+            if (wechatTitle) {
+                wechatTitle.setAttribute('data-i18n', 'dashboard.contact.x');
+                wechatTitle.textContent = translations['en-US']['dashboard.contact.x'] || 'Follow on X.com';
+            }
+            if (wechatDesc) {
+                wechatDesc.setAttribute('data-i18n', 'dashboard.contact.xDesc');
+                wechatDesc.textContent = translations['en-US']['dashboard.contact.xDesc'] || 'Follow us on X for latest updates';
+            }
+        }
+    } else {
+        // 更新赞助图片
+        if (sponsorImg) {
+            sponsorImg.src = 'static/sponsor.png';
+            sponsorImg.alt = '赞助二维码';
+            if (sponsorTitle) {
+                sponsorTitle.setAttribute('data-i18n', 'dashboard.contact.sponsor');
+                sponsorTitle.textContent = translations['zh-CN']['dashboard.contact.sponsor'];
+            }
+            if (sponsorDesc) {
+                sponsorDesc.setAttribute('data-i18n', 'dashboard.contact.sponsorDesc');
+                sponsorDesc.textContent = translations['zh-CN']['dashboard.contact.sponsorDesc'];
+            }
+        }
+
+        // 更新联系方式图片 (X.com -> WeChat)
+        if (wechatImg) {
+            wechatImg.src = 'static/wechat.png';
+            wechatImg.alt = '微信二维码';
+            if (wechatIcon) {
+                wechatIcon.className = 'fab fa-weixin';
+            }
+            if (wechatTitle) {
+                wechatTitle.setAttribute('data-i18n', 'dashboard.contact.wechat');
+                wechatTitle.textContent = translations['zh-CN']['dashboard.contact.wechat'];
+            }
+            if (wechatDesc) {
+                wechatDesc.setAttribute('data-i18n', 'dashboard.contact.wechatDesc');
+                wechatDesc.textContent = translations['zh-CN']['dashboard.contact.wechatDesc'];
+            }
+        }
     }
 }
 
@@ -783,6 +893,8 @@ function updatePageLanguage() {
 export function initI18n() {
     // 设置初始语言
     updatePageLanguage();
+    // 设置初始图片
+    updateDashboardImages(currentLanguage);
     
     // 监听 DOM 变化，自动翻译新添加的元素
     const observer = new MutationObserver((mutations) => {
