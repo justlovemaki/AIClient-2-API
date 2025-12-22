@@ -134,7 +134,7 @@ AIClient-2-APIを使い始める最も推奨される方法は、自動起動ス
 
 #### Web UI管理コントロールコンソール
 
-![Web UI](src/img/web.png)
+![Web UI](src/img/zh.png)
 
 以下の機能モジュールを備えたWeb管理インターフェース：
 
@@ -272,6 +272,15 @@ AIClient-2-APIプロジェクトに貢献してくれたすべての開発者に
 
 [![Contributors](https://contrib.rocks/image?repo=justlovemaki/AIClient-2-API)](https://github.com/justlovemaki/AIClient-2-API/graphs/contributors)
 
+### スポンサーリスト
+
+プロジェクトをサポートしてくださっているスポンサーの皆様に深く感謝いたします：
+
+- [**Cigarliu**](https://github.com/Cigarliu "9.9")
+- [**xianengqi**](https://github.com/xianengqi "9.9")
+- [**3831143avl**](https://github.com/3831143avl "10")
+- [**醉春风**](https://github.com/handsometong "28.8")
+- [**crazy**](https://github.com/404 "88")
 
 ### 🌟 Star History
 
