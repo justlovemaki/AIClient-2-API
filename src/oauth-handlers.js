@@ -250,7 +250,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
             }
         });
         
-        const host = 'localhost';
+        const host = '0.0.0.0';
         server.listen(config.port, host, () => {
             console.log(`${config.logPrefix} OAuth 回调服务器已启动于 ${host}:${config.port}`);
             activeServers.set(config.port, server);

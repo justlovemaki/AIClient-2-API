@@ -39,15 +39,6 @@ function initEventStream() {
         showToast(t('common.success'), `${t('common.success')} (${data.provider})`, 'success');
         // 发送自定义事件，以便其他模块（如生成凭据逻辑）可以接收到详细信息
         window.dispatchEvent(new CustomEvent('oauth_success_event', { detail: data }));
-        
-        // 关闭授权窗口和模态框
-        // 查找并关闭所有授权相关的模态框
-        const modals = document.querySelectorAll('.modal-overlay');
-        modals.forEach(modal => modal.remove());
-        
-        // 授权成功后刷新配置和提供商列表
-        if (loadProviders) loadProviders();
-        if (loadConfigList) loadConfigList();
     });
 
     newEventSource.addEventListener('provider_update', (event) => {
