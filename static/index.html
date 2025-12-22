@@ -1010,7 +1010,9 @@
             curlCodes.forEach(element => {
                 const curlCommand = element.textContent;
                 // 替换curl命令中的http://localhost:3000部分
-                const updatedCommand = curlCommand.replace(/curl http:\/\/localhost:3000/g, `curl ${baseURL}`);
+                // 确保baseURL不以斜杠结尾，然后正确拼接路径
+                const cleanBaseURL = baseURL.replace(/\/$/, '');
+                const updatedCommand = curlCommand.replace(/curl http:\/\/localhost:3000/g, `curl ${cleanBaseURL}`);
                 element.textContent = updatedCommand;
             });
         }

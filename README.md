@@ -134,7 +134,7 @@ Go to the **"Configuration"** page, you can:
 
 #### Web UI Management Console
 
-![Web UI](src/img/web.png)
+![Web UI](src/img/en.png)
 
 A functional Web management interface, including:
 
@@ -272,6 +272,15 @@ Thanks to all the developers who contributed to the AIClient-2-API project:
 
 [![Contributors](https://contrib.rocks/image?repo=justlovemaki/AIClient-2-API)](https://github.com/justlovemaki/AIClient-2-API/graphs/contributors)
 
+### Sponsor List
+
+We are grateful for the support from our sponsors:
+
+- [**Cigarliu**](https://github.com/Cigarliu "9.9")
+- [**xianengqi**](https://github.com/xianengqi "9.9")
+- [**3831143avl**](https://github.com/3831143avl "10")
+- [**醉春风**](https://github.com/handsometong "28.8")
+- [**crazy**](https://github.com/404 "88")
 
 ### 🌟 Star History
 
