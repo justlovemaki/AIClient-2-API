@@ -209,6 +209,7 @@ export class GeminiConverter extends BaseConverter {
                 }
                 if (part.functionCall) {
                     toolCalls.push({
+                        index: toolCalls.length,
                         id: part.functionCall.id || `call_${uuidv4()}`,
                         type: 'function',
                         function: {
