@@ -232,6 +232,11 @@ export class GeminiConverter extends BaseConverter {
                          candidate.finishReason.toLowerCase();
         }
 
+        // 如果包含工具调用，且完成原因为 stop，则将完成原因修改为 tool_calls
+        if (toolCalls.length > 0 && finishReason === 'stop') {
+            finishReason = 'tool_calls';
+        }
+
         // 构建delta对象
         const delta = {};
         if (content) delta.content = content;
