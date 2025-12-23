@@ -207,6 +207,68 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Startup Parameter Configuration**: Use the `--provider-pools-file <path>` parameter to specify the pool configuration file path
 4. **Health Check**: The system will automatically perform periodic health checks and avoid using unhealthy providers
 
+#### Advanced Configuration
+
+##### 1. Model Filtering Configuration
+
+Support excluding unsupported models through `notSupportedModels` configuration, the system will automatically skip these providers.
+
+**Configuration**: Add `notSupportedModels` field for providers in `provider_pools.json`:
+
+```json
+{
+  "gemini-cli-oauth": [
+    {
+      "uuid": "provider-1",
+      "notSupportedModels": ["gemini-3.0-pro", "gemini-3.5-flash"],
+      "checkHealth": true
+    }
+  ]
+}
+```
+
+**How It Works**:
+- When requesting a specific model, the system automatically filters out providers that have configured the model as unsupported
+- Only providers that support the model will be selected to handle the request
+
+**Use Cases**:
+- Some accounts cannot access specific models due to quota or permission restrictions
+- Need to assign different model access permissions to different accounts
+
+##### 2. Cross-Type Fallback Configuration
+
+When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
+
+**Configuration**: Add `providerFallbackChain` configuration in `config.json`:
+
+```json
+{
+  "providerFallbackChain": {
+    "gemini-cli-oauth": ["gemini-antigravity"],
+    "gemini-antigravity": ["gemini-cli-oauth"],
+    "claude-kiro-oauth": ["claude-custom"],
+    "claude-custom": ["claude-kiro-oauth"]
+  }
+}
+```
+
+**How It Works**:
+1. Try to select a healthy account from the primary Provider Type pool
+2. If all accounts in that type are unhealthy or return 429:
+   - Look up the configured fallback types
+   - Check if the fallback type supports the requested model (protocol compatibility check)
+   - Select a healthy account from the fallback type's pool
+3. Supports multi-level degradation chains: `gemini-cli-oauth → gemini-antigravity → openai-custom`
+4. Only returns an error if all fallback types are also unavailable
+
+**Use Cases**:
+- In batch task scenarios, the free RPD quota of a single Provider Type can be easily exhausted in a short time
+- Through cross-type Fallback, you can fully utilize the independent quotas of multiple Providers, improving overall availability and throughput
+
+**Notes**:
+- Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
+- The system automatically checks if the target Provider Type supports the requested model
+
 ---
 
 ### 📁 Authorization File Storage Paths
