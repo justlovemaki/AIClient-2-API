@@ -219,7 +219,7 @@
     </div>
 
     <script type="module">
-        import { initI18n, t } from './app/i18n.js';
+        import { initI18n, t, setLanguage } from './app/i18n.js';
         import { initLanguageSwitcher } from './app/language-switcher.js';
 
         // 初始化多语言
@@ -246,7 +246,7 @@
                     option.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const lang = option.getAttribute('data-lang');
-                        module.setLanguage(lang);
+                        setLanguage(lang);
                         switcher.querySelector('.current-lang').textContent = lang === 'zh-CN' ? '中文' : 'EN';
                         languageOptions.forEach(opt => opt.classList.remove('active'));
                         option.classList.add('active');
