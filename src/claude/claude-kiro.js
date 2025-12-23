@@ -780,6 +780,21 @@ async initializeAuth(forceRefresh = false) {
             // 设置 currentContent 为 "Continue"，因为我们需要一个 user 消息来触发 AI 继续
             currentContent = 'Continue';
         } else {
+            // 最后一条消息是 user，需要确保 history 最后一个元素是 assistantResponseMessage
+            // Kiro API 要求 history 必须以 assistantResponseMessage 结尾
+            if (history.length > 0) {
+                const lastHistoryItem = history[history.length - 1];
+                if (!lastHistoryItem.assistantResponseMessage) {
+                    // 最后一个不是 assistantResponseMessage，需要补全一个空的
+                    console.log('[Kiro] History does not end with assistantResponseMessage, adding empty one');
+                    history.push({
+                        assistantResponseMessage: {
+                            content: 'Continue'
+                        }
+                    });
+                }
+            }
+            
             // 处理 user 消息
             if (Array.isArray(currentMessage.content)) {
                 for (const part of currentMessage.content) {
