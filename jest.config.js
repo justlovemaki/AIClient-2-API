@@ -1,7 +1,7 @@
 export default {
   testEnvironment: 'node',
   transform: {
-    '^.+\\.js$': 'babel-jest',
+    '^.+\\.(js|mjs)$': 'babel-jest',
   },
   transformIgnorePatterns: [
     '/node_modules/(?!(uuid)/)', // uuid is an ESM module that needs to be transformed
@@ -15,8 +15,7 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   testMatch: [
-    '**/tests/api-server.test.js',
-    '**/tests/api-integration.test.js'
+    '**/tests/**/*.test.js'
   ],
   collectCoverageFrom: [
     'src/**/*.js',

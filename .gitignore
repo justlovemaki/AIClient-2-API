@@ -6,3 +6,6 @@ config.json
 provider_pools.json
 fetch_system_prompt.txt
 input_system_prompt.txt
+token-store.json
+usage-cache.json
+*_oauth_creds.json

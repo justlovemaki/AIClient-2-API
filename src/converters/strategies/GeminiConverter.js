@@ -209,6 +209,7 @@ export class GeminiConverter extends BaseConverter {
                 }
                 if (part.functionCall) {
                     toolCalls.push({
+                        index: toolCalls.length,
                         id: part.functionCall.id || `call_${uuidv4()}`,
                         type: 'function',
                         function: {
@@ -229,6 +230,11 @@ export class GeminiConverter extends BaseConverter {
             finishReason = candidate.finishReason === 'STOP' ? 'stop' :
                          candidate.finishReason === 'MAX_TOKENS' ? 'length' :
                          candidate.finishReason.toLowerCase();
+        }
+
+        // 如果包含工具调用，且完成原因为 stop，则将完成原因修改为 tool_calls
+        if (toolCalls.length > 0 && finishReason === 'stop') {
+            finishReason = 'tool_calls';
         }
 
         // 构建delta对象
