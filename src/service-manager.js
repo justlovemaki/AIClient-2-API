@@ -163,7 +163,8 @@ export async function initApiService(config) {
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, {
             globalConfig: config,
-            maxErrorCount: config.MAX_ERROR_COUNT ?? 3
+            maxErrorCount: config.MAX_ERROR_COUNT ?? 3,
+            providerFallbackChain: config.providerFallbackChain || {},
         });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
         // 健康检查将在服务器完全启动后执行
@@ -230,6 +231,55 @@ export async function getApiService(config, requestedModel = null, options = {})
     }
     // 号池不可用时降级，直接使用当前请求的 config 初始化服务适配器
     return getServiceAdapter(serviceConfig);
+}
+
+/**
+ * Get API service adapter with fallback support and return detailed result
+ * @param {Object} config - The current request configuration
+ * @param {string} [requestedModel] - Optional. The model name to filter providers by.
+ * @param {Object} [options] - Optional. Additional options.
+ * @returns {Promise<Object>} Object containing service adapter and metadata
+ */
+export async function getApiServiceWithFallback(config, requestedModel = null, options = {}) {
+    let serviceConfig = config;
+    let actualProviderType = config.MODEL_PROVIDER;
+    let isFallback = false;
+    let selectedUuid = null;
+    
+    if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
+        const selectedResult = providerPoolManager.selectProviderWithFallback(
+            config.MODEL_PROVIDER,
+            requestedModel,
+            { skipUsageCount: true }
+        );
+        
+        if (selectedResult) {
+            const { config: selectedProviderConfig, actualProviderType: selectedType, isFallback: fallbackUsed } = selectedResult;
+            
+            // 合并选中的提供者配置到当前请求的 config 中
+            serviceConfig = deepmerge(config, selectedProviderConfig);
+            delete serviceConfig.providerPools;
+            
+            actualProviderType = selectedType;
+            isFallback = fallbackUsed;
+            selectedUuid = selectedProviderConfig.uuid;
+            
+            // 如果发生了 fallback，需要更新 MODEL_PROVIDER
+            if (isFallback) {
+                serviceConfig.MODEL_PROVIDER = actualProviderType;
+            }
+        }
+    }
+    
+    const service = getServiceAdapter(serviceConfig);
+    
+    return {
+        service,
+        serviceConfig,
+        actualProviderType,
+        isFallback,
+        uuid: selectedUuid
+    };
 }
 
 /**

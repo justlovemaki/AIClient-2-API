@@ -649,6 +649,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
             if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
             if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
+            if (newConfig.providerFallbackChain !== undefined) currentConfig.providerFallbackChain = newConfig.providerFallbackChain;
 
             // Handle system prompt update
             if (newConfig.systemPrompt !== undefined) {
@@ -711,7 +712,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                     CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                     PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
-                    MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT
+                    MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
+                    providerFallbackChain: currentConfig.providerFallbackChain
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');

@@ -1,6 +1,7 @@
 import * as fs from 'fs'; // Import fs module
 import { getServiceAdapter } from './adapter.js';
-import { MODEL_PROVIDER } from './common.js';
+import { MODEL_PROVIDER, getProtocolPrefix } from './common.js';
+import { getProviderModels } from './provider-models.js';
 import axios from 'axios';
 
 /**
@@ -35,6 +36,9 @@ export class ProviderPoolManager {
         this.saveDebounceTime = options.saveDebounceTime || 1000; // 默认1秒防抖
         this.saveTimer = null;
         this.pendingSaves = new Set(); // 记录待保存的 providerType
+        
+        // Fallback 链配置
+        this.fallbackChain = options.globalConfig?.providerFallbackChain || {};
         
         this.initializeProviderStatus();
     }
@@ -166,6 +170,157 @@ export class ProviderPoolManager {
         this._log('debug', `Selected provider for ${providerType} (round-robin): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}${options.skipUsageCount ? ' (skip usage count)' : ''}`);
         
         return selected.config;
+    }
+
+    /**
+     * Selects a provider from the pool with fallback support.
+     * When the primary provider type has no healthy providers, it will try fallback types.
+     * @param {string} providerType - The primary type of provider to select.
+     * @param {string} [requestedModel] - Optional. The model name to filter providers by.
+     * @param {Object} [options] - Optional. Additional options.
+     * @param {boolean} [options.skipUsageCount] - Optional. If true, skip incrementing usage count.
+     * @returns {object|null} An object containing the selected provider's configuration and the actual provider type used, or null if no healthy provider is found.
+     */
+    selectProviderWithFallback(providerType, requestedModel = null, options = {}) {
+        // 参数校验
+        if (!providerType || typeof providerType !== 'string') {
+            this._log('error', `Invalid providerType: ${providerType}`);
+            return null;
+        }
+
+        // 记录尝试过的类型，避免循环
+        const triedTypes = new Set();
+        const typesToTry = [providerType];
+        
+        // 添加 fallback 类型到尝试列表
+        const fallbackTypes = this.fallbackChain[providerType];
+        if (!fallbackTypes || fallbackTypes.length === 0) {
+            this._log('info', `No fallback types configured for ${providerType}`);
+            const selectedConfig = this.selectProvider(providerType, requestedModel, options);
+            if (selectedConfig) {
+                return {
+                    config: selectedConfig,
+                    actualProviderType: providerType,
+                    isFallback: false
+                };
+            }
+        }
+
+        if (Array.isArray(fallbackTypes)) {
+            typesToTry.push(...fallbackTypes);
+        }
+        for (const currentType of typesToTry) {
+            // 避免重复尝试
+            if (triedTypes.has(currentType)) {
+                continue;
+            }
+            triedTypes.add(currentType);
+
+            // 检查该类型是否有配置的池
+            if (!this.providerStatus[currentType] || this.providerStatus[currentType].length === 0) {
+                this._log('info', `No provider pool configured for type: ${currentType}`);
+                continue;
+            }
+
+            // 如果是 fallback 类型，需要检查模型兼容性
+            if (currentType !== providerType && requestedModel) {
+                // 检查协议前缀是否兼容
+                const primaryProtocol = getProtocolPrefix(providerType);
+                const fallbackProtocol = getProtocolPrefix(currentType);
+                
+                if (primaryProtocol !== fallbackProtocol) {
+                    this._log('info', `Skipping fallback type ${currentType}: protocol mismatch (${primaryProtocol} vs ${fallbackProtocol})`);
+                    continue;
+                }
+
+                // 检查 fallback 类型是否支持请求的模型
+                const supportedModels = getProviderModels(currentType);
+                if (supportedModels.length > 0 && !supportedModels.includes(requestedModel)) {
+                    this._log('info', `Skipping fallback type ${currentType}: model ${requestedModel} not supported`);
+                    continue;
+                }
+            }
+
+            // 尝试从当前类型选择提供商
+            const selectedConfig = this.selectProvider(currentType, requestedModel, options);
+            
+            if (selectedConfig) {
+                if (currentType !== providerType) {
+                    this._log('info', `Fallback activated: ${providerType} -> ${currentType} (uuid: ${selectedConfig.uuid})`);
+                }
+                return {
+                    config: selectedConfig,
+                    actualProviderType: currentType,
+                    isFallback: currentType !== providerType
+                };
+            }
+        }
+
+        this._log('warn', `None available provider found for ${providerType} or any of its fallback types: ${fallbackTypes?.join(', ') || 'none configured'}`);
+        return null;
+    }
+
+    /**
+     * Gets the fallback chain for a given provider type.
+     * @param {string} providerType - The provider type to get fallback chain for.
+     * @returns {Array<string>} The fallback chain array, or empty array if not configured.
+     */
+    getFallbackChain(providerType) {
+        return this.fallbackChain[providerType] || [];
+    }
+
+    /**
+     * Sets or updates the fallback chain for a provider type.
+     * @param {string} providerType - The provider type to set fallback chain for.
+     * @param {Array<string>} fallbackTypes - Array of fallback provider types.
+     */
+    setFallbackChain(providerType, fallbackTypes) {
+        if (!Array.isArray(fallbackTypes)) {
+            this._log('error', `Invalid fallbackTypes: must be an array`);
+            return;
+        }
+        this.fallbackChain[providerType] = fallbackTypes;
+        this._log('info', `Updated fallback chain for ${providerType}: ${fallbackTypes.join(' -> ')}`);
+    }
+
+    /**
+     * Checks if all providers of a given type are unhealthy.
+     * @param {string} providerType - The provider type to check.
+     * @returns {boolean} True if all providers are unhealthy or disabled.
+     */
+    isAllProvidersUnhealthy(providerType) {
+        const providers = this.providerStatus[providerType] || [];
+        if (providers.length === 0) {
+            return true;
+        }
+        return providers.every(p => !p.config.isHealthy || p.config.isDisabled);
+    }
+
+    /**
+     * Gets statistics about provider health for a given type.
+     * @param {string} providerType - The provider type to get stats for.
+     * @returns {Object} Statistics object with total, healthy, unhealthy, and disabled counts.
+     */
+    getProviderStats(providerType) {
+        const providers = this.providerStatus[providerType] || [];
+        const stats = {
+            total: providers.length,
+            healthy: 0,
+            unhealthy: 0,
+            disabled: 0
+        };
+        
+        for (const p of providers) {
+            if (p.config.isDisabled) {
+                stats.disabled++;
+            } else if (p.config.isHealthy) {
+                stats.healthy++;
+            } else {
+                stats.unhealthy++;
+            }
+        }
+        
+        return stats;
     }
 
     /**

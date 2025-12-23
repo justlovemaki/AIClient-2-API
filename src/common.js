@@ -384,10 +384,37 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     };
 
     const fromProvider = clientProviderMap[endpointType];
-    const toProvider = CONFIG.MODEL_PROVIDER;
+    // 使用实际的提供商类型（可能是 fallback 后的类型）
+    let toProvider = CONFIG.actualProviderType || CONFIG.MODEL_PROVIDER;
+    let actualUuid = pooluuid;
     
     if (!fromProvider) {
         throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
+    }
+
+    // 2. Extract model and determine if the request is for streaming.
+    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
+
+    if (!model) {
+        throw new Error("Could not determine the model from the request.");
+    }
+    console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
+
+    // 2.5. 如果使用了提供商池，根据模型重新选择提供商（支持 Fallback）
+    // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
+    if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
+        const { getApiServiceWithFallback } = await import('./service-manager.js');
+        const result = await getApiServiceWithFallback(CONFIG, model);
+        
+        service = result.service;
+        toProvider = result.actualProviderType;
+        actualUuid = result.uuid || pooluuid;
+        
+        if (result.isFallback) {
+            console.log(`[Content Generation] Fallback activated: ${CONFIG.MODEL_PROVIDER} -> ${toProvider} (uuid: ${actualUuid})`);
+        } else {
+            console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+        }
     }
 
     // 1. Convert request body from client format to backend format, if necessary.
@@ -400,22 +427,6 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         console.log(`[Request Convert] Request format matches backend provider. No conversion needed.`);
     }
 
-    // 2. Extract model and determine if the request is for streaming.
-    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
-
-    if (!model) {
-        throw new Error("Could not determine the model from the request.");
-    }
-    console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
-
-    // 2.5. 如果使用了提供商池，根据模型重新选择提供商
-    // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
-    if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
-        const { getApiService } = await import('./service-manager.js');
-        service = await getApiService(CONFIG, model);
-        console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
-    }
-
     // 3. Apply system prompt from file if configured.
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);
@@ -426,9 +437,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     // 5. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
-        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid);
     } else {
-        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid);
     }
 }
 

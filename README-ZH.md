@@ -206,6 +206,68 @@
 3. **启动参数配置**：使用 `--provider-pools-file <path>` 参数指定号池配置文件路径
 4. **健康检查**：系统会定期自动执行健康检查，不使用不健康的提供商
 
+#### 高级配置
+
+##### 1. 模型过滤配置
+
+支持通过 `notSupportedModels` 配置排除不支持的模型，系统会自动跳过这些提供商。
+
+**配置方式**：在 `provider_pools.json` 中为提供商添加 `notSupportedModels` 字段：
+
+```json
+{
+  "gemini-cli-oauth": [
+    {
+      "uuid": "provider-1",
+      "notSupportedModels": ["gemini-3.0-pro", "gemini-3.5-flash"],
+      "checkHealth": true
+    }
+  ]
+}
+```
+
+**工作原理**：
+- 当请求特定模型时，系统会自动过滤掉配置了该模型为不支持的提供商
+- 只有支持该模型的提供商才会被选中处理请求
+
+**使用场景**：
+- 某些账号因配额或权限限制无法访问特定模型
+- 需要为不同账号分配不同的模型访问权限
+
+##### 2. 跨类型 Fallback 配置
+
+当某一 Provider Type（如 `gemini-cli-oauth`）下的所有账号都因 429 配额耗尽或被标记为 unhealthy 时，系统能够自动 fallback 到另一个兼容的 Provider Type（如 `gemini-antigravity`），而不是直接返回错误。
+
+**配置方式**：在 `config.json` 中添加 `providerFallbackChain` 配置：
+
+```json
+{
+  "providerFallbackChain": {
+    "gemini-cli-oauth": ["gemini-antigravity"],
+    "gemini-antigravity": ["gemini-cli-oauth"],
+    "claude-kiro-oauth": ["claude-custom"],
+    "claude-custom": ["claude-kiro-oauth"]
+  }
+}
+```
+
+**工作原理**：
+1. 尝试从主 Provider Type 池选取 healthy 账号
+2. 如果该类型所有账号都 unhealthy：
+   - 查找配置的 fallback 类型
+   - 检查 fallback 类型是否支持当前请求的模型（协议兼容性检查）
+   - 从 fallback 类型的池中选取 healthy 账号
+3. 支持多级降级链：`gemini-cli-oauth → gemini-antigravity → openai-custom`
+4. 如果所有 fallback 类型也不可用，才返回错误
+
+**使用场景**：
+- 批量任务场景下，单一 Provider Type 的免费 RPD 配额容易在短时间内耗尽
+- 通过跨类型 Fallback，可以充分利用多种 Provider 的独立配额，提高整体可用性和吞吐量
+
+**注意事项**：
+- Fallback 只会在协议兼容的类型之间进行（如 `gemini-*` 之间、`claude-*` 之间）
+- 系统会自动检查目标 Provider Type 是否支持当前请求的模型
+
 ---
 
 ### 📁 授权文件存储路径

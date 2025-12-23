@@ -33,5 +33,11 @@
     "KIRO_REFRESH_IDC_URL": "https://oidc.{{region}}.amazonaws.com/token",
     "KIRO_BASE_URL": "https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse",
     "KIRO_AMAZON_Q_URL": "https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming",
-    "KIRO_USAGE_LIMITS_URL": "https://q.{{region}}.amazonaws.com/getUsageLimits"
+    "KIRO_USAGE_LIMITS_URL": "https://q.{{region}}.amazonaws.com/getUsageLimits",
+    "providerFallbackChain": {
+      "gemini-cli-oauth": ["gemini-antigravity"],
+      "gemini-antigravity": ["gemini-cli-oauth"],
+      "claude-kiro-oauth": ["claude-custom"],
+      "claude-custom": ["claude-kiro-oauth"]
+    }
   }
