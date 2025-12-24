@@ -22,6 +22,7 @@ const translations = {
         'dashboard.title': '系统概览',
         'dashboard.uptime': '运行时间',
         'dashboard.systemInfo': '系统信息',
+        'dashboard.version': '版本号',
         'dashboard.nodeVersion': 'Node.js版本',
         'dashboard.serverTime': '服务器时间',
         'dashboard.memoryUsage': '内存使用',
@@ -60,6 +61,8 @@ const translations = {
         // OAuth
         'oauth.modal.title': 'OAuth 授权',
         'oauth.modal.provider': '提供商:',
+        'oauth.modal.requiredPort': '需要开放端口:',
+        'oauth.modal.portNote': '请确保此端口可被外部访问，用于接收授权回调',
         'oauth.modal.steps': '授权步骤：',
         'oauth.modal.step1': '点击下方按钮在浏览器中打开授权页面',
         'oauth.modal.step2.qwen': '完成授权后，系统会自动获取凭据文件',
@@ -391,6 +394,7 @@ const translations = {
         'dashboard.title': 'System Overview',
         'dashboard.uptime': 'Uptime',
         'dashboard.systemInfo': 'System Information',
+        'dashboard.version': 'Version',
         'dashboard.nodeVersion': 'Node.js Version',
         'dashboard.serverTime': 'Server Time',
         'dashboard.memoryUsage': 'Memory Usage',
@@ -429,6 +433,8 @@ const translations = {
         // OAuth
         'oauth.modal.title': 'OAuth Authorization',
         'oauth.modal.provider': 'Provider:',
+        'oauth.modal.requiredPort': 'Required Port:',
+        'oauth.modal.portNote': 'Please ensure this port is accessible externally for receiving authorization callbacks',
         'oauth.modal.steps': 'Authorization Steps:',
         'oauth.modal.step1': 'Click the button below to open the authorization page in your browser',
         'oauth.modal.step2.qwen': 'After authorization, the system will automatically fetch the credentials file',
