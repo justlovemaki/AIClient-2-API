@@ -17,7 +17,7 @@ export const PROVIDER_MODELS = {
         'gemini-2.5-computer-use-preview-10-2025',
         'gemini-3-pro-image-preview',
         'gemini-3-pro-preview',
-        'gemini-3-flash',
+        'gemini-3-flash-preview',
         'gemini-2.5-flash',
         'gemini-claude-sonnet-4-5',
         'gemini-claude-sonnet-4-5-thinking',
