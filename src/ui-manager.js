@@ -758,8 +758,21 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Get system information
     if (method === 'GET' && pathParam === '/api/system') {
         const memUsage = process.memoryUsage();
+        
+        // 读取版本号
+        let appVersion = 'unknown';
+        try {
+            const versionFilePath = path.join(process.cwd(), 'VERSION');
+            if (existsSync(versionFilePath)) {
+                appVersion = readFileSync(versionFilePath, 'utf8').trim();
+            }
+        } catch (error) {
+            console.warn('[UI API] Failed to read VERSION file:', error.message);
+        }
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
+            appVersion: appVersion,
             nodeVersion: process.version,
             serverTime: new Date().toLocaleString(),
             memoryUsage: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,

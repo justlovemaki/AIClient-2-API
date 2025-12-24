@@ -2,8 +2,10 @@ name: 构建并发布 Docker 镜像
 
 on:
   push:
-    tags:
-      - 'v*.*.*'  # 匹配 v1.0.0, v2.1.3 等版本号格式
+    branches:
+      - main
+    paths:
+      - 'VERSION'  # 仅当 VERSION 文件变更时触发
 
 env:
   REGISTRY: docker.io
@@ -13,12 +15,42 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # 需要写权限来创建 tag
       packages: write
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以便创建 tag
+
+      - name: 读取版本号
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '\n\r ')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "读取到版本号: $VERSION"
+
+      - name: 检查 tag 是否已存在
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} 已存在"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} 不存在，将创建新 tag"
+          fi
+
+      - name: 创建 Git Tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+          echo "已创建并推送 tag: v${{ steps.version.outputs.version }}"
 
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -35,10 +67,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
 
       - name: 构建并推送 Docker 镜像
         uses: docker/build-push-action@v5
@@ -56,7 +86,8 @@ jobs:
         run: |
           echo "## Docker 镜像构建成功 :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**版本标签:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**版本号:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Git Tag:** ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**镜像标签:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
