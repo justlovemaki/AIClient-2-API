@@ -201,15 +201,26 @@ async function cleanupExpiredTokens() {
 }
 
 /**
+ * 默认密码（当pwd文件不存在时使用）
+ */
+const DEFAULT_PASSWORD = 'admin123';
+
+/**
  * 读取密码文件内容
  */
 async function readPasswordFile() {
     try {
-        const password = await fs.readFile(path.join(process.cwd(), 'configs', 'pwd'), 'utf8');
+        const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
+        if (!existsSync(pwdFilePath)) {
+            console.log('[Auth] 密码文件不存在，使用默认密码');
+            return DEFAULT_PASSWORD;
+        }
+        const password = await fs.readFile(pwdFilePath, 'utf8');
         return password.trim();
     } catch (error) {
         console.error('读取密码文件失败:', error);
-        return null;
+        console.log('[Auth] 读取密码文件失败，使用默认密码');
+        return DEFAULT_PASSWORD;
     }
 }
 
