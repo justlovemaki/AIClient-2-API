@@ -31,6 +31,7 @@
 >
 > **📅 バージョン更新ログ**
 >
+> - **2025.12.25** - 設定ファイル統一管理：すべての設定を `configs/` ディレクトリに集約。Dockerユーザーはマウントパスを `-v "ローカルパス:/app/configs"` に更新が必要
 > - **2025.12.11** - Dockerイメージが自動的にビルドされ、Docker Hubで公開されました: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 > - **2025.11.30** - Antigravityプロトコルサポートの追加、Google内部インターフェース経由でGemini 3 Pro、Claude Sonnet 4.5などのモデルへのアクセスをサポート
 > - **2025.11.16** - Ollamaプロトコルサポートの追加、統一インターフェースでサポートされるすべてのモデルにアクセス
