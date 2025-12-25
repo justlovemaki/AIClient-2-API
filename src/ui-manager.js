@@ -209,17 +209,23 @@ const DEFAULT_PASSWORD = 'admin123';
  * 读取密码文件内容
  */
 async function readPasswordFile() {
+    const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
     try {
-        const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
         if (!existsSync(pwdFilePath)) {
             console.log('[Auth] 密码文件不存在，使用默认密码');
             return DEFAULT_PASSWORD;
         }
         const password = await fs.readFile(pwdFilePath, 'utf8');
-        return password.trim();
+        const trimmedPassword = password.trim();
+        // 如果密码文件为空，使用默认密码
+        if (!trimmedPassword) {
+            console.log('[Auth] 密码文件为空，使用默认密码');
+            return DEFAULT_PASSWORD;
+        }
+        return trimmedPassword;
     } catch (error) {
-        console.error('读取密码文件失败:', error);
-        console.log('[Auth] 读取密码文件失败，使用默认密码');
+        console.error('[Auth] 读取密码文件失败:', error.message);
+        console.log('[Auth] 使用默认密码');
         return DEFAULT_PASSWORD;
     }
 }
