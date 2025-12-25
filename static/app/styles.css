@@ -1845,7 +1845,7 @@ input:checked + .toggle-slider:before {
     position: relative;
 }
 
-/* 上传配置管理页面样式 */
+/* 配置管理页面样式 */
 .upload-config-panel {
     background: var(--bg-primary);
     padding: 2rem;

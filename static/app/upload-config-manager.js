@@ -1,4 +1,4 @@
-// 上传配置管理功能模块
+// 配置管理功能模块
 
 import { showToast } from './utils.js';
 import { t } from './i18n.js';
@@ -320,7 +320,7 @@ function generateMockConfigData() {
     return [
         {
             name: 'provider_pools.json',
-            path: './provider_pools.json',
+            path: './configs/provider_pools.json',
             type: 'provider-pool',
             size: 2048,
             modified: '2025-11-11T04:30:00.000Z',
@@ -336,7 +336,7 @@ function generateMockConfigData() {
         },
         {
             name: 'config.json',
-            path: './config.json',
+            path: './configs/config.json',
             type: 'other',
             size: 1024,
             modified: '2025-11-10T12:00:00.000Z',
@@ -357,7 +357,7 @@ function generateMockConfigData() {
         },
         {
             name: 'input_system_prompt.txt',
-            path: './input_system_prompt.txt',
+            path: './configs/input_system_prompt.txt',
             type: 'system-prompt',
             size: 256,
             modified: '2025-11-08T15:20:00.000Z',
@@ -698,7 +698,7 @@ async function deleteConfig(path) {
 }
 
 /**
- * 初始化上传配置管理页面
+ * 初始化配置管理页面
  */
 function initUploadConfigManager() {
     // 绑定搜索事件

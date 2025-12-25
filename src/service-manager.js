@@ -72,7 +72,7 @@ export async function autoLinkProviderConfigs(config) {
     
     // 如果有新的配置文件需要关联，保存更新后的 provider_pools.json
     if (totalNewProviders > 0) {
-        const filePath = config.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        const filePath = config.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         try {
             await pfs.writeFile(filePath, JSON.stringify(config.providerPools, null, 2), 'utf8');
             console.log(`[Auto-Link] Added ${totalNewProviders} new config(s) to provider pools:`);
@@ -311,7 +311,7 @@ export function markProviderUnhealthy(provider, providerInfo) {
  */
 export async function getProviderStatus(config, options = {}) {
     let providerPools = {};
-    const filePath = config.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+    const filePath = config.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
     try {
         if (providerPoolManager && providerPoolManager.providerPools) {
             providerPools = providerPoolManager.providerPools;

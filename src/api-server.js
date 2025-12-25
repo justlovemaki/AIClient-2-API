@@ -31,7 +31,7 @@ import { createRequestHandler } from './request-handler.js';
  * - 动态系统提示管理 / Dynamic System Prompt Management:
  *   - 文件注入：通过 `--system-prompt-file` 从外部文件加载系统提示，并通过 `--system-prompt-mode` 控制其行为（覆盖或追加）。
  *     File Injection: Loads system prompts from external files via `--system-prompt-file` and controls their behavior (overwrite or append) with `--system-prompt-mode`.
- *   - 实时同步：能够将请求中包含的系统提示实时写入 `fetch_system_prompt.txt` 文件，便于开发者观察和调试。
+ *   - 实时同步：能够将请求中包含的系统提示实时写入 `configs/fetch_system_prompt.txt` 文件，便于开发者观察和调试。
  *     Real-time Synchronization: Capable of writing system prompts included in requests to the `fetch_system_prompt.txt` file in real-time, facilitating developer observation and debugging.
  * 
  * - 智能请求转换和修复：自动将 OpenAI 格式的请求转换为 Gemini 格式，包括角色映射（`assistant` -> `model`）、合并来自同一角色的连续消息以及修复缺失的 `role` 字段。
@@ -84,7 +84,7 @@ import { createRequestHandler } from './request-handler.js';
  *   --prompt-log-base-name api-logs
  * 
  * 命令行参数 / Command Line Parameters:
- * --host <address>                    服务器监听地址 / Server listening address (default: localhost)
+ * --host <address>                    服务器监听地址 / Server listening address (default: 0.0.0.0)
  * --port <number>                     服务器监听端口 / Server listening port (default: 3000)
  * --api-key <key>                     身份验证所需的 API 密钥 / Required API key for authentication (default: 123456)
  * --model-provider <provider[,provider...]> AI 模型提供商 / AI model provider: openai-custom, claude-custom, gemini-cli-oauth, claude-kiro-oauth
@@ -98,7 +98,7 @@ import { createRequestHandler } from './request-handler.js';
  * --kiro-oauth-creds-file <path>     Kiro OAuth 凭据 JSON 文件路径 / Path to Kiro OAuth credentials JSON file
  * --qwen-oauth-creds-file <path>     Qwen OAuth 凭据 JSON 文件路径 / Path to Qwen OAuth credentials JSON file
  * --project-id <id>                  Google Cloud 项目 ID / Google Cloud Project ID (for gemini-cli provider)
- * --system-prompt-file <path>        系统提示文件路径 / Path to system prompt file (default: input_system_prompt.txt)
+ * --system-prompt-file <path>        系统提示文件路径 / Path to system prompt file (default: configs/input_system_prompt.txt)
  * --system-prompt-mode <mode>        系统提示模式 / System prompt mode: overwrite or append (default: overwrite)
  * --log-prompts <mode>               提示日志模式 / Prompt logging mode: console, file, or none (default: none)
  * --prompt-log-base-name <name>      提示日志文件基础名称 / Base name for prompt log files (default: prompt_log)
@@ -117,7 +117,7 @@ import { getProviderPoolManager } from './service-manager.js';
 // --- Server Initialization ---
 async function startServer() {
     // Initialize configuration
-    await initializeConfig();
+    await initializeConfig(process.argv.slice(2), 'configs/config.json');
     
     // 自动关联 configs 目录中的配置文件到对应的提供商
     console.log('[Initialization] Checking for unlinked provider configs...');
@@ -162,12 +162,16 @@ async function startServer() {
         console.log(`  • Health check: /health`);
         console.log(`  • UI Management Console: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/`);
 
-        // Auto-open browser to UI (only if host is localhost or 127.0.0.1)
-        // if (CONFIG.HOST === 'localhost' || CONFIG.HOST === '127.0.0.1') {
+        // Auto-open browser to UI (only if host is 0.0.0.0 or 127.0.0.1)
+        // if (CONFIG.HOST === '0.0.0.0' || CONFIG.HOST === '127.0.0.1') {
             try {
                 const open = (await import('open')).default;
                 setTimeout(() => {
-                    open(`http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`)
+                    let openUrl = `http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`;
+                    if(CONFIG.HOST === '0.0.0.0'){
+                        openUrl = `http://localhost:${CONFIG.SERVER_PORT}/login.html`;
+                    }
+                    open(openUrl)
                         .then(() => {
                             console.log('[UI] Opened login page in default browser');
                         })

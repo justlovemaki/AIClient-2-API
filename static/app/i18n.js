@@ -14,7 +14,7 @@ const translations = {
         'nav.dashboard': '仪表盘',
         'nav.config': '配置管理',
         'nav.providers': '提供商池管理',
-        'nav.upload': '上传配置管理',
+        'nav.upload': '配置管理',
         'nav.usage': '用量查询',
         'nav.logs': '实时日志',
         
@@ -147,7 +147,7 @@ const translations = {
         'config.qwen.credsFilePathPlaceholder': '例如: ~/.qwen/oauth_creds.json',
         'config.advanced.title': '高级配置',
         'config.advanced.systemPromptFile': '系统提示文件路径',
-        'config.advanced.systemPromptFilePlaceholder': '例如: input_system_prompt.txt',
+        'config.advanced.systemPromptFilePlaceholder': '例如: configs/input_system_prompt.txt',
         'config.advanced.systemPromptMode': '系统提示模式',
         'config.advanced.systemPromptMode.append': '追加 (append)',
         'config.advanced.systemPromptMode.overwrite': '覆盖 (overwrite)',
@@ -162,7 +162,7 @@ const translations = {
         'config.advanced.cronInterval': 'OAuth令牌刷新间隔(分钟)',
         'config.advanced.cronEnabled': '启用OAuth令牌自动刷新(需重启服务)',
         'config.advanced.poolFilePath': '提供商池配置文件路径(不能为空)',
-        'config.advanced.poolFilePathPlaceholder': '默认: provider_pools.json',
+        'config.advanced.poolFilePathPlaceholder': '默认: configs/provider_pools.json',
         'config.advanced.poolNote': '配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置',
         'config.advanced.maxErrorCount': '提供商最大错误次数',
         'config.advanced.maxErrorCountPlaceholder': '默认: 3',
@@ -182,7 +182,7 @@ const translations = {
         'config.placeholder.model': '例如: gpt-3.5-turbo',
         
         // Upload Config
-        'upload.title': '上传配置管理',
+        'upload.title': '配置管理',
         'upload.search': '搜索配置',
         'upload.searchPlaceholder': '输入文件名',
         'upload.statusFilter': '关联状态',
@@ -386,7 +386,7 @@ const translations = {
         'nav.dashboard': 'Dashboard',
         'nav.config': 'Configuration',
         'nav.providers': 'Provider Pools',
-        'nav.upload': 'Upload Config',
+        'nav.upload': 'Config Management',
         'nav.usage': 'Usage Query',
         'nav.logs': 'Real-time Logs',
         
@@ -519,7 +519,7 @@ const translations = {
         'config.qwen.credsFilePathPlaceholder': 'e.g.: ~/.qwen/oauth_creds.json',
         'config.advanced.title': 'Advanced Configuration',
         'config.advanced.systemPromptFile': 'System Prompt File Path',
-        'config.advanced.systemPromptFilePlaceholder': 'e.g.: input_system_prompt.txt',
+        'config.advanced.systemPromptFilePlaceholder': 'e.g.: configs/input_system_prompt.txt',
         'config.advanced.systemPromptMode': 'System Prompt Mode',
         'config.advanced.systemPromptMode.append': 'Append',
         'config.advanced.systemPromptMode.overwrite': 'Overwrite',
@@ -534,7 +534,7 @@ const translations = {
         'config.advanced.cronInterval': 'OAuth Token Refresh Interval (minutes)',
         'config.advanced.cronEnabled': 'Enable OAuth Token Auto Refresh (requires restart)',
         'config.advanced.poolFilePath': 'Provider Pool Config File Path (required)',
-        'config.advanced.poolFilePathPlaceholder': 'Default: provider_pools.json',
+        'config.advanced.poolFilePathPlaceholder': 'Default: configs/provider_pools.json',
         'config.advanced.poolNote': 'When provider pool is configured, it will be used by default. Falls back to default config if pool config fails',
         'config.advanced.maxErrorCount': 'Provider Max Error Count',
         'config.advanced.maxErrorCountPlaceholder': 'Default: 3',
@@ -554,7 +554,7 @@ const translations = {
         'config.placeholder.model': 'e.g.: gpt-3.5-turbo',
         
         // Upload Config
-        'upload.title': 'Upload Configuration Management',
+        'upload.title': 'Config Management',
         'upload.search': 'Search Config',
         'upload.searchPlaceholder': 'Enter filename',
         'upload.statusFilter': 'Association Status',

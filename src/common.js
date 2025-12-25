@@ -53,8 +53,8 @@ export const ENDPOINT_TYPE = {
     GEMINI_MODEL_LIST: 'gemini_model_list',
 };
 
-export const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'fetch_system_prompt.txt');
-export const INPUT_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'input_system_prompt.txt');
+export const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'configs', 'fetch_system_prompt.txt');
+export const INPUT_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'configs', 'input_system_prompt.txt');
 
 export function formatExpiryTime(expiryTimestamp) {
     if (!expiryTimestamp || typeof expiryTimestamp !== 'number') return "No expiry date available";

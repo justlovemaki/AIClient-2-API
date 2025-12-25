@@ -34,7 +34,7 @@ AIClient2API 现在包含一个功能完整的可视化 Web UI 管理控制台�
   - OAuth令牌自动刷新设置
   - 提供商池配置文件路径
 
-### 🔧 上传配置管理
+### 🔧 配置管理
 - 搜索配置文件功能
 - 按关联状态过滤（已关联/未关联）
 - 配置文件列表展示
@@ -88,7 +88,7 @@ node src/api-server.js --port 3000 --api-key 123456
 1. **仪表盘** - 系统概览、统计信息和路径路由示例
 2. **配置管理** - 修改服务器配置和提供商设置
 3. **提供商池管理** - 管理多个API提供商账户
-4. **上传配置管理** - 管理配置文件和搜索过滤
+4. **配置管理** - 管理配置文件和搜索过滤
 5. **实时日志** - 查看服务器运行日志
 
 ## API 端点
@@ -122,7 +122,7 @@ node src/api-server.js --port 3000 --api-key 123456
 - `GET /app/navigation.js` - 导航逻辑
 - `GET /app/modal.js` - 模态框组件
 - `GET /app/file-upload.js` - 文件上传
-- `GET /app/upload-config-manager.js` - 上传配置管理
+- `GET /app/upload-config-manager.js` - 配置管理
 - `GET /app/routing-examples.js` - 路由示例
 - `GET /app/constants.js` - 常量定义
 

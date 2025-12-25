@@ -49,23 +49,23 @@ function normalizeConfiguredProviders(config) {
 /**
  * Initializes the server configuration from config.json and command-line arguments.
  * @param {string[]} args - Command-line arguments.
- * @param {string} [configFilePath='config.json'] - Path to the configuration file.
+ * @param {string} [configFilePath='configs/config.json'] - Path to the configuration file.
  * @returns {Object} The initialized configuration object.
  */
-export async function initializeConfig(args = process.argv.slice(2), configFilePath = 'config.json') {
+export async function initializeConfig(args = process.argv.slice(2), configFilePath = 'configs/config.json') {
     let currentConfig = {};
 
     try {
         const configData = fs.readFileSync(configFilePath, 'utf8');
         currentConfig = JSON.parse(configData);
-        console.log('[Config] Loaded configuration from config.json');
+        console.log('[Config] Loaded configuration from configs/config.json');
     } catch (error) {
-        console.error('[Config Error] Failed to load config.json:', error.message);
+        console.error('[Config Error] Failed to load configs/config.json:', error.message);
         // Fallback to default values if config.json is not found or invalid
         currentConfig = {
             REQUIRED_API_KEY: "123456",
             SERVER_PORT: 3000,
-            HOST: 'localhost',
+            HOST: '0.0.0.0',
             MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
             OPENAI_API_KEY: null,
             OPENAI_BASE_URL: null,
@@ -323,7 +323,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
 
     // 加载号池配置
     if (!currentConfig.PROVIDER_POOLS_FILE_PATH) {
-        currentConfig.PROVIDER_POOLS_FILE_PATH = 'provider_pools.json';
+        currentConfig.PROVIDER_POOLS_FILE_PATH = 'configs/provider_pools.json';
     }
     if (currentConfig.PROVIDER_POOLS_FILE_PATH) {
         try {

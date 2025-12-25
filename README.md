@@ -39,8 +39,8 @@
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
 > - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
 > - **2025.08.29** - Released account pool management feature, supporting multi-account polling, intelligent failover, and automatic degradation strategies
->   - Configuration: Add `PROVIDER_POOLS_FILE_PATH` parameter in config.json
->   - Reference configuration: [provider_pools.json](./provider_pools.json.example)
+>   - Configuration: Add `PROVIDER_POOLS_FILE_PATH` parameter in `configs/config.json`
+>   - Reference configuration: [provider_pools.json](./configs/provider_pools.json.example)
 > - **History Developed**
 >   - Support Gemini CLI, Kiro and other client2API
 >   - OpenAI, Claude, Gemini three-protocol mutual conversion, automatic intelligent switching
@@ -156,7 +156,7 @@ Access: `http://localhost:3000` → Login → Sidebar navigation → Take effect
 Supports various input types such as images and documents, providing you with a richer interaction experience and more powerful application scenarios.
 
 #### Latest Model Support
-Seamlessly support the following latest large models, just configure the corresponding endpoint in Web UI or [`config.json`](./config.json):
+Seamlessly support the following latest large models, just configure the corresponding endpoint in Web UI or [`configs/config.json`](./configs/config.json):
 *   **Claude 4.5 Opus** - Anthropic's strongest model ever, now supported via Kiro, Antigravity
 *   **Gemini 3 Pro** - Google's next-generation architecture preview, now supported via Gemini, Antigravity
 *   **Qwen3 Coder Plus** - Alibaba Tongyi Qianwen's latest code-specific model, now supported via Qwen Code
@@ -202,8 +202,8 @@ In the Web UI management interface, you can complete authorization configuration
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
 #### Account Pool Management Configuration
-1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./provider_pools.json.example)
-2. **Configure Pool Parameters**: Set `PROVIDER_POOLS_FILE_PATH` in config.json to point to the pool configuration file
+1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./configs/provider_pools.json.example)
+2. **Configure Pool Parameters**: Set `PROVIDER_POOLS_FILE_PATH` in `configs/config.json` to point to the pool configuration file
 3. **Startup Parameter Configuration**: Use the `--provider-pools-file <path>` parameter to specify the pool configuration file path
 4. **Health Check**: The system will automatically perform periodic health checks and avoid using unhealthy providers
 
@@ -213,7 +213,7 @@ In the Web UI management interface, you can complete authorization configuration
 
 Support excluding unsupported models through `notSupportedModels` configuration, the system will automatically skip these providers.
 
-**Configuration**: Add `notSupportedModels` field for providers in `provider_pools.json`:
+**Configuration**: Add `notSupportedModels` field for providers in `configs/provider_pools.json`:
 
 ```json
 {
@@ -239,7 +239,7 @@ Support excluding unsupported models through `notSupportedModels` configuration,
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 
-**Configuration**: Add `providerFallbackChain` configuration in `config.json`:
+**Configuration**: Add `providerFallbackChain` configuration in `configs/config.json`:
 
 ```json
 {

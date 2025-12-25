@@ -40,7 +40,7 @@
 > - **2025.09.01** - Qwen Code CLIを統合、`qwen3-coder-plus`モデルサポートを追加
 > - **2025.08.29** - アカウントプール管理機能をリリース、マルチアカウントポーリング、自動フェイルオーバー、自動ダウングレード戦略をサポート
 >   - 設定方法：config.jsonに`PROVIDER_POOLS_FILE_PATH`パラメータを追加
->   - 参考設定：[provider_pools.json](./provider_pools.json.example)
+>   - 参考設定：[provider_pools.json](./configs/provider_pools.json.example)
 > - **開発済み履歴**
 >   - Gemini CLI、Kiroなどのクライアント2APIをサポート
 >   - OpenAI、Claude、Geminiの3つのプロトコル相互変換、自動インテリジェント切り替え
@@ -156,7 +156,7 @@ AIClient-2-APIを使い始める最も推奨される方法は、自動起動ス
 画像、ドキュメントなど様々なタイプの入力をサポートし、よりリッチなインタラクティブ体験とより強力なアプリケーションシナリオを提供します。
 
 #### 最新モデルサポート
-以下の最新大規模モデルをシームレスにサポート、Web UIまたは[`config.json`](./config.json)で対応するエンドポイントを設定するだけで使用可能：
+以下の最新大規模モデルをシームレスにサポート、Web UIまたは[`config.json`](./configs/config.json)で対応するエンドポイントを設定するだけで使用可能：
 *   **Claude 4.5 Opus** - Anthropic史上最強モデル、Kiro、Antigravity経由でサポート
 *   **Gemini 3 Pro** - Google次世代アーキテクチャプレビュー版、Gemini、Antigravity経由でサポート
 *   **Qwen3 Coder Plus** - アリババ通義千問の最新コード専用モデル、Qwen Code経由でサポート
@@ -202,7 +202,7 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 4. **重要なお知らせ**：Kiroサービス使用ポリシーが更新されました、最新の使用制限と条件については公式ウェブサイトをご確認ください。
 
 #### アカウントプール管理設定
-1. **プール設定ファイルの作成**：[provider_pools.json.example](./provider_pools.json.example) を参考に設定ファイルを作成します
+1. **プール設定ファイルの作成**：[provider_pools.json.example](./configs/provider_pools.json.example) を参考に設定ファイルを作成します
 2. **プールパラメータの設定**：config.json で `PROVIDER_POOLS_FILE_PATH` を設定し、プール設定ファイルを指定します
 3. **起動パラメータ設定**：`--provider-pools-file <path>` パラメータを使用してプール設定ファイルのパスを指定します
 4. **ヘルスチェック**：システムは定期的にヘルスチェックを自動実行し、健全でないプロバイダーを使用しません
@@ -239,7 +239,7 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 
 あるProvider Type（例：`gemini-cli-oauth`）のすべてのアカウントが429割り当て制限により枯渇したり、unhealthyとマークされた場合、システムは直接エラーを返すのではなく、互換性のある別のProvider Type（例：`gemini-antigravity`）に自動的にフォールバックできます。
 
-**設定方法**：`config.json` に `providerFallbackChain` 設定を追加：
+**設定方法**：`configs/config.json` に `providerFallbackChain` 設定を追加：
 
 ```json
 {

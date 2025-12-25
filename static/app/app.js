@@ -107,7 +107,7 @@ function initApp() {
     initEventStream();
     initFileUpload(); // 初始化文件上传功能
     initRoutingExamples(); // 初始化路径路由示例功能
-    initUploadConfigManager(); // 初始化上传配置管理功能
+    initUploadConfigManager(); // 初始化配置管理功能
     initUsageManager(); // 初始化用量管理功能
     initImageZoom(); // 初始化图片放大功能
     loadInitialData();
@@ -151,7 +151,7 @@ window.refreshProviderConfig = refreshProviderConfig;
 window.fileUploadHandler = fileUploadHandler;
 window.showAuthModal = showAuthModal;
 
-// 上传配置管理相关全局函数
+// 配置管理相关全局函数
 window.viewConfig = viewConfig;
 window.deleteConfig = deleteConfig;
 window.loadConfigList = loadConfigList;
