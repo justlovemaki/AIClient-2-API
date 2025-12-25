@@ -88,6 +88,19 @@
 
 使用 AIClient-2-API 最推荐的方式是通过自动化脚本启动，并直接在 **Web UI 控制台** 进行可视化配置。
 
+#### 🐳 Docker 快捷启动 (推荐)
+
+```bash
+docker run -d -p 3000:3000 --restart=always -v "指定路径:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+```
+
+**参数说明**：
+- `-d`：后台运行容器
+- `-p 3000:3000`：将容器内 3000 端口映射到主机 3000 端口
+- `--restart=always`：容器自动重启策略
+- `-v "指定路径:/app/configs"`：挂载配置目录（请将"指定路径"替换为实际路径，如 `/home/user/aiclient-configs`）
+- `--name aiclient2api`：容器名称
+
 #### 1. 运行启动脚本
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: 双击运行 `install-and-run.bat`
