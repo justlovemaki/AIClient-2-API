@@ -670,7 +670,7 @@ export class ProviderPoolManager {
         this.saveTimer = null;
         
         try {
-            const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             let currentPools = {};
             
             // 一次性读取文件
@@ -679,7 +679,7 @@ export class ProviderPoolManager {
                 currentPools = JSON.parse(fileContent);
             } catch (readError) {
                 if (readError.code === 'ENOENT') {
-                    this._log('info', 'provider_pools.json does not exist, creating new file.');
+                    this._log('info', 'configs/provider_pools.json does not exist, creating new file.');
                 } else {
                     throw readError;
                 }
@@ -709,7 +709,7 @@ export class ProviderPoolManager {
             
             // 一次性写入文件
             await fs.promises.writeFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
-            this._log('info', `provider_pools.json updated successfully for types: ${typesToSave.join(', ')}`);
+            this._log('info', `configs/provider_pools.json updated successfully for types: ${typesToSave.join(', ')}`);
         } catch (error) {
             this._log('error', `Failed to write provider_pools.json: ${error.message}`);
         }

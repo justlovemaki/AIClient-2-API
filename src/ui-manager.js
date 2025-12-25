@@ -25,10 +25,10 @@ import {
 import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from './usage-service.js';
 
 // Token存储到本地文件中
-const TOKEN_STORE_FILE = 'token-store.json';
+const TOKEN_STORE_FILE = path.join(process.cwd(), 'configs', 'token-store.json');
 
 // 用量缓存文件路径
-const USAGE_CACHE_FILE = 'usage-cache.json';
+const USAGE_CACHE_FILE = path.join(process.cwd(), 'configs', 'usage-cache.json');
 
 /**
  * 读取用量缓存文件
@@ -205,7 +205,7 @@ async function cleanupExpiredTokens() {
  */
 async function readPasswordFile() {
     try {
-        const password = await fs.readFile('./pwd', 'utf8');
+        const password = await fs.readFile(path.join(process.cwd(), 'configs', 'pwd'), 'utf8');
         return password.trim();
     } catch (error) {
         console.error('读取密码文件失败:', error);
@@ -408,7 +408,7 @@ async function reloadConfig(providerPoolManager) {
         const { initializeConfig } = await import('./config-manager.js');
         
         // Reload main config
-        const newConfig = await initializeConfig(process.argv.slice(2), 'config.json');
+        const newConfig = await initializeConfig(process.argv.slice(2), 'configs/config.json');
         // Update provider pool manager if available
         if (providerPoolManager) {
             providerPoolManager.providerPools = newConfig.providerPools;
@@ -565,7 +565,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // 写入密码到 pwd 文件
-            const pwdFilePath = path.join(process.cwd(), 'pwd');
+            const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
             await fs.writeFile(pwdFilePath, password.trim(), 'utf8');
             
             console.log('[UI API] Admin password updated successfully');
@@ -653,7 +653,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             // Handle system prompt update
             if (newConfig.systemPrompt !== undefined) {
-                const promptPath = currentConfig.SYSTEM_PROMPT_FILE_PATH || 'input_system_prompt.txt';
+                const promptPath = currentConfig.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
                 try {
                     const relativePath = path.relative(process.cwd(), promptPath);
                     writeFileSync(promptPath, newConfig.systemPrompt, 'utf-8');
@@ -674,7 +674,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             // Update config.json file
             try {
-                const configPath = 'config.json';
+                const configPath = 'configs/config.json';
                 
                 // Create a clean config object for saving (exclude runtime-only properties)
                 const configToSave = {
@@ -717,12 +717,12 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
-                console.log('[UI API] Configuration saved to config.json');
+                console.log('[UI API] Configuration saved to configs/config.json');
                 
                 // 广播更新事件
                 broadcastEvent('config_update', {
                     action: 'update',
-                    filePath: 'config.json',
+                    filePath: 'configs/config.json',
                     type: 'main_config',
                     timestamp: new Date().toISOString()
                 });
@@ -784,7 +784,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Get provider pools summary
     if (method === 'GET' && pathParam === '/api/providers') {
         let providerPools = {};
-        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
@@ -806,7 +806,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     if (method === 'GET' && providerTypeMatch) {
         const providerType = decodeURIComponent(providerTypeMatch[1]);
         let providerPools = {};
-        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
@@ -951,7 +951,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
 
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             let providerPools = {};
             
             // Load existing pools
@@ -1029,7 +1029,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const providerUuid = updateProviderMatch[2];
 
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             let providerPools = {};
             
             // Load existing pools
@@ -1103,7 +1103,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const action = disableEnableProviderMatch[3];
 
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             let providerPools = {};
             
             // Load existing pools
@@ -1177,7 +1177,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const providerType = decodeURIComponent(resetHealthMatch[1]);
 
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             let providerPools = {};
             
             // Load existing pools
@@ -1316,7 +1316,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // 保存更新后的状态到文件
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             
             // 从 providerStatus 构建 providerPools 对象并保存
             const providerPools = {};
@@ -1671,7 +1671,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             const { providerType, credPathKey, defaultCheckModel, displayName } = providerMapping;
-            const poolsFilePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const poolsFilePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
             
             // Load existing pools
             let providerPools = {};
@@ -1855,7 +1855,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'reload',
-                filePath: 'config.json',
+                filePath: 'configs/config.json',
                 providerPoolsPath: newConfig.PROVIDER_POOLS_FILE_PATH || null,
                 timestamp: new Date().toISOString()
             });
@@ -1866,7 +1866,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 message: '配置文件重新加载成功',
                 details: {
                     configReloaded: true,
-                    configPath: 'config.json',
+                    configPath: 'configs/config.json',
                     providerPoolsPath: newConfig.PROVIDER_POOLS_FILE_PATH || null
                 }
             }));

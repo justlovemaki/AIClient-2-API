@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/img/logo-min.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
+<img src="src/img/logo-mid.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
 # AIClient-2-API 🚀
 
@@ -39,8 +39,8 @@
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
 > - **2025.09.01** - 集成 Qwen Code CLI，新增 `qwen3-coder-plus` 模型支持
 > - **2025.08.29** - 发布账号池管理功能，支持多账号轮询、智能故障转移和自动降级策略
->   - 配置方式：在 config.json 中添加 `PROVIDER_POOLS_FILE_PATH` 参数
->   - 参考配置：[provider_pools.json](./provider_pools.json.example)
+>   - 配置方式：在 `configs/config.json` 中添加 `PROVIDER_POOLS_FILE_PATH` 参数
+>   - 参考配置：[provider_pools.json](./configs/provider_pools.json.example)
 > - **历史已开发**
 >   - 支持 Gemini CLI、Kiro 等客户端2API
 >   - OpenAI ,Claude ,Gemini 三协议互转，自动智能切换
@@ -155,7 +155,7 @@
 支持图片、文档等多种类型的输入，为您提供更丰富的交互体验和更强大的应用场景。
 
 #### 最新模型支持
-无缝支持以下最新大模型，仅需在 Web UI 或 [`config.json`](./config.json) 中配置相应的端点：
+无缝支持以下最新大模型，仅需在 Web UI 或 [`configs/config.json`](./configs/config.json) 中配置相应的端点：
 *   **Claude 4.5 Opus** - Anthropic 史上最强模型，现已通过 Kiro, Antigravity 支持
 *   **Gemini 3 Pro** - Google 下一代架构预览版，现已通过 Gemini, Antigravity 支持
 *   **Qwen3 Coder Plus** - 阿里通义千问最新代码专用模型，现已通过Qwen Code 支持
@@ -201,8 +201,8 @@
 4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
 
 #### 账号池管理配置
-1. **创建号池配置文件**：参考 [provider_pools.json.example](./provider_pools.json.example) 创建配置文件
-2. **配置号池参数**：在 config.json 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
+1. **创建号池配置文件**：参考 [provider_pools.json.example](./configs/provider_pools.json.example) 创建配置文件
+2. **配置号池参数**：在 `configs/config.json` 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
 3. **启动参数配置**：使用 `--provider-pools-file <path>` 参数指定号池配置文件路径
 4. **健康检查**：系统会定期自动执行健康检查，不使用不健康的提供商
 
@@ -212,7 +212,7 @@
 
 支持通过 `notSupportedModels` 配置排除不支持的模型，系统会自动跳过这些提供商。
 
-**配置方式**：在 `provider_pools.json` 中为提供商添加 `notSupportedModels` 字段：
+**配置方式**：在 `configs/provider_pools.json` 中为提供商添加 `notSupportedModels` 字段：
 
 ```json
 {
@@ -238,7 +238,7 @@
 
 当某一 Provider Type（如 `gemini-cli-oauth`）下的所有账号都因 429 配额耗尽或被标记为 unhealthy 时，系统能够自动 fallback 到另一个兼容的 Provider Type（如 `gemini-antigravity`），而不是直接返回错误。
 
-**配置方式**：在 `config.json` 中添加 `providerFallbackChain` 配置：
+**配置方式**：在 `configs/config.json` 中添加 `providerFallbackChain` 配置：
 
 ```json
 {
@@ -282,7 +282,7 @@
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth 凭据 (支持 Claude 4.5 Opus) |
 
 > **说明**：`~` 表示用户主目录（Windows: `C:\Users\用户名`，Linux/macOS: `/home/用户名` 或 `/Users/用户名`）
->
+
 > **自定义路径**：可通过配置文件中的相关参数或环境变量指定自定义存储位置
 
 ---
