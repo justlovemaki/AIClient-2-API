@@ -207,25 +207,29 @@ const DEFAULT_PASSWORD = 'admin123';
 
 /**
  * 读取密码文件内容
+ * 如果文件不存在或读取失败，返回默认密码
  */
 async function readPasswordFile() {
     const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
     try {
-        if (!existsSync(pwdFilePath)) {
-            console.log('[Auth] 密码文件不存在，使用默认密码');
-            return DEFAULT_PASSWORD;
-        }
+        // 使用异步方式检查文件是否存在并读取，避免竞态条件
         const password = await fs.readFile(pwdFilePath, 'utf8');
         const trimmedPassword = password.trim();
         // 如果密码文件为空，使用默认密码
         if (!trimmedPassword) {
-            console.log('[Auth] 密码文件为空，使用默认密码');
+            console.log('[Auth] 密码文件为空，使用默认密码: ' + DEFAULT_PASSWORD);
             return DEFAULT_PASSWORD;
         }
+        console.log('[Auth] 成功读取密码文件');
         return trimmedPassword;
     } catch (error) {
-        console.error('[Auth] 读取密码文件失败:', error.message);
-        console.log('[Auth] 使用默认密码');
+        // ENOENT 表示文件不存在，这是正常情况
+        if (error.code === 'ENOENT') {
+            console.log('[Auth] 密码文件不存在，使用默认密码: ' + DEFAULT_PASSWORD);
+        } else {
+            console.error('[Auth] 读取密码文件失败:', error.code || error.message);
+            console.log('[Auth] 使用默认密码: ' + DEFAULT_PASSWORD);
+        }
         return DEFAULT_PASSWORD;
     }
 }
@@ -235,7 +239,10 @@ async function readPasswordFile() {
  */
 async function validateCredentials(password) {
     const storedPassword = await readPasswordFile();
-    return storedPassword && password === storedPassword;
+    console.log('[Auth] 验证密码, 存储密码长度:', storedPassword ? storedPassword.length : 0, ', 输入密码长度:', password ? password.length : 0);
+    const isValid = storedPassword && password === storedPassword;
+    console.log('[Auth] 密码验证结果:', isValid);
+    return isValid;
 }
 
 /**
