@@ -89,6 +89,19 @@
 
 AIClient-2-APIを使い始める最も推奨される方法は、自動起動スクリプトを使用し、**Web UIコンソール**で直接ビジュアル設定を行うことです。
 
+#### 🐳 Docker クイックスタート (推奨)
+
+```bash
+docker run -d -p 3000:3000 --restart=always -v "指定パス:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+```
+
+**パラメータ説明**：
+- `-d`：バックグラウンドでコンテナを実行
+- `-p 3000:3000`：コンテナ内の3000ポートをホストの3000ポートにマッピング
+- `--restart=always`：コンテナ自動再起動ポリシー
+- `-v "指定パス:/app/configs"`：設定ディレクトリをマウント（「指定パス」を実際のパスに置き換えてください、例：`/home/user/aiclient-configs`）
+- `--name aiclient2api`：コンテナ名
+
 #### 1. 起動スクリプトの実行
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: `install-and-run.bat` をダブルクリックして実行

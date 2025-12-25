@@ -89,6 +89,19 @@
 
 The most recommended way to use AIClient-2-API is to start it through an automated script and configure it visually directly in the **Web UI console**.
 
+#### 🐳 Docker Quick Start (Recommended)
+
+```bash
+docker run -d -p 3000:3000 --restart=always -v "your_path:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+```
+
+**Parameter Description**:
+- `-d`: Run container in background
+- `-p 3000:3000`: Map container port 3000 to host port 3000
+- `--restart=always`: Container auto-restart policy
+- `-v "your_path:/app/configs"`: Mount configuration directory (replace "your_path" with actual path, e.g., `/home/user/aiclient-configs`)
+- `--name aiclient2api`: Container name
+
 #### 1. Run the startup script
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: Double-click `install-and-run.bat`
