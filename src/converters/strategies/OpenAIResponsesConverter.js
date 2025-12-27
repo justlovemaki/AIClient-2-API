@@ -382,11 +382,18 @@ export class OpenAIResponsesConverter extends BaseConverter {
         // 处理 input 数组中的消息
         if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
             responsesRequest.input.forEach(item => {
-                if (item.type === 'message') {
-                    const content = item.content
-                        .filter(c => c.type === 'input_text')
-                        .map(c => c.text)
-                        .join('\n');
+                // 如果 item 没有 type 属性，默认为 message
+                // 或者 item.type 明确为 message
+                if (!item.type || item.type === 'message') {
+                    let content = '';
+                    if (Array.isArray(item.content)) {
+                        content = item.content
+                            .filter(c => c.type === 'input_text')
+                            .map(c => c.text)
+                            .join('\n');
+                    } else if (typeof item.content === 'string') {
+                        content = item.content;
+                    }
                     
                     if (content) {
                         geminiRequest.contents.push({

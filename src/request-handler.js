@@ -23,11 +23,13 @@ export function createRequestHandler(config, providerPoolManager) {
         let path = requestUrl.pathname;
         const method = req.method;
 
+        // Set CORS headers for all requests
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider');
+
         // Handle CORS preflight requests
         if (method === 'OPTIONS') {
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider');
             res.writeHead(204);
             res.end();
             return;
