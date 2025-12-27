@@ -306,6 +306,15 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
         }
         return this.kiroApiService.getUsageLimits();
     }
+
+    /**
+     * Count tokens for a message request (compatible with Anthropic API)
+     * @param {Object} requestBody - The request body containing model, messages, system, tools, etc.
+     * @returns {Object} { input_tokens: number }
+     */
+    countTokens(requestBody) {
+        return this.kiroApiService.countTokens(requestBody);
+    }
 }
 
 // Qwen API 服务适配器
