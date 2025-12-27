@@ -261,52 +261,13 @@ async function handleGenerateCreds(event) {
  * 实际执行授权逻辑
  */
 async function proceedWithAuth(providerType, targetInputId, extraOptions = {}) {
-    try {
-        showToast(t('common.info'), t('modal.provider.auth.initializing'), 'info');
-        
-        // 使用 fileUploadHandler 中的 getProviderKey 获取目录名称
-        const providerDir = fileUploadHandler.getProviderKey(providerType);
-
-        const response = await window.apiClient.post(
-            `/providers/${encodeURIComponent(providerType)}/generate-auth-url`,
-            {
-                saveToConfigs: true,
-                providerDir: providerDir,
-                ...extraOptions
-            }
-        );
-
-        if (response.success && response.authUrl) {
-            // 使用自定义事件监听授权成功，以便自动填充路径
-            const handleSuccess = (e) => {
-                const data = e.detail;
-                if (data.provider === providerType && data.relativePath) {
-                    const input = document.getElementById(targetInputId);
-                    if (input) {
-                        input.value = data.relativePath;
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                        showToast(t('common.success'), t('modal.provider.auth.success'), 'success');
-                    }
-                    window.removeEventListener('oauth_success_event', handleSuccess);
-                }
-            };
-            window.addEventListener('oauth_success_event', handleSuccess);
-            
-            // 调用 provider-manager.js 中的 showAuthModal (假设已在全局作用域或通过某种方式可用)
-            // 如果不可用，我们需要在 app.js 中导出它
-            if (window.showAuthModal) {
-                window.showAuthModal(response.authUrl, response.authInfo);
-            } else {
-                // 降级处理：如果在 app.js 中没导出，尝试直接打开
-                window.open(response.authUrl, '_blank');
-                showToast(t('common.info'), t('modal.provider.auth.window'), 'info');
-            }
-        } else {
-            showToast(t('common.error'), t('modal.provider.auth.failed'), 'error');
-        }
-    } catch (error) {
-        console.error('生成凭据失败:', error);
-        showToast(t('common.error'), t('modal.provider.auth.failed') + `: ${error.message}`, 'error');
+    if (window.executeGenerateAuthUrl) {
+        await window.executeGenerateAuthUrl(providerType, {
+            targetInputId,
+            ...extraOptions
+        });
+    } else {
+        console.error('executeGenerateAuthUrl not found');
     }
 }
 

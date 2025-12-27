@@ -451,6 +451,24 @@ async function executeGenerateAuthUrl(providerType, extraOptions = {}) {
         );
         
         if (response.success && response.authUrl) {
+            // 如果提供了 targetInputId，设置成功监听器
+            if (extraOptions.targetInputId) {
+                const targetInputId = extraOptions.targetInputId;
+                const handleSuccess = (e) => {
+                    const data = e.detail;
+                    if (data.provider === providerType && data.relativePath) {
+                        const input = document.getElementById(targetInputId);
+                        if (input) {
+                            input.value = data.relativePath;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            showToast(t('common.success'), t('modal.provider.auth.success'), 'success');
+                        }
+                        window.removeEventListener('oauth_success_event', handleSuccess);
+                    }
+                };
+                window.addEventListener('oauth_success_event', handleSuccess);
+            }
+
             // 显示授权信息模态框
             showAuthModal(response.authUrl, response.authInfo);
         } else {
@@ -492,7 +510,8 @@ function showAuthModal(authUrl, authInfo) {
     
     // 获取需要开放的端口号（从 authInfo 或当前页面 URL）
     const requiredPort = authInfo.callbackPort || authInfo.port || window.location.port || '3000';
-    
+    const isDeviceFlow = authInfo.provider === 'openai-qwen-oauth' || (authInfo.provider === 'claude-kiro-oauth' && authInfo.authMethod === 'builder-id');
+
     let instructionsHtml = '';
     if (authInfo.provider === 'openai-qwen-oauth') {
         instructionsHtml = `
@@ -545,11 +564,19 @@ function showAuthModal(authUrl, authInfo) {
                 <div class="auth-info">
                     <p><strong data-i18n="oauth.modal.provider">${t('oauth.modal.provider')}</strong> ${authInfo.provider}</p>
                     <div class="port-info-section" style="margin: 12px 0; padding: 12px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px;">
-                        <p style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <div style="margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <i class="fas fa-network-wired" style="color: #d97706;"></i>
                             <strong data-i18n="oauth.modal.requiredPort">${t('oauth.modal.requiredPort')}</strong>
-                            <code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: #d97706;">${requiredPort}</code>
-                        </p>
+                            ${isDeviceFlow ?
+                                `<code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: #d97706;">${requiredPort}</code>` :
+                                `<div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="number" class="auth-port-input" value="${requiredPort}" style="width: 80px; padding: 2px 8px; border: 1px solid #d97706; border-radius: 4px; font-weight: bold; color: #d97706; background: white;">
+                                    <button class="regenerate-port-btn" title="${t('common.generate')}" style="background: none; border: 1px solid #d97706; border-radius: 4px; cursor: pointer; color: #d97706; padding: 2px 6px;">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>`
+                            }
+                        </div>
                         <p style="margin: 8px 0 0 0; font-size: 0.85rem; color: #92400e;" data-i18n="oauth.modal.portNote">${t('oauth.modal.portNote')}</p>
                     </div>
                     ${instructionsHtml}
@@ -585,6 +612,25 @@ function showAuthModal(authUrl, authInfo) {
         });
     });
     
+    // 重新生成按钮事件
+    const regenerateBtn = modal.querySelector('.regenerate-port-btn');
+    if (regenerateBtn) {
+        regenerateBtn.onclick = async () => {
+            const newPort = modal.querySelector('.auth-port-input').value;
+            if (newPort && newPort !== requiredPort) {
+                modal.remove();
+                // 构造重新请求的参数
+                const options = { ...authInfo, port: newPort };
+                // 移除不需要传递回后端的字段
+                delete options.provider;
+                delete options.redirectUri;
+                delete options.callbackPort;
+                
+                await executeGenerateAuthUrl(authInfo.provider, options);
+            }
+        };
+    }
+
     // 复制链接按钮
     const copyBtn = modal.querySelector('.copy-btn');
     copyBtn.addEventListener('click', () => {
@@ -715,5 +761,6 @@ export {
     renderProviders,
     updateProviderStatsDisplay,
     openProviderManager,
-    showAuthModal
+    showAuthModal,
+    executeGenerateAuthUrl
 };

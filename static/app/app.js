@@ -39,7 +39,8 @@ import {
     updateTimeDisplay,
     loadProviders,
     openProviderManager,
-    showAuthModal
+    showAuthModal,
+    executeGenerateAuthUrl
 } from './provider-manager.js';
 
 import {
@@ -150,6 +151,7 @@ window.showProviderManagerModal = showProviderManagerModal;
 window.refreshProviderConfig = refreshProviderConfig;
 window.fileUploadHandler = fileUploadHandler;
 window.showAuthModal = showAuthModal;
+window.executeGenerateAuthUrl = executeGenerateAuthUrl;
 
 // 配置管理相关全局函数
 window.viewConfig = viewConfig;

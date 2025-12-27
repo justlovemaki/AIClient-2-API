@@ -92,12 +92,12 @@
 #### 🐳 Docker 快捷启动 (推荐)
 
 ```bash
-docker run -d -p 3000:3000 --restart=always -v "指定路径:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+docker run -d -p 3000:3000 -p 8085:8085 -p 8086:8086 -p 19876-19880:19876-19880 --restart=always -v "指定路径:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
 ```
 
 **参数说明**：
 - `-d`：后台运行容器
-- `-p 3000:3000`：将容器内 3000 端口映射到主机 3000 端口
+- `-p 3000:3000 ...`：端口映射。3000 为 Web UI，其余为 OAuth 回调端口（Gemini: 8085, Antigravity: 8086, Kiro: 19876-19880）
 - `--restart=always`：容器自动重启策略
 - `-v "指定路径:/app/configs"`：挂载配置目录（请将"指定路径"替换为实际路径，如 `/home/user/aiclient-configs`）
 - `--name aiclient2api`：容器名称
