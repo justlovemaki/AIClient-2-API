@@ -1779,6 +1779,73 @@ async initializeAuth(forceRefresh = false) {
     }
 
     /**
+     * Count tokens for a message request (compatible with Anthropic API)
+     * POST /v1/messages/count_tokens
+     * @param {Object} requestBody - The request body containing model, messages, system, tools, etc.
+     * @returns {Object} { input_tokens: number }
+     */
+    countTokens(requestBody) {
+        let totalTokens = 0;
+
+        // Count system prompt tokens
+        if (requestBody.system) {
+            const systemText = this.getContentText(requestBody.system);
+            totalTokens += this.countTextTokens(systemText);
+        }
+
+        // Count all messages tokens
+        if (requestBody.messages && Array.isArray(requestBody.messages)) {
+            for (const message of requestBody.messages) {
+                if (message.content) {
+                    if (typeof message.content === 'string') {
+                        totalTokens += this.countTextTokens(message.content);
+                    } else if (Array.isArray(message.content)) {
+                        for (const block of message.content) {
+                            if (block.type === 'text' && block.text) {
+                                totalTokens += this.countTextTokens(block.text);
+                            } else if (block.type === 'tool_use') {
+                                // Count tool use block tokens
+                                totalTokens += this.countTextTokens(block.name || '');
+                                totalTokens += this.countTextTokens(JSON.stringify(block.input || {}));
+                            } else if (block.type === 'tool_result') {
+                                // Count tool result block tokens
+                                const resultContent = this.getContentText(block.content);
+                                totalTokens += this.countTextTokens(resultContent);
+                            } else if (block.type === 'image') {
+                                // Images have a fixed token cost (approximately 1600 tokens for a typical image)
+                                // This is an estimation as actual cost depends on image size
+                                totalTokens += 1600;
+                            } else if (block.type === 'document') {
+                                // Documents - estimate based on content if available
+                                if (block.source?.data) {
+                                    // For base64 encoded documents, estimate tokens
+                                    const estimatedChars = block.source.data.length * 0.75; // base64 to bytes ratio
+                                    totalTokens += Math.ceil(estimatedChars / 4);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Count tools definitions tokens if present
+        if (requestBody.tools && Array.isArray(requestBody.tools)) {
+            for (const tool of requestBody.tools) {
+                // Count tool name and description
+                totalTokens += this.countTextTokens(tool.name || '');
+                totalTokens += this.countTextTokens(tool.description || '');
+                // Count input schema
+                if (tool.input_schema) {
+                    totalTokens += this.countTextTokens(JSON.stringify(tool.input_schema));
+                }
+            }
+        }
+
+        return { input_tokens: totalTokens };
+    }
+
+    /**
      * 获取用量限制信息
      * @returns {Promise<Object>} 用量限制信息
      */
