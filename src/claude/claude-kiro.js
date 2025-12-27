@@ -1639,8 +1639,9 @@ async initializeAuth(forceRefresh = false) {
                 toolCalls.forEach((tc, index) => {
                     let inputObject;
                     try {
-                        // Arguments should be a stringified JSON object.
-                        inputObject = tc.function.arguments;
+                        // Arguments should be a stringified JSON object, need to parse it
+                        const args = tc.function.arguments;
+                        inputObject = typeof args === 'string' ? JSON.parse(args) : args;
                     } catch (e) {
                         console.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
                         // If parsing fails, wrap the raw string in an object as a fallback,
@@ -1658,7 +1659,7 @@ async initializeAuth(forceRefresh = false) {
                             input: {} // input is streamed via input_json_delta
                         }
                     });
-                    
+
                     // 3. content_block_delta for each tool_use
                     // Since Kiro is not truly streaming, we send the full arguments as one delta.
                     events.push({
@@ -1666,10 +1667,10 @@ async initializeAuth(forceRefresh = false) {
                         index: index,
                         delta: {
                             type: "input_json_delta",
-                            partial_json: inputObject
+                            partial_json: JSON.stringify(inputObject)
                         }
                     });
- 
+
                     // 4. content_block_stop for each tool_use
                     events.push({
                         type: "content_block_stop",
@@ -1706,8 +1707,9 @@ async initializeAuth(forceRefresh = false) {
                 for (const tc of toolCalls) {
                     let inputObject;
                     try {
-                        // Arguments should be a stringified JSON object.
-                        inputObject = tc.function.arguments;
+                        // Arguments should be a stringified JSON object, need to parse it
+                        const args = tc.function.arguments;
+                        inputObject = typeof args === 'string' ? JSON.parse(args) : args;
                     } catch (e) {
                         console.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
                         // If parsing fails, wrap the raw string in an object as a fallback,
