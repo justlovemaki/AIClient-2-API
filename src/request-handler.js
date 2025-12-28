@@ -9,6 +9,24 @@ import { PROMPT_LOG_FILENAME } from './config-manager.js';
 import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
 
 /**
+ * Parse request body as JSON
+ */
+function parseRequestBody(req) {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                resolve(body ? JSON.parse(body) : {});
+            } catch (e) {
+                reject(new Error('Invalid JSON in request body'));
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+/**
  * Main request handler. It authenticates the request, determines the endpoint type,
  * and delegates to the appropriate specialized handler function.
  * @param {Object} config - The server configuration
@@ -97,16 +115,6 @@ export function createRequestHandler(config, providerPoolManager) {
             }
         }
 
-        // Ignore count_tokens requests
-        if (path.includes('/count_tokens')) {
-            console.log(`[Server] Ignoring count_tokens request: ${path}`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                tokens: 0,
-                message: 'Token counting is not supported'
-            }));
-            return true;
-        }
 
         // Handle API requests
         // Allow overriding MODEL_PROVIDER via request header
@@ -152,6 +160,37 @@ export function createRequestHandler(config, providerPoolManager) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;
+        }
+
+        // Handle count_tokens requests (Anthropic API compatible)
+        if (path.includes('/count_tokens') && method === 'POST') {
+            try {
+                const body = await parseRequestBody(req);
+                console.log(`[Server] Handling count_tokens request for model: ${body.model}`);
+
+                // Check if apiService has countTokens method
+                if (apiService && typeof apiService.countTokens === 'function') {
+                    const result = apiService.countTokens(body);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(result));
+                } else {
+                    // Fallback: use estimateInputTokens if available
+                    if (apiService && typeof apiService.estimateInputTokens === 'function') {
+                        const inputTokens = apiService.estimateInputTokens(body);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ input_tokens: inputTokens }));
+                    } else {
+                        // Last resort: return 0 with a message
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ input_tokens: 0 }));
+                    }
+                }
+                return true;
+            } catch (error) {
+                console.error(`[Server] count_tokens error: ${error.message}`);
+                handleError(res, { statusCode: 500, message: `Failed to count tokens: ${error.message}` });
+                return;
+            }
         }
 
         try {
