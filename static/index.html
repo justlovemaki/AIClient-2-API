@@ -24,8 +24,8 @@
                         <i class="fas fa-sign-out-alt"></i> <span data-i18n="header.logout">登出</span>
                     </button>
                     </span>
-                    <button id="refreshBtn" class="logout-btn" aria-label="Refresh Data" data-i18n-aria-label="header.refresh">
-                        <i class="fas fa-sync-alt"></i> <span class="btn-text" data-i18n="header.refresh">重载</span>
+                    <button id="restartBtn" class="logout-btn" aria-label="Restart Service" data-i18n-aria-label="header.restart">
+                        <i id="restartBtnIcon" class="fas fa-redo"></i> <span id="restartBtnText" class="btn-text" data-i18n="header.restart">重启</span>
                     </button>
                 </div>
             </div>
@@ -98,31 +98,84 @@
 
                     <!-- System Information Panel -->
                     <div class="system-info-panel">
-                        <h3 data-i18n="dashboard.systemInfo">系统信息</h3>
+                        <div class="system-info-header">
+                            <h3 data-i18n="dashboard.systemInfo">系统信息</h3>
+                            <div class="update-controls">
+                                <button id="checkUpdateBtn" class="btn btn-outline btn-sm" data-i18n-title="dashboard.update.checkTitle" title="检查更新">
+                                    <i class="fas fa-sync-alt"></i> <span data-i18n="dashboard.update.check">检查更新</span>
+                                </button>
+                                <button id="performUpdateBtn" class="btn btn-primary btn-sm" style="display: none;" data-i18n-title="dashboard.update.performTitle" title="执行更新">
+                                    <i class="fas fa-download"></i> <span data-i18n="dashboard.update.perform">立即更新</span>
+                                </button>
+                            </div>
+                        </div>
                         <div class="info-grid">
                             <div class="info-item">
                                 <span class="info-label">
                                     <i class="fas fa-tag"></i> <span data-i18n="dashboard.version">版本号</span>
                                 </span>
-                                <span class="info-value" id="appVersion">--</span>
+                                <div class="version-display-wrapper">
+                                    <span class="info-value" id="appVersion">--</span>
+                                    <span class="update-badge" id="updateBadge" style="display: none;">
+                                        <i class="fas fa-arrow-up"></i> <span id="latestVersionText">--</span>
+                                    </span>
+                                </div>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">
                                     <i class="fas fa-code"></i> <span data-i18n="dashboard.nodeVersion">Node.js版本</span>
                                 </span>
+                                <div class="version-display-wrapper">
                                 <span class="info-value" id="nodeVersion">--</span>
+                                </div>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">
                                     <i class="fas fa-clock"></i> <span data-i18n="dashboard.serverTime">服务器时间</span>
                                 </span>
+                                <div class="version-display-wrapper">
                                 <span class="info-value" id="serverTime">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="fas fa-desktop"></i> <span data-i18n="dashboard.platform">操作系统</span>
+                                </span>
+                                <div class="version-display-wrapper">
+                                <span class="info-value" id="platformInfo">--</span>
+                                </div>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">
                                     <i class="fas fa-memory"></i> <span data-i18n="dashboard.memoryUsage">内存使用</span>
                                 </span>
+                                <div class="version-display-wrapper">
                                 <span class="info-value" id="memoryUsage">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="fas fa-microchip"></i> <span data-i18n="dashboard.cpuUsage">CPU 使用</span>
+                                </span>
+                                <div class="version-display-wrapper">
+                                <span class="info-value" id="cpuUsage">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="fas fa-cogs"></i> <span data-i18n="dashboard.serviceMode">运行模式</span>
+                                </span>
+                                <div class="version-display-wrapper">
+                                <span class="info-value" id="serviceMode">--</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="fas fa-microchip"></i> <span data-i18n="dashboard.processPid">进程 PID</span>
+                                </span>
+                                <div class="version-display-wrapper">
+                                <span class="info-value" id="processPid">--</span>
+                                </div>
                             </div>
                         </div>
                     </div>

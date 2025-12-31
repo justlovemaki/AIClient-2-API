@@ -4,14 +4,15 @@ import { elements, autoScroll, setAutoScroll, clearLogs } from './constants.js';
 import { showToast } from './utils.js';
 import { fileUploadHandler } from './file-upload.js';
 import { t } from './i18n.js';
+import { checkUpdate, performUpdate } from './provider-manager.js';
 
 /**
  * 初始化所有事件监听器
  */
 function initEventListeners() {
-    // 刷新按钮
-    if (elements.refreshBtn) {
-        elements.refreshBtn.addEventListener('click', handleRefresh);
+    // 重启按钮
+    if (elements.restartBtn) {
+        elements.restartBtn.addEventListener('click', handleRestart);
     }
 
     // 清空日志
@@ -79,6 +80,18 @@ function initEventListeners() {
     // if (providerPoolsInput) {
     //     providerPoolsInput.addEventListener('input', handleProviderPoolsConfigChange);
     // }
+
+    // 检查更新按钮
+    const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+    if (checkUpdateBtn) {
+        checkUpdateBtn.addEventListener('click', () => checkUpdate(false));
+    }
+
+    // 执行更新按钮
+    const performUpdateBtn = document.getElementById('performUpdateBtn');
+    if (performUpdateBtn) {
+        performUpdateBtn.addEventListener('click', performUpdate);
+    }
 
     // 日志容器滚动
     if (elements.logsContainer) {
@@ -326,21 +339,100 @@ let loadInitialData;
 let saveConfiguration;
 let reloadConfig;
 
-// 刷新处理函数
-async function handleRefresh() {
+// 当前服务模式（由 provider-manager.js 设置）
+let currentServiceMode = 'worker';
+
+/**
+ * 设置当前服务模式
+ * @param {string} mode - 服务模式 ('worker' 或 'standalone')
+ */
+export function setServiceMode(mode) {
+    currentServiceMode = mode;
+}
+
+/**
+ * 获取当前服务模式
+ * @returns {string} 当前服务模式
+ */
+export function getServiceMode() {
+    return currentServiceMode;
+}
+
+// 重启/重载服务处理函数
+async function handleRestart() {
     try {
-        // 先刷新基础数据
-        if (loadInitialData) {
-            loadInitialData();
-        }
-        
-        // 如果reloadConfig函数可用，则也刷新配置
-        if (reloadConfig) {
-            await reloadConfig();
+        // 根据服务模式执行不同操作
+        if (currentServiceMode === 'standalone') {
+            // 独立模式：执行重载配置
+            await handleReloadConfig();
+        } else {
+            // 子进程模式：执行重启服务
+            await handleRestartService();
         }
     } catch (error) {
-        console.error('刷新失败:', error);
-        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
+        console.error('Operation failed:', error);
+        const errorKey = currentServiceMode === 'standalone' ? 'header.reload.failed' : 'header.restart.failed';
+        showToast(t('common.error'), t(errorKey) + ': ' + error.message, 'error');
+    }
+}
+
+/**
+ * 重载配置（独立模式）
+ */
+async function handleReloadConfig() {
+    // 确认重载操作
+    if (!confirm(t('header.reload.confirm'))) {
+        return;
+    }
+    
+    showToast(t('common.info'), t('header.reload.requesting'), 'info');
+    
+    // 先刷新基础数据
+    if (loadInitialData) {
+        loadInitialData();
+    }
+    
+    // 如果reloadConfig函数可用，则也刷新配置
+    if (reloadConfig) {
+        await reloadConfig();
+    }
+}
+
+/**
+ * 重启服务（子进程模式）
+ */
+async function handleRestartService() {
+    // 确认重启操作
+    if (!confirm(t('header.restart.confirm'))) {
+        return;
+    }
+    
+    showToast(t('common.info'), t('header.restart.requesting'), 'info');
+    
+    const result = await window.apiClient.post('/restart-service');
+    
+    if (result.success) {
+        showToast(t('common.success'), result.message || t('header.restart.success'), 'success');
+        
+        // 如果是 worker 模式，服务会自动重启，等待几秒后刷新页面
+        if (result.mode === 'worker') {
+            setTimeout(() => {
+                showToast(t('common.info'), t('header.restart.reconnecting'), 'info');
+                // 等待服务重启后刷新页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+            }, 2000);
+        }
+    } else {
+        // 显示错误信息
+        const errorMsg = result.message || result.error?.message || t('header.restart.failed');
+        showToast(t('common.error'), errorMsg, 'error');
+        
+        // 如果是独立模式，显示提示
+        if (result.mode === 'standalone') {
+            showToast(t('common.info'), result.hint, 'warning');
+        }
     }
 }
 

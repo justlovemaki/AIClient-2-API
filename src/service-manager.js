@@ -93,6 +93,11 @@ export async function autoLinkProviderConfigs(config) {
         console.log('[Auto-Link] No new configs to link');
     }
     
+    // Update provider pool manager if available
+    if (providerPoolManager) {
+        providerPoolManager.providerPools = config.providerPools;
+        providerPoolManager.initializeProviderStatus();
+    }
     return config.providerPools;
 }
 
