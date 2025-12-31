@@ -17,7 +17,7 @@ let providerStats = {
 // DOM元素
 const elements = {
     serverStatus: document.getElementById('serverStatus'),
-    refreshBtn: document.getElementById('refreshBtn'),
+    restartBtn: document.getElementById('restartBtn'),
     sections: document.querySelectorAll('.section'),
     navItems: document.querySelectorAll('.nav-item'),
     logsContainer: document.getElementById('logsContainer'),

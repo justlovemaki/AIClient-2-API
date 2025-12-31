@@ -78,9 +78,10 @@
 
 - [🐳 Docker Deployment](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 - [🔧 Usage Instructions](#-usage-instructions)
+- [❓ FAQ](#-faq)
 - [📄 Open Source License](#-open-source-license)
 - [🙏 Acknowledgements](#-acknowledgements)
-- [⚠️ Disclaimer](#-disclaimer)
+- [⚠️ Disclaimer](#️-disclaimer)
 
 ---
 
@@ -334,6 +335,128 @@ curl http://localhost:3000/ollama/api/chat \
 
 ---
 
+## ❓ FAQ
+
+### 1. OAuth Authorization Failed
+
+**Problem Description**: After clicking "Generate Authorization", the browser opens the authorization page but authorization fails or cannot be completed.
+
+**Solutions**:
+- **Check Network Connection**: Ensure you can access Google, Alibaba Cloud, and other services normally
+- **Check Port Occupation**: OAuth callbacks require specific ports (Gemini: 8085, Antigravity: 8086, Kiro: 19876-19880), ensure these ports are not occupied
+- **Clear Browser Cache**: Try using incognito mode or clearing browser cache and retry
+- **Check Firewall Settings**: Ensure the firewall allows access to local callback ports
+- **Docker Users**: Ensure all OAuth callback ports are correctly mapped
+
+### 2. Port Already in Use
+
+**Problem Description**: When starting the service, it shows the port is already in use (e.g., `EADDRINUSE`).
+
+**Solutions**:
+```bash
+# Windows - Find the process occupying the port
+netstat -ano | findstr :3000
+# Then use Task Manager to end the corresponding PID process
+
+# Linux/macOS - Find and end the process occupying the port
+lsof -i :3000
+kill -9 <PID>
+```
+
+Or modify the port configuration in `configs/config.json` to use a different port.
+
+### 3. Docker Container Won't Start
+
+**Problem Description**: Docker container fails to start or exits immediately.
+
+**Solutions**:
+- **Check Logs**: `docker logs aiclient2api` to view error messages
+- **Check Mount Path**: Ensure the local path in the `-v` parameter exists and has read/write permissions
+- **Check Port Conflicts**: Ensure all mapped ports are not occupied on the host
+- **Re-pull Image**: `docker pull justlikemaki/aiclient-2-api:latest`
+
+### 4. Credential File Not Recognized
+
+**Problem Description**: After uploading or configuring credential files, the system shows it cannot be recognized or format error.
+
+**Solutions**:
+- **Check File Format**: Ensure the credential file is valid JSON format
+- **Check File Path**: Ensure the file path is correct, Docker users need to ensure the file is in the mounted directory
+- **Check File Permissions**: Ensure the service has permission to read the credential file
+- **Regenerate Credentials**: If credentials have expired, try re-authorizing via OAuth
+
+### 5. Request Returns 429 Error
+
+**Problem Description**: API requests frequently return 429 Too Many Requests error.
+
+**Solutions**:
+- **Configure Account Pool**: Add multiple accounts to `provider_pools.json`, enable polling mechanism
+- **Configure Fallback**: Configure `providerFallbackChain` in `config.json` for cross-type degradation
+- **Reduce Request Frequency**: Appropriately increase request intervals to avoid triggering rate limits
+- **Wait for Quota Reset**: Free quotas usually reset daily or per minute
+
+### 6. Model Unavailable or Returns Error
+
+**Problem Description**: When requesting a specific model, it returns an error or shows the model is unavailable.
+
+**Solutions**:
+- **Check Model Name**: Ensure you're using the correct model name (case-sensitive)
+- **Check Provider Support**: Confirm the currently configured provider supports that model
+- **Check Account Permissions**: Some advanced models may require specific account permissions
+- **Configure Model Filtering**: Use `notSupportedModels` to exclude unsupported models
+
+### 7. Web UI Cannot Be Accessed
+
+**Problem Description**: Browser cannot open `http://localhost:3000`.
+
+**Solutions**:
+- **Check Service Status**: Confirm the service has started successfully, check terminal output
+- **Check Port Mapping**: Docker users ensure `-p 3000:3000` parameter is correct
+- **Try Other Address**: Try accessing `http://127.0.0.1:3000`
+- **Check Firewall**: Ensure the firewall allows access to port 3000
+
+### 8. Streaming Response Interrupted
+
+**Problem Description**: When using streaming output, the response is interrupted midway or incomplete.
+
+**Solutions**:
+- **Check Network Stability**: Ensure network connection is stable
+- **Increase Timeout**: Increase request timeout in client configuration
+- **Check Proxy Settings**: If using a proxy, ensure the proxy supports long connections
+- **Check Service Logs**: Check for error messages
+
+### 9. Configuration Changes Not Taking Effect
+
+**Problem Description**: After modifying configuration in Web UI, service behavior doesn't change.
+
+**Solutions**:
+- **Refresh Page**: Refresh the Web UI page after modification
+- **Check Save Status**: Confirm the configuration was saved successfully (check prompt messages)
+- **Restart Service**: Some configurations may require service restart to take effect
+- **Check Configuration File**: Directly check `configs/config.json` to confirm changes were written
+
+### 10. API Returns 404
+
+**Problem Description**: When calling API endpoints, it returns 404 Not Found error.
+
+**Solutions**:
+- **Check Endpoint Path**: Ensure you're using the correct endpoint path, such as `/v1/chat/completions`, `/ollama/api/chat`, etc.
+- **Check Client Auto-completion**: Some clients (like Cherry-Studio, NextChat) automatically append paths (like `/v1/chat/completions`) after the Base URL, causing path duplication. Check the actual request URL in the console and remove redundant path parts
+- **Check Service Status**: Confirm the service has started normally, visit `http://localhost:3000` to view Web UI
+- **Check Port Configuration**: Ensure requests are sent to the correct port (default 3000)
+- **View Available Routes**: Check "Interactive Routing Examples" on the Web UI dashboard page to see all available endpoints
+
+### 11. Unauthorized: API key is invalid or missing
+
+**Problem Description**: When calling API endpoints, it returns `Unauthorized: API key is invalid or missing.` error.
+
+**Solutions**:
+- **Check API Key Configuration**: Ensure API Key is correctly configured in `configs/config.json` or Web UI
+- **Check Request Header Format**: Ensure the request contains the correct Authorization header format, such as `Authorization: Bearer your-api-key`
+- **Check Service Logs**: View detailed error messages on the "Real-time Logs" page in Web UI to locate the specific cause
+
+---
+
 ## 📄 Open Source License
 
 This project follows the [**GNU General Public License v3 (GPLv3)**](https://www.gnu.org/licenses/gpl-3.0) license. For details, please check the `LICENSE` file in the root directory.
@@ -357,6 +480,7 @@ We are grateful for the support from our sponsors:
 - [**3831143avl**](https://github.com/3831143avl "10")
 - [**醉春风**](https://github.com/handsometong "28.8")
 - [**crazy**](https://github.com/404 "88")
+- [**清宵落了灯花**](https://github.com/Lanternmorning "16")
 
 ### 🌟 Star History
 

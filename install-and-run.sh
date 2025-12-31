@@ -75,9 +75,9 @@ if [ $? -ne 0 ]; then
 fi
 echo "[成功] 依赖安装/更新完成"
 
-# 检查src目录和api-server.js是否存在
-if [ ! -f "src/api-server.js" ]; then
-    echo "[错误] 未找到src/api-server.js文件"
+# 检查src目录和master.js是否存在
+if [ ! -f "src/master.js" ]; then
+    echo "[错误] 未找到src/master.js文件"
     exit 1
 fi
 
@@ -95,4 +95,4 @@ echo "按 Ctrl+C 停止服务器"
 echo
 
 # 启动服务器
-node src/api-server.js
+node src/master.js

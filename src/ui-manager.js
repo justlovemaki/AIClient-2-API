@@ -1,10 +1,57 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import multer from 'multer';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { getRequestBody } from './common.js';
+
+const execAsync = promisify(exec);
+
+// CPU 使用率计算相关变量
+let previousCpuInfo = null;
+
+/**
+ * 获取 CPU 使用率百分比
+ * @returns {string} CPU 使用率字符串，如 "25.5%"
+ */
+function getCpuUsagePercent() {
+    const cpus = os.cpus();
+    
+    let totalIdle = 0;
+    let totalTick = 0;
+    
+    for (const cpu of cpus) {
+        for (const type in cpu.times) {
+            totalTick += cpu.times[type];
+        }
+        totalIdle += cpu.times.idle;
+    }
+    
+    const currentCpuInfo = {
+        idle: totalIdle,
+        total: totalTick
+    };
+    
+    let cpuPercent = 0;
+    
+    if (previousCpuInfo) {
+        const idleDiff = currentCpuInfo.idle - previousCpuInfo.idle;
+        const totalDiff = currentCpuInfo.total - previousCpuInfo.total;
+        
+        if (totalDiff > 0) {
+            cpuPercent = 100 - (100 * idleDiff / totalDiff);
+        }
+    }
+    
+    previousCpuInfo = currentCpuInfo;
+    
+    return `${cpuPercent.toFixed(1)}%`;
+}
+
 import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
@@ -109,7 +156,7 @@ async function readTokenStore() {
             return { tokens: {} };
         }
     } catch (error) {
-        console.error('读取token存储文件失败:', error);
+        console.error('[Token Store] Failed to read token store file:', error);
         return { tokens: {} };
     }
 }
@@ -121,7 +168,7 @@ async function writeTokenStore(tokenStore) {
     try {
         await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
     } catch (error) {
-        console.error('写入token存储文件失败:', error);
+        console.error('[Token Store] Failed to write token store file:', error);
     }
 }
 
@@ -217,18 +264,18 @@ async function readPasswordFile() {
         const trimmedPassword = password.trim();
         // 如果密码文件为空，使用默认密码
         if (!trimmedPassword) {
-            console.log('[Auth] 密码文件为空，使用默认密码: ' + DEFAULT_PASSWORD);
+            console.log('[Auth] Password file is empty, using default password: ' + DEFAULT_PASSWORD);
             return DEFAULT_PASSWORD;
         }
-        console.log('[Auth] 成功读取密码文件');
+        console.log('[Auth] Successfully read password file');
         return trimmedPassword;
     } catch (error) {
-        // ENOENT 表示文件不存在，这是正常情况
+        // ENOENT means file does not exist, which is normal
         if (error.code === 'ENOENT') {
-            console.log('[Auth] 密码文件不存在，使用默认密码: ' + DEFAULT_PASSWORD);
+            console.log('[Auth] Password file does not exist, using default password: ' + DEFAULT_PASSWORD);
         } else {
-            console.error('[Auth] 读取密码文件失败:', error.code || error.message);
-            console.log('[Auth] 使用默认密码: ' + DEFAULT_PASSWORD);
+            console.error('[Auth] Failed to read password file:', error.code || error.message);
+            console.log('[Auth] Using default password: ' + DEFAULT_PASSWORD);
         }
         return DEFAULT_PASSWORD;
     }
@@ -239,9 +286,9 @@ async function readPasswordFile() {
  */
 async function validateCredentials(password) {
     const storedPassword = await readPasswordFile();
-    console.log('[Auth] 验证密码, 存储密码长度:', storedPassword ? storedPassword.length : 0, ', 输入密码长度:', password ? password.length : 0);
+    console.log('[Auth] Validating password, stored password length:', storedPassword ? storedPassword.length : 0, ', input password length:', password ? password.length : 0);
     const isValid = storedPassword && password === storedPassword;
-    console.log('[Auth] 密码验证结果:', isValid);
+    console.log('[Auth] Password validation result:', isValid);
     return isValid;
 }
 
@@ -262,7 +309,7 @@ function parseRequestBody(req) {
                     resolve(JSON.parse(body));
                 }
             } catch (error) {
-                reject(new Error('无效的JSON格式'));
+                reject(new Error('Invalid JSON format'));
             }
         });
         req.on('error', reject);
@@ -291,7 +338,7 @@ async function checkAuth(req) {
 async function handleLoginRequest(req, res) {
     if (req.method !== 'POST') {
         res.writeHead(405, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, message: '仅支持POST请求' }));
+        res.end(JSON.stringify({ success: false, message: 'Only POST requests are supported' }));
         return true;
     }
 
@@ -301,18 +348,18 @@ async function handleLoginRequest(req, res) {
         
         if (!password) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: '密码不能为空' }));
+            res.end(JSON.stringify({ success: false, message: 'Password cannot be empty' }));
             return true;
         }
 
         const isValid = await validateCredentials(password);
         
         if (isValid) {
-            // 生成简单token
+            // Generate simple token
             const token = generateToken();
             const expiryTime = getExpiryTime();
             
-            // 存储token信息到本地文件
+            // Store token info to local file
             await saveToken(token, {
                 username: 'admin',
                 loginTime: Date.now(),
@@ -322,23 +369,23 @@ async function handleLoginRequest(req, res) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: '登录成功',
+                message: 'Login successful',
                 token,
-                expiresIn: '1小时'
+                expiresIn: '1 hour'
             }));
         } else {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
-                message: '密码错误，请重试'
+                message: 'Incorrect password, please try again'
             }));
         }
     } catch (error) {
-        console.error('登录处理错误:', error);
+        console.error('[Auth] Login processing error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,
-            message: error.message || '服务器错误'
+            message: error.message || 'Server error'
         }));
     }
     return true;
@@ -373,7 +420,7 @@ const fileFilter = (req, file, cb) => {
     if (allowedTypes.includes(ext)) {
         cb(null, true);
     } else {
-        cb(new Error('不支持的文件类型'), false);
+        cb(new Error('Unsupported file type'), false);
     }
 };
 
@@ -482,7 +529,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             });
             res.end(JSON.stringify({
                 error: {
-                    message: '未授权访问，请先登录',
+                    message: 'Unauthorized access, please login first',
                     code: 'UNAUTHORIZED'
                 }
             }));
@@ -496,11 +543,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         
         uploadMiddleware(req, res, async (err) => {
             if (err) {
-                console.error('文件上传错误:', err.message);
+                console.error('[UI API] File upload error:', err.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: err.message || '文件上传失败'
+                        message: err.message || 'File upload failed'
                     }
                 }));
                 return;
@@ -511,7 +558,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
                         error: {
-                            message: '没有文件被上传'
+                            message: 'No file was uploaded'
                         }
                     }));
                     return;
@@ -548,23 +595,23 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     timestamp: new Date().toISOString()
                 });
 
-                console.log(`[UI API] OAuth凭据文件已上传: ${targetFilePath} (提供商: ${provider})`);
+                console.log(`[UI API] OAuth credentials file uploaded: ${targetFilePath} (provider: ${provider})`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
-                    message: '文件上传成功',
+                    message: 'File uploaded successfully',
                     filePath: relativePath,
                     originalName: req.file.originalname,
                     provider: provider
                 }));
 
             } catch (error) {
-                console.error('文件上传处理错误:', error);
+                console.error('[UI API] File upload processing error:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '文件上传处理失败: ' + error.message
+                        message: 'File upload processing failed: ' + error.message
                     }
                 }));
             }
@@ -582,7 +629,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '密码不能为空'
+                        message: 'Password cannot be empty'
                     }
                 }));
                 return true;
@@ -597,7 +644,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: '后台登录密码已更新'
+                message: 'Admin password updated successfully'
             }));
             return true;
         } catch (error) {
@@ -605,7 +652,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: '更新密码失败: ' + error.message
+                    message: 'Failed to update password: ' + error.message
                 }
             }));
             return true;
@@ -794,12 +841,16 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             console.warn('[UI API] Failed to read VERSION file:', error.message);
         }
         
+        // 计算 CPU 使用率
+        const cpuUsage = getCpuUsagePercent();
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             appVersion: appVersion,
             nodeVersion: process.version,
             serverTime: new Date().toLocaleString(),
             memoryUsage: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
+            cpuUsage: cpuUsage,
             uptime: process.uptime()
         }));
         return true;
@@ -1257,7 +1308,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: `成功重置 ${resetCount} 个节点的健康状态`,
+                message: `Successfully reset health status for ${resetCount} providers`,
                 resetCount,
                 totalCount: providers.length
             }));
@@ -1303,7 +1354,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                         results.push({
                             uuid: providerConfig.uuid,
                             success: null,
-                            message: '健康检测不支持此提供商类型'
+                            message: 'Health check not supported for this provider type'
                         });
                         continue;
                     }
@@ -1314,7 +1365,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                             uuid: providerConfig.uuid,
                             success: true,
                             modelName: healthResult.modelName,
-                            message: '健康'
+                            message: 'Healthy'
                         });
                     } else {
                         providerPoolManager.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
@@ -1326,7 +1377,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                             uuid: providerConfig.uuid,
                             success: false,
                             modelName: healthResult.modelName,
-                            message: healthResult.errorMessage || '检测失败'
+                            message: healthResult.errorMessage || 'Check failed'
                         });
                     }
                 } catch (error) {
@@ -1366,7 +1417,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: `健康检测完成: ${successCount} 个健康, ${failCount} 个异常`,
+                message: `Health check completed: ${successCount} healthy, ${failCount} unhealthy`,
                 successCount,
                 failCount,
                 totalCount: providers.length,
@@ -1421,7 +1472,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: `不支持的提供商类型: ${providerType}`
+                        message: `Unsupported provider type: ${providerType}`
                     }
                 }));
                 return true;
@@ -1440,7 +1491,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: `生成授权链接失败: ${error.message}`
+                    message: `Failed to generate auth URL: ${error.message}`
                 }
             }));
             return true;
@@ -1512,7 +1563,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '访问被拒绝：只能查看configs目录下的文件'
+                        message: 'Access denied: can only view files in configs directory'
                     }
                 }));
                 return true;
@@ -1522,7 +1573,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '文件不存在'
+                        message: 'File does not exist'
                     }
                 }));
                 return true;
@@ -1568,7 +1619,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '访问被拒绝：只能删除configs目录下的文件'
+                        message: 'Access denied: can only delete files in configs directory'
                     }
                 }));
                 return true;
@@ -1578,7 +1629,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '文件不存在'
+                        message: 'File does not exist'
                     }
                 }));
                 return true;
@@ -1597,7 +1648,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: '文件删除成功',
+                message: 'File deleted successfully',
                 filePath: relativePath
             }));
             return true;
@@ -1619,7 +1670,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             const configsPath = path.join(process.cwd(), 'configs');
             if (!existsSync(configsPath)) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: 'configs目录不存在' } }));
+                res.end(JSON.stringify({ error: { message: 'configs directory does not exist' } }));
                 return true;
             }
 
@@ -1660,7 +1711,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: '打包下载失败: ' + error.message
+                    message: 'Failed to download zip: ' + error.message
                 }
             }));
             return true;
@@ -1688,7 +1739,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
-                        message: '无法识别配置文件对应的提供商类型，请确保文件位于 configs/kiro/、configs/gemini/、configs/qwen/ 或 configs/antigravity/ 目录下'
+                        message: 'Unable to identify provider type for config file, please ensure file is in configs/kiro/, configs/gemini/, configs/qwen/ or configs/antigravity/ directory'
                     }
                 }));
                 return true;
@@ -1726,7 +1777,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
             if (isAlreadyLinked) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: '该配置文件已关联' } }));
+                res.end(JSON.stringify({ error: { message: 'This config file is already linked' } }));
                 return true;
             }
 
@@ -1769,7 +1820,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: `配置已成功关联到 ${displayName}`,
+                message: `Config successfully linked to ${displayName}`,
                 provider: newProvider,
                 providerType: providerType
             }));
@@ -1779,7 +1830,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: '关联失败: ' + error.message
+                    message: 'Link failed: ' + error.message
                 }
             }));
             return true;
@@ -1820,7 +1871,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: '获取用量信息失败: ' + error.message
+                    message: 'Failed to get usage info: ' + error.message
                 }
             }));
             return true;
@@ -1839,7 +1890,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             let usageResults;
             
             if (!refresh) {
-                // 优先读取缓存
+                // Prefer reading from cache
                 const cachedData = await readProviderUsageCache(providerType);
                 if (cachedData) {
                     console.log(`[Usage API] Returning cached usage data for ${providerType}`);
@@ -1848,7 +1899,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
             
             if (!usageResults) {
-                // 缓存不存在或需要刷新，重新查询
+                // Cache does not exist or refresh required, re-query
                 console.log(`[Usage API] Fetching fresh usage data for ${providerType}`);
                 usageResults = await getProviderTypeUsage(providerType, currentConfig, providerPoolManager);
                 // 更新缓存
@@ -1863,7 +1914,45 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: `获取 ${providerType} 用量信息失败: ` + error.message
+                    message: `Failed to get usage info for ${providerType}: ` + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Check for updates - compare local VERSION with latest git tag
+    if (method === 'GET' && pathParam === '/api/check-update') {
+        try {
+            const updateInfo = await checkForUpdates();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(updateInfo));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to check for updates:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Failed to check for updates: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Perform update - git fetch and checkout to latest tag
+    if (method === 'POST' && pathParam === '/api/update') {
+        try {
+            const updateResult = await performUpdate();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(updateResult));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to perform update:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Update failed: ' + error.message
                 }
             }));
             return true;
@@ -1887,7 +1976,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: '配置文件重新加载成功',
+                message: 'Configuration files reloaded successfully',
                 details: {
                     configReloaded: true,
                     configPath: 'configs/config.json',
@@ -1900,11 +1989,84 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: '重新加载配置文件失败: ' + error.message
+                    message: 'Failed to reload configuration files: ' + error.message
                 }
             }));
             return true;
         }
+    }
+
+    // Restart service (worker process)
+    // 重启服务端点 - 支持主进程-子进程架构
+    if (method === 'POST' && pathParam === '/api/restart-service') {
+        try {
+            const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
+            
+            if (IS_WORKER_PROCESS && process.send) {
+                // 作为子进程运行，通知主进程重启
+                console.log('[UI API] Requesting restart from master process...');
+                process.send({ type: 'restart_request' });
+                
+                // 广播重启事件
+                broadcastEvent('service_restart', {
+                    action: 'restart_requested',
+                    timestamp: new Date().toISOString(),
+                    message: 'Service restart requested, worker will be restarted by master process'
+                });
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'Restart request sent to master process',
+                    mode: 'worker',
+                    details: {
+                        workerPid: process.pid,
+                        restartMethod: 'master_controlled'
+                    }
+                }));
+            } else {
+                // 独立运行模式，无法自动重启
+                console.log('[UI API] Service is running in standalone mode, cannot auto-restart');
+                
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    message: 'Service is running in standalone mode. Please use master.js to enable auto-restart feature.',
+                    mode: 'standalone',
+                    hint: 'Start the service with: node src/master.js [args]'
+                }));
+            }
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to restart service:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Failed to restart service: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Get service mode information
+    // 获取服务运行模式信息
+    if (method === 'GET' && pathParam === '/api/service-mode') {
+        const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
+        const masterPort = process.env.MASTER_PORT || 3100;
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            mode: IS_WORKER_PROCESS ? 'worker' : 'standalone',
+            pid: process.pid,
+            ppid: process.ppid,
+            uptime: process.uptime(),
+            canAutoRestart: IS_WORKER_PROCESS && !!process.send,
+            masterPort: IS_WORKER_PROCESS ? masterPort : null,
+            nodeVersion: process.version,
+            platform: process.platform
+        }));
+        return true;
     }
 
     return false;
@@ -2109,7 +2271,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
             }
         } catch (readError) {
             isValid = false;
-            errorMessage = `无法读取文件: ${readError.message}`;
+            errorMessage = `Unable to read file: ${readError.message}`;
         }
         
         return {
@@ -2161,8 +2323,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
          pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Gemini OAuth凭据文件路径',
+            type: 'Main Config',
+            location: 'Gemini OAuth credentials file path',
             configKey: 'GEMINI_OAUTH_CREDS_FILE_PATH'
         });
     }
@@ -2172,8 +2334,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
          pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Kiro OAuth凭据文件路径',
+            type: 'Main Config',
+            location: 'Kiro OAuth credentials file path',
             configKey: 'KIRO_OAUTH_CREDS_FILE_PATH'
         });
     }
@@ -2183,8 +2345,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
          pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
         usageInfo.usageType = 'main_config';
         usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Qwen OAuth凭据文件路径',
+            type: 'Main Config',
+            location: 'Qwen OAuth credentials file path',
             configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
         });
     }
@@ -2204,8 +2366,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '提供商池',
-                    location: `Gemini OAuth凭据 (节点${index + 1})`,
+                    type: 'Provider Pool',
+                    location: `Gemini OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'GEMINI_OAUTH_CREDS_FILE_PATH'
@@ -2216,8 +2378,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '提供商池',
-                    location: `Kiro OAuth凭据 (节点${index + 1})`,
+                    type: 'Provider Pool',
+                    location: `Kiro OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'KIRO_OAUTH_CREDS_FILE_PATH'
@@ -2228,8 +2390,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '提供商池',
-                    location: `Qwen OAuth凭据 (节点${index + 1})`,
+                    type: 'Provider Pool',
+                    location: `Qwen OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
@@ -2240,8 +2402,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                 (pathsEqual(relativePath, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH) ||
                  pathsEqual(relativePath, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
                 providerUsages.push({
-                    type: '提供商池',
-                    location: `Antigravity OAuth凭据 (节点${index + 1})`,
+                    type: 'Provider Pool',
+                    location: `Antigravity OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
@@ -2393,15 +2555,15 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
             error: null
         };
 
-        // 首先检查是否已禁用，已禁用的提供商跳过初始化
+        // First check if disabled, skip initialization for disabled providers
         if (provider.isDisabled) {
-            instanceResult.error = '提供商已禁用';
+            instanceResult.error = 'Provider is disabled';
             result.errorCount++;
         } else if (!adapter) {
-            // 服务实例未初始化，尝试自动初始化
+            // Service instance not initialized, try auto-initialization
             try {
                 console.log(`[Usage API] Auto-initializing service adapter for ${providerType}: ${provider.uuid}`);
-                // 构建配置对象
+                // Build configuration object
                 const serviceConfig = {
                     ...CONFIG,
                     ...provider,
@@ -2410,12 +2572,12 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
                 adapter = getServiceAdapter(serviceConfig);
             } catch (initError) {
                 console.error(`[Usage API] Failed to initialize adapter for ${providerType}: ${provider.uuid}:`, initError.message);
-                instanceResult.error = `服务实例初始化失败: ${initError.message}`;
+                instanceResult.error = `Service instance initialization failed: ${initError.message}`;
                 result.errorCount++;
             }
         }
         
-        // 如果适配器存在（包括刚初始化的），且没有错误，尝试获取用量
+        // If adapter exists (including just initialized), and no error, try to get usage
         if (adapter && !instanceResult.error) {
             try {
                 const usage = await getAdapterUsage(adapter, providerType);
@@ -2449,7 +2611,7 @@ async function getAdapterUsage(adapter, providerType) {
             const rawUsage = await adapter.kiroApiService.getUsageLimits();
             return formatKiroUsage(rawUsage);
         }
-        throw new Error('该适配器不支持用量查询');
+        throw new Error('This adapter does not support usage query');
     }
     
     if (providerType === 'gemini-cli-oauth') {
@@ -2460,7 +2622,7 @@ async function getAdapterUsage(adapter, providerType) {
             const rawUsage = await adapter.geminiApiService.getUsageLimits();
             return formatGeminiUsage(rawUsage);
         }
-        throw new Error('该适配器不支持用量查询');
+        throw new Error('This adapter does not support usage query');
     }
     
     if (providerType === 'gemini-antigravity') {
@@ -2471,10 +2633,10 @@ async function getAdapterUsage(adapter, providerType) {
             const rawUsage = await adapter.antigravityApiService.getUsageLimits();
             return formatAntigravityUsage(rawUsage);
         }
-        throw new Error('该适配器不支持用量查询');
+        throw new Error('This adapter does not support usage query');
     }
     
-    throw new Error(`不支持的提供商类型: ${providerType}`);
+    throw new Error(`Unsupported provider type: ${providerType}`);
 }
 
 /**
@@ -2499,5 +2661,218 @@ function getProviderDisplayName(provider, providerType) {
         return `${dirName}/${fileName}`;
     }
 
-    return provider.uuid || '未命名';
+    return provider.uuid || 'Unnamed';
+}
+
+/**
+ * 比较版本号
+ * @param {string} v1 - 版本号1
+ * @param {string} v2 - 版本号2
+ * @returns {number} 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ */
+function compareVersions(v1, v2) {
+    // 移除 'v' 前缀（如果有）
+    const clean1 = v1.replace(/^v/, '');
+    const clean2 = v2.replace(/^v/, '');
+    
+    const parts1 = clean1.split('.').map(Number);
+    const parts2 = clean2.split('.').map(Number);
+    
+    const maxLen = Math.max(parts1.length, parts2.length);
+    
+    for (let i = 0; i < maxLen; i++) {
+        const num1 = parts1[i] || 0;
+        const num2 = parts2[i] || 0;
+        
+        if (num1 > num2) return 1;
+        if (num1 < num2) return -1;
+    }
+    
+    return 0;
+}
+
+/**
+ * 检查是否有新版本可用
+ * @returns {Promise<Object>} 更新信息
+ */
+async function checkForUpdates() {
+    const versionFilePath = path.join(process.cwd(), 'VERSION');
+    
+    // 读取本地版本
+    let localVersion = 'unknown';
+    try {
+        if (existsSync(versionFilePath)) {
+            localVersion = readFileSync(versionFilePath, 'utf8').trim();
+        }
+    } catch (error) {
+        console.warn('[Update] Failed to read local VERSION file:', error.message);
+    }
+    
+    // 检查是否在 git 仓库中
+    try {
+        await execAsync('git rev-parse --git-dir');
+    } catch (error) {
+        return {
+            hasUpdate: false,
+            localVersion,
+            latestVersion: null,
+            error: 'Current directory is not a Git repository, cannot check for updates'
+        };
+    }
+    
+    // 获取远程 tags
+    try {
+        console.log('[Update] Fetching remote tags...');
+        await execAsync('git fetch --tags');
+    } catch (error) {
+        console.warn('[Update] Failed to fetch tags:', error.message);
+        return {
+            hasUpdate: false,
+            localVersion,
+            latestVersion: null,
+            error: 'Unable to fetch remote tags: ' + error.message
+        };
+    }
+    
+    // 获取最新的 tag（根据操作系统选择合适的命令）
+    let latestTag = null;
+    const isWindows = process.platform === 'win32';
+    
+    try {
+        if (isWindows) {
+            // Windows: 使用 git for-each-ref，这是跨平台兼容的方式
+            const { stdout } = await execAsync('git for-each-ref --sort=-v:refname --format="%(refname:short)" refs/tags --count=1');
+            latestTag = stdout.trim();
+        } else {
+            // Linux/macOS: 使用 head 命令，更高效
+            const { stdout } = await execAsync('git tag --sort=-v:refname | head -n 1');
+            latestTag = stdout.trim();
+        }
+    } catch (error) {
+        // 备用方案：获取所有 tags 并在 JavaScript 中排序
+        try {
+            const { stdout } = await execAsync('git tag');
+            const tags = stdout.trim().split('\n').filter(t => t);
+            if (tags.length > 0) {
+                // 按版本号排序（降序）
+                tags.sort((a, b) => compareVersions(b, a));
+                latestTag = tags[0];
+            }
+        } catch (e) {
+            console.warn('[Update] Failed to get latest tag:', e.message);
+            return {
+                hasUpdate: false,
+                localVersion,
+                latestVersion: null,
+                error: 'Unable to get latest version tag'
+            };
+        }
+    }
+    
+    if (!latestTag) {
+        return {
+            hasUpdate: false,
+            localVersion,
+            latestVersion: null,
+            error: 'No version tags found'
+        };
+    }
+    
+    // 比较版本
+    const comparison = compareVersions(latestTag, localVersion);
+    const hasUpdate = comparison > 0;
+    
+    console.log(`[Update] Local version: ${localVersion}, Latest tag: ${latestTag}, Has update: ${hasUpdate}`);
+    
+    return {
+        hasUpdate,
+        localVersion,
+        latestVersion: latestTag,
+        error: null
+    };
+}
+
+/**
+ * 执行更新操作
+ * @returns {Promise<Object>} 更新结果
+ */
+async function performUpdate() {
+    // 首先检查是否有更新
+    const updateInfo = await checkForUpdates();
+    
+    if (updateInfo.error) {
+        throw new Error(updateInfo.error);
+    }
+    
+    if (!updateInfo.hasUpdate) {
+        return {
+            success: true,
+            message: 'Already at the latest version',
+            localVersion: updateInfo.localVersion,
+            latestVersion: updateInfo.latestVersion,
+            updated: false
+        };
+    }
+    
+    const latestTag = updateInfo.latestVersion;
+    
+    console.log(`[Update] Starting update to ${latestTag}...`);
+    
+    // 检查是否有未提交的更改
+    try {
+        const { stdout: statusOutput } = await execAsync('git status --porcelain');
+        if (statusOutput.trim()) {
+            // 有未提交的更改，先 stash
+            console.log('[Update] Stashing local changes...');
+            await execAsync('git stash');
+        }
+    } catch (error) {
+        console.warn('[Update] Failed to check git status:', error.message);
+    }
+    
+    // 执行 checkout 到最新 tag
+    try {
+        console.log(`[Update] Checking out to ${latestTag}...`);
+        await execAsync(`git checkout ${latestTag}`);
+    } catch (error) {
+        console.error('[Update] Failed to checkout:', error.message);
+        throw new Error('Failed to switch to new version: ' + error.message);
+    }
+    
+    // 更新 VERSION 文件（如果 tag 和 VERSION 文件不同步）
+    const versionFilePath = path.join(process.cwd(), 'VERSION');
+    try {
+        const newVersion = latestTag.replace(/^v/, '');
+        writeFileSync(versionFilePath, newVersion, 'utf8');
+        console.log(`[Update] VERSION file updated to ${newVersion}`);
+    } catch (error) {
+        console.warn('[Update] Failed to update VERSION file:', error.message);
+    }
+    
+    // 检查是否需要安装依赖
+    let needsRestart = false;
+    try {
+        // 确保本地版本号有 v 前缀，以匹配 git tag 格式
+        const localVersionTag = updateInfo.localVersion.startsWith('v') ? updateInfo.localVersion : `v${updateInfo.localVersion}`;
+        const { stdout: diffOutput } = await execAsync(`git diff ${localVersionTag}..${latestTag} --name-only`);
+        if (diffOutput.includes('package.json') || diffOutput.includes('package-lock.json')) {
+            console.log('[Update] package.json changed, running npm install...');
+            await execAsync('npm install');
+            needsRestart = true;
+        }
+    } catch (error) {
+        console.warn('[Update] Failed to check package changes:', error.message);
+    }
+    
+    console.log(`[Update] Update completed successfully to ${latestTag}`);
+    
+    return {
+        success: true,
+        message: `Successfully updated to version ${latestTag}`,
+        localVersion: updateInfo.localVersion,
+        latestVersion: latestTag,
+        updated: true,
+        needsRestart: needsRestart,
+        restartMessage: needsRestart ? 'Dependencies updated, recommend restarting service to apply changes' : null
+    };
 }

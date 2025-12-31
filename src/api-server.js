@@ -114,6 +114,107 @@ import 'dotenv/config'; // Import dotenv and configure it
 import './converters/register-converters.js'; // 注册所有转换器
 import { getProviderPoolManager } from './service-manager.js';
 
+// 检测是否作为子进程运行
+const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
+
+// 存储服务器实例，用于优雅关闭
+let serverInstance = null;
+
+/**
+ * 发送消息给主进程
+ * @param {Object} message - 消息对象
+ */
+function sendToMaster(message) {
+    if (IS_WORKER_PROCESS && process.send) {
+        process.send(message);
+    }
+}
+
+/**
+ * 设置子进程通信处理
+ */
+function setupWorkerCommunication() {
+    if (!IS_WORKER_PROCESS) return;
+
+    // 监听来自主进程的消息
+    process.on('message', (message) => {
+        if (!message || !message.type) return;
+
+        console.log('[Worker] Received message from master:', message.type);
+
+        switch (message.type) {
+            case 'shutdown':
+                console.log('[Worker] Shutdown requested by master');
+                gracefulShutdown();
+                break;
+            case 'status':
+                sendToMaster({
+                    type: 'status',
+                    data: {
+                        pid: process.pid,
+                        uptime: process.uptime(),
+                        memoryUsage: process.memoryUsage()
+                    }
+                });
+                break;
+            default:
+                console.log('[Worker] Unknown message type:', message.type);
+        }
+    });
+
+    // 监听断开连接
+    process.on('disconnect', () => {
+        console.log('[Worker] Disconnected from master, shutting down...');
+        gracefulShutdown();
+    });
+}
+
+/**
+ * 优雅关闭服务器
+ */
+async function gracefulShutdown() {
+    console.log('[Server] Initiating graceful shutdown...');
+
+    if (serverInstance) {
+        serverInstance.close(() => {
+            console.log('[Server] HTTP server closed');
+            process.exit(0);
+        });
+
+        // 设置超时，防止无限等待
+        setTimeout(() => {
+            console.log('[Server] Shutdown timeout, forcing exit...');
+            process.exit(1);
+        }, 10000);
+    } else {
+        process.exit(0);
+    }
+}
+
+/**
+ * 设置进程信号处理
+ */
+function setupSignalHandlers() {
+    process.on('SIGTERM', () => {
+        console.log('[Server] Received SIGTERM');
+        gracefulShutdown();
+    });
+
+    process.on('SIGINT', () => {
+        console.log('[Server] Received SIGINT');
+        gracefulShutdown();
+    });
+
+    process.on('uncaughtException', (error) => {
+        console.error('[Server] Uncaught exception:', error);
+        gracefulShutdown();
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('[Server] Unhandled rejection at:', promise, 'reason:', reason);
+    });
+}
+
 // --- Server Initialization ---
 async function startServer() {
     // Initialize configuration
@@ -135,8 +236,8 @@ async function startServer() {
     // Create request handler
     const requestHandlerInstance = createRequestHandler(CONFIG, getProviderPoolManager());
 
-    const server = http.createServer(requestHandlerInstance);
-    server.listen(CONFIG.SERVER_PORT, CONFIG.HOST, async () => {
+    serverInstance = http.createServer(requestHandlerInstance);
+    serverInstance.listen(CONFIG.SERVER_PORT, CONFIG.HOST, async () => {
         console.log(`--- Unified API Server Configuration ---`);
         const configuredProviders = Array.isArray(CONFIG.DEFAULT_MODEL_PROVIDERS) && CONFIG.DEFAULT_MODEL_PROVIDERS.length > 0
             ? CONFIG.DEFAULT_MODEL_PROVIDERS
@@ -196,11 +297,25 @@ async function startServer() {
             console.log('[Initialization] Performing initial health checks for provider pools...');
             poolManager.performHealthChecks(true);
         }
+
+        // 如果是子进程，通知主进程已就绪
+        if (IS_WORKER_PROCESS) {
+            sendToMaster({ type: 'ready', pid: process.pid });
+        }
     });
-    return server; // Return the server instance for testing purposes
+    return serverInstance; // Return the server instance for testing purposes
 }
+
+// 设置信号处理
+setupSignalHandlers();
+
+// 设置子进程通信
+setupWorkerCommunication();
 
 startServer().catch(err => {
     console.error("[Server] Failed to start server:", err.message);
     process.exit(1);
 });
+
+// 导出用于外部调用
+export { gracefulShutdown, sendToMaster };
