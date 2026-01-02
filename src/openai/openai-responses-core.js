@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as http from 'http';
 import * as https from 'https';
+import { configureAxiosProxy } from '../proxy-utils.js';
 
 // OpenAI Responses API specification service for interacting with third-party models
 export class OpenAIResponsesApiService {
@@ -42,6 +43,9 @@ export class OpenAIResponsesApiService {
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;
         }
+        
+        // 配置自定义代理 (使用 openai-custom 的代理配置)
+        configureAxiosProxy(axiosConfig, config, 'openai-custom');
 
         this.axiosInstance = axios.create(axiosConfig);
     }

@@ -114,6 +114,17 @@ async function loadConfiguration() {
                 providerFallbackChainEl.value = '';
             }
         }
+        
+        // 加载代理配置
+        const proxyUrlEl = document.getElementById('proxyUrl');
+        if (proxyUrlEl) proxyUrlEl.value = data.PROXY_URL || '';
+        
+        // 加载启用代理的提供商
+        const proxyProviderCheckboxes = document.querySelectorAll('input[name="proxyProvider"]');
+        const enabledProviders = data.PROXY_ENABLED_PROVIDERS || [];
+        proxyProviderCheckboxes.forEach(checkbox => {
+            checkbox.checked = enabledProviders.includes(checkbox.value);
+        });
 
         // 触发提供商配置显示
         handleProviderChange();
@@ -246,6 +257,13 @@ async function saveConfiguration() {
     } else {
         config.providerFallbackChain = {};
     }
+    
+    // 保存代理配置
+    config.PROXY_URL = document.getElementById('proxyUrl')?.value?.trim() || null;
+    
+    // 获取启用代理的提供商列表
+    const proxyProviderCheckboxes = document.querySelectorAll('input[name="proxyProvider"]:checked');
+    config.PROXY_ENABLED_PROVIDERS = Array.from(proxyProviderCheckboxes).map(cb => cb.value);
 
     try {
         await window.apiClient.post('/config', config);

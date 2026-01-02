@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as http from 'http';
 import * as https from 'https';
+import { configureAxiosProxy } from '../proxy-utils.js';
 
 /**
  * Claude API Core Service Class.
@@ -58,6 +59,9 @@ export class ClaudeApiService {
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;
         }
+        
+        // 配置自定义代理
+        configureAxiosProxy(axiosConfig, this.config, 'claude-custom');
         
         return axios.create(axiosConfig);
     }
