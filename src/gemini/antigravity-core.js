@@ -10,6 +10,7 @@ import open from 'open';
 import { formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../oauth-handlers.js';
+import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../proxy-utils.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -225,14 +226,25 @@ function ensureRolesInContents(requestBody) {
 
 export class AntigravityApiService {
     constructor(config) {
+        // 检查是否需要使用代理
+        const proxyConfig = getGoogleAuthProxyConfig(config, 'gemini-antigravity');
+        
         // 配置 OAuth2Client 使用自定义的 HTTP agent
-        this.authClient = new OAuth2Client({
+        const oauth2Options = {
             clientId: OAUTH_CLIENT_ID,
             clientSecret: OAUTH_CLIENT_SECRET,
-            transporterOptions: {
+        };
+        
+        if (proxyConfig) {
+            oauth2Options.transporterOptions = proxyConfig;
+            console.log('[Antigravity] Using proxy for OAuth2Client');
+        } else {
+            oauth2Options.transporterOptions = {
                 agent: httpsAgent,
-            },
-        });
+            };
+        }
+        
+        this.authClient = new OAuth2Client(oauth2Options);
         this.availableModels = [];
         this.isInitialized = false;
 
@@ -252,6 +264,9 @@ export class AntigravityApiService {
             this.baseUrlAutopush
             // ANTIGRAVITY_BASE_URL_PROD // 生产环境已注释
         ];
+        
+        // 保存代理配置供后续使用
+        this.proxyConfig = getProxyConfigForProvider(config, 'gemini-antigravity');
     }
 
     async initialize() {

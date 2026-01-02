@@ -10,6 +10,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
 import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../oauth-handlers.js';
+import { configureAxiosProxy } from '../proxy-utils.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
@@ -221,6 +222,9 @@ export class QwenApiService {
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;
         }
+        
+        // 配置自定义代理
+        configureAxiosProxy(axiosConfig, this.config, 'openai-qwen-oauth');
         
         this.currentAxiosInstance = axios.create(axiosConfig);
 
@@ -511,6 +515,9 @@ export class QwenApiService {
             if (!this.useSystemProxy) {
                 axiosConfig.proxy = false;
             }
+            
+            // 配置自定义代理
+            configureAxiosProxy(axiosConfig, this.config, 'openai-qwen-oauth');
             
             this.currentAxiosInstance = axios.create(axiosConfig);
 
