@@ -668,7 +668,7 @@ async initializeAuth(forceRefresh = false) {
                     modelId: codewhispererModel,
                     origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR
                 };
-                let images = [];
+                let imageCount = 0;
                 let toolResults = [];
                 
                 if (Array.isArray(message.content)) {
@@ -682,22 +682,24 @@ async initializeAuth(forceRefresh = false) {
                                 toolUseId: part.tool_use_id
                             });
                         } else if (part.type === 'image') {
-                            images.push({
-                                format: part.source.media_type.split('/')[1],
-                                source: {
-                                    bytes: part.source.data
-                                }
-                            });
+                            // 历史消息中的图片不保留 base64 数据，只记录数量
+                            // 避免请求体过大导致 400 错误
+                            imageCount++;
                         }
                     }
                 } else {
                     userInputMessage.content = this.getContentText(message);
                 }
                 
-                // 只添加非空字段，API 不接受空数组或空对象
-                if (images.length > 0) {
-                    userInputMessage.images = images;
+                // 如果历史消息中有图片，添加占位符说明
+                if (imageCount > 0) {
+                    const imagePlaceholder = `[此消息包含 ${imageCount} 张图片，已在历史记录中省略]`;
+                    userInputMessage.content = userInputMessage.content 
+                        ? `${userInputMessage.content}\n${imagePlaceholder}` 
+                        : imagePlaceholder;
+                    console.log(`[Kiro] Replaced ${imageCount} image(s) with placeholder in history message`);
                 }
+                
                 if (toolResults.length > 0) {
                     // 去重 toolResults - Kiro API 不接受重复的 toolUseId
                     const uniqueToolResults = [];
