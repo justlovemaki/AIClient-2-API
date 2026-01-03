@@ -791,7 +791,7 @@ function showAuthModal(authUrl, authInfo) {
             const applyBtn = modal.querySelector('.apply-callback-btn');
 
             // 处理回调 URL 的核心逻辑
-            const processCallback = (urlStr) => {
+            const processCallback = (urlStr, isManualInput = false) => {
                 try {
                     // 尝试清理 URL（有些用户可能会复制多余的文字）
                     const cleanUrlStr = urlStr.trim().match(/https?:\/\/[^\s]+/)?.[0] || urlStr.trim();
@@ -806,13 +806,50 @@ function showAuthModal(authUrl, authInfo) {
                         
                         showToast(t('common.info'), t('oauth.processing'), 'info');
                         
-                        // 优先在子窗口中跳转（如果没关）
-                        if (authWindow && !authWindow.closed) {
-                            authWindow.location.href = localUrl.href;
+                        // 如果是手动输入，直接通过 fetch 请求处理，然后关闭子窗口
+                        if (isManualInput) {
+                            // 关闭子窗口
+                            if (authWindow && !authWindow.closed) {
+                                authWindow.close();
+                            }
+                            // 通过服务端API处理手动输入的回调URL
+                            window.apiClient.post('/oauth/manual-callback', {
+                                provider: authInfo.provider,
+                                callbackUrl: localUrl.href,
+                                authMethod: authInfo.authMethod
+                            })
+                                .then(response => {
+                                    if (response.success) {
+                                        console.log('OAuth 回调处理成功');
+                                        showToast(t('common.success'), t('oauth.success.msg'), 'success');
+                                    } else {
+                                        console.error('OAuth 回调处理失败:', response.error);
+                                        showToast(t('common.error'), response.error || t('oauth.error.process'), 'error');
+                                    }
+                                })
+                                .catch(err => {
+                                    console.error('OAuth 回调请求失败:', err);
+                                    showToast(t('common.error'), t('oauth.error.process'), 'error');
+                                });
                         } else {
-                            // 备选方案：通过隐藏 iframe 或者是 fetch
-                            const img = new Image();
-                            img.src = localUrl.href;
+                            // 自动监听模式：优先在子窗口中跳转（如果没关）
+                            if (authWindow && !authWindow.closed) {
+                                authWindow.location.href = localUrl.href;
+                            } else {
+                                // 备选方案：通过 fetch 请求
+                                // 通过 fetch 请求本地服务器处理回调
+                                fetch(localUrl.href)
+                                    .then(response => {
+                                        if (response.ok) {
+                                            console.log('OAuth 回调处理成功');
+                                        } else {
+                                            console.error('OAuth 回调处理失败:', response.status);
+                                        }
+                                    })
+                                    .catch(err => {
+                                        console.error('OAuth 回调请求失败:', err);
+                                    });
+                            }
                         }
                         
                     } else {
@@ -825,7 +862,7 @@ function showAuthModal(authUrl, authInfo) {
             };
 
             applyBtn.addEventListener('click', () => {
-                processCallback(manualInput.value);
+                processCallback(manualInput.value, true);
             });
 
             // 启动定时器轮询子窗口 URL

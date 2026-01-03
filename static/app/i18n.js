@@ -136,6 +136,8 @@ const translations = {
         'config.host': '监听地址',
         'config.port': '端口',
         'config.modelProvider': '模型提供商',
+        'config.modelProviderHelp': '勾选启动时初始化的模型提供商 (必须至少勾选一个)',
+        'config.modelProviderRequired': '必须至少勾选一个模型提供商',
         'config.optional': '(选填)',
         'config.gemini.baseUrl': 'Gemini Base URL',
         'config.gemini.baseUrlPlaceholder': 'https://cloudcode-pa.googleapis.com',
@@ -196,7 +198,7 @@ const translations = {
         'config.advanced.cronEnabled': '启用OAuth令牌自动刷新(需重启服务)',
         'config.advanced.poolFilePath': '提供商池配置文件路径(不能为空)',
         'config.advanced.poolFilePathPlaceholder': '默认: configs/provider_pools.json',
-        'config.advanced.poolNote': '配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置',
+        'config.advanced.poolNote': '使用默认路径配置需添加一个空节点',
         'config.advanced.maxErrorCount': '提供商最大错误次数',
         'config.advanced.maxErrorCountPlaceholder': '默认: 3',
         'config.advanced.maxErrorCountNote': '提供商连续错误达到此次数后将被标记为不健康，默认为 3 次',
@@ -272,7 +274,7 @@ const translations = {
         
         // Providers
         'providers.title': '提供商池管理',
-        'providers.note': '配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置',
+        'providers.note': '使用默认路径配置需添加一个空节点',
         'providers.activeConnections': '活动连接',
         'providers.activeProviders': '活跃提供商',
         'providers.healthyProviders': '健康提供商',
@@ -361,6 +363,8 @@ const translations = {
         'usage.card.freeTrial': '免费试用',
         'usage.card.bonus': '奖励',
         'usage.card.expires': '到期: {time}',
+        'usage.group.expandAll': '展开所有卡片',
+        'usage.group.collapseAll': '折叠所有卡片',
         
         // Logs
         'logs.title': '实时日志',
@@ -541,6 +545,8 @@ const translations = {
         'config.host': 'Listen Address',
         'config.port': 'Port',
         'config.modelProvider': 'Model Provider',
+        'config.modelProviderHelp': 'Check model providers to initialize on startup (must select at least one)',
+        'config.modelProviderRequired': 'At least one model provider must be selected',
         'config.optional': '(Optional)',
         'config.gemini.baseUrl': 'Gemini Base URL',
         'config.gemini.baseUrlPlaceholder': 'https://cloudcode-pa.googleapis.com',
@@ -601,7 +607,7 @@ const translations = {
         'config.advanced.cronEnabled': 'Enable OAuth Token Auto Refresh (requires restart)',
         'config.advanced.poolFilePath': 'Provider Pool Config File Path (required)',
         'config.advanced.poolFilePathPlaceholder': 'Default: configs/provider_pools.json',
-        'config.advanced.poolNote': 'When provider pool is configured, it will be used by default. Falls back to default config if pool config fails',
+        'config.advanced.poolNote': 'To use default path configuration, add an empty node',
         'config.advanced.maxErrorCount': 'Provider Max Error Count',
         'config.advanced.maxErrorCountPlaceholder': 'Default: 3',
         'config.advanced.maxErrorCountNote': 'Provider will be marked as unhealthy after consecutive errors reach this count, default is 3',
@@ -677,7 +683,7 @@ const translations = {
         
         // Providers
         'providers.title': 'Provider Pool Management',
-        'providers.note': 'When provider pool is configured, it will be used by default. Falls back to default config if pool config fails',
+        'providers.note': 'To use default path configuration, add an empty node',
         'providers.activeConnections': 'Active Connections',
         'providers.activeProviders': 'Active Providers',
         'providers.healthyProviders': 'Healthy Providers',
@@ -766,6 +772,8 @@ const translations = {
         'usage.card.freeTrial': 'Free Trial',
         'usage.card.bonus': 'Bonus',
         'usage.card.expires': 'Expires: {time}',
+        'usage.group.expandAll': 'Expand All Cards',
+        'usage.group.collapseAll': 'Collapse All Cards',
         
         // Logs
         'logs.title': 'Real-time Logs',

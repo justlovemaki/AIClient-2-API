@@ -177,36 +177,59 @@ export async function initApiService(config) {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');
     }
 
-    // Initialize configured service adapters at startup
-    // 对于未纳入号池的提供者，提前初始化以避免首个请求的额外延迟
-    const providersToInit = new Set();
-    if (Array.isArray(config.DEFAULT_MODEL_PROVIDERS)) {
-        config.DEFAULT_MODEL_PROVIDERS.forEach((provider) => providersToInit.add(provider));
-    }
-    if (config.providerPools) {
-        Object.keys(config.providerPools).forEach((provider) => providersToInit.add(provider));
-    }
-    if (providersToInit.size === 0) {
-        const { ALL_MODEL_PROVIDERS } = await import('./config-manager.js');
-        ALL_MODEL_PROVIDERS.forEach((provider) => providersToInit.add(provider));
-    }
-
-    for (const provider of providersToInit) {
-        const { ALL_MODEL_PROVIDERS } = await import('./config-manager.js');
-        if (!ALL_MODEL_PROVIDERS.includes(provider)) {
-            console.warn(`[Initialization Warning] Skipping unknown model provider '${provider}' during adapter initialization.`);
-            continue;
+    // Initialize all provider pool nodes at startup
+    // 初始化号池中所有提供商的所有节点，以避免首个请求的额外延迟
+    if (config.providerPools && Object.keys(config.providerPools).length > 0) {
+        let totalInitialized = 0;
+        let totalFailed = 0;
+        
+        for (const [providerType, providerConfigs] of Object.entries(config.providerPools)) {
+            // 验证提供商类型是否在 DEFAULT_MODEL_PROVIDERS 中
+            if (config.DEFAULT_MODEL_PROVIDERS && Array.isArray(config.DEFAULT_MODEL_PROVIDERS)) {
+                if (!config.DEFAULT_MODEL_PROVIDERS.includes(providerType)) {
+                    console.log(`[Initialization] Skipping provider type '${providerType}' (not in DEFAULT_MODEL_PROVIDERS).`);
+                    continue;
+                }
+            }
+            
+            if (!Array.isArray(providerConfigs) || providerConfigs.length === 0) {
+                continue;
+            }
+            
+            console.log(`[Initialization] Initializing ${providerConfigs.length} node(s) for provider '${providerType}'...`);
+            
+            // 初始化该提供商类型的所有节点
+            for (const providerConfig of providerConfigs) {
+                // 跳过已禁用的节点
+                if (providerConfig.isDisabled) {
+                    continue;
+                }
+                
+                try {
+                    // 合并全局配置和节点配置
+                    const nodeConfig = deepmerge(config, {
+                        ...providerConfig,
+                        MODEL_PROVIDER: providerType
+                    });
+                    delete nodeConfig.providerPools; // 移除 providerPools 避免递归
+                    
+                    // 初始化服务适配器
+                    getServiceAdapter(nodeConfig);
+                    totalInitialized++;
+                    
+                    const identifier = providerConfig.customName || providerConfig.uuid || 'unknown';
+                    console.log(`  ✓ Initialized node: ${identifier}`);
+                } catch (error) {
+                    totalFailed++;
+                    const identifier = providerConfig.customName || providerConfig.uuid || 'unknown';
+                    console.warn(`  ✗ Failed to initialize node ${identifier}: ${error.message}`);
+                }
+            }
         }
-        if (config.providerPools && config.providerPools[provider] && config.providerPools[provider].length > 0) {
-            // 由号池管理器负责按需初始化
-            continue;
-        }
-        try {
-            console.log(`[Initialization] Initializing single service adapter for ${provider}...`);
-            getServiceAdapter({ ...config, MODEL_PROVIDER: provider });
-        } catch (error) {
-            console.warn(`[Initialization Warning] Failed to initialize single service adapter for ${provider}: ${error.message}`);
-        }
+        
+        console.log(`[Initialization] Provider pool initialization complete: ${totalInitialized} succeeded, ${totalFailed} failed.`);
+    } else {
+        console.log('[Initialization] No provider pools configured. Skipping node initialization.');
     }
     return serviceInstances; // Return the collection of initialized service instances
 }
@@ -231,10 +254,11 @@ export async function getApiService(config, requestedModel = null, options = {})
             config.uuid = serviceConfig.uuid;
             console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
-            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}. Falling back to main config.`);
+            const errorMsg = `[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
     }
-    // 号池不可用时降级，直接使用当前请求的 config 初始化服务适配器
     return getServiceAdapter(serviceConfig);
 }
 
@@ -273,6 +297,10 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
             if (isFallback) {
                 serviceConfig.MODEL_PROVIDER = actualProviderType;
             }
+        } else {
+            const errorMsg = `[API Service] No healthy provider found in pool (including fallback) for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
     }
     

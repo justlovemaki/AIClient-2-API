@@ -93,6 +93,7 @@ export class ProviderPoolManager {
                 providerConfig.lastHealthCheckTime = providerConfig.lastHealthCheckTime || null;
                 providerConfig.lastHealthCheckModel = providerConfig.lastHealthCheckModel || null;
                 providerConfig.lastErrorMessage = providerConfig.lastErrorMessage || null;
+                providerConfig.customName = providerConfig.customName || null;
 
                 this.providerStatus[providerType].push({
                     config: providerConfig,

@@ -67,25 +67,6 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             SERVER_PORT: 3000,
             HOST: '0.0.0.0',
             MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
-            OPENAI_API_KEY: null,
-            OPENAI_BASE_URL: null,
-            CLAUDE_API_KEY: null,
-            CLAUDE_BASE_URL: null,
-            GEMINI_OAUTH_CREDS_BASE64: null,
-            GEMINI_OAUTH_CREDS_FILE_PATH: null,
-            KIRO_OAUTH_CREDS_BASE64: null,
-            KIRO_OAUTH_CREDS_FILE_PATH: null,
-            QWEN_OAUTH_CREDS_FILE_PATH: null,
-            PROJECT_ID: null,
-            // Provider URLs
-            QWEN_BASE_URL: null,
-            QWEN_OAUTH_BASE_URL: null,
-            GEMINI_BASE_URL: null,
-            ANTIGRAVITY_BASE_URL_DAILY: null,
-            ANTIGRAVITY_BASE_URL_AUTOPUSH: null,
-            KIRO_REFRESH_URL: null,
-            KIRO_REFRESH_IDC_URL: null,
-            KIRO_BASE_URL: null,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'append',
             PROMPT_LOG_BASE_NAME: "prompt_log",
@@ -136,99 +117,6 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             } else {
                 console.warn(`[Config Warning] --model-provider flag requires a value.`);
             }
-        } else if (args[i] === '--openai-api-key') {
-            if (i + 1 < args.length) {
-                currentConfig.OPENAI_API_KEY = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --openai-api-key flag requires a value.`);
-            }
-        } else if (args[i] === '--openai-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.OPENAI_BASE_URL = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --openai-base-url flag requires a value.`);
-            }
-        } else if (args[i] === '--claude-api-key') {
-            if (i + 1 < args.length) {
-                currentConfig.CLAUDE_API_KEY = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --claude-api-key flag requires a value.`);
-            }
-        } else if (args[i] === '--claude-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.CLAUDE_BASE_URL = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --claude-base-url flag requires a value.`);
-            }
-        }
-        // Provider URL arguments
-        else if (args[i] === '--qwen-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.QWEN_BASE_URL = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--qwen-oauth-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.QWEN_OAUTH_BASE_URL = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--gemini-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.GEMINI_BASE_URL = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--antigravity-base-url-daily') {
-            if (i + 1 < args.length) {
-                currentConfig.ANTIGRAVITY_BASE_URL_DAILY = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--antigravity-base-url-autopush') {
-            if (i + 1 < args.length) {
-                currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--kiro-refresh-url') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_REFRESH_URL = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--kiro-refresh-idc-url') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_REFRESH_IDC_URL = args[i + 1];
-                i++;
-            }
-        } else if (args[i] === '--kiro-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_BASE_URL = args[i + 1];
-                i++;
-            }
-        }
-        // Gemini-specific arguments
-        else if (args[i] === '--gemini-oauth-creds-base64') {
-            if (i + 1 < args.length) {
-                currentConfig.GEMINI_OAUTH_CREDS_BASE64 = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --gemini-oauth-creds-base64 flag requires a value.`);
-            }
-        } else if (args[i] === '--gemini-oauth-creds-file') {
-            if (i + 1 < args.length) {
-                currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --gemini-oauth-creds-file flag requires a value.`);
-            }
-        } else if (args[i] === '--project-id') {
-            if (i + 1 < args.length) {
-                currentConfig.PROJECT_ID = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --project-id flag requires a value.`);
-            }
         } else if (args[i] === '--system-prompt-file') {
             if (i + 1 < args.length) {
                 currentConfig.SYSTEM_PROMPT_FILE_PATH = args[i + 1];
@@ -262,28 +150,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             } else {
                 console.warn(`[Config Warning] --prompt-log-base-name flag requires a value.`);
             }
-        } else if (args[i] === '--kiro-oauth-creds-base64') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_OAUTH_CREDS_BASE64 = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --kiro-oauth-creds-base64 flag requires a value.`);
-            }
-        } else if (args[i] === '--kiro-oauth-creds-file') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = args[i + 1];
-                i++;
-            } else {
-               console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--qwen-oauth-creds-file') {
-           if (i + 1 < args.length) {
-               currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = args[i + 1];
-               i++;
-           } else {
-               console.warn(`[Config Warning] --qwen-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--cron-near-minutes') {
+        } else if (args[i] === '--cron-near-minutes') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
                 i++;
@@ -383,46 +250,5 @@ export async function getSystemPromptFileContent(filePath) {
     }
 }
 
-/**
- * Logs provider-specific configuration details
- * @param {string} provider - The model provider
- * @param {Object} config - The configuration object
- */
-export function logProviderSpecificDetails(provider, config) {
-    switch (provider) {
-        case MODEL_PROVIDER.OPENAI_CUSTOM:
-            console.log(`  [openai-custom] API Key: ${config.OPENAI_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  [openai-custom] Base URL: ${config.OPENAI_BASE_URL || 'Default'}`);
-            break;
-        case MODEL_PROVIDER.CLAUDE_CUSTOM:
-            console.log(`  [claude-custom] API Key: ${config.CLAUDE_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  [claude-custom] Base URL: ${config.CLAUDE_BASE_URL || 'Default'}`);
-            break;
-        case MODEL_PROVIDER.GEMINI_CLI:
-            if (config.GEMINI_OAUTH_CREDS_FILE_PATH) {
-                console.log(`  [gemini-cli-oauth] OAuth Creds File Path: ${config.GEMINI_OAUTH_CREDS_FILE_PATH}`);
-            } else if (config.GEMINI_OAUTH_CREDS_BASE64) {
-                console.log(`  [gemini-cli-oauth] OAuth Creds Source: Provided via Base64 string`);
-            } else {
-                console.log(`  [gemini-cli-oauth] OAuth Creds: Default discovery`);
-            }
-            // console.log(`  [gemini-cli-oauth] Project ID: ${config.PROJECT_ID || 'Auto-discovered'}`);
-            break;
-        case MODEL_PROVIDER.KIRO_API:
-            if (config.KIRO_OAUTH_CREDS_FILE_PATH) {
-                console.log(`  [claude-kiro-oauth] OAuth Creds File Path: ${config.KIRO_OAUTH_CREDS_FILE_PATH}`);
-            } else if (config.KIRO_OAUTH_CREDS_BASE64) {
-                console.log(`  [claude-kiro-oauth] OAuth Creds Source: Provided via Base64 string`);
-            } else {
-                console.log(`  [claude-kiro-oauth] OAuth Creds: Default`);
-            }
-            break;
-        case MODEL_PROVIDER.QWEN_API:
-            console.log(`  [openai-qwen-oauth] OAuth Creds File Path: ${config.QWEN_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-            break;
-        default:
-            console.log(`  [${provider}] Provider initialized.`);
-    }
-}
-
 export { ALL_MODEL_PROVIDERS };
+

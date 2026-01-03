@@ -20,10 +20,13 @@
                     <span class="status-badge" id="serverStatus">
                         <i class="fas fa-circle"></i> <span class="status-text" data-i18n="header.status.connecting">连接中...</span>
                     </span>
+                    <button id="themeToggleBtn" class="theme-toggle" aria-label="Toggle Theme" data-i18n-aria-label="header.themeToggle" title="切换主题" data-i18n-title="header.themeToggle">
+                        <i class="fas fa-moon"></i>
+                        <i class="fas fa-sun"></i>
+                    </button>
                     <button id="logoutBtn" class="logout-btn" data-i18n="header.logout" title="Logout" data-i18n-title="header.logout">
                         <i class="fas fa-sign-out-alt"></i> <span data-i18n="header.logout">登出</span>
                     </button>
-                    </span>
                     <button id="restartBtn" class="logout-btn" aria-label="Restart Service" data-i18n-aria-label="header.restart">
                         <i id="restartBtnIcon" class="fas fa-redo"></i> <span id="restartBtnText" class="btn-text" data-i18n="header.restart">重启</span>
                     </button>
@@ -543,208 +546,38 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="modelProvider" data-i18n="config.modelProvider">模型提供商</label>
-                                <select id="modelProvider" class="form-control">
-                                    <option value="gemini-cli-oauth">Gemini CLI OAuth</option>
-                                    <option value="gemini-antigravity">Gemini Antigravity</option>
-                                    <option value="openai-custom">OpenAI Custom</option>
-                                    <option value="claude-custom">Claude Custom</option>
-                                    <option value="claude-kiro-oauth">Claude Kiro OAuth</option>
-                                    <option value="openai-qwen-oauth">Qwen OAuth</option>
-                                    <option value="openaiResponses-custom">OpenAI Responses</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Gemini CLI OAuth 配置 -->
-                            <div class="provider-config" data-provider="gemini-cli-oauth">
-                                <div class="form-group">
-                                    <label for="geminiBaseUrl"><span data-i18n="config.gemini.baseUrl">Gemini Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="geminiBaseUrl" class="form-control" data-i18n-placeholder="config.gemini.baseUrlPlaceholder" placeholder="https://cloudcode-pa.googleapis.com">
+                                <label data-i18n="config.modelProvider">模型提供商 (可多选)</label>
+                                <div id="modelProvider" class="provider-checklist">
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="gemini-cli-oauth">
+                                        <span>Gemini CLI OAuth</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="gemini-antigravity">
+                                        <span>Gemini Antigravity</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="openai-custom">
+                                        <span>OpenAI Custom</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="claude-custom">
+                                        <span>Claude Custom</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="claude-kiro-oauth">
+                                        <span>Claude Kiro OAuth</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="openai-qwen-oauth">
+                                        <span>Qwen OAuth</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="openaiResponses-custom">
+                                        <span>OpenAI Responses</span>
+                                    </label>
                                 </div>
-                                <div class="form-group">
-                                    <label for="projectId"><span data-i18n="config.gemini.projectId">项目ID</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="projectId" class="form-control" data-i18n-placeholder="config.gemini.projectIdPlaceholder" placeholder="Google Cloud项目ID">
-                                </div>
-                                <div class="form-group">
-                                    <label data-i18n="config.gemini.oauthCreds">OAuth凭据</label>
-                                    <div class="radio-group">
-                                        <label class="radio-label">
-                                            <input type="radio" name="geminiCredsType" value="file" checked>
-                                            <span data-i18n="config.gemini.credsType.file">文件路径</span>
-                                        </label>
-                                        <label class="radio-label">
-                                            <input type="radio" name="geminiCredsType" value="base64">
-                                            <span data-i18n="config.gemini.credsType.base64">Base64编码</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group" id="geminiCredsBase64Group">
-                                    <label for="geminiOauthCredsBase64" data-i18n="config.gemini.credsBase64">OAuth凭据 (Base64)</label>
-                                    <textarea id="geminiOauthCredsBase64" class="form-control" rows="3" data-i18n-placeholder="config.gemini.credsBase64Placeholder" placeholder="请输入Base64编码的OAuth凭据"></textarea>
-                                </div>
-                                <div class="form-group" id="geminiCredsFileGroup" style="display: none;">
-                                    <label for="geminiOauthCredsFilePath" data-i18n="config.gemini.credsFilePath">OAuth凭据文件路径</label>
-                                    <div class="file-input-group">
-                                        <input type="text" id="geminiOauthCredsFilePath" class="form-control" data-i18n-placeholder="config.gemini.credsFilePathPlaceholder" placeholder="例如: ~/.gemini/oauth_creds.json">
-                                        <button type="button" class="btn btn-outline upload-btn" data-target="geminiOauthCredsFilePath" data-i18n-title="common.upload" title="上传文件" aria-label="上传文件" data-i18n-aria-label="common.upload">
-                                            <i class="fas fa-upload"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="geminiOauthCredsFilePath" data-provider="gemini-cli-oauth" data-i18n-title="common.generate" title="生成凭据文件">
-                                            <i class="fas fa-magic"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Gemini Antigravity 配置 -->
-                            <div class="provider-config" data-provider="gemini-antigravity" style="display: none;">
-                                <div class="form-group">
-                                    <label for="antigravityBaseUrlDaily"><span data-i18n="config.antigravity.dailyUrl">Daily Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="antigravityBaseUrlDaily" class="form-control" data-i18n-placeholder="config.antigravity.dailyUrlPlaceholder" placeholder="https://daily-cloudcode-pa.sandbox.googleapis.com">
-                                </div>
-                                <div class="form-group">
-                                    <label for="antigravityBaseUrlAutopush"><span data-i18n="config.antigravity.autopushUrl">Autopush Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="antigravityBaseUrlAutopush" class="form-control" data-i18n-placeholder="config.antigravity.autopushUrlPlaceholder" placeholder="https://autopush-cloudcode-pa.sandbox.googleapis.com">
-                                </div>
-                                <div class="form-group">
-                                    <label for="antigravityOauthCredsFilePath" data-i18n="config.antigravity.credsFilePath">OAuth凭据文件路径</label>
-                                    <div class="file-input-group">
-                                        <input type="text" id="antigravityOauthCredsFilePath" class="form-control" data-i18n-placeholder="config.antigravity.credsFilePathPlaceholder" placeholder="例如: ~/.antigravity/oauth_creds.json">
-                                        <button type="button" class="btn btn-outline upload-btn" data-target="antigravityOauthCredsFilePath" data-i18n-title="common.upload" title="上传文件" aria-label="上传文件" data-i18n-aria-label="common.upload">
-                                            <i class="fas fa-upload"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="antigravityOauthCredsFilePath" data-provider="gemini-antigravity" data-i18n-title="common.generate" title="生成凭据文件">
-                                            <i class="fas fa-magic"></i>
-                                        </button>
-                                    </div>
-                                    <small class="form-text" data-i18n="config.antigravity.note">Antigravity 使用 Google OAuth 认证，需要提供凭据文件路径</small>
-                                </div>
-                            </div>
-                            
-                            <!-- OpenAI Custom 配置 -->
-                            <div class="provider-config" data-provider="openai-custom" style="display: none;">
-                                <div class="form-group password-input-group">
-                                    <label for="openaiApiKey" data-i18n="config.openai.apiKey">OpenAI API Key</label>
-                                    <div class="password-input-wrapper">
-                                        <input type="password" id="openaiApiKey" class="form-control" data-i18n-placeholder="config.openai.apiKeyPlaceholder" placeholder="sk-...">
-                                        <button type="button" class="password-toggle" data-target="openaiApiKey">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="openaiBaseUrl" data-i18n="config.openai.baseUrl">OpenAI Base URL</label>
-                                    <input type="text" id="openaiBaseUrl" class="form-control" value="https://api.openai.com/v1" data-i18n-placeholder="config.openai.baseUrlPlaceholder" placeholder="例如: https://api.openai.com/v1">
-                                </div>
-                            </div>
-                            
-                            <!-- Claude Custom 配置 -->
-                            <div class="provider-config" data-provider="claude-custom" style="display: none;">
-                                <div class="form-group password-input-group">
-                                    <label for="claudeApiKey" data-i18n="config.claude.apiKey">Claude API Key</label>
-                                    <div class="password-input-wrapper">
-                                        <input type="password" id="claudeApiKey" class="form-control" data-i18n-placeholder="config.claude.apiKeyPlaceholder" placeholder="sk-ant-...">
-                                        <button type="button" class="password-toggle" data-target="claudeApiKey">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="claudeBaseUrl" data-i18n="config.claude.baseUrl">Claude Base URL</label>
-                                    <input type="text" id="claudeBaseUrl" class="form-control" value="https://api.anthropic.com" data-i18n-placeholder="config.claude.baseUrlPlaceholder" placeholder="例如: https://api.anthropic.com">
-                                </div>
-                            </div>
-                            
-                            <!-- Claude Kiro OAuth 配置 -->
-                            <div class="provider-config" data-provider="claude-kiro-oauth" style="display: none;">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="kiroBaseUrl"><span data-i18n="config.kiro.baseUrl">Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                        <input type="text" id="kiroBaseUrl" class="form-control" data-i18n-placeholder="config.kiro.baseUrlPlaceholder" placeholder="https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="kiroRefreshUrl"><span data-i18n="config.kiro.refreshUrl">Refresh URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                        <input type="text" id="kiroRefreshUrl" class="form-control" data-i18n-placeholder="config.kiro.refreshUrlPlaceholder" placeholder="https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="kiroRefreshIdcUrl"><span data-i18n="config.kiro.refreshIdcUrl">Refresh IDC URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                        <input type="text" id="kiroRefreshIdcUrl" class="form-control" data-i18n-placeholder="config.kiro.refreshIdcUrlPlaceholder" placeholder="https://oidc.{{region}}.amazonaws.com/token">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label data-i18n="config.gemini.oauthCreds">OAuth凭据</label>
-                                    <div class="radio-group">
-                                        <label class="radio-label">
-                                            <input type="radio" name="kiroCredsType" value="file" checked>
-                                            <span data-i18n="config.gemini.credsType.file">文件路径</span>
-                                        </label>
-                                        <label class="radio-label">
-                                            <input type="radio" name="kiroCredsType" value="base64">
-                                            <span data-i18n="config.gemini.credsType.base64">Base64编码</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group" id="kiroCredsBase64Group">
-                                    <label for="kiroOauthCredsBase64" data-i18n="config.gemini.credsBase64">OAuth凭据 (Base64)</label>
-                                    <textarea id="kiroOauthCredsBase64" class="form-control" rows="3" data-i18n="config.gemini.credsBase64Placeholder" placeholder="请输入Base64编码的OAuth凭据"></textarea>
-                                </div>
-                                <div class="form-group" id="kiroCredsFileGroup" style="display: none;">
-                                    <label for="kiroOauthCredsFilePath" data-i18n="config.kiro.credsFilePath">OAuth凭据文件路径</label>
-                                    <div class="file-input-group">
-                                        <input type="text" id="kiroOauthCredsFilePath" class="form-control" data-i18n-placeholder="config.kiro.credsFilePathPlaceholder" placeholder="例如: ~/.aws/sso/cache/kiro-auth-token.json">
-                                        <button type="button" class="btn btn-outline upload-btn" data-target="kiroOauthCredsFilePath" data-i18n-title="common.upload" title="上传文件" aria-label="上传文件" data-i18n-aria-label="common.upload">
-                                            <i class="fas fa-upload"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="kiroOauthCredsFilePath" data-provider="claude-kiro-oauth" data-i18n-title="common.generate" title="生成凭据文件">
-                                            <i class="fas fa-magic"></i>
-                                        </button>
-                                    </div>
-                                    <small class="form-text">
-                                        <i class="fas fa-info-circle"></i>
-                                        <span data-i18n="config.kiro.note">使用 AWS 登录方式时，请确保授权文件中包含 clientId 和 clientSecret 字段</span>
-                                    </small>
-                                </div>
-                            </div>
-                            
-                            <!-- Qwen OAuth 配置 -->
-                            <div class="provider-config" data-provider="openai-qwen-oauth" style="display: none;">
-                                <div class="form-group">
-                                    <label for="qwenBaseUrl"><span data-i18n="config.qwen.baseUrl">Qwen Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="qwenBaseUrl" class="form-control" data-i18n-placeholder="config.qwen.baseUrlPlaceholder" placeholder="https://portal.qwen.ai/v1">
-                                </div>
-                                <div class="form-group">
-                                    <label for="qwenOauthBaseUrl"><span data-i18n="config.qwen.oauthBaseUrl">OAuth Base URL</span> <span class="optional-tag" data-i18n="config.optional">(选填)</span></label>
-                                    <input type="text" id="qwenOauthBaseUrl" class="form-control" data-i18n-placeholder="config.qwen.oauthBaseUrlPlaceholder" placeholder="https://chat.qwen.ai">
-                                </div>
-                                <div class="form-group">
-                                    <label for="qwenOauthCredsFilePath" data-i18n="config.qwen.credsFilePath">OAuth凭据文件路径</label>
-                                    <div class="file-input-group">
-                                        <input type="text" id="qwenOauthCredsFilePath" class="form-control" data-i18n-placeholder="config.qwen.credsFilePathPlaceholder" placeholder="例如: ~/.qwen/oauth_creds.json">
-                                        <button type="button" class="btn btn-outline upload-btn" data-target="qwenOauthCredsFilePath" data-i18n-title="common.upload" title="上传文件" aria-label="上传文件" data-i18n-aria-label="common.upload">
-                                            <i class="fas fa-upload"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline generate-creds-btn" data-target="qwenOauthCredsFilePath" data-provider="openai-qwen-oauth" data-i18n-title="common.generate" title="生成凭据文件">
-                                            <i class="fas fa-magic"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- OpenAI Responses 配置 -->
-                            <div class="provider-config" data-provider="openaiResponses-custom" style="display: none;">
-                                <div class="form-group password-input-group">
-                                    <label for="openaiResponsesApiKey" data-i18n="config.openai.apiKey">OpenAI API Key</label>
-                                    <div class="password-input-wrapper">
-                                        <input type="password" id="openaiResponsesApiKey" class="form-control" data-i18n-placeholder="config.openai.apiKeyPlaceholder" placeholder="sk-...">
-                                        <button type="button" class="password-toggle" data-target="openaiResponsesApiKey">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="openaiResponsesBaseUrl" data-i18n="config.openai.baseUrl">OpenAI Base URL</label>
-                                    <input type="text" id="openaiResponsesBaseUrl" class="form-control" value="https://api.openai.com/v1" data-i18n-placeholder="config.openai.baseUrlPlaceholder" placeholder="例如: https://api.openai.com/v1">
-                                </div>
+                                <small class="form-text text-muted" data-i18n="config.modelProviderHelp">勾选启动时初始化的模型提供商 (必须至少勾选一个)</small>
                             </div>
                             
                             <!-- 高级配置区域 -->
@@ -808,7 +641,7 @@
                                 <div class="form-group pool-section">
                                     <label for="providerPoolsFilePath" data-i18n="config.advanced.poolFilePath">提供商池配置文件路径(不能为空)</label>
                                     <input type="text" id="providerPoolsFilePath" class="form-control" value="" data-i18n-placeholder="config.advanced.poolFilePathPlaceholder" placeholder="默认: configs/provider_pools.json">
-                                    <small class="form-text" data-i18n="config.advanced.poolNote">配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置</small>
+                                    <small class="form-text" data-i18n="config.advanced.poolNote">使用默认路径配置需添加一个空节点</small>
                                 </div>
                                 
                                 <div class="form-group pool-section">
@@ -923,7 +756,7 @@
                     <div class="pool-description">
                         <div class="highlight-note">
                             <i class="fas fa-info-circle"></i>
-                            <span data-i18n="providers.note">配置了提供商池后，默认使用提供商池的配置，提供商池配置失效降级到默认配置</span>
+                            <span data-i18n="providers.note">使用默认路径配置需添加一个空节点</span>
                         </div>
                     </div>
                     <!-- Provider Pool Stats -->
@@ -1019,15 +852,20 @@
     <!-- Scripts -->
     <script type="module" src="app/i18n.js"></script>
     <script type="module" src="app/language-switcher.js"></script>
+    <script type="module" src="app/theme-switcher.js"></script>
     <script type="module" src="app/auth.js"></script>
     <script type="module">
-        // 导入多语言和认证函数
+        // 导入多语言、主题切换和认证函数
         import { initI18n, t } from './app/i18n.js';
         import { initLanguageSwitcher } from './app/language-switcher.js';
+        import { initThemeSwitcher } from './app/theme-switcher.js';
         import { initAuth, logout } from './app/auth.js';
         
         // 初始化多语言
         initI18n();
+        
+        // 初始化主题切换器（尽早初始化以避免闪烁）
+        initThemeSwitcher();
         
         // 页面加载时检查登录状态
         (async function() {
