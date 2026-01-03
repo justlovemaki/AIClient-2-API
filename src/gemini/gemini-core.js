@@ -9,6 +9,7 @@ import open from 'open';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../oauth-handlers.js';
+import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../proxy-utils.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -193,14 +194,25 @@ async function* apply_anti_truncation_to_stream(service, model, requestBody) {
 
 export class GeminiApiService {
     constructor(config) {
+        // 检查是否需要使用代理
+        const proxyConfig = getGoogleAuthProxyConfig(config, 'gemini-cli-oauth');
+        
         // 配置 OAuth2Client 使用自定义的 HTTP agent
-        this.authClient = new OAuth2Client({
+        const oauth2Options = {
             clientId: OAUTH_CLIENT_ID,
             clientSecret: OAUTH_CLIENT_SECRET,
-            transporterOptions: {
+        };
+        
+        if (proxyConfig) {
+            oauth2Options.transporterOptions = proxyConfig;
+            console.log('[Gemini] Using proxy for OAuth2Client');
+        } else {
+            oauth2Options.transporterOptions = {
                 agent: httpsAgent,
-            },
-        });
+            };
+        }
+        
+        this.authClient = new OAuth2Client(oauth2Options);
         this.availableModels = [];
         this.isInitialized = false;
 
@@ -212,6 +224,9 @@ export class GeminiApiService {
 
         this.codeAssistEndpoint = config.GEMINI_BASE_URL || DEFAULT_CODE_ASSIST_ENDPOINT;
         this.apiVersion = DEFAULT_CODE_ASSIST_API_VERSION;
+        
+        // 保存代理配置供后续使用
+        this.proxyConfig = getProxyConfigForProvider(config, 'gemini-cli-oauth');
     }
 
     async initialize() {

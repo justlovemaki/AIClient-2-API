@@ -751,6 +751,46 @@
                             <div class="advanced-config-section">
                                 <h3 data-i18n="config.advanced.title"><i class="fas fa-cogs"></i> 高级配置</h3>
                                 
+                                <!-- 代理配置 -->
+                                <div class="proxy-config-section">
+                                    <h4 data-i18n="config.proxy.title"><i class="fas fa-globe"></i> 代理设置</h4>
+                                    <div class="form-group">
+                                        <label for="proxyUrl" data-i18n="config.proxy.url">代理地址</label>
+                                        <input type="text" id="proxyUrl" class="form-control" data-i18n-placeholder="config.proxy.urlPlaceholder" placeholder="例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+                                        <small class="form-text" data-i18n="config.proxy.urlNote">支持 HTTP、HTTPS 和 SOCKS5 代理，留空则不使用代理</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label data-i18n="config.proxy.enabledProviders">启用代理的提供商</label>
+                                        <div class="checkbox-group proxy-providers-group">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="gemini-cli-oauth">
+                                                <span>Gemini CLI OAuth</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="gemini-antigravity">
+                                                <span>Gemini Antigravity</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="claude-kiro-oauth">
+                                                <span>Claude Kiro OAuth</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="openai-qwen-oauth">
+                                                <span>Qwen OAuth</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="openai-custom">
+                                                <span>OpenAI Custom</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="proxyProvider" value="claude-custom">
+                                                <span>Claude Custom</span>
+                                            </label>
+                                        </div>
+                                        <small class="form-text" data-i18n="config.proxy.enabledProvidersNote">选择需要通过代理访问的提供商，未选中的提供商将直接连接</small>
+                                    </div>
+                                </div>
+                                
                                 <div class="config-row">
                                     <div class="form-group">
                                         <label for="systemPromptFilePath" data-i18n="config.advanced.systemPromptFile">系统提示文件路径</label>
