@@ -701,6 +701,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
             if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
             if (newConfig.providerFallbackChain !== undefined) currentConfig.providerFallbackChain = newConfig.providerFallbackChain;
+            
+            // Proxy settings
+            if (newConfig.PROXY_URL !== undefined) currentConfig.PROXY_URL = newConfig.PROXY_URL;
+            if (newConfig.PROXY_ENABLED_PROVIDERS !== undefined) currentConfig.PROXY_ENABLED_PROVIDERS = newConfig.PROXY_ENABLED_PROVIDERS;
 
             // Handle system prompt update
             if (newConfig.systemPrompt !== undefined) {
@@ -743,7 +747,9 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                     PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                     MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
-                    providerFallbackChain: currentConfig.providerFallbackChain
+                    providerFallbackChain: currentConfig.providerFallbackChain,
+                    PROXY_URL: currentConfig.PROXY_URL,
+                    PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');

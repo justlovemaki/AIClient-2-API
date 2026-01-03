@@ -69,6 +69,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
             SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
             SYSTEM_PROMPT_MODE: 'append',
+            PROXY_URL: null, // HTTP/HTTPS/SOCKS5 代理地址，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080
+            PROXY_ENABLED_PROVIDERS: [], // 启用代理的提供商列表，如 ['gemini-cli-oauth', 'claude-kiro-oauth']
             PROMPT_LOG_BASE_NAME: "prompt_log",
             PROMPT_LOG_MODE: "none",
             REQUEST_MAX_RETRIES: 3,

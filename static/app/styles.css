@@ -551,6 +551,65 @@ textarea.form-control {
     color: var(--primary-color);
 }
 
+/* 代理配置区域 */
+.proxy-config-section {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    background: var(--bg-primary);
+}
+
+.proxy-config-section h4 {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.proxy-config-section h4 i {
+    color: var(--primary-color);
+}
+
+/* 复选框组样式 */
+.checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    transition: all 0.2s ease;
+}
+
+.checkbox-label:hover {
+    border-color: var(--primary-color);
+    background: var(--bg-hover);
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--primary-color);
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
 .config-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
