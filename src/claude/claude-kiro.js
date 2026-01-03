@@ -8,7 +8,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
-import { json } from 'stream/consumers';
+import { configureAxiosProxy } from '../proxy-utils.js';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -357,6 +357,9 @@ export class KiroApiService {
             axiosConfig.proxy = false;
         }
         
+        // 配置自定义代理
+        configureAxiosProxy(axiosConfig, this.config, 'claude-kiro-oauth');
+        
         this.axiosInstance = axios.create(axiosConfig);
         this.isInitialized = true;
     }
@@ -528,7 +531,7 @@ async initializeAuth(forceRefresh = false) {
     if (!this.accessToken) {
         throw new Error('No access token available after initialization and refresh attempts.');
     }
-}
+    }
 
     /**
      * Extract text content from OpenAI message format
