@@ -18,5 +18,10 @@
       "gemini-antigravity": ["gemini-cli-oauth"],
       "claude-kiro-oauth": ["claude-custom"],
       "claude-custom": ["claude-kiro-oauth"]
-    }
+    },
+    "PROXY_URL": "http://127.0.0.1:1089",
+    "PROXY_ENABLED_PROVIDERS": [
+      "gemini-cli-oauth",
+      "gemini-antigravity"
+    ]
   }
