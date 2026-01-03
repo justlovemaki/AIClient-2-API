@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/img/logo-min.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
+<img src="src/img/logo-mid.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
 # AIClient-2-API 🚀
 
@@ -83,9 +83,9 @@
   - [🐳 Docker Deployment](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
   - [📋 Core Features](#-core-features)
 - [🔐 Authorization Configuration Guide](#-authorization-configuration-guide)
-- [⚙️ Advanced Configuration](#advanced-configuration)
 - [📁 Authorization File Storage Paths](#-authorization-file-storage-paths)
 - [🦙 Ollama Protocol Usage Examples](#-ollama-protocol-usage-examples)
+- [⚙️ Advanced Configuration](#advanced-configuration)
 - [❓ FAQ](#-faq)
 - [📄 Open Source License](#-open-source-license)
 - [🙏 Acknowledgements](#-acknowledgements)
@@ -230,6 +230,55 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Startup Parameter Configuration**: Use the `--provider-pools-file <path>` parameter to specify the pool configuration file path
 4. **Health Check**: The system will automatically perform periodic health checks and avoid using unhealthy providers
 
+### 📁 Authorization File Storage Paths
+
+Default storage locations for authorization credential files of each service:
+
+| Service | Default Path | Description |
+|------|---------|------|
+| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth authentication credentials |
+| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
+| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
+| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
+
+> **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
+>
+> **Custom Path**: Can specify custom storage location via relevant parameters in configuration file or environment variables
+
+---
+
+### 🦙 Ollama Protocol Usage Examples
+
+This project supports the Ollama protocol, allowing access to all supported models through a unified interface. The Ollama endpoint provides standard interfaces such as `/api/tags`, `/api/chat`, `/api/generate`, etc.
+
+**Ollama API Call Examples**:
+
+1. **List all available models**:
+```bash
+curl http://localhost:3000/ollama/api/tags
+```
+
+2. **Chat interface**:
+```bash
+curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ]
+  }'
+```
+
+3. **Specify provider using model prefix**:
+- `[Kiro]` - Access Claude models using Kiro API
+- `[Claude]` - Use official Claude API
+- `[Gemini CLI]` - Access via Gemini CLI OAuth
+- `[OpenAI]` - Use official OpenAI API
+- `[Qwen CLI]` - Access via Qwen OAuth
+
+---
+
 ### Advanced Configuration
 
 #### 1. Proxy Configuration
@@ -345,55 +394,6 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 **Notes**:
 - Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
 - The system automatically checks if the target Provider Type supports the requested model
-
----
-
-### 📁 Authorization File Storage Paths
-
-Default storage locations for authorization credential files of each service:
-
-| Service | Default Path | Description |
-|------|---------|------|
-| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth authentication credentials |
-| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
-| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
-| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
-
-> **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
->
-> **Custom Path**: Can specify custom storage location via relevant parameters in configuration file or environment variables
-
----
-
-### 🦙 Ollama Protocol Usage Examples
-
-This project supports the Ollama protocol, allowing access to all supported models through a unified interface. The Ollama endpoint provides standard interfaces such as `/api/tags`, `/api/chat`, `/api/generate`, etc.
-
-**Ollama API Call Examples**:
-
-1. **List all available models**:
-```bash
-curl http://localhost:3000/ollama/api/tags
-```
-
-2. **Chat interface**:
-```bash
-curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [
-      {"role": "user", "content": "Hello"}
-    ]
-  }'
-```
-
-3. **Specify provider using model prefix**:
-- `[Kiro]` - Access Claude models using Kiro API
-- `[Claude]` - Use official Claude API
-- `[Gemini CLI]` - Access via Gemini CLI OAuth
-- `[OpenAI]` - Use official OpenAI API
-- `[Qwen CLI]` - Access via Qwen OAuth
 
 ---
 

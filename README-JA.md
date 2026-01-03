@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/img/logo-min.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
+<img src="src/img/logo-mid.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
 # AIClient-2-API 🚀
 
@@ -83,9 +83,9 @@
   - [🐳 Docker デプロイ](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
   - [📋 コア機能](#-コア機能)
 - [🔐 認証設定ガイド](#-認証設定ガイド)
-- [⚙️ 高度な設定](#高度な設定)
 - [📁 認証ファイル保存パス](#-認証ファイル保存パス)
 - [🦙 Ollamaプロトコル使用例](#-ollamaプロトコル使用例)
+- [⚙️ 高度な設定](#高度な設定)
 - [❓ よくある質問](#-よくある質問)
 - [📄 オープンソースライセンス](#-オープンソースライセンス)
 - [🙏 謝辞](#-謝辞)
@@ -230,6 +230,55 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 3. **起動パラメータ設定**：`--provider-pools-file <path>` パラメータを使用してプール設定ファイルのパスを指定します
 4. **ヘルスチェック**：システムは定期的にヘルスチェックを自動実行し、健全でないプロバイダーを使用しません
 
+### 📁 認証ファイル保存パス
+
+各サービスの認証情報ファイルのデフォルト保存場所：
+
+| サービス | デフォルトパス | 説明 |
+|------|---------|------|
+| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth認証情報 |
+| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro認証トークン |
+| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth認証情報 |
+| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 (Claude 4.5 Opus サポート) |
+
+> **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
+>
+> **カスタムパス**：設定ファイルの関連パラメータまたは環境変数でカスタム保存場所を指定可能
+
+---
+
+### 🦙 Ollamaプロトコル使用例
+
+本プロジェクトはOllamaプロトコルをサポートしており、統一インターフェースを通じてすべてのサポートモデルにアクセスできます。Ollamaエンドポイントは`/api/tags`、`/api/chat`、`/api/generate`などの標準インターフェースを提供します。
+
+**Ollama API呼び出し例**：
+
+1. **利用可能なすべてのモデルをリスト表示**：
+```bash
+curl http://localhost:3000/ollama/api/tags
+```
+
+2. **チャットインターフェース**：
+```bash
+curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [
+      {"role": "user", "content": "こんにちは"}
+    ]
+  }'
+```
+
+3. **モデルプレフィックスを使用してプロバイダーを指定**：
+- `[Kiro]` - Kiro APIを使用してClaudeモデルにアクセス
+- `[Claude]` - 公式Claude APIを使用
+- `[Gemini CLI]` - Gemini CLI OAuth経由でアクセス
+- `[OpenAI]` - 公式OpenAI APIを使用
+- `[Qwen CLI]` - Qwen OAuth経由でアクセス
+
+---
+
 ### 高度な設定
 
 #### 1. プロキシ設定
@@ -345,55 +394,6 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 **注意事項**：
 - フォールバックはプロトコル互換タイプ間でのみ発生します（例：`gemini-*` 間、`claude-*` 間）
 - システムは自動的にターゲットProvider Typeがリクエストされたモデルをサポートしているか確認します
-
----
-
-### 📁 認証ファイル保存パス
-
-各サービスの認証情報ファイルのデフォルト保存場所：
-
-| サービス | デフォルトパス | 説明 |
-|------|---------|------|
-| **Gemini** | `~/.gemini/oauth_creds.json` | OAuth認証情報 |
-| **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro認証トークン |
-| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth認証情報 |
-| **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 (Claude 4.5 Opus サポート) |
-
-> **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
->
-> **カスタムパス**：設定ファイルの関連パラメータまたは環境変数でカスタム保存場所を指定可能
-
----
-
-### 🦙 Ollamaプロトコル使用例
-
-本プロジェクトはOllamaプロトコルをサポートしており、統一インターフェースを通じてすべてのサポートモデルにアクセスできます。Ollamaエンドポイントは`/api/tags`、`/api/chat`、`/api/generate`などの標準インターフェースを提供します。
-
-**Ollama API呼び出し例**：
-
-1. **利用可能なすべてのモデルをリスト表示**：
-```bash
-curl http://localhost:3000/ollama/api/tags
-```
-
-2. **チャットインターフェース**：
-```bash
-curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [
-      {"role": "user", "content": "こんにちは"}
-    ]
-  }'
-```
-
-3. **モデルプレフィックスを使用してプロバイダーを指定**：
-- `[Kiro]` - Kiro APIを使用してClaudeモデルにアクセス
-- `[Claude]` - 公式Claude APIを使用
-- `[Gemini CLI]` - Gemini CLI OAuth経由でアクセス
-- `[OpenAI]` - 公式OpenAI APIを使用
-- `[Qwen CLI]` - Qwen OAuth経由でアクセス
 
 ---
 
