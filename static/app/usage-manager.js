@@ -228,14 +228,48 @@ function createProviderGroup(providerType, instances) {
             <span class="instance-count" data-i18n="usage.group.instances" data-i18n-params='{"count":"${instanceCount}"}'>${t('usage.group.instances', { count: instanceCount })}</span>
             <span class="success-count ${successCount === instanceCount ? 'all-success' : ''}" data-i18n="usage.group.success" data-i18n-params='{"count":"${successCount}","total":"${instanceCount}"}'>${t('usage.group.success', { count: successCount, total: instanceCount })}</span>
         </div>
+        <div class="usage-group-actions">
+            <button class="btn-toggle-cards" title="${t('usage.group.expandAll')}">
+                <i class="fas fa-expand-alt"></i>
+            </button>
+        </div>
     `;
     
-    // 点击头部切换折叠状态
-    header.addEventListener('click', () => {
+    // 点击头部切换分组折叠状态
+    const titleDiv = header.querySelector('.usage-group-title');
+    titleDiv.addEventListener('click', () => {
         groupContainer.classList.toggle('collapsed');
     });
     
     groupContainer.appendChild(header);
+    
+    // 展开/折叠所有卡片按钮事件
+    const toggleCardsBtn = header.querySelector('.btn-toggle-cards');
+    toggleCardsBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // 阻止事件冒泡到分组头部
+        
+        const cards = groupContainer.querySelectorAll('.usage-instance-card');
+        const allCollapsed = Array.from(cards).every(card => card.classList.contains('collapsed'));
+        
+        // 如果全部折叠，则全部展开；否则全部折叠
+        cards.forEach(card => {
+            if (allCollapsed) {
+                card.classList.remove('collapsed');
+            } else {
+                card.classList.add('collapsed');
+            }
+        });
+        
+        // 更新按钮图标和提示文本
+        const icon = toggleCardsBtn.querySelector('i');
+        if (allCollapsed) {
+            icon.className = 'fas fa-compress-alt';
+            toggleCardsBtn.title = t('usage.group.collapseAll');
+        } else {
+            icon.className = 'fas fa-expand-alt';
+            toggleCardsBtn.title = t('usage.group.expandAll');
+        }
+    });
     
     // 分组内容（卡片网格）
     const content = document.createElement('div');
@@ -263,18 +297,58 @@ function createProviderGroup(providerType, instances) {
  */
 function createInstanceUsageCard(instance, providerType) {
     const card = document.createElement('div');
-    card.className = `usage-instance-card ${instance.success ? 'success' : 'error'}`;
+    card.className = `usage-instance-card ${instance.success ? 'success' : 'error'} collapsed`;
 
     const providerDisplayName = getProviderDisplayName(providerType);
     const providerIcon = getProviderIcon(providerType);
 
-    // 实例头部 - 整合用户信息
-    const header = document.createElement('div');
-    header.className = 'usage-instance-header';
+    // 计算总用量（用于折叠摘要显示）
+    const totalUsage = instance.usage ? calculateTotalUsage(instance.usage.usageBreakdown) : { hasData: false, percent: 0 };
+    const progressClass = totalUsage.percent >= 90 ? 'danger' : (totalUsage.percent >= 70 ? 'warning' : 'normal');
+
+    // 折叠摘要 - 两行显示
+    const collapsedSummary = document.createElement('div');
+    collapsedSummary.className = 'usage-card-collapsed-summary';
     
     const statusIcon = instance.success
         ? '<i class="fas fa-check-circle status-success"></i>'
         : '<i class="fas fa-times-circle status-error"></i>';
+    
+    // 显示名称：优先自定义名称，其次 uuid
+    const displayName = instance.name || instance.uuid;
+    
+    collapsedSummary.innerHTML = `
+        <div class="collapsed-summary-row collapsed-summary-name-row">
+            <i class="fas fa-chevron-right usage-toggle-icon"></i>
+            <span class="collapsed-name" title="${displayName}">${displayName}</span>
+            ${statusIcon}
+        </div>
+        <div class="collapsed-summary-row collapsed-summary-usage-row">
+            ${totalUsage.hasData ? `
+                <div class="collapsed-progress-bar ${progressClass}">
+                    <div class="progress-fill" style="width: ${totalUsage.percent}%"></div>
+                </div>
+                <span class="collapsed-percent">${totalUsage.percent.toFixed(1)}%</span>
+                <span class="collapsed-usage-text">${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}</span>
+            ` : (instance.error ? `<span class="collapsed-error">${t('common.error')}</span>` : '')}
+        </div>
+    `;
+    
+    // 点击折叠摘要切换展开状态
+    collapsedSummary.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.toggle('collapsed');
+    });
+    
+    card.appendChild(collapsedSummary);
+
+    // 展开内容区域
+    const expandedContent = document.createElement('div');
+    expandedContent.className = 'usage-card-expanded-content';
+
+    // 实例头部 - 整合用户信息
+    const header = document.createElement('div');
+    header.className = 'usage-instance-header';
     
     const healthBadge = instance.isDisabled
         ? `<span class="badge badge-disabled" data-i18n="usage.card.status.disabled">${t('usage.card.status.disabled')}</span>`
@@ -310,7 +384,7 @@ function createInstanceUsageCard(instance, providerType) {
         </div>
         ${userInfoHTML}
     `;
-    card.appendChild(header);
+    expandedContent.appendChild(header);
 
     // 实例内容 - 只显示用量和到期时间
     const content = document.createElement('div');
@@ -327,7 +401,9 @@ function createInstanceUsageCard(instance, providerType) {
         content.appendChild(renderUsageDetails(instance.usage));
     }
 
-    card.appendChild(content);
+    expandedContent.appendChild(content);
+    card.appendChild(expandedContent);
+    
     return card;
 }
 
@@ -352,7 +428,10 @@ function renderUsageDetails(usage) {
         
         totalSection.innerHTML = `
             <div class="total-usage-header">
-                <span class="total-label"><i class="fas fa-chart-pie"></i> <span data-i18n="usage.card.totalUsage">${t('usage.card.totalUsage')}</span></span>
+                <span class="total-label">
+                    <i class="fas fa-chart-pie"></i>
+                    <span data-i18n="usage.card.totalUsage">${t('usage.card.totalUsage')}</span>
+                </span>
                 <span class="total-value">${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}</span>
             </div>
             <div class="progress-bar ${progressClass}">
@@ -360,6 +439,7 @@ function renderUsageDetails(usage) {
             </div>
             <div class="total-percent">${totalUsage.percent.toFixed(2)}%</div>
         `;
+        
         container.appendChild(totalSection);
     }
 

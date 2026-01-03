@@ -1,5 +1,5 @@
 import * as http from 'http';
-import { initializeConfig, CONFIG, logProviderSpecificDetails } from './config-manager.js';
+import { initializeConfig, CONFIG } from './config-manager.js';
 import { initApiService, autoLinkProviderConfigs } from './service-manager.js';
 import { initializeUIManagement } from './ui-manager.js';
 import { initializeAPIManagement } from './api-manager.js';
@@ -247,7 +247,6 @@ async function startServer() {
         if (uniqueProviders.length > 1) {
             console.log(`  Additional Model Providers: ${uniqueProviders.slice(1).join(', ')}`);
         }
-        uniqueProviders.forEach((provider) => logProviderSpecificDetails(provider, CONFIG));
         console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
         console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
         console.log(`  Host: ${CONFIG.HOST}`);
@@ -267,6 +266,8 @@ async function startServer() {
         // if (CONFIG.HOST === '0.0.0.0' || CONFIG.HOST === '127.0.0.1') {
             try {
                 const open = (await import('open')).default;
+                // 作为子进程启动时，需要更长的延迟确保服务完全就绪
+                const openDelay = IS_WORKER_PROCESS ? 3000 : 1000;
                 setTimeout(() => {
                     let openUrl = `http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`;
                     if(CONFIG.HOST === '0.0.0.0'){
@@ -279,7 +280,7 @@ async function startServer() {
                         .catch(err => {
                             console.log('[UI] Please open manually: http://' + CONFIG.HOST + ':' + CONFIG.SERVER_PORT + '/login.html');
                         });
-                }, 1000);
+                }, openDelay);
             } catch (err) {
                 console.log(`[UI] Login page available at: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`);
             }

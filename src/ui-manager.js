@@ -690,26 +690,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.HOST !== undefined) currentConfig.HOST = newConfig.HOST;
             if (newConfig.SERVER_PORT !== undefined) currentConfig.SERVER_PORT = newConfig.SERVER_PORT;
             if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
-            if (newConfig.PROJECT_ID !== undefined) currentConfig.PROJECT_ID = newConfig.PROJECT_ID;
-            if (newConfig.OPENAI_API_KEY !== undefined) currentConfig.OPENAI_API_KEY = newConfig.OPENAI_API_KEY;
-            if (newConfig.OPENAI_BASE_URL !== undefined) currentConfig.OPENAI_BASE_URL = newConfig.OPENAI_BASE_URL;
-            if (newConfig.CLAUDE_API_KEY !== undefined) currentConfig.CLAUDE_API_KEY = newConfig.CLAUDE_API_KEY;
-            if (newConfig.CLAUDE_BASE_URL !== undefined) currentConfig.CLAUDE_BASE_URL = newConfig.CLAUDE_BASE_URL;
-            if (newConfig.GEMINI_OAUTH_CREDS_BASE64 !== undefined) currentConfig.GEMINI_OAUTH_CREDS_BASE64 = newConfig.GEMINI_OAUTH_CREDS_BASE64;
-            if (newConfig.GEMINI_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH = newConfig.GEMINI_OAUTH_CREDS_FILE_PATH;
-            if (newConfig.KIRO_OAUTH_CREDS_BASE64 !== undefined) currentConfig.KIRO_OAUTH_CREDS_BASE64 = newConfig.KIRO_OAUTH_CREDS_BASE64;
-            if (newConfig.KIRO_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = newConfig.KIRO_OAUTH_CREDS_FILE_PATH;
-            if (newConfig.QWEN_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = newConfig.QWEN_OAUTH_CREDS_FILE_PATH;
-            
-            // New Provider URLs
-            if (newConfig.QWEN_BASE_URL !== undefined) currentConfig.QWEN_BASE_URL = newConfig.QWEN_BASE_URL;
-            if (newConfig.QWEN_OAUTH_BASE_URL !== undefined) currentConfig.QWEN_OAUTH_BASE_URL = newConfig.QWEN_OAUTH_BASE_URL;
-            if (newConfig.GEMINI_BASE_URL !== undefined) currentConfig.GEMINI_BASE_URL = newConfig.GEMINI_BASE_URL;
-            if (newConfig.ANTIGRAVITY_BASE_URL_DAILY !== undefined) currentConfig.ANTIGRAVITY_BASE_URL_DAILY = newConfig.ANTIGRAVITY_BASE_URL_DAILY;
-            if (newConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH !== undefined) currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH = newConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH;
-            if (newConfig.KIRO_REFRESH_URL !== undefined) currentConfig.KIRO_REFRESH_URL = newConfig.KIRO_REFRESH_URL;
-            if (newConfig.KIRO_REFRESH_IDC_URL !== undefined) currentConfig.KIRO_REFRESH_IDC_URL = newConfig.KIRO_REFRESH_IDC_URL;
-            if (newConfig.KIRO_BASE_URL !== undefined) currentConfig.KIRO_BASE_URL = newConfig.KIRO_BASE_URL;
             if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) currentConfig.SYSTEM_PROMPT_FILE_PATH = newConfig.SYSTEM_PROMPT_FILE_PATH;
             if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
             if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
@@ -753,27 +733,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     SERVER_PORT: currentConfig.SERVER_PORT,
                     HOST: currentConfig.HOST,
                     MODEL_PROVIDER: currentConfig.MODEL_PROVIDER,
-                    OPENAI_API_KEY: currentConfig.OPENAI_API_KEY,
-                    OPENAI_BASE_URL: currentConfig.OPENAI_BASE_URL,
-                    CLAUDE_API_KEY: currentConfig.CLAUDE_API_KEY,
-                    CLAUDE_BASE_URL: currentConfig.CLAUDE_BASE_URL,
-                    PROJECT_ID: currentConfig.PROJECT_ID,
-                    GEMINI_OAUTH_CREDS_BASE64: currentConfig.GEMINI_OAUTH_CREDS_BASE64,
-                    GEMINI_OAUTH_CREDS_FILE_PATH: currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH,
-                    KIRO_OAUTH_CREDS_BASE64: currentConfig.KIRO_OAUTH_CREDS_BASE64,
-                    KIRO_OAUTH_CREDS_FILE_PATH: currentConfig.KIRO_OAUTH_CREDS_FILE_PATH,
-                    QWEN_OAUTH_CREDS_FILE_PATH: currentConfig.QWEN_OAUTH_CREDS_FILE_PATH,
-                    // Provider URLs
-                    QWEN_BASE_URL: currentConfig.QWEN_BASE_URL,
-                    QWEN_OAUTH_BASE_URL: currentConfig.QWEN_OAUTH_BASE_URL,
-                    GEMINI_BASE_URL: currentConfig.GEMINI_BASE_URL,
-                    ANTIGRAVITY_BASE_URL_DAILY: currentConfig.ANTIGRAVITY_BASE_URL_DAILY,
-                    ANTIGRAVITY_BASE_URL_AUTOPUSH: currentConfig.ANTIGRAVITY_BASE_URL_AUTOPUSH,
-                    KIRO_REFRESH_URL: currentConfig.KIRO_REFRESH_URL,
-                    KIRO_REFRESH_IDC_URL: currentConfig.KIRO_REFRESH_IDC_URL,
-                    KIRO_BASE_URL: currentConfig.KIRO_BASE_URL,
-                    KIRO_AMAZON_Q_URL: currentConfig.KIRO_AMAZON_Q_URL,
-                    KIRO_USAGE_LIMITS_URL: currentConfig.KIRO_USAGE_LIMITS_URL,
                     SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
                     SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
                     PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,
@@ -1493,6 +1452,84 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 error: {
                     message: `Failed to generate auth URL: ${error.message}`
                 }
+            }));
+            return true;
+        }
+    }
+
+    // Handle manual OAuth callback
+    if (method === 'POST' && pathParam === '/api/oauth/manual-callback') {
+        try {
+            const body = await getRequestBody(req);
+            const { provider, callbackUrl, authMethod } = body;
+            
+            if (!provider || !callbackUrl) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: 'provider and callbackUrl are required'
+                }));
+                return true;
+            }
+            
+            console.log(`[OAuth Manual Callback] Processing manual callback for ${provider}`);
+            console.log(`[OAuth Manual Callback] Callback URL: ${callbackUrl}`);
+            
+            // 解析回调URL
+            const url = new URL(callbackUrl);
+            const code = url.searchParams.get('code');
+            const token = url.searchParams.get('token');
+            
+            if (!code && !token) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: 'Callback URL must contain code or token parameter'
+                }));
+                return true;
+            }
+            
+            // 通过fetch请求本地OAuth回调服务器处理
+            // 使用localhost而不是原始hostname，确保请求到达本地服务器
+            const localUrl = new URL(callbackUrl);
+            localUrl.hostname = 'localhost';
+            localUrl.protocol = 'http:';
+            
+            try {
+                const response = await fetch(localUrl.href);
+                
+                if (response.ok) {
+                    console.log(`[OAuth Manual Callback] Successfully processed callback for ${provider}`);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        message: 'OAuth callback processed successfully'
+                    }));
+                } else {
+                    const errorText = await response.text();
+                    console.error(`[OAuth Manual Callback] Callback processing failed:`, errorText);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: `Callback processing failed: ${response.status}`
+                    }));
+                }
+            } catch (fetchError) {
+                console.error(`[OAuth Manual Callback] Failed to process callback:`, fetchError);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: `Failed to process callback: ${fetchError.message}`
+                }));
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('[OAuth Manual Callback] Error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
             }));
             return true;
         }
@@ -2646,6 +2683,11 @@ async function getAdapterUsage(adapter, providerType) {
  * @returns {string} 显示名称
  */
 function getProviderDisplayName(provider, providerType) {
+    // 优先使用自定义名称
+    if (provider.customName) {
+        return provider.customName;
+    }
+
     // 尝试从凭据文件路径提取名称
     const credPathKey = {
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',

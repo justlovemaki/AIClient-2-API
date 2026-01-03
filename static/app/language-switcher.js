@@ -33,8 +33,8 @@ export function initLanguageSwitcher() {
     const headerControls = document.querySelector('.header-controls');
     if (headerControls) {
         const switcher = createLanguageSwitcher();
-        // 插入到第一个位置
-        headerControls.insertBefore(switcher, headerControls.firstChild);
+        // 追加到最后位置（最右边）
+        headerControls.appendChild(switcher);
         
         // 绑定事件
         bindLanguageSwitcherEvents();
