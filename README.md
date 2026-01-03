@@ -78,8 +78,14 @@
 
 ## 📑 Quick Navigation
 
-- [🐳 Docker Deployment](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
-- [🔧 Usage Instructions](#-usage-instructions)
+- [💡 Core Advantages](#-core-advantages)
+- [🚀 Quick Start](#-quick-start)
+  - [🐳 Docker Deployment](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
+  - [📋 Core Features](#-core-features)
+- [🔐 Authorization Configuration Guide](#-authorization-configuration-guide)
+- [⚙️ Advanced Configuration](#advanced-configuration)
+- [📁 Authorization File Storage Paths](#-authorization-file-storage-paths)
+- [🦙 Ollama Protocol Usage Examples](#-ollama-protocol-usage-examples)
 - [❓ FAQ](#-faq)
 - [📄 Open Source License](#-open-source-license)
 - [🙏 Acknowledgements](#-acknowledgements)
@@ -224,9 +230,9 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Startup Parameter Configuration**: Use the `--provider-pools-file <path>` parameter to specify the pool configuration file path
 4. **Health Check**: The system will automatically perform periodic health checks and avoid using unhealthy providers
 
-#### Advanced Configuration
+### Advanced Configuration
 
-##### 1. Proxy Configuration
+#### 1. Proxy Configuration
 
 This project supports flexible proxy configuration, allowing you to configure a unified proxy for different providers or use provider-specific proxied endpoints.
 
@@ -280,7 +286,7 @@ This project supports flexible proxy configuration, allowing you to configure a 
 - Ensure the proxy service is stable and available, otherwise it may affect service quality
 - SOCKS5 proxy usually performs better than HTTP proxy
 
-##### 2. Model Filtering Configuration
+#### 2. Model Filtering Configuration
 
 Support excluding unsupported models through `notSupportedModels` configuration, the system will automatically skip these providers.
 
@@ -306,7 +312,7 @@ Support excluding unsupported models through `notSupportedModels` configuration,
 - Some accounts cannot access specific models due to quota or permission restrictions
 - Need to assign different model access permissions to different accounts
 
-##### 3. Cross-Type Fallback Configuration
+#### 3. Cross-Type Fallback Configuration
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 
