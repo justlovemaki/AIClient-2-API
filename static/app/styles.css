@@ -154,6 +154,62 @@ body {
     font-size: 14px;
 }
 
+/* Theme Toggle Button */
+.theme-toggle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--theme-toggle-bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-toggle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: var(--primary-color);
+}
+
+.theme-toggle:active {
+    transform: translateY(0);
+}
+
+.theme-toggle i {
+    font-size: 18px;
+    color: var(--theme-toggle-icon);
+    transition: all 0.3s ease;
+    position: absolute;
+}
+
+/* Light mode: show moon, hide sun */
+.theme-toggle .fa-moon {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+.theme-toggle .fa-sun {
+    opacity: 0;
+    transform: rotate(-90deg);
+}
+
+/* Dark mode: show sun, hide moon */
+[data-theme="dark"] .theme-toggle .fa-moon {
+    opacity: 0;
+    transform: rotate(90deg);
+}
+
+[data-theme="dark"] .theme-toggle .fa-sun {
+    opacity: 1;
+    transform: rotate(0deg);
+    color: #fbbf24;
+}
+
 /* 高亮说明样式 */
 .highlight-note {
     display: inline-flex;

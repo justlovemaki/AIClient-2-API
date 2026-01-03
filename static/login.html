@@ -19,16 +19,21 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
         .login-container {
-            background: white;
+            background: var(--bg-primary);
             border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-lg);
             width: 100%;
             max-width: 400px;
             padding: 40px;
             animation: fadeIn 0.5s ease-in;
+            border: 1px solid var(--border-color);
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
 
         @keyframes fadeIn {
@@ -56,13 +61,13 @@
 
         .logo h1 {
             font-size: 24px;
-            color: #333;
+            color: var(--primary-color);
             margin-bottom: 5px;
         }
 
         .logo p {
             font-size: 14px;
-            color: #666;
+            color: var(--text-secondary);
         }
 
         .form-group {
@@ -72,7 +77,7 @@
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: var(--text-primary);
             font-size: 14px;
             font-weight: 500;
         }
@@ -80,24 +85,26 @@
         .form-group input {
             width: 100%;
             padding: 12px 15px;
-            border: 2px solid #e1e8ed;
+            border: 2px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
             transition: all 0.3s ease;
             outline: none;
+            background: var(--bg-primary);
+            color: var(--text-primary);
         }
 
         .form-group input:focus {
-            border-color: #059669;
+            border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
         }
 
         .form-group input::placeholder {
-            color: #aaa;
+            color: var(--text-secondary);
         }
 
         .error-message {
-            color: #e74c3c;
+            color: var(--danger-color);
             font-size: 13px;
             margin-top: 8px;
             display: none;
@@ -117,7 +124,7 @@
         .login-button {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             color: white;
             border: none;
             border-radius: 8px;
@@ -138,7 +145,8 @@
         }
 
         .login-button:disabled {
-            background: #ccc;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
             cursor: not-allowed;
             transform: none;
         }
@@ -147,12 +155,12 @@
             text-align: center;
             margin-top: 30px;
             padding-top: 20px;
-            border-top: 1px solid #e1e8ed;
+            border-top: 1px solid var(--border-color);
         }
 
         .footer p {
             font-size: 13px;
-            color: #999;
+            color: var(--text-secondary);
         }
 
         .loading {
@@ -171,6 +179,12 @@
             to { transform: rotate(360deg); }
         }
 
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
         @media (max-width: 480px) {
             .login-container {
                 padding: 30px 20px;
@@ -185,7 +199,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div style="position: absolute; top: 20px; right: 20px;" id="langSwitcherContainer"></div>
+    <div style="position: absolute; top: 20px; right: 20px;" class="header-controls">
+        <button id="themeToggleBtn" class="theme-toggle" aria-label="Toggle Theme" title="切换主题">
+            <i class="fas fa-moon"></i>
+            <i class="fas fa-sun"></i>
+        </button>
+        <div id="langSwitcherContainer"></div>
+    </div>
     <div class="login-container">
         <div class="logo">
             <img src="/favicon.ico" alt="Logo" onerror="this.style.display='none'">
@@ -221,6 +241,10 @@
     <script type="module">
         import { initI18n, t, setLanguage } from './app/i18n.js';
         import { initLanguageSwitcher } from './app/language-switcher.js';
+        import { initThemeSwitcher } from './app/theme-switcher.js';
+
+        // 初始化主题切换器（尽早初始化以避免闪烁）
+        initThemeSwitcher();
 
         // 初始化多语言
         initI18n();
