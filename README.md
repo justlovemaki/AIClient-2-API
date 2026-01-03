@@ -31,6 +31,8 @@
 >
 > **📅 Version Update Log**
 >
+> - **2026.01.03** - Added theme switching functionality and optimized provider pool initialization, removed the fallback strategy of using provider default configuration
+> - **2025.12.30** - Added main process management and automatic update functionality
 > - **2025.12.25** - Unified configuration management: All configs centralized to `configs/` directory. Docker users need to update mount path to `-v "local_path:/app/configs"`
 > - **2025.12.11** - Automatically built Docker images are now available on Docker Hub: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 > - **2025.11.30** - Added Antigravity protocol support, enabling access to Gemini 3 Pro, Claude Sonnet 4.5, and other models via Google internal interfaces
@@ -224,7 +226,61 @@ In the Web UI management interface, you can complete authorization configuration
 
 #### Advanced Configuration
 
-##### 1. Model Filtering Configuration
+##### 1. Proxy Configuration
+
+This project supports flexible proxy configuration, allowing you to configure a unified proxy for different providers or use provider-specific proxied endpoints.
+
+**Configuration Methods**:
+
+1. **Web UI Configuration** (Recommended): Convenient configuration management
+
+  In the "Configuration" page of the Web UI, you can visually configure all proxy options:
+  - **Unified Proxy**: Fill in the proxy address in the "Proxy Settings" area and check the providers that need to use the proxy
+  - **Provider Endpoints**: In each provider's configuration area, directly modify the Base URL to a proxied endpoint
+  - **Click "Save Configuration"**: Takes effect immediately without restarting the service
+
+2. **Unified Proxy Configuration**: Configure a global proxy and specify which providers use it
+
+   - **Web UI Configuration**: Fill in the proxy address in the "Proxy Settings" area of the "Configuration" page and check the providers that need to use the proxy
+   - **Configuration File**: Configure in `configs/config.json`
+   ```json
+   {
+     "PROXY_URL": "http://127.0.0.1:7890",
+     "PROXY_ENABLED_PROVIDERS": [
+       "gemini-cli-oauth",
+       "gemini-antigravity",
+       "claude-kiro-oauth"
+     ]
+   }
+   ```
+
+3. **Provider-Specific Proxied Endpoints**: Some providers (like OpenAI, Claude) support configuring proxied API endpoints
+
+   - **Web UI Configuration**: In each provider's configuration area on the "Configuration" page, modify the corresponding Base URL
+   - **Configuration File**: Configure in `configs/config.json`
+   ```json
+   {
+     "OPENAI_BASE_URL": "https://your-proxy-endpoint.com/v1",
+     "CLAUDE_BASE_URL": "https://your-proxy-endpoint.com"
+   }
+   ```
+
+**Supported Proxy Types**:
+- **HTTP Proxy**: `http://127.0.0.1:7890`
+- **HTTPS Proxy**: `https://127.0.0.1:7890`
+- **SOCKS5 Proxy**: `socks5://127.0.0.1:1080`
+
+**Use Cases**:
+- **Network-Restricted Environments**: Use in network environments where Google, OpenAI, and other services cannot be accessed directly
+- **Hybrid Configuration**: Some providers use unified proxy, others use their own proxied endpoints
+- **Flexible Switching**: Enable/disable proxy for specific providers at any time in the Web UI
+
+**Notes**:
+- Proxy configuration priority: Unified proxy configuration > Provider-specific endpoints > Direct connection
+- Ensure the proxy service is stable and available, otherwise it may affect service quality
+- SOCKS5 proxy usually performs better than HTTP proxy
+
+##### 2. Model Filtering Configuration
 
 Support excluding unsupported models through `notSupportedModels` configuration, the system will automatically skip these providers.
 
@@ -250,7 +306,7 @@ Support excluding unsupported models through `notSupportedModels` configuration,
 - Some accounts cannot access specific models due to quota or permission restrictions
 - Need to assign different model access permissions to different accounts
 
-##### 2. Cross-Type Fallback Configuration
+##### 3. Cross-Type Fallback Configuration
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 
