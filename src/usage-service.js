@@ -488,7 +488,7 @@ export function formatAntigravityUsage(usageData) {
                 currency: null,
                 
                 // 当前用量 - Antigravity 返回的是剩余比例，转换为已用比例（百分比形式）
-                currentUsage: Math.round(usedPercent * 100),
+                currentUsage: usedPercent * 100,
                 usageLimit: 100, // 以百分比表示，总量为 100%
                 
                 // 超额信息
@@ -512,7 +512,7 @@ export function formatAntigravityUsage(usageData) {
                 inputTokenLimit: modelInfo.inputTokenLimit || 0,
                 outputTokenLimit: modelInfo.outputTokenLimit || 0,
                 remaining: remainingPercent,
-                remainingPercent: Math.round(remainingPercent * 100), // 剩余百分比
+                remainingPercent: remainingPercent * 100, // 剩余百分比
                 resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
                            utcToBeijing(modelInfo.resetTimeRaw || modelInfo.resetTime) : '--',
                 resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null
