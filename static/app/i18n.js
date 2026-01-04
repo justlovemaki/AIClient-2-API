@@ -349,6 +349,7 @@ const translations = {
         'modal.provider.add.failed': '添加失败',
         'modal.provider.resetHealth.success': '成功重置 {count} 个节点的健康状态',
         'modal.provider.resetHealth.failed': '重置健康状态失败',
+        'modal.provider.kiroAuthHint': '使用 AWS Builder ID 登录方式时，需要 <code>clientId</code> 和 <code>clientSecret</code> 字段，可在同文件夹下的另一个 JSON 文件中获取',
         
         // Pagination
         'pagination.showing': '显示 {start}-{end} / 共 {total} 条',
@@ -768,6 +769,7 @@ const translations = {
         'modal.provider.add.failed': 'Add failed',
         'modal.provider.resetHealth.success': 'Successfully reset health status for {count} nodes',
         'modal.provider.resetHealth.failed': 'Failed to reset health status',
+        'modal.provider.kiroAuthHint': 'When using AWS Builder ID login, <code>clientId</code> and <code>clientSecret</code> fields are required, which can be found in another JSON file in the same folder',
         
         // Pagination
         'pagination.showing': 'Showing {start}-{end} of {total}',

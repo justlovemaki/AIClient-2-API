@@ -534,6 +534,7 @@ function renderProviderConfig(provider) {
             `;
         } else if (field1IsOAuthFilePath) {
             // OAuth凭据文件路径字段，添加上传按钮
+            const field1IsKiro = field1Key.includes('KIRO');
             html += `
                 <div class="config-item">
                     <label>${field1Label}</label>
@@ -549,6 +550,7 @@ function renderProviderConfig(provider) {
                             <i class="fas fa-upload"></i>
                         </button>
                     </div>
+                    ${field1IsKiro ? '<small class="form-text"><i class="fas fa-info-circle"></i> ' + t('modal.provider.kiroAuthHint') + '</small>' : ''}
                 </div>
             `;
         } else {
@@ -594,6 +596,7 @@ function renderProviderConfig(provider) {
                 `;
             } else if (field2IsOAuthFilePath) {
                 // OAuth凭据文件路径字段，添加上传按钮
+                const field2IsKiro = field2Key.includes('KIRO');
                 html += `
                     <div class="config-item">
                         <label>${field2Label}</label>
@@ -609,6 +612,7 @@ function renderProviderConfig(provider) {
                                 <i class="fas fa-upload"></i>
                             </button>
                         </div>
+                        ${field2IsKiro ? '<small class="form-text"><i class="fas fa-info-circle"></i> ' + t('modal.provider.kiroAuthHint') + '</small>' : ''}
                     </div>
                 `;
             } else {
@@ -670,7 +674,7 @@ function getFieldOrder(provider) {
         'openaiResponses-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
         'claude-custom': ['CLAUDE_API_KEY', 'CLAUDE_BASE_URL'],
         'gemini-cli-oauth': ['PROJECT_ID', 'GEMINI_OAUTH_CREDS_FILE_PATH', 'GEMINI_BASE_URL'],
-        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH', 'KIRO_BASE_URL', 'KIRO_REFRESH_URL'],
+        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH', 'KIRO_BASE_URL', 'KIRO_REFRESH_URL', 'KIRO_REFRESH_IDC_URL'],
         'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH', 'QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL'],
         'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH', 'ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH']
     };
@@ -1116,19 +1120,19 @@ function addDynamicConfigFields(form, providerType) {
                 `;
             } else if (isOAuthFilePath1) {
                 // OAuth凭据文件路径字段，添加上传按钮
-                const isKiroField = field1.id.includes('Kiro');
-                fields += `
-                    <div class="form-group">
-                        <label>${field1.label}</label>
-                        <div class="file-input-group">
-                            <input type="text" id="new${field1.id}" class="form-control" placeholder="${field1.placeholder || ''}" value="${field1.value || ''}">
-                            <button type="button" class="btn btn-outline upload-btn" data-target="new${field1.id}" aria-label="上传文件">
-                                <i class="fas fa-upload"></i>
-                            </button>
-                        </div>
-                        ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> 使用 AWS 登录方式时，请确保授权文件中包含 <code>clientId</code> 和 <code>clientSecret</code> 字段</small>' : ''}
-                    </div>
-                `;
+                const isKiroField = field1.id.includes('KIRO');
+    fields += `
+        <div class="form-group">
+            <label>${field1.label}</label>
+            <div class="file-input-group">
+                <input type="text" id="new${field1.id}" class="form-control" placeholder="${field1.placeholder || ''}" value="${field1.value || ''}">
+                <button type="button" class="btn btn-outline upload-btn" data-target="new${field1.id}" aria-label="上传文件">
+                    <i class="fas fa-upload"></i>
+                </button>
+            </div>
+            ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> ' + t('modal.provider.kiroAuthHint') + '</small>' : ''}
+        </div>
+    `;
             } else {
                 fields += `
                     <div class="form-group">
@@ -1159,19 +1163,19 @@ function addDynamicConfigFields(form, providerType) {
                     `;
                 } else if (isOAuthFilePath2) {
                     // OAuth凭据文件路径字段，添加上传按钮
-                    const isKiroField = field2.id.includes('Kiro');
-                    fields += `
-                        <div class="form-group">
-                            <label>${field2.label}</label>
-                            <div class="file-input-group">
-                                <input type="text" id="new${field2.id}" class="form-control" placeholder="${field2.placeholder || ''}" value="${field2.value || ''}">
-                                <button type="button" class="btn btn-outline upload-btn" data-target="new${field2.id}" aria-label="上传文件">
-                                    <i class="fas fa-upload"></i>
-                                </button>
-                            </div>
-                            ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> 使用 AWS 登录方式时，请确保授权文件中包含 <code>clientId</code> 和 <code>clientSecret</code> 字段</small>' : ''}
-                        </div>
-                    `;
+                    const isKiroField = field2.id.includes('KIRO');
+    fields += `
+        <div class="form-group">
+            <label>${field2.label}</label>
+            <div class="file-input-group">
+                <input type="text" id="new${field2.id}" class="form-control" placeholder="${field2.placeholder || ''}" value="${field2.value || ''}">
+                <button type="button" class="btn btn-outline upload-btn" data-target="new${field2.id}" aria-label="上传文件">
+                    <i class="fas fa-upload"></i>
+                </button>
+            </div>
+            ${isKiroField ? '<small class="form-text"><i class="fas fa-info-circle"></i> ' + t('modal.provider.kiroAuthHint') + '</small>' : ''}
+        </div>
+    `;
                 } else {
                     fields += `
                         <div class="form-group">
