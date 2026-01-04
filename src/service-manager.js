@@ -274,6 +274,7 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
     let actualProviderType = config.MODEL_PROVIDER;
     let isFallback = false;
     let selectedUuid = null;
+    let actualModel = null;
     
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         const selectedResult = providerPoolManager.selectProviderWithFallback(
@@ -283,7 +284,7 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
         );
         
         if (selectedResult) {
-            const { config: selectedProviderConfig, actualProviderType: selectedType, isFallback: fallbackUsed } = selectedResult;
+            const { config: selectedProviderConfig, actualProviderType: selectedType, isFallback: fallbackUsed, actualModel: fallbackModel } = selectedResult;
             
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);
@@ -292,6 +293,7 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
             actualProviderType = selectedType;
             isFallback = fallbackUsed;
             selectedUuid = selectedProviderConfig.uuid;
+            actualModel = fallbackModel;
             
             // 如果发生了 fallback，需要更新 MODEL_PROVIDER
             if (isFallback) {
@@ -311,7 +313,8 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
         serviceConfig,
         actualProviderType,
         isFallback,
-        uuid: selectedUuid
+        uuid: selectedUuid,
+        actualModel
     };
 }
 

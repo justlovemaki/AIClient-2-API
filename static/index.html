@@ -701,6 +701,18 @@
                                     <small class="form-text" data-i18n="config.advanced.fallbackChainNote">当某一 Provider Type 所有账号都不健康时，自动切换到配置的 Fallback 类型。JSON 格式，键为主类型，值为 Fallback 类型数组（按优先级排序）</small>
                                 </div>
                                 
+                                <div class="form-group pool-section">
+                                    <label for="modelFallbackMapping" data-i18n="config.advanced.modelFallbackMapping">跨协议模型 Fallback 映射</label>
+                                    <textarea id="modelFallbackMapping" class="form-control" rows="6" data-i18n-placeholder="config.advanced.modelFallbackMappingPlaceholder" placeholder='例如:
+{
+  "gemini-claude-opus-4-5-thinking": {
+    "targetProviderType": "claude-kiro-oauth",
+    "targetModel": "claude-opus-4-5"
+  }
+}'></textarea>
+                                    <small class="form-text" data-i18n="config.advanced.modelFallbackMappingNote">当主 Provider 不可用时，根据模型名映射到其他协议的 Provider 和模型。JSON 格式。</small>
+                                </div>
+                                
                                 <!-- 系统提示配置移到最下面 -->
                                 <div class="form-group system-prompt-section">
                                     <label for="systemPrompt" data-i18n="config.advanced.systemPrompt">系统提示</label>
@@ -972,4 +984,3 @@
     <script type="module" src="app/app.js"></script>
 </body>
 </html>
-
