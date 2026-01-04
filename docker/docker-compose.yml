@@ -1,0 +1,27 @@
+services:
+  aiclient-api:
+    # 方式一：使用 Docker Hub 预构建镜像（默认，推荐）
+    image: justlikemaki/aiclient-2-api:latest
+    
+    # 方式二：从 Dockerfile 本地构建（取消下面注释并注释掉上面的 image 行）
+    # build:
+    #   context: ..
+    #   dockerfile: Dockerfile
+    
+    container_name: aiclient2api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "8085:8085"
+      - "8086:8086"
+      - "19876-19880:19876-19880"
+    volumes:
+      - ./configs:/app/configs
+    environment:
+      - ARGS=
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
