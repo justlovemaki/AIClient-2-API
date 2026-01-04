@@ -40,6 +40,9 @@ export class ProviderPoolManager {
         // Fallback 链配置
         this.fallbackChain = options.globalConfig?.providerFallbackChain || {};
         
+        // Model Fallback 映射配置
+        this.modelFallbackMapping = options.globalConfig?.modelFallbackMapping || {};
+
         this.initializeProviderStatus();
     }
 
@@ -189,27 +192,19 @@ export class ProviderPoolManager {
             return null;
         }
 
+        // ==========================
+        // 优先级 1: Provider Fallback Chain (同协议/兼容协议的回退)
+        // ==========================
+        
         // 记录尝试过的类型，避免循环
         const triedTypes = new Set();
         const typesToTry = [providerType];
         
-        // 添加 fallback 类型到尝试列表
-        const fallbackTypes = this.fallbackChain[providerType];
-        if (!fallbackTypes || fallbackTypes.length === 0) {
-            this._log('info', `No fallback types configured for ${providerType}`);
-            const selectedConfig = this.selectProvider(providerType, requestedModel, options);
-            if (selectedConfig) {
-                return {
-                    config: selectedConfig,
-                    actualProviderType: providerType,
-                    isFallback: false
-                };
-            }
-        }
-
+        const fallbackTypes = this.fallbackChain[providerType] || [];
         if (Array.isArray(fallbackTypes)) {
             typesToTry.push(...fallbackTypes);
         }
+
         for (const currentType of typesToTry) {
             // 避免重复尝试
             if (triedTypes.has(currentType)) {
@@ -219,7 +214,7 @@ export class ProviderPoolManager {
 
             // 检查该类型是否有配置的池
             if (!this.providerStatus[currentType] || this.providerStatus[currentType].length === 0) {
-                this._log('info', `No provider pool configured for type: ${currentType}`);
+                this._log('debug', `No provider pool configured for type: ${currentType}`);
                 continue;
             }
 
@@ -230,14 +225,14 @@ export class ProviderPoolManager {
                 const fallbackProtocol = getProtocolPrefix(currentType);
                 
                 if (primaryProtocol !== fallbackProtocol) {
-                    this._log('info', `Skipping fallback type ${currentType}: protocol mismatch (${primaryProtocol} vs ${fallbackProtocol})`);
+                    this._log('debug', `Skipping fallback type ${currentType}: protocol mismatch (${primaryProtocol} vs ${fallbackProtocol})`);
                     continue;
                 }
 
                 // 检查 fallback 类型是否支持请求的模型
                 const supportedModels = getProviderModels(currentType);
                 if (supportedModels.length > 0 && !supportedModels.includes(requestedModel)) {
-                    this._log('info', `Skipping fallback type ${currentType}: model ${requestedModel} not supported`);
+                    this._log('debug', `Skipping fallback type ${currentType}: model ${requestedModel} not supported`);
                     continue;
                 }
             }
@@ -247,7 +242,7 @@ export class ProviderPoolManager {
             
             if (selectedConfig) {
                 if (currentType !== providerType) {
-                    this._log('info', `Fallback activated: ${providerType} -> ${currentType} (uuid: ${selectedConfig.uuid})`);
+                    this._log('info', `Fallback activated (Chain): ${providerType} -> ${currentType} (uuid: ${selectedConfig.uuid})`);
                 }
                 return {
                     config: selectedConfig,
@@ -257,7 +252,72 @@ export class ProviderPoolManager {
             }
         }
 
-        this._log('warn', `None available provider found for ${providerType} or any of its fallback types: ${fallbackTypes?.join(', ') || 'none configured'}`);
+        // ==========================
+        // 优先级 2: Model Fallback Mapping (跨协议/特定模型的回退)
+        // ==========================
+
+        if (requestedModel && this.modelFallbackMapping && this.modelFallbackMapping[requestedModel]) {
+            const mapping = this.modelFallbackMapping[requestedModel];
+            const targetProviderType = mapping.targetProviderType;
+            const targetModel = mapping.targetModel;
+
+            if (targetProviderType && targetModel) {
+                this._log('info', `Trying Model Fallback Mapping for ${requestedModel}: -> ${targetProviderType} (${targetModel})`);
+                
+                // 递归调用 selectProviderWithFallback，但这次针对目标提供商类型
+                // 注意：这里我们直接尝试从目标提供商池中选择，因为如果再次递归可能会导致死循环或逻辑复杂化
+                // 简单起见，我们直接尝试选择目标提供商
+                
+                // 检查目标类型是否有配置的池
+                if (this.providerStatus[targetProviderType] && this.providerStatus[targetProviderType].length > 0) {
+                    // 尝试从目标类型选择提供商（使用转换后的模型名）
+                    const selectedConfig = this.selectProvider(targetProviderType, targetModel, options);
+                    
+                    if (selectedConfig) {
+                        this._log('info', `Fallback activated (Model Mapping): ${providerType} (${requestedModel}) -> ${targetProviderType} (${targetModel}) (uuid: ${selectedConfig.uuid})`);
+                        return {
+                            config: selectedConfig,
+                            actualProviderType: targetProviderType,
+                            isFallback: true,
+                            actualModel: targetModel // 返回实际使用的模型名，供上层进行请求转换
+                        };
+                    } else {
+                        // 如果目标类型的主池也不可用，尝试目标类型的 fallback chain
+                        // 例如 claude-kiro-oauth (mapped) -> claude-custom (chain)
+                        // 这需要我们小心处理，避免无限递归。
+                        // 我们可以手动检查目标类型的 fallback chain
+                        
+                        const targetFallbackTypes = this.fallbackChain[targetProviderType] || [];
+                        for (const fallbackType of targetFallbackTypes) {
+                             // 检查协议兼容性 (目标类型 vs 它的 fallback)
+                             const targetProtocol = getProtocolPrefix(targetProviderType);
+                             const fallbackProtocol = getProtocolPrefix(fallbackType);
+                             
+                             if (targetProtocol !== fallbackProtocol) continue;
+                             
+                             // 检查模型支持
+                             const supportedModels = getProviderModels(fallbackType);
+                             if (supportedModels.length > 0 && !supportedModels.includes(targetModel)) continue;
+                             
+                             const fallbackSelectedConfig = this.selectProvider(fallbackType, targetModel, options);
+                             if (fallbackSelectedConfig) {
+                                 this._log('info', `Fallback activated (Model Mapping -> Chain): ${providerType} (${requestedModel}) -> ${targetProviderType} -> ${fallbackType} (${targetModel}) (uuid: ${fallbackSelectedConfig.uuid})`);
+                                 return {
+                                     config: fallbackSelectedConfig,
+                                     actualProviderType: fallbackType,
+                                     isFallback: true,
+                                     actualModel: targetModel
+                                 };
+                             }
+                        }
+                    }
+                } else {
+                    this._log('warn', `Model Fallback target provider ${targetProviderType} not configured or empty.`);
+                }
+            }
+        }
+
+        this._log('warn', `None available provider found for ${providerType} (Model: ${requestedModel}) after checking fallback chain and model mapping.`);
         return null;
     }
 
