@@ -393,7 +393,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
 
     // 2. Extract model and determine if the request is for streaming.
-    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
+    let { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
 
     if (!model) {
         throw new Error("Could not determine the model from the request.");
@@ -410,6 +410,12 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         toProvider = result.actualProviderType;
         actualUuid = result.uuid || pooluuid;
         
+        // 如果发生了模型级别的 fallback，需要更新请求使用的模型
+        if (result.actualModel && result.actualModel !== model) {
+            console.log(`[Content Generation] Model Fallback: ${model} -> ${result.actualModel}`);
+            model = result.actualModel;
+        }
+
         if (result.isFallback) {
             console.log(`[Content Generation] Fallback activated: ${CONFIG.MODEL_PROVIDER} -> ${toProvider} (uuid: ${actualUuid})`);
         } else {
