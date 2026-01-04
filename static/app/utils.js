@@ -84,6 +84,7 @@ function getFieldLabel(key) {
         'GEMINI_BASE_URL': 'Gemini Base URL',
         'KIRO_BASE_URL': 'Base URL',
         'KIRO_REFRESH_URL': 'Refresh URL',
+        'KIRO_REFRESH_IDC_URL': 'Refresh IDC URL',
         'QWEN_BASE_URL': 'Qwen Base URL',
         'QWEN_OAUTH_BASE_URL': 'OAuth Base URL',
         'ANTIGRAVITY_BASE_URL_DAILY': 'Daily Base URL',
