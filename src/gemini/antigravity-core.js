@@ -808,7 +808,7 @@ export class AntigravityApiService {
                             'User-Agent': this.userAgent
                         },
                         responseType: 'json',
-                        body: JSON.stringify({})
+                        body: JSON.stringify({ project: this.projectId })
                     };
 
                     const res = await this.authClient.request(requestOptions);
