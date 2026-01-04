@@ -70,6 +70,7 @@ async function loadConfiguration() {
         const providerPoolsFilePathEl = document.getElementById('providerPoolsFilePath');
         const maxErrorCountEl = document.getElementById('maxErrorCount');
         const providerFallbackChainEl = document.getElementById('providerFallbackChain');
+        const modelFallbackMappingEl = document.getElementById('modelFallbackMapping');
 
         if (systemPromptFilePathEl) systemPromptFilePathEl.value = data.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
         if (systemPromptModeEl) systemPromptModeEl.value = data.SYSTEM_PROMPT_MODE || 'append';
@@ -88,6 +89,15 @@ async function loadConfiguration() {
                 providerFallbackChainEl.value = JSON.stringify(data.providerFallbackChain, null, 2);
             } else {
                 providerFallbackChainEl.value = '';
+            }
+        }
+
+        // 加载 Model Fallback 映射配置
+        if (modelFallbackMappingEl) {
+            if (data.modelFallbackMapping && typeof data.modelFallbackMapping === 'object') {
+                modelFallbackMappingEl.value = JSON.stringify(data.modelFallbackMapping, null, 2);
+            } else {
+                modelFallbackMappingEl.value = '';
             }
         }
         
@@ -159,6 +169,19 @@ async function saveConfiguration() {
         }
     } else {
         config.providerFallbackChain = {};
+    }
+
+    // 保存 Model Fallback 映射配置
+    const modelFallbackMappingValue = document.getElementById('modelFallbackMapping')?.value?.trim() || '';
+    if (modelFallbackMappingValue) {
+        try {
+            config.modelFallbackMapping = JSON.parse(modelFallbackMappingValue);
+        } catch (e) {
+            showToast(t('common.error'), t('config.advanced.modelFallbackMappingInvalid') || 'Model Fallback 映射配置格式无效，请输入有效的 JSON', 'error');
+            return;
+        }
+    } else {
+        config.modelFallbackMapping = {};
     }
     
     // 保存代理配置
