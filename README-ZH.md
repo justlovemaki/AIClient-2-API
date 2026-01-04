@@ -111,6 +111,21 @@ docker run -d -p 3000:3000 -p 8085:8085 -p 8086:8086 -p 19876-19880:19876-19880 
 - `-v "指定路径:/app/configs"`：挂载配置目录（请将"指定路径"替换为实际路径，如 `/home/user/aiclient-configs`）
 - `--name aiclient2api`：容器名称
 
+#### 🐳 Docker Compose 部署
+
+你也可以使用 Docker Compose 进行部署。首先，进入 `docker` 目录：
+
+```bash
+cd docker
+mkdir -p configs
+docker compose up -d
+```
+
+如需从源码构建而非使用预构建镜像，请编辑 `docker-compose.yml`：
+1. 注释掉 `image: justlikemaki/aiclient-2-api:latest` 行
+2. 取消 `build:` 部分的注释
+3. 运行 `docker compose up -d --build`
+
 #### 1. 运行启动脚本
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: 双击运行 `install-and-run.bat`

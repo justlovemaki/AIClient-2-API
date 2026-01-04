@@ -112,6 +112,21 @@ docker run -d -p 3000:3000 -p 8085:8085 -p 8086:8086 -p 19876-19880:19876-19880 
 - `-v "your_path:/app/configs"`: Mount configuration directory (replace "your_path" with actual path, e.g., `/home/user/aiclient-configs`)
 - `--name aiclient2api`: Container name
 
+#### 🐳 Docker Compose Deployment
+
+You can also use Docker Compose for deployment. First, navigate to the `docker` directory:
+
+```bash
+cd docker
+mkdir -p configs
+docker compose up -d
+```
+
+To build from source instead of using the pre-built image, edit `docker-compose.yml`:
+1. Comment out the `image: justlikemaki/aiclient-2-api:latest` line
+2. Uncomment the `build:` section
+3. Run `docker compose up -d --build`
+
 #### 1. Run the startup script
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: Double-click `install-and-run.bat`
