@@ -359,6 +359,41 @@ body {
     font-size: 14px;
 }
 
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.125rem;
+    transition: var(--transition);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.github-link:hover {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.github-link:active {
+    transform: translateY(0);
+}
+
+.github-link i {
+    transition: transform 0.3s ease;
+}
+
 /* 高亮说明样式 */
 .highlight-note {
     display: inline-flex;
