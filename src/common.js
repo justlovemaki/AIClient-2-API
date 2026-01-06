@@ -235,7 +235,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
         // 流式请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
-                        const customNameDisplay = customName ? `, ${customName}` : '';
+            const customNameDisplay = customName ? `, ${customName}` : '';
             console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful stream request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
