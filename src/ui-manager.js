@@ -1313,6 +1313,13 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             const results = [];
             for (const providerStatus of providers) {
                 const providerConfig = providerStatus.config;
+                
+                // 跳过已禁用的节点
+                if (providerConfig.isDisabled) {
+                    console.log(`[UI API] Skipping health check for disabled provider: ${providerConfig.uuid}`);
+                    continue;
+                }
+
                 try {
                     // 传递 forceCheck = true 强制执行健康检查，忽略 checkHealth 配置
                     const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig, true);
