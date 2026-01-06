@@ -177,7 +177,7 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
     }
 }
 
-export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName) {
     let fullResponseText = '';
     let fullResponseJson = '';
     let fullOldResponseJson = '';
@@ -234,7 +234,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
         // 流式请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}) after successful stream request`);
+            const customNameDisplay = customName ? `, ${customName}` : '';
+            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful stream request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
             });
@@ -266,7 +267,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 }
 
 
-export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName) {
     try{
         // The service returns the response in its native format (toProvider).
         const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
@@ -289,7 +290,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         
         // 一元请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}) after successful unary request`);
+            const customNameDisplay = customName ? `, ${customName}` : '';
+            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful unary request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
             });
@@ -400,6 +402,8 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
     console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
 
+    let actualCustomName = CONFIG.customName;
+
     // 2.5. 如果使用了提供商池，根据模型重新选择提供商（支持 Fallback）
     // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
     if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
@@ -409,6 +413,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         service = result.service;
         toProvider = result.actualProviderType;
         actualUuid = result.uuid || pooluuid;
+        actualCustomName = result.serviceConfig?.customName || CONFIG.customName;
         
         // 如果发生了模型级别的 fallback，需要更新请求使用的模型
         if (result.actualModel && result.actualModel !== model) {
@@ -443,9 +448,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     // 5. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
-        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid);
+        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName);
     } else {
-        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid);
+        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName);
     }
 }
 
