@@ -482,58 +482,49 @@ export function extractPromptText(requestBody, provider) {
     return strategy.extractPromptText(requestBody);
 }
 
-export function handleError(res, error) {
-    const statusCode = error.response?.status || 500;
+export function handleError(res, error, provider = null) {
+    const statusCode = error.response?.status || error.statusCode || error.status || error.code || 500;
     let errorMessage = error.message;
     let suggestions = [];
 
+    // 仅在没有传入错误信息时，才使用默认消息；否则只添加建议
+    const hasOriginalMessage = error.message && error.message.trim() !== '';
+
+    // 根据提供商获取适配的错误信息和建议
+    const providerSuggestions = _getProviderSpecificSuggestions(statusCode, provider);
+    
     // Provide detailed information and suggestions for different error types
     switch (statusCode) {
         case 401:
             errorMessage = 'Authentication failed. Please check your credentials.';
-            suggestions = [
-                'Verify your OAuth credentials are valid',
-                'Try re-authenticating by deleting the credentials file',
-                'Check if your Google Cloud project has the necessary permissions'
-            ];
+            suggestions = providerSuggestions.auth;
             break;
         case 403:
             errorMessage = 'Access forbidden. Insufficient permissions.';
-            suggestions = [
-                'Ensure your Google Cloud project has the Code Assist API enabled',
-                'Check if your account has the necessary permissions',
-                'Verify the project ID is correct'
-            ];
+            suggestions = providerSuggestions.permission;
             break;
         case 429:
             errorMessage = 'Too many requests. Rate limit exceeded.';
-            suggestions = [
-                'The request has been automatically retried with exponential backoff',
-                'If the issue persists, try reducing the request frequency',
-                'Consider upgrading your API quota if available'
-            ];
+            suggestions = providerSuggestions.rateLimit;
             break;
         case 500:
         case 502:
         case 503:
         case 504:
             errorMessage = 'Server error occurred. This is usually temporary.';
-            suggestions = [
-                'The request has been automatically retried',
-                'If the issue persists, try again in a few minutes',
-                'Check Google Cloud status page for service outages'
-            ];
+            suggestions = providerSuggestions.serverError;
             break;
         default:
             if (statusCode >= 400 && statusCode < 500) {
                 errorMessage = `Client error (${statusCode}): ${error.message}`;
-                suggestions = ['Check your request format and parameters'];
+                suggestions = providerSuggestions.clientError;
             } else if (statusCode >= 500) {
                 errorMessage = `Server error (${statusCode}): ${error.message}`;
-                suggestions = ['This is a server-side issue, please try again later'];
+                suggestions = providerSuggestions.serverError;
             }
     }
 
+    errorMessage = hasOriginalMessage ? error.message.trim() : errorMessage;
     console.error(`\n[Server] Request failed (${statusCode}): ${errorMessage}`);
     if (suggestions.length > 0) {
         console.error('[Server] Suggestions:');
@@ -556,6 +547,168 @@ export function handleError(res, error) {
         }
     };
     res.end(JSON.stringify(errorPayload));
+}
+
+/**
+ * 根据提供商类型获取适配的错误建议
+ * @param {number} statusCode - HTTP 状态码
+ * @param {string|null} provider - 提供商类型
+ * @returns {Object} 包含各类错误建议的对象
+ */
+function _getProviderSpecificSuggestions(statusCode, provider) {
+    const protocolPrefix = provider ? getProtocolPrefix(provider) : null;
+    
+    // 默认/通用建议
+    const defaultSuggestions = {
+        auth: [
+            'Verify your API key or credentials are valid',
+            'Check if your credentials have expired',
+            'Ensure the API key has the necessary permissions'
+        ],
+        permission: [
+            'Check if your account has the necessary permissions',
+            'Verify the API endpoint is accessible with your credentials',
+            'Contact your administrator if permissions are restricted'
+        ],
+        rateLimit: [
+            'The request has been automatically retried with exponential backoff',
+            'If the issue persists, try reducing the request frequency',
+            'Consider upgrading your API quota if available'
+        ],
+        serverError: [
+            'The request has been automatically retried',
+            'If the issue persists, try again in a few minutes',
+            'Check the service status page for outages'
+        ],
+        clientError: [
+            'Check your request format and parameters',
+            'Verify the model name is correct',
+            'Ensure all required fields are provided'
+        ]
+    };
+    
+    // 根据提供商返回特定建议
+    switch (protocolPrefix) {
+        case MODEL_PROTOCOL_PREFIX.GEMINI:
+            return {
+                auth: [
+                    'Verify your OAuth credentials are valid',
+                    'Try re-authenticating by deleting the credentials file',
+                    'Check if your Google Cloud project has the necessary permissions'
+                ],
+                permission: [
+                    'Ensure your Google Cloud project has the Gemini API enabled',
+                    'Check if your account has the necessary permissions',
+                    'Verify the project ID is correct'
+                ],
+                rateLimit: [
+                    'The request has been automatically retried with exponential backoff',
+                    'If the issue persists, try reducing the request frequency',
+                    'Consider upgrading your Google Cloud API quota'
+                ],
+                serverError: [
+                    'The request has been automatically retried',
+                    'If the issue persists, try again in a few minutes',
+                    'Check Google Cloud status page for service outages'
+                ],
+                clientError: [
+                    'Check your request format and parameters',
+                    'Verify the model name is a valid Gemini model',
+                    'Ensure all required fields are provided'
+                ]
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.OPENAI:
+        case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            return {
+                auth: [
+                    'Verify your OpenAI API key is valid',
+                    'Check if your API key has expired or been revoked',
+                    'Ensure the API key is correctly formatted (starts with sk-)'
+                ],
+                permission: [
+                    'Check if your OpenAI account has access to the requested model',
+                    'Verify your organization settings allow this operation',
+                    'Ensure you have sufficient credits in your account'
+                ],
+                rateLimit: [
+                    'The request has been automatically retried with exponential backoff',
+                    'If the issue persists, try reducing the request frequency',
+                    'Consider upgrading your OpenAI usage tier for higher limits'
+                ],
+                serverError: [
+                    'The request has been automatically retried',
+                    'If the issue persists, try again in a few minutes',
+                    'Check OpenAI status page (status.openai.com) for outages'
+                ],
+                clientError: [
+                    'Check your request format and parameters',
+                    'Verify the model name is a valid OpenAI model',
+                    'Ensure the message format is correct (role and content fields)'
+                ]
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.CLAUDE:
+            return {
+                auth: [
+                    'Verify your Anthropic API key is valid',
+                    'Check if your API key has expired or been revoked',
+                    'Ensure the x-api-key header is correctly set'
+                ],
+                permission: [
+                    'Check if your Anthropic account has access to the requested model',
+                    'Verify your account is in good standing',
+                    'Ensure you have sufficient credits in your account'
+                ],
+                rateLimit: [
+                    'The request has been automatically retried with exponential backoff',
+                    'If the issue persists, try reducing the request frequency',
+                    'Consider upgrading your Anthropic usage tier for higher limits'
+                ],
+                serverError: [
+                    'The request has been automatically retried',
+                    'If the issue persists, try again in a few minutes',
+                    'Check Anthropic status page for service outages'
+                ],
+                clientError: [
+                    'Check your request format and parameters',
+                    'Verify the model name is a valid Claude model',
+                    'Ensure the message format follows Anthropic API specifications'
+                ]
+            };
+            
+        case MODEL_PROTOCOL_PREFIX.OLLAMA:
+            return {
+                auth: [
+                    'Ollama typically does not require authentication',
+                    'If using a custom setup, verify your credentials',
+                    'Check if the Ollama server requires authentication'
+                ],
+                permission: [
+                    'Verify the Ollama server is accessible',
+                    'Check if the requested model is available locally',
+                    'Ensure the Ollama server allows the requested operation'
+                ],
+                rateLimit: [
+                    'The local Ollama server may be overloaded',
+                    'Try reducing concurrent requests',
+                    'Consider increasing server resources if running locally'
+                ],
+                serverError: [
+                    'Check if the Ollama server is running',
+                    'Verify the server address and port are correct',
+                    'Check Ollama server logs for detailed error information'
+                ],
+                clientError: [
+                    'Check your request format and parameters',
+                    'Verify the model name is available in your Ollama installation',
+                    'Try pulling the model first with: ollama pull <model-name>'
+                ]
+            };
+            
+        default:
+            return defaultSuggestions;
+    }
 }
 
 /**

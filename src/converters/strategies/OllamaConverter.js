@@ -228,11 +228,32 @@ export class OllamaConverter extends BaseConverter {
                 ollamaResponse.done_reason = response.stop_reason === 'end_turn' ? 'stop' : response.stop_reason;
             }
         }
+        // Handle Gemini format (candidates array)
+        else if (response.candidates && response.candidates.length > 0) {
+            const candidate = response.candidates[0];
+            let textContent = '';
+            if (candidate.content && candidate.content.parts) {
+                textContent = candidate.content.parts
+                    .filter(part => part.text)
+                    .map(part => part.text)
+                    .join('');
+            }
+            
+            ollamaResponse.message = {
+                role: candidate.content?.role || 'assistant',
+                content: textContent
+            };
+
+            if (candidate.finishReason) {
+                ollamaResponse.done_reason = candidate.finishReason.toLowerCase();
+            }
+        }
 
         // Add usage statistics if available
-        if (response.usage) {
-            ollamaResponse.prompt_eval_count = response.usage.prompt_tokens || response.usage.input_tokens || 0;
-            ollamaResponse.eval_count = response.usage.completion_tokens || response.usage.output_tokens || 0;
+        const usage = response.usage || response.usageMetadata;
+        if (usage) {
+            ollamaResponse.prompt_eval_count = usage.prompt_tokens || usage.input_tokens || usage.promptTokenCount || 0;
+            ollamaResponse.eval_count = usage.completion_tokens || usage.output_tokens || usage.candidatesTokenCount || 0;
             ollamaResponse.total_duration = 0;
             ollamaResponse.load_duration = 0;
             ollamaResponse.prompt_eval_duration = 0;
@@ -275,11 +296,28 @@ export class OllamaConverter extends BaseConverter {
                 ollamaResponse.done_reason = response.stop_reason === 'end_turn' ? 'stop' : response.stop_reason;
             }
         }
+        // Handle Gemini format
+        else if (response.candidates && response.candidates.length > 0) {
+            const candidate = response.candidates[0];
+            let textContent = '';
+            if (candidate.content && candidate.content.parts) {
+                textContent = candidate.content.parts
+                    .filter(part => part.text)
+                    .map(part => part.text)
+                    .join('');
+            }
+            ollamaResponse.response = textContent;
+
+            if (candidate.finishReason) {
+                ollamaResponse.done_reason = candidate.finishReason.toLowerCase();
+            }
+        }
 
         // Add usage statistics
-        if (response.usage) {
-            ollamaResponse.prompt_eval_count = response.usage.prompt_tokens || response.usage.input_tokens || 0;
-            ollamaResponse.eval_count = response.usage.completion_tokens || response.usage.output_tokens || 0;
+        const genUsage = response.usage || response.usageMetadata;
+        if (genUsage) {
+            ollamaResponse.prompt_eval_count = genUsage.prompt_tokens || genUsage.input_tokens || genUsage.promptTokenCount || 0;
+            ollamaResponse.eval_count = genUsage.completion_tokens || genUsage.output_tokens || genUsage.candidatesTokenCount || 0;
             ollamaResponse.total_duration = 0;
             ollamaResponse.load_duration = 0;
             ollamaResponse.prompt_eval_duration = 0;

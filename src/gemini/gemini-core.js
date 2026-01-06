@@ -639,7 +639,7 @@ export class GeminiApiService {
                 };
 
                 const res = await this.authClient.request(requestOptions);
-                console.log(`[Gemini] retrieveUserQuota success`);
+                // console.log(`[Gemini] retrieveUserQuota success`, JSON.stringify(res.data));
                 if (res.data && res.data.buckets) {
                     const buckets = res.data.buckets;
                     

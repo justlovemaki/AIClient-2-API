@@ -110,7 +110,7 @@ export function createRequestHandler(config, providerPoolManager) {
                 return true;
             } catch (error) {
                 console.log(`[Server] req provider_health error: ${error.message}`);
-                handleError(res, { statusCode: 500, message: `Failed to get providers health: ${error.message}` });
+                handleError(res, { statusCode: 500, message: `Failed to get providers health: ${error.message}` }, currentConfig.MODEL_PROVIDER);
                 return;
             }
         }
@@ -125,8 +125,11 @@ export function createRequestHandler(config, providerPoolManager) {
         }
           
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
+        // Note: 'ollama' is not a valid MODEL_PROVIDER, it's a protocol prefix for Ollama API compatibility
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
-        if (pathSegments.length > 0) {
+        const isOllamaPath = pathSegments[0] === 'ollama' || path.startsWith('/api/');
+        
+        if (pathSegments.length > 0 && !isOllamaPath) {
             const firstSegment = pathSegments[0];
             const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
             if (firstSegment && isValidProvider) {
@@ -140,25 +143,34 @@ export function createRequestHandler(config, providerPoolManager) {
             }
         }
 
+        // Check authentication for API requests (before Ollama handling to allow unauthenticated Ollama endpoints)
+        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
+            return;
+        }
+
+        // Handle Ollama request BEFORE getting apiService (Ollama endpoints handle their own provider selection)
+        // This is important because Ollama /api/tags aggregates models from ALL providers, not just the default one
+        if (isOllamaPath) {
+            const { handled, normalizedPath } = await handleOllamaRequest(method, path, requestUrl, req, res, null, currentConfig, providerPoolManager);
+            if (handled) return;
+            // If not handled by Ollama handler, continue with normal flow
+            path = normalizedPath;
+        }
+
         // 获取或选择 API Service 实例
         let apiService;
         try {
             apiService = await getApiService(currentConfig);
         } catch (error) {
-            handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
+            handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` }, currentConfig.MODEL_PROVIDER);
             const poolManager = getProviderPoolManager();
             if (poolManager) {
                 poolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
                     uuid: currentConfig.uuid
                 });
             }
-            return;
-        }
-
-        // Check authentication for API requests
-        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;
         }
 
@@ -188,18 +200,13 @@ export function createRequestHandler(config, providerPoolManager) {
                 return true;
             } catch (error) {
                 console.error(`[Server] count_tokens error: ${error.message}`);
-                handleError(res, { statusCode: 500, message: `Failed to count tokens: ${error.message}` });
+                handleError(res, { statusCode: 500, message: `Failed to count tokens: ${error.message}` }, currentConfig.MODEL_PROVIDER);
                 return;
             }
         }
 
         try {
-            // Handle Ollama request (normalize path and route to appropriate endpoints)
-            const { handled, normalizedPath } = await handleOllamaRequest(method, path, requestUrl, req, res, apiService, currentConfig, providerPoolManager);
-            if (handled) return;
-            path = normalizedPath;
-
-            // Handle API requests
+            // Handle API requests (Ollama requests are already handled above before apiService is obtained)
             const apiHandled = await handleAPIRequests(method, path, req, res, currentConfig, apiService, providerPoolManager, PROMPT_LOG_FILENAME);
             if (apiHandled) return;
 
@@ -207,7 +214,7 @@ export function createRequestHandler(config, providerPoolManager) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Not Found' } }));
         } catch (error) {
-            handleError(res, error);
+            handleError(res, error, currentConfig.MODEL_PROVIDER);
         }
     };
 }

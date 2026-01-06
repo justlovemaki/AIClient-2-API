@@ -31,6 +31,9 @@
 >
 > **📅 バージョン更新ログ**
 >
+> <details>
+> <summary>クリックして詳細なバージョン履歴を展開</summary>
+>
 > - **2026.01.03** - テーマ切替機能を追加し、プロバイダープール初期化を最適化、プロバイダーのデフォルト設定を使用するフォールバック戦略を削除
 > - **2025.12.30** - メインプロセス管理と自動更新機能を追加
 > - **2025.12.25** - 設定ファイル統一管理：すべての設定を `configs/` ディレクトリに集約。Dockerユーザーはマウントパスを `-v "ローカルパス:/app/configs"` に更新が必要
@@ -47,6 +50,7 @@
 > - **開発済み履歴**
 >   - Gemini CLI、Kiroなどのクライアント2APIをサポート
 >   - OpenAI、Claude、Geminiの3つのプロトコル相互変換、自動インテリジェント切り替え
+> </details>
 
 ---
 
@@ -204,6 +208,9 @@ docker compose up -d
 
 ### 🔐 認証設定ガイド
 
+<details>
+<summary>クリックして各プロバイダーの認証設定詳細手順を展開</summary>
+
 > **💡 ヒント**：最適な体験を得るために、**Web UIコンソール**を通じてビジュアルに認証管理を行うことを推奨します。
 
 #### 🌐 Web UI クイック認証 (推奨)
@@ -245,7 +252,12 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 3. **起動パラメータ設定**：`--provider-pools-file <path>` パラメータを使用してプール設定ファイルのパスを指定します
 4. **ヘルスチェック**：システムは定期的にヘルスチェックを自動実行し、健全でないプロバイダーを使用しません
 
+</details>
+
 ### 📁 認証ファイル保存パス
+
+<details>
+<summary>クリックして各サービスの認証情報のデフォルト保存場所を展開</summary>
 
 各サービスの認証情報ファイルのデフォルト保存場所：
 
@@ -257,8 +269,10 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 (Claude 4.5 Opus サポート) |
 
 > **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
->
+
 > **カスタムパス**：設定ファイルの関連パラメータまたは環境変数でカスタム保存場所を指定可能
+
+</details>
 
 ---
 
@@ -270,13 +284,15 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 
 1. **利用可能なすべてのモデルをリスト表示**：
 ```bash
-curl http://localhost:3000/ollama/api/tags
+curl http://localhost:3000/ollama/api/tags \
+  -H "Authorization: Bearer your-api-key"
 ```
 
 2. **チャットインターフェース**：
 ```bash
 curl http://localhost:3000/ollama/api/chat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
   -d '{
     "model": "[Claude] claude-sonnet-4.5",
     "messages": [
@@ -295,6 +311,9 @@ curl http://localhost:3000/ollama/api/chat \
 ---
 
 ### 高度な設定
+
+<details>
+<summary>クリックしてプロキシ設定、モデルフィルタリング、Fallbackなどの高度な設定を展開</summary>
 
 #### 1. プロキシ設定
 
@@ -410,9 +429,14 @@ curl http://localhost:3000/ollama/api/chat \
 - フォールバックはプロトコル互換タイプ間でのみ発生します（例：`gemini-*` 間、`claude-*` 間）
 - システムは自動的にターゲットProvider Typeがリクエストされたモデルをサポートしているか確認します
 
+</details>
+
 ---
 
 ## ❓ よくある質問
+
+<details>
+<summary>クリックしてよくある質問と解決策を展開（ポート占有、Docker起動、429エラーなど）</summary>
 
 ### 1. OAuth認証失敗
 
@@ -531,6 +555,8 @@ kill -9 <PID>
 - **API Key設定を確認**：`configs/config.json` またはWeb UIでAPI Keyが正しく設定されていることを確認
 - **リクエストヘッダー形式を確認**：リクエストに正しい形式のAuthorizationヘッダーが含まれていることを確認、例：`Authorization: Bearer your-api-key`
 - **サービスログを確認**：Web UIの「リアルタイムログ」ページで詳細なエラーメッセージを確認し、具体的な原因を特定
+
+</details>
 
 ---
 
