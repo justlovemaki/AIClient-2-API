@@ -605,13 +605,15 @@ export class ClaudeConverter extends BaseConverter {
      * Claude模型列表 -> OpenAI模型列表
      */
     toOpenAIModelList(claudeModels) {
+        const models = claudeModels.data || claudeModels.models || [];
         return {
             object: "list",
-            data: claudeModels.models.map(m => ({
+            data: models.map(m => ({
                 id: m.id || m.name,
                 object: "model",
-                created: Math.floor(Date.now() / 1000),
+                created: m.created_at ? Math.floor(new Date(m.created_at).getTime() / 1000) : Math.floor(Date.now() / 1000),
                 owned_by: "anthropic",
+                display_name: m.display_name || m.id || m.name,
             })),
         };
     }
@@ -620,7 +622,7 @@ export class ClaudeConverter extends BaseConverter {
      * 将 Claude 模型列表转换为 Gemini 模型列表
      */
     toGeminiModelList(claudeModels) {
-        const models = claudeModels.models || [];
+        const models = claudeModels.data || claudeModels.models || [];
         return {
             models: models.map(m => ({
                 name: `models/${m.id || m.name}`,
@@ -766,10 +768,10 @@ export class ClaudeConverter extends BaseConverter {
                 claudeRequest.system.forEach(systemPrompt => {
                     if (systemPrompt && systemPrompt.type === 'text' && typeof systemPrompt.text === 'string') {
                         systemParts.push({ text: systemPrompt.text });
-                    }
+            }
                 });
                 if (systemParts.length > 0) {
-                    geminiRequest.systemInstruction = {
+            geminiRequest.systemInstruction = {
                         role: 'user',
                         parts: systemParts
                     };
@@ -783,7 +785,7 @@ export class ClaudeConverter extends BaseConverter {
                 // 对象格式的系统指令
                 geminiRequest.systemInstruction = {
                     parts: [{ text: JSON.stringify(claudeRequest.system) }]
-                };
+            };
             }
         }
 
@@ -890,10 +892,10 @@ export class ClaudeConverter extends BaseConverter {
                     });
                     
                     if (parts.length > 0) {
-                        geminiRequest.contents.push({
+                    geminiRequest.contents.push({
                             role: geminiRole,
                             parts: parts
-                        });
+                    });
                     }
                 } else if (typeof content === 'string') {
                     // 字符串内容
@@ -942,10 +944,10 @@ export class ClaudeConverter extends BaseConverter {
             const functionDeclarations = [];
             
             claudeRequest.tools.forEach(tool => {
-                if (!tool || typeof tool !== 'object' || !tool.name) {
-                    console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
+                    if (!tool || typeof tool !== 'object' || !tool.name) {
+                        console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
                     return;
-                }
+                    }
 
                 // 清理 input_schema
                 let inputSchema = tool.input_schema;
@@ -959,7 +961,7 @@ export class ClaudeConverter extends BaseConverter {
                 }
 
                 const funcDecl = {
-                    name: String(tool.name),
+                        name: String(tool.name),
                     description: String(tool.description || '')
                 };
                 

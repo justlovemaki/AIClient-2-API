@@ -31,6 +31,10 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
             await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_MODEL_LIST, currentConfig, providerPoolManager, currentConfig.uuid);
             return true;
         }
+        if (path === '/models') {
+            await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.CLAUDE_MODEL_LIST, currentConfig, providerPoolManager, currentConfig.uuid);
+            return true;
+        }
     }
 
     // Route content generation requests
@@ -49,6 +53,10 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
             return true;
         }
         if (path === '/v1/messages') {
+            await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.CLAUDE_MESSAGE, currentConfig, promptLogFilename, providerPoolManager, currentConfig.uuid);
+            return true;
+        }
+        if (path === '/messages') {
             await handleContentGenerationRequest(req, res, apiService, ENDPOINT_TYPE.CLAUDE_MESSAGE, currentConfig, promptLogFilename, providerPoolManager, currentConfig.uuid);
             return true;
         }

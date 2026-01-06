@@ -51,6 +51,7 @@ export const ENDPOINT_TYPE = {
     CLAUDE_MESSAGE: 'claude_message',
     OPENAI_MODEL_LIST: 'openai_model_list',
     GEMINI_MODEL_LIST: 'gemini_model_list',
+    CLAUDE_MODEL_LIST: 'claude_model_list',
 };
 
 export const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'configs', 'fetch_system_prompt.txt');
@@ -234,7 +235,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
         // 流式请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
-            const customNameDisplay = customName ? `, ${customName}` : '';
+                        const customNameDisplay = customName ? `, ${customName}` : '';
             console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful stream request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
@@ -326,6 +327,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         const clientProviderMap = {
             [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
             [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
+            [ENDPOINT_TYPE.CLAUDE_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.CLAUDE,
         };
 
 
@@ -338,10 +340,13 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // 1. Get the model list in the backend's native format.
         const nativeModelList = await service.listModels();
-                
+
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
-        if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
+
+        if (endpointType === ENDPOINT_TYPE.CLAUDE_MODEL_LIST) {
+            console.log(`[ModelList] Anthropic native endpoint - returning native format`);
+        } else if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
             console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
             clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
         } else {
@@ -497,7 +502,7 @@ export function handleError(res, error, provider = null) {
 
     // 根据提供商获取适配的错误信息和建议
     const providerSuggestions = _getProviderSpecificSuggestions(statusCode, provider);
-    
+
     // Provide detailed information and suggestions for different error types
     switch (statusCode) {
         case 401:

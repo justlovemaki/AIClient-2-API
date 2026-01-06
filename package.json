@@ -9,6 +9,7 @@
     "google-auth-library": "^10.1.0",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
+    "jsonrepair": "^3.13.1",
     "lodash": "^4.17.21",
     "multer": "^2.0.2",
     "open": "^10.2.0",

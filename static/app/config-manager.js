@@ -67,6 +67,7 @@ async function loadConfiguration() {
         const requestBaseDelayEl = document.getElementById('requestBaseDelay');
         const cronNearMinutesEl = document.getElementById('cronNearMinutes');
         const cronRefreshTokenEl = document.getElementById('cronRefreshToken');
+        const enableTokenLoggingEl = document.getElementById('enableTokenLogging');
         const providerPoolsFilePathEl = document.getElementById('providerPoolsFilePath');
         const maxErrorCountEl = document.getElementById('maxErrorCount');
         const providerFallbackChainEl = document.getElementById('providerFallbackChain');
@@ -80,6 +81,7 @@ async function loadConfiguration() {
         if (requestBaseDelayEl) requestBaseDelayEl.value = data.REQUEST_BASE_DELAY || 1000;
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
+        if (enableTokenLoggingEl) enableTokenLoggingEl.checked = data.ENABLE_TOKEN_LOGGING || false;
         if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH;
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 3;
         
@@ -155,6 +157,7 @@ async function saveConfiguration() {
     config.REQUEST_BASE_DELAY = parseInt(document.getElementById('requestBaseDelay')?.value || 1000);
     config.CRON_NEAR_MINUTES = parseInt(document.getElementById('cronNearMinutes')?.value || 1);
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
+    config.ENABLE_TOKEN_LOGGING = document.getElementById('enableTokenLogging')?.checked || false;
     config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
     config.MAX_ERROR_COUNT = parseInt(document.getElementById('maxErrorCount')?.value || 3);
     

@@ -698,6 +698,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
             if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
             if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
+            if (newConfig.ENABLE_TOKEN_LOGGING !== undefined) currentConfig.ENABLE_TOKEN_LOGGING = newConfig.ENABLE_TOKEN_LOGGING;
             if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
             if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
             if (newConfig.providerFallbackChain !== undefined) currentConfig.providerFallbackChain = newConfig.providerFallbackChain;
@@ -746,6 +747,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
                     CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                     CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
+                    ENABLE_TOKEN_LOGGING: currentConfig.ENABLE_TOKEN_LOGGING,
                     PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                     MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
                     providerFallbackChain: currentConfig.providerFallbackChain,

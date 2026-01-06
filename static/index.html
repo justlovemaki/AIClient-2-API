@@ -228,11 +228,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/gemini-cli-oauth/v1/messages</code>
+                                        <code class="endpoint-path">/gemini-cli-oauth/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/gemini-cli-oauth/v1/messages \
+                                            <pre><code>curl http://localhost:3000/gemini-cli-oauth/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -281,11 +281,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/gemini-antigravity/v1/messages</code>
+                                            <code class="endpoint-path">/gemini-antigravity/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/gemini-antigravity/v1/messages \
+                                            <pre><code>curl http://localhost:3000/gemini-antigravity/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -334,11 +334,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/claude-custom/v1/messages</code>
+                                            <code class="endpoint-path">/claude-custom/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/claude-custom/v1/messages \
+                                            <pre><code>curl http://localhost:3000/claude-custom/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -387,11 +387,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/claude-kiro-oauth/v1/messages</code>
-                                        </div>
+                                            <code class="endpoint-path">/claude-kiro-oauth/messages</code>
+                                     </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/claude-kiro-oauth/v1/messages \
+                                            <pre><code>curl http://localhost:3000/claude-kiro-oauth/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -440,11 +440,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/openai-custom/v1/messages</code>
+                                            <code class="endpoint-path">/openai-custom/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/openai-custom/v1/messages \
+                                            <pre><code>curl http://localhost:3000/openai-custom/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -493,11 +493,11 @@
                                     <div class="protocol-content active" data-protocol="claude">
                                         <div class="endpoint-info">
                                             <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                                            <code class="endpoint-path">/openai-qwen-oauth/v1/messages</code>
+                                            <code class="endpoint-path">/openai-qwen-oauth/messages</code>
                                         </div>
                                         <div class="usage-example">
                                             <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/messages \
+                                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/messages \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -732,6 +732,16 @@
                                         </button>
                                     </div>
                                     <small class="form-text" data-i18n="config.advanced.adminPasswordNote">用于保护管理控制台的访问，修改后需要重新登录</small>
+                                </div>
+
+                                <!-- Token计算日志配置 -->
+                                <div class="form-group pool-section">
+                                    <label for="enableTokenLogging" data-i18n="config.advanced.tokenLogging">Token计算日志</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="enableTokenLogging">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <small class="form-text" data-i18n="config.advanced.tokenLoggingNote">启用后会在控制台显示详细的Token计算信息（System、Messages、Tools、Total），用于调试和监控</small>
                                 </div>
                             </div>
                             
