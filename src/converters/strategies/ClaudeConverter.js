@@ -942,12 +942,12 @@ export class ClaudeConverter extends BaseConverter {
         // 处理工具 - 使用 parametersJsonSchema 格式
         if (Array.isArray(claudeRequest.tools) && claudeRequest.tools.length > 0) {
             const functionDeclarations = [];
-            
+
             claudeRequest.tools.forEach(tool => {
-                    if (!tool || typeof tool !== 'object' || !tool.name) {
-                        console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
+                if (!tool || typeof tool !== 'object' || !tool.name) {
+                    console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
                     return;
-                    }
+                }
 
                 // 清理 input_schema
                 let inputSchema = tool.input_schema;
@@ -961,18 +961,18 @@ export class ClaudeConverter extends BaseConverter {
                 }
 
                 const funcDecl = {
-                        name: String(tool.name),
+                    name: String(tool.name),
                     description: String(tool.description || '')
                 };
-                
+
                 // 使用 parametersJsonSchema 而不是 parameters
                 if (inputSchema) {
                     funcDecl.parametersJsonSchema = inputSchema;
                 }
-                
+
                 functionDeclarations.push(funcDecl);
             });
-            
+
             if (functionDeclarations.length > 0) {
                 geminiRequest.tools = [{
                     functionDeclarations: functionDeclarations
