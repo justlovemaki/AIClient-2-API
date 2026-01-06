@@ -31,6 +31,9 @@
 >
 > **📅 Version Update Log**
 >
+> <details>
+> <summary>Click to expand detailed version history</summary>
+>
 > - **2026.01.03** - Added theme switching functionality and optimized provider pool initialization, removed the fallback strategy of using provider default configuration
 > - **2025.12.30** - Added main process management and automatic update functionality
 > - **2025.12.25** - Unified configuration management: All configs centralized to `configs/` directory. Docker users need to update mount path to `-v "local_path:/app/configs"`
@@ -47,6 +50,7 @@
 > - **History Developed**
 >   - Support Gemini CLI, Kiro and other client2API
 >   - OpenAI, Claude, Gemini three-protocol mutual conversion, automatic intelligent switching
+> </details>
 
 ---
 
@@ -204,6 +208,9 @@ Seamlessly support the following latest large models, just configure the corresp
 
 ### 🔐 Authorization Configuration Guide
 
+<details>
+<summary>Click to expand detailed authorization configuration steps for each provider</summary>
+
 > **💡 Tip**: For the best experience, it is recommended to manage authorization visually through the **Web UI console**.
 
 #### 🌐 Web UI Quick Authorization (Recommended)
@@ -245,7 +252,12 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Startup Parameter Configuration**: Use the `--provider-pools-file <path>` parameter to specify the pool configuration file path
 4. **Health Check**: The system will automatically perform periodic health checks and avoid using unhealthy providers
 
+</details>
+
 ### 📁 Authorization File Storage Paths
+
+<details>
+<summary>Click to expand default storage locations for authorization credentials</summary>
 
 Default storage locations for authorization credential files of each service:
 
@@ -257,8 +269,10 @@ Default storage locations for authorization credential files of each service:
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
 
 > **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
->
+
 > **Custom Path**: Can specify custom storage location via relevant parameters in configuration file or environment variables
+
+</details>
 
 ---
 
@@ -270,13 +284,15 @@ This project supports the Ollama protocol, allowing access to all supported mode
 
 1. **List all available models**:
 ```bash
-curl http://localhost:3000/ollama/api/tags
+curl http://localhost:3000/ollama/api/tags \
+  -H "Authorization: Bearer your-api-key"
 ```
 
 2. **Chat interface**:
 ```bash
 curl http://localhost:3000/ollama/api/chat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
   -d '{
     "model": "[Claude] claude-sonnet-4.5",
     "messages": [
@@ -295,6 +311,9 @@ curl http://localhost:3000/ollama/api/chat \
 ---
 
 ### Advanced Configuration
+
+<details>
+<summary>Click to expand proxy configuration, model filtering, and Fallback advanced settings</summary>
 
 #### 1. Proxy Configuration
 
@@ -410,9 +429,14 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 - Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
 - The system automatically checks if the target Provider Type supports the requested model
 
+</details>
+
 ---
 
 ## ❓ FAQ
+
+<details>
+<summary>Click to expand FAQ and solutions (port occupation, Docker startup, 429 errors, etc.)</summary>
 
 ### 1. OAuth Authorization Failed
 
@@ -531,6 +555,8 @@ Or modify the port configuration in `configs/config.json` to use a different por
 - **Check API Key Configuration**: Ensure API Key is correctly configured in `configs/config.json` or Web UI
 - **Check Request Header Format**: Ensure the request contains the correct Authorization header format, such as `Authorization: Bearer your-api-key`
 - **Check Service Logs**: View detailed error messages on the "Real-time Logs" page in Web UI to locate the specific cause
+
+</details>
 
 ---
 

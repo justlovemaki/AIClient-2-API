@@ -1,6 +1,8 @@
+
 import { OAuth2Client } from 'google-auth-library';
 import * as http from 'http';
 import * as https from 'https';
+import * as crypto from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -11,6 +13,7 @@ import { formatExpiryTime } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../proxy-utils.js';
+import { cleanJsonSchemaProperties } from '../converters/utils.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -29,35 +32,44 @@ const httpsAgent = new https.Agent({
 // --- Constants ---
 const CREDENTIALS_DIR = '.antigravity';
 const CREDENTIALS_FILE = 'oauth_creds.json';
-const DEFAULT_ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
-const DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
+
+// Base URLs - 按照 Go 代码的降级顺序
+const ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.googleapis.com';
+const ANTIGRAVITY_SANDBOX_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
+const ANTIGRAVITY_BASE_URL_PROD = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
+
 const ANTIGRAVITY_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const DEFAULT_USER_AGENT = 'antigravity/1.11.5 windows/amd64';
+const DEFAULT_USER_AGENT = 'antigravity/1.104.0 darwin/arm64';
 const REFRESH_SKEW = 3000; // 3000秒（50分钟）提前刷新Token
+
+// Thinking 配置相关常量
+const DEFAULT_THINKING_MIN = 1024;
+const DEFAULT_THINKING_MAX = 100000;
 
 // 获取 Antigravity 模型列表
 const ANTIGRAVITY_MODELS = getProviderModels('gemini-antigravity');
 
-// 模型别名映射
+// 模型别名映射 - 别名 -> 真实模型名
 const MODEL_ALIAS_MAP = {
     'gemini-2.5-computer-use-preview-10-2025': 'rev19-uic3-1p',
     'gemini-3-pro-image-preview': 'gemini-3-pro-image',
     'gemini-3-pro-preview': 'gemini-3-pro-high',
     'gemini-3-flash-preview': 'gemini-3-flash',
-    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash-preview': 'gemini-2.5-flash',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
     'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
     'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking'
 };
 
+// 真实模型名 -> 别名
 const MODEL_NAME_MAP = {
     'rev19-uic3-1p': 'gemini-2.5-computer-use-preview-10-2025',
     'gemini-3-pro-image': 'gemini-3-pro-image-preview',
     'gemini-3-pro-high': 'gemini-3-pro-preview',
     'gemini-3-flash': 'gemini-3-flash-preview',
-    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash': 'gemini-2.5-flash-preview',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
     'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking',
     'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking'
@@ -65,6 +77,8 @@ const MODEL_NAME_MAP = {
 
 /**
  * 将别名转换为真实模型名
+ * @param {string} modelName - 模型别名
+ * @returns {string} 真实模型名
  */
 function alias2ModelName(modelName) {
     return MODEL_ALIAS_MAP[modelName];
@@ -72,13 +86,48 @@ function alias2ModelName(modelName) {
 
 /**
  * 将真实模型名转换为别名
+ * @param {string} modelName - 真实模型名
+ * @returns {string|null} 模型别名，如果不支持则返回 null
  */
 function modelName2Alias(modelName) {
     return MODEL_NAME_MAP[modelName];
 }
 
 /**
+ * 检查模型是否为 Claude 模型
+ * @param {string} modelName - 模型名称
+ * @returns {boolean}
+ */
+function isClaude(modelName) {
+    return modelName && modelName.toLowerCase().includes('claude');
+}
+
+/**
+ * 检查是否为图像模型
+ * @param {string} modelName - 模型名称
+ * @returns {boolean}
+ */
+function isImageModel(modelName) {
+    return modelName && modelName.toLowerCase().includes('image');
+}
+
+/**
+ * 检查模型是否支持 Thinking
+ * @param {string} modelName - 模型名称
+ * @returns {boolean}
+ */
+function modelSupportsThinking(modelName) {
+    if (!modelName) return false;
+    const name = modelName.toLowerCase();
+    // 支持 thinking 的模型：gemini-3-*, gemini-2.5-*, claude-*-thinking
+    return name.startsWith('gemini-3-') ||
+           name.startsWith('gemini-2.5-') ||
+           name.includes('-thinking');
+}
+
+/**
  * 生成随机请求ID
+ * @returns {string}
  */
 function generateRequestID() {
     return 'agent-' + uuidv4();
@@ -86,14 +135,44 @@ function generateRequestID() {
 
 /**
  * 生成随机会话ID
+ * @returns {string}
  */
 function generateSessionID() {
-    const n = Math.floor(Math.random() * 9000000000000000000);
+    const n = Math.floor(Math.random() * 9000);
     return '-' + n.toString();
 }
 
 /**
+ * 基于请求内容生成稳定的会话ID
+ * 使用第一个用户消息的 SHA256 哈希值
+ * @param {Object} payload - 请求体
+ * @returns {string} 稳定的会话ID
+ */
+function generateStableSessionID(payload) {
+    try {
+        const contents = payload?.request?.contents;
+        if (Array.isArray(contents)) {
+            for (const content of contents) {
+                if (content.role === 'user') {
+                    const text = content.parts?.[0]?.text;
+                    if (text) {
+                        const hash = crypto.createHash('sha256').update(text).digest();
+                        // 取前8字节转换为 BigInt，然后取正数
+                        const n = hash.readBigUInt64BE(0) & BigInt('0x7FFFFFFFFFFFFFFF');
+                        return '-' + n.toString();
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // 如果解析失败，回退到随机会话ID
+    }
+    return generateSessionID();
+}
+
+/**
  * 生成随机项目ID
+ * @returns {string}
  */
 function generateProjectID() {
     const adjectives = ['useful', 'bright', 'swift', 'calm', 'bold'];
@@ -105,11 +184,82 @@ function generateProjectID() {
 }
 
 /**
+ * 规范化 Thinking Budget
+ * @param {string} modelName - 模型名称
+ * @param {number} budget - 原始 budget 值
+ * @returns {number} 规范化后的 budget
+ */
+function normalizeThinkingBudget(modelName, budget) {
+    // -1 表示动态/无限制
+    if (budget === -1) return -1;
+    
+    // 获取模型的 thinking 限制
+    const min = DEFAULT_THINKING_MIN;
+    const max = DEFAULT_THINKING_MAX;
+    
+    // 限制在有效范围内
+    if (budget < min) return min;
+    if (budget > max) return max;
+    return budget;
+}
+
+/**
+ * 规范化 Antigravity Thinking 配置
+ * 对于 Claude 模型，确保 thinking budget < max_tokens
+ * @param {string} modelName - 模型名称
+ * @param {Object} payload - 请求体
+ * @param {boolean} isClaudeModel - 是否为 Claude 模型
+ * @returns {Object} 处理后的请求体
+ */
+function normalizeAntigravityThinking(modelName, payload, isClaudeModel) {
+    // 如果模型不支持 thinking，移除 thinking 配置
+    if (!modelSupportsThinking(modelName)) {
+        if (payload?.request?.generationConfig?.thinkingConfig) {
+            delete payload.request.generationConfig.thinkingConfig;
+        }
+        return payload;
+    }
+    
+    const thinkingConfig = payload?.request?.generationConfig?.thinkingConfig;
+    if (!thinkingConfig) return payload;
+    
+    const budget = thinkingConfig.thinkingBudget;
+    if (budget === undefined) return payload;
+    
+    let normalizedBudget = normalizeThinkingBudget(modelName, budget);
+    
+    // 对于 Claude 模型，确保 thinking budget < max_tokens
+    if (isClaudeModel) {
+        const maxTokens = payload?.request?.generationConfig?.maxOutputTokens;
+        if (maxTokens && maxTokens > 0 && normalizedBudget >= maxTokens) {
+            normalizedBudget = maxTokens - 1;
+        }
+        
+        // 检查最小 budget
+        const minBudget = DEFAULT_THINKING_MIN;
+        if (normalizedBudget >= 0 && normalizedBudget < minBudget) {
+            // Budget 低于最小值，移除 thinking 配置
+            delete payload.request.generationConfig.thinkingConfig;
+            return payload;
+        }
+    }
+    
+    payload.request.generationConfig.thinkingConfig.thinkingBudget = normalizedBudget;
+    return payload;
+}
+
+/**
  * 将 Gemini 格式请求转换为 Antigravity 格式
+ * @param {string} modelName - 模型名称
+ * @param {Object} payload - 请求体
+ * @param {string} projectId - 项目ID
+ * @returns {Object} 转换后的请求体
  */
 function geminiToAntigravity(modelName, payload, projectId) {
     // 深拷贝请求体,避免修改原始对象
     let template = JSON.parse(JSON.stringify(payload));
+    
+    const isClaudeModel = isClaude(modelName);
 
     // 设置基本字段
     template.model = modelName;
@@ -122,8 +272,8 @@ function geminiToAntigravity(modelName, payload, projectId) {
         template.request = {};
     }
 
-    // 设置会话ID
-    template.request.sessionId = generateSessionID();
+    // 设置会话ID - 使用稳定的会话ID
+    template.request.sessionId = generateStableSessionID(template);
 
     // 删除安全设置
     if (template.request.safetySettings) {
@@ -131,19 +281,24 @@ function geminiToAntigravity(modelName, payload, projectId) {
     }
 
     // 设置工具配置
-    if (template.request.toolConfig) {
-        if (!template.request.toolConfig.functionCallingConfig) {
-            template.request.toolConfig.functionCallingConfig = {};
-        }
-        template.request.toolConfig.functionCallingConfig.mode = 'VALIDATED';
+    if (!template.request.toolConfig) {
+        template.request.toolConfig = {};
     }
+    if (!template.request.toolConfig.functionCallingConfig) {
+        template.request.toolConfig.functionCallingConfig = {};
+    }
+    template.request.toolConfig.functionCallingConfig.mode = 'VALIDATED';
 
-    // 删除 maxOutputTokens
-    if (template.request.generationConfig && template.request.generationConfig.maxOutputTokens) {
-        delete template.request.generationConfig.maxOutputTokens;
+    // 对于非 Claude 模型，删除 maxOutputTokens
+    // Claude 模型需要保留 maxOutputTokens
+    if (!isClaudeModel) {
+        if (template.request.generationConfig && template.request.generationConfig.maxOutputTokens) {
+            delete template.request.generationConfig.maxOutputTokens;
+        }
     }
 
     // 处理 Thinking 配置
+    // 对于非 gemini-3-* 模型，将 thinkingLevel 转换为 thinkingBudget
     if (!modelName.startsWith('gemini-3-')) {
         if (template.request.generationConfig &&
             template.request.generationConfig.thinkingConfig &&
@@ -153,28 +308,281 @@ function geminiToAntigravity(modelName, payload, projectId) {
         }
     }
 
-    // 处理 Claude 模型的工具声明 (包括 sonnet 和 opus)
-    if (modelName.startsWith('claude-sonnet-') || modelName.startsWith('claude-opus-')) {
-        if (template.request.tools && Array.isArray(template.request.tools)) {
-            template.request.tools.forEach(tool => {
-                if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
-                    tool.functionDeclarations.forEach(funcDecl => {
-                        if (funcDecl.parametersJsonSchema) {
-                            funcDecl.parameters = funcDecl.parametersJsonSchema;
-                            delete funcDecl.parameters.$schema;
-                            delete funcDecl.parametersJsonSchema;
-                        }
-                    });
-                }
-            });
-        }
+    // 清理所有工具声明中的 JSON Schema 属性（移除 Google API 不支持的属性如 exclusiveMinimum 等）
+    if (template.request.tools && Array.isArray(template.request.tools)) {
+        template.request.tools.forEach((tool) => {
+            if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
+                tool.functionDeclarations.forEach((funcDecl) => {
+                    // 对于 Claude 模型，处理 parametersJsonSchema
+                    if (isClaudeModel && funcDecl.parametersJsonSchema) {
+                        funcDecl.parameters = cleanJsonSchemaProperties(funcDecl.parametersJsonSchema);
+                        delete funcDecl.parameters.$schema;
+                        delete funcDecl.parametersJsonSchema;
+                    } else if (funcDecl.parameters) {
+                        funcDecl.parameters = cleanJsonSchemaProperties(funcDecl.parameters);
+                    }
+                });
+            }
+        });
     }
+
+    // 如果是图像模型，增加参数 "generationConfig.imageConfig.imageSize": "4K"
+    if (isImageModel(modelName)) {
+        if (!template.request.generationConfig) {
+            template.request.generationConfig = {};
+        }
+
+        if (!template.request.generationConfig.imageConfig) {
+            template.request.generationConfig.imageConfig = {};
+        }
+        template.request.generationConfig.imageConfig.imageSize = '4K';
+        if (!template.request.generationConfig.thinkingConfig) {
+            template.request.generationConfig.thinkingConfig = {};
+        }
+        template.request.generationConfig.thinkingConfig.includeThoughts = false;
+    }
+
+    // 规范化 Thinking 配置
+    template = normalizeAntigravityThinking(modelName, template, isClaudeModel);
 
     return template;
 }
 
 /**
+ * 过滤 SSE 中的 usageMetadata（仅在最终块中保留）
+ * @param {string} line - SSE 行数据
+ * @returns {string} 过滤后的行数据
+ */
+function filterSSEUsageMetadata(line) {
+    if (!line || typeof line !== 'string') return line;
+    
+    // 检查是否是 data: 开头的 SSE 数据
+    if (!line.startsWith('data: ')) return line;
+    
+    try {
+        const jsonStr = line.slice(6); // 移除 'data: ' 前缀
+        const data = JSON.parse(jsonStr);
+        
+        // 检查是否有 finishReason，如果没有则移除 usageMetadata
+        const hasFinishReason = data?.response?.candidates?.[0]?.finishReason ||
+                               data?.candidates?.[0]?.finishReason;
+        
+        if (!hasFinishReason) {
+            // 移除 usageMetadata
+            if (data.response) {
+                delete data.response.usageMetadata;
+            }
+            if (data.usageMetadata) {
+                delete data.usageMetadata;
+            }
+            return 'data: ' + JSON.stringify(data);
+        }
+    } catch (e) {
+        // 解析失败，返回原始数据
+    }
+    
+    return line;
+}
+
+/**
+ * 将流式响应转换为非流式响应
+ * 用于 Claude 模型的非流式请求（实际上是流式请求然后合并）
+ * @param {Buffer|string} stream - 流式响应数据
+ * @returns {Object} 合并后的非流式响应
+ */
+function convertStreamToNonStream(stream) {
+    const lines = stream.toString().split('\n');
+    
+    let responseTemplate = '';
+    let traceId = '';
+    let finishReason = '';
+    let modelVersion = '';
+    let responseId = '';
+    let role = '';
+    let usageRaw = null;
+    const parts = [];
+    
+    // 用于合并连续的 text 和 thought 部分
+    let pendingKind = '';
+    let pendingText = '';
+    let pendingThoughtSig = '';
+    
+    const flushPending = () => {
+        if (!pendingKind) return;
+        
+        const text = pendingText;
+        if (pendingKind === 'text') {
+            if (text.trim()) {
+                parts.push({ text: text });
+            }
+        } else if (pendingKind === 'thought') {
+            if (text.trim() || pendingThoughtSig) {
+                const part = { thought: true, text: text };
+                if (pendingThoughtSig) {
+                    part.thoughtSignature = pendingThoughtSig;
+                }
+                parts.push(part);
+            }
+        }
+        
+        pendingKind = '';
+        pendingText = '';
+        pendingThoughtSig = '';
+    };
+    
+    const normalizePart = (part) => {
+        const m = { ...part };
+        // 处理 thoughtSignature / thought_signature
+        const sig = part.thoughtSignature || part.thought_signature;
+        if (sig) {
+            m.thoughtSignature = sig;
+            delete m.thought_signature;
+        }
+        // 处理 inline_data -> inlineData
+        if (m.inline_data) {
+            m.inlineData = m.inline_data;
+            delete m.inline_data;
+        }
+        return m;
+    };
+    
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        
+        let data;
+        try {
+            data = JSON.parse(trimmed);
+        } catch (e) {
+            continue;
+        }
+        
+        let responseNode = data.response;
+        if (!responseNode) {
+            if (data.candidates) {
+                responseNode = data;
+            } else {
+                continue;
+            }
+        }
+        responseTemplate = JSON.stringify(responseNode);
+        
+        if (data.traceId) {
+            traceId = data.traceId;
+        }
+        
+        if (responseNode.candidates?.[0]?.content?.role) {
+            role = responseNode.candidates[0].content.role;
+        }
+        
+        if (responseNode.candidates?.[0]?.finishReason) {
+            finishReason = responseNode.candidates[0].finishReason;
+        }
+        
+        if (responseNode.modelVersion) {
+            modelVersion = responseNode.modelVersion;
+        }
+        
+        if (responseNode.responseId) {
+            responseId = responseNode.responseId;
+        }
+        
+        if (responseNode.usageMetadata) {
+            usageRaw = responseNode.usageMetadata;
+        } else if (data.usageMetadata) {
+            usageRaw = data.usageMetadata;
+        }
+        
+        const partsArray = responseNode.candidates?.[0]?.content?.parts;
+        if (Array.isArray(partsArray)) {
+            for (const part of partsArray) {
+                const hasFunctionCall = part.functionCall !== undefined;
+                const hasInlineData = part.inlineData !== undefined || part.inline_data !== undefined;
+                const sig = part.thoughtSignature || part.thought_signature || '';
+                const text = part.text || '';
+                const thought = part.thought || false;
+                
+                if (hasFunctionCall || hasInlineData) {
+                    flushPending();
+                    parts.push(normalizePart(part));
+                    continue;
+                }
+                
+                if (thought || part.text !== undefined) {
+                    const kind = thought ? 'thought' : 'text';
+                    if (pendingKind && pendingKind !== kind) {
+                        flushPending();
+                    }
+                    pendingKind = kind;
+                    pendingText += text;
+                    if (kind === 'thought' && sig) {
+                        pendingThoughtSig = sig;
+                    }
+                    continue;
+                }
+                
+                flushPending();
+                parts.push(normalizePart(part));
+            }
+        }
+    }
+    
+    flushPending();
+    
+    // 构建最终响应
+    if (!responseTemplate) {
+        responseTemplate = '{"candidates":[{"content":{"role":"model","parts":[]}}]}';
+    }
+    
+    let result = JSON.parse(responseTemplate);
+    
+    // 设置 parts
+    if (!result.candidates) {
+        result.candidates = [{ content: { role: 'model', parts: [] } }];
+    }
+    if (!result.candidates[0]) {
+        result.candidates[0] = { content: { role: 'model', parts: [] } };
+    }
+    if (!result.candidates[0].content) {
+        result.candidates[0].content = { role: 'model', parts: [] };
+    }
+    result.candidates[0].content.parts = parts;
+    
+    if (role) {
+        result.candidates[0].content.role = role;
+    }
+    if (finishReason) {
+        result.candidates[0].finishReason = finishReason;
+    }
+    if (modelVersion) {
+        result.modelVersion = modelVersion;
+    }
+    if (responseId) {
+        result.responseId = responseId;
+    }
+    if (usageRaw) {
+        result.usageMetadata = usageRaw;
+    } else if (!result.usageMetadata) {
+        result.usageMetadata = {
+            promptTokenCount: 0,
+            candidatesTokenCount: 0,
+            totalTokenCount: 0
+        };
+    }
+    
+    // 包装为最终格式
+    const output = {
+        response: result,
+        traceId: traceId || ''
+    };
+    
+    return output;
+}
+
+/**
  * 将 Antigravity 响应转换为 Gemini 格式
+ * @param {Object} antigravityResponse - Antigravity 响应
+ * @returns {Object|null} Gemini 格式响应
  */
 function toGeminiApiResponse(antigravityResponse) {
     if (!antigravityResponse) return null;
@@ -200,6 +608,8 @@ function toGeminiApiResponse(antigravityResponse) {
 
 /**
  * 确保请求体中的内容部分都有角色属性
+ * @param {Object} requestBody - 请求体
+ * @returns {Object} 处理后的请求体
  */
 function ensureRolesInContents(requestBody) {
     delete requestBody.model;
@@ -254,19 +664,30 @@ export class AntigravityApiService {
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
         this.projectId = config.PROJECT_ID;
 
-        // Initialize instance-specific endpoints
-        this.baseUrlDaily = config.ANTIGRAVITY_BASE_URL_DAILY || DEFAULT_ANTIGRAVITY_BASE_URL_DAILY;
-        this.baseUrlAutopush = config.ANTIGRAVITY_BASE_URL_AUTOPUSH || DEFAULT_ANTIGRAVITY_BASE_URL_AUTOPUSH;
-
-        // 多环境降级顺序
-        this.baseURLs = [
-            this.baseUrlDaily,
-            this.baseUrlAutopush
-            // ANTIGRAVITY_BASE_URL_PROD // 生产环境已注释
-        ];
+        // 多环境降级顺序 - 按照 Go 代码的顺序
+        this.baseURLs = this.getBaseURLFallbackOrder(config);
         
         // 保存代理配置供后续使用
         this.proxyConfig = getProxyConfigForProvider(config, 'gemini-antigravity');
+    }
+
+    /**
+     * 获取 Base URL 降级顺序
+     * @param {Object} config - 配置对象
+     * @returns {string[]} Base URL 列表
+     */
+    getBaseURLFallbackOrder(config) {
+        // 如果配置了自定义 base_url，只使用该 URL
+        if (config.ANTIGRAVITY_BASE_URL) {
+            return [config.ANTIGRAVITY_BASE_URL.replace(/\/$/, '')];
+        }
+        
+        // 默认降级顺序：daily -> sandbox -> prod
+        return [
+            ANTIGRAVITY_BASE_URL_DAILY,
+            ANTIGRAVITY_SANDBOX_BASE_URL_DAILY,
+            ANTIGRAVITY_BASE_URL_PROD
+        ];
     }
 
     async initialize() {
@@ -478,12 +899,13 @@ export class AntigravityApiService {
                 };
 
                 const res = await this.authClient.request(requestOptions);
-                console.log(`[Antigravity] Raw response from ${baseURL}:`, Object.keys(res.data.models));
+                // console.log(`[Antigravity] Raw response from ${baseURL}:`, Object.keys(res.data.models));
                 if (res.data && res.data.models) {
                     const models = Object.keys(res.data.models);
                     this.availableModels = models
                         .map(modelName2Alias)
-                        .filter(alias => alias !== undefined && alias !== '' && alias !== null);
+                        .filter(alias => alias !== undefined && alias !== '' && alias !== null)
+                        .filter(alias => ANTIGRAVITY_MODELS.includes(alias));
 
                     console.log(`[Antigravity] Available models: [${this.availableModels.join(', ')}]`);
                     return;
@@ -680,8 +1102,10 @@ export class AntigravityApiService {
         });
 
         let buffer = [];
-        for await (const line of rl) {
+        for await (let line of rl) {
             if (line.startsWith('data: ')) {
+                // 过滤 usageMetadata（仅在最终块中保留）
+                line = filterSSEUsageMetadata(line);
                 buffer.push(line.slice(6));
             } else if (line === '' && buffer.length > 0) {
                 try {
@@ -714,6 +1138,7 @@ export class AntigravityApiService {
         // 深拷贝请求体
         const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)));
         const actualModelName = alias2ModelName(selectedModel);
+        const isClaudeModel = isClaude(actualModelName);
 
         // 将处理后的请求体转换为 Antigravity 格式
         const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody }, this.projectId);
@@ -721,8 +1146,40 @@ export class AntigravityApiService {
         // 设置模型名称为实际模型名
         payload.model = actualModelName;
 
+        // 对于 Claude 模型，使用流式请求然后转换为非流式响应
+        if (isClaudeModel) {
+            return await this.executeClaudeNonStream(payload);
+        }
+
         const response = await this.callApi('generateContent', payload);
         return toGeminiApiResponse(response.response);
+    }
+
+    /**
+     * 执行 Claude 非流式请求
+     * Claude 模型实际上使用流式请求，然后将结果合并为非流式响应
+     * @param {Object} payload - 请求体
+     * @returns {Object} 非流式响应
+     */
+    async executeClaudeNonStream(payload) {
+        const chunks = [];
+        
+        try {
+            const stream = this.streamApi('streamGenerateContent', payload);
+            for await (const chunk of stream) {
+                if (chunk) {
+                    chunks.push(JSON.stringify(chunk));
+                }
+            }
+            
+            // 将流式响应转换为非流式响应
+            const streamData = chunks.join('\n');
+            const nonStreamResponse = convertStreamToNonStream(streamData);
+            return toGeminiApiResponse(nonStreamResponse.response);
+        } catch (error) {
+            console.error('[Antigravity] Claude non-stream execution error:', error.message);
+            throw error;
+        }
     }
 
     async * generateContentStream(model, requestBody) {
@@ -819,7 +1276,7 @@ export class AntigravityApiService {
                         // 遍历模型数据，提取配额信息
                         for (const [modelId, modelData] of Object.entries(modelsData)) {
                             const aliasName = modelName2Alias(modelId);
-                            if (aliasName == null ||aliasName === '') continue; // 跳过不支持的模型
+                            if (aliasName == null || aliasName === '') continue; // 跳过不支持的模型
                             
                             const modelInfo = {
                                 remaining: 0,
@@ -843,7 +1300,6 @@ export class AntigravityApiService {
                             sortedModels[key] = result.models[key];
                         });
                         result.models = sortedModels;
-                        // console.log(`[Antigravity] Sorted Models:`, sortedModels);
                         console.log(`[Antigravity] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
                         break; // 成功获取后退出循环
                     }

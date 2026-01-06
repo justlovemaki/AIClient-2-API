@@ -229,6 +229,12 @@ export function extractAndProcessSystemMessages(messages) {
 
 /**
  * 清理JSON Schema属性（移除Gemini不支持的属性）
+ * Google Gemini API 只支持有限的 JSON Schema 属性，不支持以下属性：
+ * - exclusiveMinimum, exclusiveMaximum, minimum, maximum
+ * - minLength, maxLength, minItems, maxItems
+ * - pattern, format, default, const
+ * - additionalProperties, $schema, $ref, $id
+ * - allOf, anyOf, oneOf, not
  * @param {Object} schema - JSON Schema
  * @returns {Object} 清理后的JSON Schema
  */
@@ -237,23 +243,39 @@ export function cleanJsonSchemaProperties(schema) {
         return schema;
     }
 
+    // 如果是数组，递归处理每个元素
+    if (Array.isArray(schema)) {
+        return schema.map(item => cleanJsonSchemaProperties(item));
+    }
+
+    // Gemini 支持的 JSON Schema 属性白名单
+    const allowedKeys = [
+        "type",
+        "description",
+        "properties",
+        "required",
+        "enum",
+        "items",
+        "nullable"
+    ];
+
     const sanitized = {};
     for (const [key, value] of Object.entries(schema)) {
-        if (["type", "description", "properties", "required", "enum", "items"].includes(key)) {
-            sanitized[key] = value;
+        if (allowedKeys.includes(key)) {
+            // 对于需要递归处理的属性
+            if (key === 'properties' && typeof value === 'object' && value !== null) {
+                const cleanProperties = {};
+                for (const [propName, propSchema] of Object.entries(value)) {
+                    cleanProperties[propName] = cleanJsonSchemaProperties(propSchema);
+                }
+                sanitized[key] = cleanProperties;
+            } else if (key === 'items') {
+                sanitized[key] = cleanJsonSchemaProperties(value);
+            } else {
+                sanitized[key] = value;
+            }
         }
-    }
-
-    if (sanitized.properties && typeof sanitized.properties === 'object') {
-        const cleanProperties = {};
-        for (const [propName, propSchema] of Object.entries(sanitized.properties)) {
-            cleanProperties[propName] = cleanJsonSchemaProperties(propSchema);
-        }
-        sanitized.properties = cleanProperties;
-    }
-
-    if (sanitized.items) {
-        sanitized.items = cleanJsonSchemaProperties(sanitized.items);
+        // 其他属性（如 exclusiveMinimum, minimum, maximum, pattern 等）被忽略
     }
 
     return sanitized;

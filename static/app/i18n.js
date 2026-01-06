@@ -3,6 +3,8 @@ const translations = {
     'zh-CN': {
         // Header
         'header.title': 'AIClient2API 管理控制台',
+        'header.github': 'GitHub 仓库',
+        'header.themeToggle': '切换主题',
         'header.status.connecting': '连接中...',
         'header.status.connected': '已连接',
         'header.status.disconnected': '连接断开',
@@ -423,6 +425,8 @@ const translations = {
     'en-US': {
         // Header
         'header.title': 'AIClient2API Management Console',
+        'header.github': 'GitHub Repository',
+        'header.themeToggle': 'Toggle Theme',
         'header.status.connecting': 'Connecting...',
         'header.status.connected': 'Connected',
         'header.status.disconnected': 'Disconnected',

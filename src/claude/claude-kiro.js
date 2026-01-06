@@ -308,6 +308,7 @@ export class KiroApiService {
 
         this.modelName = KIRO_CONSTANTS.DEFAULT_MODEL_NAME;
         this.axiosInstance = null; // Initialize later in async method
+        this.axiosSocialRefreshInstance = null;
     }
  
     async initialize() {
@@ -361,6 +362,10 @@ export class KiroApiService {
         configureAxiosProxy(axiosConfig, this.config, 'claude-kiro-oauth');
         
         this.axiosInstance = axios.create(axiosConfig);
+
+        axiosConfig.headers = new Headers();
+        axiosConfig.headers.set('Content-Type', KIRO_CONSTANTS.CONTENT_TYPE_JSON);
+        this.axiosSocialRefreshInstance = axios.create(axiosConfig);
         this.isInitialized = true;
     }
 
@@ -496,8 +501,15 @@ async initializeAuth(forceRefresh = false) {
                 requestBody.clientSecret = this.clientSecret;
                 requestBody.grantType = 'refresh_token';
             }
-            const response = await this.axiosInstance.post(refreshUrl, requestBody);
-            console.log('[Kiro Auth] Token refresh response: ok');
+
+            let response = null;
+            if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
+                console.log('[Kiro Auth] Token refresh social response: ok');
+            }else{
+                response = await this.axiosInstance.post(refreshUrl, requestBody);
+                console.log('[Kiro Auth] Token refresh idc response: ok');
+            }
 
             if (response.data && response.data.accessToken) {
                 this.accessToken = response.data.accessToken;
@@ -659,9 +671,15 @@ async initializeAuth(forceRefresh = false) {
             }
         }
 
-        // Add remaining user/assistant messages to history
+        // 保留最近 5 条历史消息中的图片
+        const keepImageThreshold = 5;        
         for (let i = startIndex; i < processedMessages.length - 1; i++) {
             const message = processedMessages[i];
+            // 计算当前消息距离最后一条消息的位置（从后往前数）
+            const distanceFromEnd = (processedMessages.length - 1) - i;
+            // 如果距离末尾不超过 5 条，则保留图片
+            const shouldKeepImages = distanceFromEnd <= keepImageThreshold;
+            
             if (message.role === 'user') {
                 let userInputMessage = {
                     content: '',
@@ -670,6 +688,7 @@ async initializeAuth(forceRefresh = false) {
                 };
                 let imageCount = 0;
                 let toolResults = [];
+                let images = [];
                 
                 if (Array.isArray(message.content)) {
                     for (const part of message.content) {
@@ -682,22 +701,37 @@ async initializeAuth(forceRefresh = false) {
                                 toolUseId: part.tool_use_id
                             });
                         } else if (part.type === 'image') {
-                            // 历史消息中的图片不保留 base64 数据，只记录数量
-                            // 避免请求体过大导致 400 错误
-                            imageCount++;
+                            if (shouldKeepImages) {
+                                // 最近 5 条消息内的图片保留原始数据
+                                images.push({
+                                    format: part.source.media_type.split('/')[1],
+                                    source: {
+                                        bytes: part.source.data
+                                    }
+                                });
+                            } else {
+                                // 超过 5 条历史记录的图片只记录数量
+                                imageCount++;
+                            }
                         }
                     }
                 } else {
                     userInputMessage.content = this.getContentText(message);
                 }
                 
-                // 如果历史消息中有图片，添加占位符说明
+                // 如果有保留的图片，添加到消息中
+                if (images.length > 0) {
+                    userInputMessage.images = images;
+                    console.log(`[Kiro] Kept ${images.length} image(s) in recent history message (distance from end: ${distanceFromEnd})`);
+                }
+                
+                // 如果有被替换的图片，添加占位符说明
                 if (imageCount > 0) {
                     const imagePlaceholder = `[此消息包含 ${imageCount} 张图片，已在历史记录中省略]`;
-                    userInputMessage.content = userInputMessage.content 
-                        ? `${userInputMessage.content}\n${imagePlaceholder}` 
+                    userInputMessage.content = userInputMessage.content
+                        ? `${userInputMessage.content}\n${imagePlaceholder}`
                         : imagePlaceholder;
-                    console.log(`[Kiro] Replaced ${imageCount} image(s) with placeholder in history message`);
+                    console.log(`[Kiro] Replaced ${imageCount} image(s) with placeholder in old history message (distance from end: ${distanceFromEnd})`);
                 }
                 
                 if (toolResults.length > 0) {

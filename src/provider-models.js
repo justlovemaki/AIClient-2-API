@@ -18,7 +18,7 @@ export const PROVIDER_MODELS = {
         'gemini-3-pro-image-preview',
         'gemini-3-pro-preview',
         'gemini-3-flash-preview',
-        'gemini-2.5-flash',
+        'gemini-2.5-flash-preview',
         'gemini-claude-sonnet-4-5',
         'gemini-claude-sonnet-4-5-thinking',
         'gemini-claude-opus-4-5-thinking'
