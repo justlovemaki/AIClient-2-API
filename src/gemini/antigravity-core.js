@@ -258,7 +258,7 @@ function normalizeAntigravityThinking(modelName, payload, isClaudeModel) {
 function geminiToAntigravity(modelName, payload, projectId) {
     // 深拷贝请求体,避免修改原始对象
     let template = JSON.parse(JSON.stringify(payload));
-    
+
     const isClaudeModel = isClaude(modelName);
 
     // 设置基本字段
@@ -281,13 +281,12 @@ function geminiToAntigravity(modelName, payload, projectId) {
     }
 
     // 设置工具配置
-    if (!template.request.toolConfig) {
-        template.request.toolConfig = {};
+    if (template.request.toolConfig) {
+        if (!template.request.toolConfig.functionCallingConfig) {
+            template.request.toolConfig.functionCallingConfig = {};
+        }
+        template.request.toolConfig.functionCallingConfig.mode = 'VALIDATED';
     }
-    if (!template.request.toolConfig.functionCallingConfig) {
-        template.request.toolConfig.functionCallingConfig = {};
-    }
-    template.request.toolConfig.functionCallingConfig.mode = 'VALIDATED';
 
     // 当模型是 Claude 时，禁止使用 tools
     if (isClaudeModel) {
@@ -301,11 +300,11 @@ function geminiToAntigravity(modelName, payload, projectId) {
 
     // 对于非 Claude 模型，删除 maxOutputTokens
     // Claude 模型需要保留 maxOutputTokens
-    if (!isClaudeModel) {
+    // if (!isClaudeModel) { 注释了cc用不了
         if (template.request.generationConfig && template.request.generationConfig.maxOutputTokens) {
             delete template.request.generationConfig.maxOutputTokens;
         }
-    }
+    // }
 
     // 处理 Thinking 配置
     // 对于非 gemini-3-* 模型，将 thinkingLevel 转换为 thinkingBudget
@@ -319,22 +318,22 @@ function geminiToAntigravity(modelName, payload, projectId) {
     }
 
     // 清理所有工具声明中的 JSON Schema 属性（移除 Google API 不支持的属性如 exclusiveMinimum 等）
-    if (template.request.tools && Array.isArray(template.request.tools)) {
+        if (template.request.tools && Array.isArray(template.request.tools)) {
         template.request.tools.forEach((tool) => {
-            if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
+                if (tool.functionDeclarations && Array.isArray(tool.functionDeclarations)) {
                 tool.functionDeclarations.forEach((funcDecl) => {
                     // 对于 Claude 模型，处理 parametersJsonSchema
                     if (isClaudeModel && funcDecl.parametersJsonSchema) {
                         funcDecl.parameters = cleanJsonSchemaProperties(funcDecl.parametersJsonSchema);
-                        delete funcDecl.parameters.$schema;
-                        delete funcDecl.parametersJsonSchema;
+                            delete funcDecl.parameters.$schema;
+                            delete funcDecl.parametersJsonSchema;
                     } else if (funcDecl.parameters) {
                         funcDecl.parameters = cleanJsonSchemaProperties(funcDecl.parameters);
-                    }
-                });
-            }
-        });
-    }
+                        }
+                    });
+                }
+            });
+        }
 
     // 如果是图像模型，增加参数 "generationConfig.imageConfig.imageSize": "4K"
     if (isImageModel(modelName)) {
