@@ -252,7 +252,9 @@ export async function getApiService(config, requestedModel = null, options = {})
             serviceConfig = deepmerge(config, selectedProviderConfig);
             delete serviceConfig.providerPools; // 移除 providerPools 属性
             config.uuid = serviceConfig.uuid;
-            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
+            config.customName = serviceConfig.customName;
+            const customNameDisplay = serviceConfig.customName ? ` (${serviceConfig.customName})` : '';
+            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
             const errorMsg = `[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
             console.error(errorMsg);
