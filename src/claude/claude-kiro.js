@@ -9,6 +9,7 @@ import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../proxy-utils.js';
+import { isRetryableNetworkError } from '../common.js';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -1051,7 +1052,14 @@ async initializeAuth(forceRefresh = false) {
             const response = await this.axiosInstance.post(requestUrl, requestData, { headers });
             return response;
         } catch (error) {
-            if (error.response?.status === 403 && !isRetry) {
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            if (status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403. Attempting token refresh and retrying...');
                 try {
                     await this.initializeAuth(true); // Force refresh token
@@ -1063,22 +1071,31 @@ async initializeAuth(forceRefresh = false) {
             }
             
             // Handle 429 (Too Many Requests) with exponential backoff
-            if (error.response?.status === 429 && retryCount < maxRetries) {
+            if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return this.callApi(method, model, body, isRetry, retryCount + 1);
-            }
-
-            // Handle other retryable errors (5xx server errors)
-            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received ${error.response.status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
-            console.error('[Kiro] API call failed:', error.message);
+            // Handle other retryable errors (5xx server errors)
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[Kiro] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            }
+
+            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                console.log(`[Kiro] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            }
+
+            console.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         }
     }
@@ -1347,22 +1364,48 @@ async initializeAuth(forceRefresh = false) {
                 stream.destroy();
             }
             
-            if (error.response?.status === 403 && !isRetry) {
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            if (status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403 in stream. Attempting token refresh and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApiReal(method, model, body, true, retryCount);
                 return;
             }
             
-            if (error.response?.status === 429 && retryCount < maxRetries) {
+            if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error('[Kiro] Stream API call failed:', error.message);
+            // Handle 5xx server errors with exponential backoff
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                console.log(`[Kiro] Received ${status} server error in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                console.log(`[Kiro] Network error (${errorIdentifier}) in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            console.error(`[Kiro] Stream API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         } finally {
             // 确保流被关闭，释放资源

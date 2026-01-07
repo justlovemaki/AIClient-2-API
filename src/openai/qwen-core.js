@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../oauth-handlers.js';
 import { configureAxiosProxy } from '../proxy-utils.js';
+import { isRetryableNetworkError } from '../common.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
@@ -550,6 +551,11 @@ export class QwenApiService {
         } catch (error) {
             const status = error.response?.status;
             const data = error.response?.data || error.message;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
 
             if (this.isAuthError(error) && retryCount === 0) {
                 console.warn(`[QwenApiService] Auth error (${status}). Refreshing token...`);
@@ -573,7 +579,16 @@ export class QwenApiService {
                 return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
             }
 
-            console.error(`Error calling Qwen API (Status: ${status}):`, data);
+            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                console.log(`[QwenApiService] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
+            }
+
+            console.error(`[QwenApiService] Error calling API (Status: ${status}, Code: ${errorCode}):`, data);
             throw error;
         }
     }

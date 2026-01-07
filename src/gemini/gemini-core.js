@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import open from 'open';
-import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../proxy-utils.js';
@@ -436,27 +436,43 @@ export class GeminiApiService {
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
-            console.error(`[API] Error calling ${method}:`, error.response?.status, error.message);
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            console.error(`[Gemini API] Error calling ${method}:`, status, error.message);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
-            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401/400. Refreshing auth and retrying...');
+            if ((status === 400 || status === 401) && !isRetry) {
+                console.log('[Gemini API] Received 401/400. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount);
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
-            if (error.response?.status === 429 && retryCount < maxRetries) {
+            if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                console.log(`[Gemini API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1);
             }
 
             // Handle other retryable errors (5xx server errors)
-            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${error.response.status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                console.log(`[Gemini API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, body, isRetry, retryCount + 1);
+            }
+
+            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                console.log(`[Gemini API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1);
             }
@@ -486,29 +502,46 @@ export class GeminiApiService {
             }
             yield* this.parseSSEStream(res.data);
         } catch (error) {
-            console.error(`[API] Error during stream ${method}:`, error.response?.status, error.message);
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            console.error(`[Gemini API] Error during stream ${method}:`, status, error.message);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
-            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
-                console.log('[API] Received 401/400 during stream. Refreshing auth and retrying...');
+            if ((status === 400 || status === 401) && !isRetry) {
+                console.log('[Gemini API] Received 401/400 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount);
                 return;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
-            if (error.response?.status === 429 && retryCount < maxRetries) {
+            if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                console.log(`[Gemini API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1);
                 return;
             }
 
             // Handle other retryable errors (5xx server errors)
-            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${error.response.status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                console.log(`[Gemini API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(method, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                console.log(`[Gemini API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1);
                 return;

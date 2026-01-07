@@ -23,6 +23,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../proxy-utils.js';
+import { isRetryableNetworkError } from '../common.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -71,10 +72,8 @@ class IFlowTokenStorage {
         this.refreshToken = data.refreshToken || data.refresh_token || '';
         this.expiryDate = data.expiryDate || data.expiry_date || '';
         this.apiKey = data.apiKey || data.api_key || '';
-        this.email = data.email || '';
         this.tokenType = data.tokenType || data.token_type || '';
         this.scope = data.scope || '';
-        this.type = data.type || 'iflow';
     }
 
     /**
@@ -87,9 +86,7 @@ class IFlowTokenStorage {
             expiry_date: this.expiryDate,
             token_type: this.tokenType,
             scope: this.scope,
-            apiKey: this.apiKey,
-            email: this.email,
-            type: this.type
+            apiKey: this.apiKey
         };
     }
 
@@ -743,24 +740,8 @@ export class IFlowApiService {
             const errorCode = error.code;
             const errorMessage = error.message || '';
             
-            // 定义可重试的网络错误标识（可能出现在 code 或 message 中）
-            const retryableNetworkErrors = [
-                'ECONNRESET',      // 连接被重置
-                'ETIMEDOUT',       // 连接超时
-                'ECONNREFUSED',    // 连接被拒绝
-                'ENOTFOUND',       // DNS 解析失败
-                'ENETUNREACH',     // 网络不可达
-                'EHOSTUNREACH',    // 主机不可达
-                'EPIPE',           // 管道破裂
-                'EAI_AGAIN',       // DNS 临时失败
-                'ECONNABORTED',    // 连接中止
-                'ESOCKETTIMEDOUT', // Socket 超时
-            ];
-            
-            // 检查是否为可重试的网络错误（检查 code 和 message）
-            const isRetryableNetworkError = retryableNetworkErrors.some(errId =>
-                errorCode === errId || errorMessage.includes(errId)
-            );
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
             
             if (status === 401 || status === 403) {
                 console.error(`[iFlow] Received ${status}. API Key might be invalid or expired.`);
@@ -784,7 +765,7 @@ export class IFlowApiService {
             }
 
             // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
-            if (isRetryableNetworkError && retryCount < maxRetries) {
+            if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
                 console.log(`[iFlow] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
@@ -897,24 +878,8 @@ export class IFlowApiService {
             const errorCode = error.code;
             const errorMessage = error.message || '';
             
-            // 定义可重试的网络错误标识（可能出现在 code 或 message 中）
-            const retryableNetworkErrors = [
-                'ECONNRESET',      // 连接被重置
-                'ETIMEDOUT',       // 连接超时
-                'ECONNREFUSED',    // 连接被拒绝
-                'ENOTFOUND',       // DNS 解析失败
-                'ENETUNREACH',     // 网络不可达
-                'EHOSTUNREACH',    // 主机不可达
-                'EPIPE',           // 管道破裂
-                'EAI_AGAIN',       // DNS 临时失败
-                'ECONNABORTED',    // 连接中止
-                'ESOCKETTIMEDOUT', // Socket 超时
-            ];
-            
-            // 检查是否为可重试的网络错误（检查 code 和 message）
-            const isRetryableNetworkError = retryableNetworkErrors.some(errId =>
-                errorCode === errId || errorMessage.includes(errId)
-            );
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
             
             if (status === 401 || status === 403) {
                 console.error(`[iFlow] Received ${status} during stream. API Key might be invalid or expired.`);
@@ -940,7 +905,7 @@ export class IFlowApiService {
             }
 
             // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
-            if (isRetryableNetworkError && retryCount < maxRetries) {
+            if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
                 console.log(`[iFlow] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
