@@ -1290,15 +1290,12 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                         
                         // 3. 组合完整的凭据数据
                         const credentialsData = {
-                            accessToken: tokenData.accessToken,
-                            refreshToken: tokenData.refreshToken,
-                            tokenType: tokenData.tokenType,
+                            access_token: tokenData.accessToken,
+                            refresh_token: tokenData.refreshToken,
+                            expiry_date: new Date(tokenData.expiresAt).getTime(),
+                            token_type: tokenData.tokenType,
                             scope: tokenData.scope,
-                            expiresAt: tokenData.expiresAt,
-                            apiKey: userInfo.apiKey,
-                            email: userInfo.email,
-                            lastRefresh: new Date().toISOString(),
-                            type: 'iflow'
+                            apiKey: userInfo.apiKey
                         };
                         
                         // 4. 保存凭据
@@ -1474,14 +1471,11 @@ export async function refreshIFlowTokens(refreshToken) {
     const userInfo = await fetchIFlowUserInfo(tokenData.access_token);
     
     return {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        tokenType: tokenData.token_type,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expiry_date: Date.now() + tokenData.expires_in * 1000,
+        token_type: tokenData.token_type,
         scope: tokenData.scope,
-        expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-        apiKey: userInfo.apiKey,
-        email: userInfo.email,
-        lastRefresh: new Date().toISOString(),
-        type: 'iflow'
+        apiKey: userInfo.apiKey
     };
 }

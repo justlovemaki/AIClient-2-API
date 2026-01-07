@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
-import { formatExpiryTime } from '../common.js';
+import { formatExpiryTime, isRetryableNetworkError } from '../common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../proxy-utils.js';
@@ -991,15 +991,22 @@ export class AntigravityApiService {
             const res = await this.authClient.request(requestOptions);
             return res.data;
         } catch (error) {
-            console.error(`[Antigravity API] Error calling ${method} on ${baseURL}:`, error.response?.status, error.message);
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            console.error(`[Antigravity API] Error calling ${method} on ${baseURL}:`, status, error.message);
 
-            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
+            if ((status === 400 || status === 401) && !isRetry) {
                 console.log('[Antigravity API] Received 401/400. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 return this.callApi(method, body, true, retryCount, baseURLIndex);
             }
 
-            if (error.response?.status === 429) {
+            if (status === 429) {
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     console.log(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
                     return this.callApi(method, body, isRetry, retryCount, baseURLIndex + 1);
@@ -1011,14 +1018,24 @@ export class AntigravityApiService {
                 }
             }
 
-            if (!error.response && baseURLIndex + 1 < this.baseURLs.length) {
-                console.log(`[Antigravity API] Network error on ${baseURL}. Trying next base URL...`);
-                return this.callApi(method, body, isRetry, retryCount, baseURLIndex + 1);
+            // Handle network errors - try next base URL first, then retry with backoff
+            if (isNetworkError) {
+                if (baseURLIndex + 1 < this.baseURLs.length) {
+                    const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                    console.log(`[Antigravity API] Network error (${errorIdentifier}) on ${baseURL}. Trying next base URL...`);
+                    return this.callApi(method, body, isRetry, retryCount, baseURLIndex + 1);
+                } else if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                    console.log(`[Antigravity API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return this.callApi(method, body, isRetry, retryCount + 1, 0);
+                }
             }
 
-            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Antigravity API] Server error ${error.response.status}. Retrying in ${delay}ms...`);
+                console.log(`[Antigravity API] Server error ${status}. Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1, baseURLIndex);
             }
@@ -1063,16 +1080,23 @@ export class AntigravityApiService {
 
             yield* this.parseSSEStream(res.data);
         } catch (error) {
-            console.error(`[Antigravity API] Error during stream ${method} on ${baseURL}:`, error.response?.status, error.message);
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            
+            // 检查是否为可重试的网络错误
+            const isNetworkError = isRetryableNetworkError(error);
+            
+            console.error(`[Antigravity API] Error during stream ${method} on ${baseURL}:`, status, error.message);
 
-            if ((error.response?.status === 400 || error.response?.status === 401) && !isRetry) {
+            if ((status === 400 || status === 401) && !isRetry) {
                 console.log('[Antigravity API] Received 401/400 during stream. Refreshing auth and retrying...');
                 await this.initializeAuth(true);
                 yield* this.streamApi(method, body, true, retryCount, baseURLIndex);
                 return;
             }
 
-            if (error.response?.status === 429) {
+            if (status === 429) {
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     console.log(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
                     yield* this.streamApi(method, body, isRetry, retryCount, baseURLIndex + 1);
@@ -1086,15 +1110,26 @@ export class AntigravityApiService {
                 }
             }
 
-            if (!error.response && baseURLIndex + 1 < this.baseURLs.length) {
-                console.log(`[Antigravity API] Network error on ${baseURL}. Trying next base URL...`);
-                yield* this.streamApi(method, body, isRetry, retryCount, baseURLIndex + 1);
-                return;
+            // Handle network errors - try next base URL first, then retry with backoff
+            if (isNetworkError) {
+                if (baseURLIndex + 1 < this.baseURLs.length) {
+                    const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                    console.log(`[Antigravity API] Network error (${errorIdentifier}) on ${baseURL} during stream. Trying next base URL...`);
+                    yield* this.streamApi(method, body, isRetry, retryCount, baseURLIndex + 1);
+                    return;
+                } else if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                    console.log(`[Antigravity API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    yield* this.streamApi(method, body, isRetry, retryCount + 1, 0);
+                    return;
+                }
             }
 
-            if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Antigravity API] Server error ${error.response.status} during stream. Retrying in ${delay}ms...`);
+                console.log(`[Antigravity API] Server error ${status} during stream. Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1, baseURLIndex);
                 return;
