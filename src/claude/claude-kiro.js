@@ -32,9 +32,9 @@ const KIRO_MODELS = getProviderModels('claude-kiro-oauth');
 
 // 完整的模型映射表
 const FULL_MODEL_MAPPING = {
-    "claude-opus-4-5":"claude-opus-4.5",
-    "claude-opus-4-5-20251101":"claude-opus-4.5",
-    "claude-haiku-4-5":"claude-haiku-4.5",
+    "claude-opus-4-5": "claude-opus-4.5",
+    "claude-opus-4-5-20251101": "claude-opus-4.5",
+    "claude-haiku-4-5": "claude-haiku-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
@@ -369,236 +369,200 @@ export class KiroApiService {
         this.isInitialized = true;
     }
 
-async initializeAuth(forceRefresh = false) {
-    if (this.accessToken && !forceRefresh) {
-        console.debug('[Kiro Auth] Access token already available and not forced refresh.');
-        return;
-    }
-
-    // Helper to load credentials from a file
-    const loadCredentialsFromFile = async (filePath) => {
-        try {
-            const fileContent = await fs.readFile(filePath, 'utf8');
-            return JSON.parse(fileContent);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
-            } else if (error instanceof SyntaxError) {
-                console.warn(`[Kiro Auth] Failed to parse JSON from ${filePath}: ${error.message}`);
-            } else {
-                console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
-            }
-            return null;
+    async initializeAuth(forceRefresh = false) {
+        if (this.accessToken && !forceRefresh) {
+            console.debug('[Kiro Auth] Access token already available and not forced refresh.');
+            return;
         }
-    };
 
-    // Helper to save credentials to a file
-    const saveCredentialsToFile = async (filePath, newData) => {
-        try {
-            let existingData = {};
+        // Helper to load credentials from a file
+        const loadCredentialsFromFile = async (filePath) => {
             try {
                 const fileContent = await fs.readFile(filePath, 'utf8');
-                existingData = JSON.parse(fileContent);
-            } catch (readError) {
-                if (readError.code === 'ENOENT') {
-                    console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+                return JSON.parse(fileContent);
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
+                } else if (error instanceof SyntaxError) {
+                    console.warn(`[Kiro Auth] Failed to parse JSON from ${filePath}: ${error.message}`);
                 } else {
-                    console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
+                    console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
                 }
+                return null;
             }
-            const mergedData = { ...existingData, ...newData };
-            await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
-            console.info(`[Kiro Auth] Updated token file: ${filePath}`);
-        } catch (error) {
-            console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
-        }
-    };
+        };
 
-    try {
-        let mergedCredentials = {};
-
-        // Priority 1: Load from Base64 credentials if available
-        if (this.base64Creds) {
-            Object.assign(mergedCredentials, this.base64Creds);
-            console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
-            // Clear base64Creds after use to prevent re-processing
-            this.base64Creds = null;
-        }
-
-        // Priority 2 & 3 合并: 从指定文件路径或目录加载凭证
-        // 读取指定的 credPath 文件以及目录下的其他 JSON 文件(排除当前文件)
-        const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-        const dirPath = path.dirname(targetFilePath);
-        const targetFileName = path.basename(targetFilePath);
-
-        console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
-
-        try {
-            // 首先尝试读取目标文件
-            const targetCredentials = await loadCredentialsFromFile(targetFilePath);
-            if (targetCredentials) {
-                Object.assign(mergedCredentials, targetCredentials);
-                console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
-            }
-
-            // 然后读取目录下的其他 JSON 文件(排除目标文件本身)
-            const files = await fs.readdir(dirPath);
-            for (const file of files) {
-                if (file.endsWith('.json') && file !== targetFileName) {
-                    const filePath = path.join(dirPath, file);
-                    const credentials = await loadCredentialsFromFile(filePath);
-                    if (credentials) {
-                        // 保留已有的 expiresAt,避免被覆盖
-                        credentials.expiresAt = mergedCredentials.expiresAt;
-                        Object.assign(mergedCredentials, credentials);
-                        console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
-        }
-
-        // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
-        // Apply loaded credentials, prioritizing existing values if they are not null/undefined
-        this.accessToken = this.accessToken || mergedCredentials.accessToken;
-        this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
-        this.clientId = this.clientId || mergedCredentials.clientId;
-        this.clientSecret = this.clientSecret || mergedCredentials.clientSecret;
-        this.authMethod = this.authMethod || mergedCredentials.authMethod;
-        this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
-        this.profileArn = this.profileArn || mergedCredentials.profileArn;
-        this.region = this.region || mergedCredentials.region;
-
-        // Ensure region is set before using it in URLs
-        if (!this.region) {
-            console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
-            this.region = 'us-east-1'; // Set default region
-        }
-
-        this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
-        this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.region);
-        this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
-        this.amazonQUrl = (KIRO_CONSTANTS.AMAZON_Q_URL).replace("{{region}}", this.region);
-    } catch (error) {
-        console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
-    }
-
-    // Refresh token if forced or if access token is missing but refresh token is available
-    if (forceRefresh || (!this.accessToken && this.refreshToken)) {
-        if (!this.refreshToken) {
-            throw new Error('No refresh token available to refresh access token.');
-        }
-        try {
-            const requestBody = {
-                refreshToken: this.refreshToken,
-            };
-
-            let refreshUrl = this.refreshUrl;
-            if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                refreshUrl = this.refreshIDCUrl;
-                requestBody.clientId = this.clientId;
-                requestBody.clientSecret = this.clientSecret;
-                requestBody.grantType = 'refresh_token';
-            }
-
-            let response = null;
-            if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
-                console.log('[Kiro Auth] Token refresh social response: ok');
-            }else{
-                response = await this.axiosInstance.post(refreshUrl, requestBody);
-                console.log('[Kiro Auth] Token refresh idc response: ok');
-            }
-
-            if (response.data && response.data.accessToken) {
-                this.accessToken = response.data.accessToken;
-                this.refreshToken = response.data.refreshToken;
-                this.profileArn = response.data.profileArn;
-                const expiresIn = response.data.expiresIn;
-                const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-                this.expiresAt = expiresAt;
-                console.info('[Kiro Auth] Access token refreshed successfully');
-
-                // Update the token file - use specified path if configured, otherwise use default
-                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-                const updatedTokenData = {
-                    accessToken: this.accessToken,
-                    refreshToken: this.refreshToken,
-                    expiresAt: expiresAt,
-                };
-                if(this.profileArn){
-                    updatedTokenData.profileArn = this.profileArn;
-                }
-                await saveCredentialsToFile(tokenFilePath, updatedTokenData);
-            } else {
-                throw new Error('Invalid refresh response: Missing accessToken');
-            }
-        } catch (error) {
-            console.error('[Kiro Auth] Token refresh failed:', error.message);
-            throw new Error(`Token refresh failed: ${error.message}`);
-        }
-    }
-
-    if (!this.accessToken) {
-        throw new Error('No access token available after initialization and refresh attempts.');
-    }
-    }
-
-    sanitizeText(text) {
-        if (!text || typeof text !== 'string') {
-            return text;
-        }
-
-        const MAX_ITERATIONS = 500;
-        let currentText = text;
-        let iteration = 0;
-
-        while (iteration < MAX_ITERATIONS) {
+        // Helper to save credentials to a file
+        const saveCredentialsToFile = async (filePath, newData) => {
             try {
-                JSON.parse(currentText);
-                return currentText;
-            } catch (e) {
+                let existingData = {};
                 try {
-                    const repaired = jsonrepair(currentText);
-
-                    if (repaired === currentText) {
-                        return currentText;
+                    const fileContent = await fs.readFile(filePath, 'utf8');
+                    existingData = JSON.parse(fileContent);
+                } catch (readError) {
+                    if (readError.code === 'ENOENT') {
+                        console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+                    } else {
+                        console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
                     }
-
-                    currentText = repaired;
-                    iteration++;
-                } catch (repairError) {
-                    return currentText;
                 }
+                const mergedData = { ...existingData, ...newData };
+                await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
+                console.info(`[Kiro Auth] Updated token file: ${filePath}`);
+            } catch (error) {
+                console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
+            }
+        };
+
+        try {
+            let mergedCredentials = {};
+
+            // Priority 1: Load from Base64 credentials if available
+            if (this.base64Creds) {
+                Object.assign(mergedCredentials, this.base64Creds);
+                console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
+                // Clear base64Creds after use to prevent re-processing
+                this.base64Creds = null;
+            }
+
+            // Priority 2 & 3 合并: 从指定文件路径或目录加载凭证
+            // 读取指定的 credPath 文件以及目录下的其他 JSON 文件(排除当前文件)
+            const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+            const dirPath = path.dirname(targetFilePath);
+            const targetFileName = path.basename(targetFilePath);
+
+            console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
+
+            try {
+                // 首先尝试读取目标文件
+                const targetCredentials = await loadCredentialsFromFile(targetFilePath);
+                if (targetCredentials) {
+                    Object.assign(mergedCredentials, targetCredentials);
+                    console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
+                }
+
+                // 然后读取目录下的其他 JSON 文件(排除目标文件本身)
+                const files = await fs.readdir(dirPath);
+                for (const file of files) {
+                    if (file.endsWith('.json') && file !== targetFileName) {
+                        const filePath = path.join(dirPath, file);
+                        const credentials = await loadCredentialsFromFile(filePath);
+                        if (credentials) {
+                            // 保留已有的 expiresAt,避免被覆盖
+                            credentials.expiresAt = mergedCredentials.expiresAt;
+                            Object.assign(mergedCredentials, credentials);
+                            console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
+            }
+
+            // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
+            // Apply loaded credentials, prioritizing existing values if they are not null/undefined
+            this.accessToken = this.accessToken || mergedCredentials.accessToken;
+            this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
+            this.clientId = this.clientId || mergedCredentials.clientId;
+            this.clientSecret = this.clientSecret || mergedCredentials.clientSecret;
+            this.authMethod = this.authMethod || mergedCredentials.authMethod;
+            this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
+            this.profileArn = this.profileArn || mergedCredentials.profileArn;
+            this.region = this.region || mergedCredentials.region;
+
+            // Ensure region is set before using it in URLs
+            if (!this.region) {
+                console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
+                this.region = 'us-east-1'; // Set default region
+            }
+
+            this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
+            this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.region);
+            this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
+            this.amazonQUrl = (KIRO_CONSTANTS.AMAZON_Q_URL).replace("{{region}}", this.region);
+        } catch (error) {
+            console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
+        }
+
+        // Refresh token if forced or if access token is missing but refresh token is available
+        if (forceRefresh || (!this.accessToken && this.refreshToken)) {
+            if (!this.refreshToken) {
+                throw new Error('No refresh token available to refresh access token.');
+            }
+            try {
+                const requestBody = {
+                    refreshToken: this.refreshToken,
+                };
+
+                let refreshUrl = this.refreshUrl;
+                if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                    refreshUrl = this.refreshIDCUrl;
+                    requestBody.clientId = this.clientId;
+                    requestBody.clientSecret = this.clientSecret;
+                    requestBody.grantType = 'refresh_token';
+                }
+
+                let response = null;
+                if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                    response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
+                    console.log('[Kiro Auth] Token refresh social response: ok');
+                } else {
+                    response = await this.axiosInstance.post(refreshUrl, requestBody);
+                    console.log('[Kiro Auth] Token refresh idc response: ok');
+                }
+
+                if (response.data && response.data.accessToken) {
+                    this.accessToken = response.data.accessToken;
+                    this.refreshToken = response.data.refreshToken;
+                    this.profileArn = response.data.profileArn;
+                    const expiresIn = response.data.expiresIn;
+                    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+                    this.expiresAt = expiresAt;
+                    console.info('[Kiro Auth] Access token refreshed successfully');
+
+                    // Update the token file - use specified path if configured, otherwise use default
+                    const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+                    const updatedTokenData = {
+                        accessToken: this.accessToken,
+                        refreshToken: this.refreshToken,
+                        expiresAt: expiresAt,
+                    };
+                    if (this.profileArn) {
+                        updatedTokenData.profileArn = this.profileArn;
+                    }
+                    await saveCredentialsToFile(tokenFilePath, updatedTokenData);
+                } else {
+                    throw new Error('Invalid refresh response: Missing accessToken');
+                }
+            } catch (error) {
+                console.error('[Kiro Auth] Token refresh failed:', error.message);
+                throw new Error(`Token refresh failed: ${error.message}`);
             }
         }
 
-        console.warn('[Kiro] Max iterations reached, returning text as-is');
-        return currentText;
+        if (!this.accessToken) {
+            throw new Error('No access token available after initialization and refresh attempts.');
+        }
     }
 
     getContentText(message) {
-        if(message==null){
+        if (message == null) {
             return "";
         }
-        let content;
-        if (Array.isArray(message) ) {
-            content = message
+        if (Array.isArray(message)) {
+            return message
                 .filter(part => part.type === 'text' && part.text)
                 .map(part => part.text)
                 .join('');
         } else if (typeof message.content === 'string') {
-            content = message.content;
-        } else if (Array.isArray(message.content) ) {
-            content = message.content
+            return message.content;
+        } else if (Array.isArray(message.content)) {
+            return message.content
                 .filter(part => part.type === 'text' && part.text)
                 .map(part => part.text)
                 .join('');
-        } else {
-            content = String(message.content || message);
         }
-        return this.sanitizeText(content);
+        return String(message.content || message);
     }
 
     /**
@@ -705,14 +669,14 @@ async initializeAuth(forceRefresh = false) {
         }
 
         // 保留最近 5 条历史消息中的图片
-        const keepImageThreshold = 5;        
+        const keepImageThreshold = 5;
         for (let i = startIndex; i < processedMessages.length - 1; i++) {
             const message = processedMessages[i];
             // 计算当前消息距离最后一条消息的位置（从后往前数）
             const distanceFromEnd = (processedMessages.length - 1) - i;
             // 如果距离末尾不超过 5 条，则保留图片
             const shouldKeepImages = distanceFromEnd <= keepImageThreshold;
-            
+
             if (message.role === 'user') {
                 let userInputMessage = {
                     content: '',
@@ -744,7 +708,7 @@ async initializeAuth(forceRefresh = false) {
                                 });
                             } else {
                                 // 超过 5 条历史记录的图片只记录数量
-                            imageCount++;
+                                imageCount++;
                             }
                         }
                     }
@@ -757,7 +721,7 @@ async initializeAuth(forceRefresh = false) {
                     userInputMessage.images = images;
                     console.log(`[Kiro] Kept ${images.length} image(s) in recent history message (distance from end: ${distanceFromEnd})`);
                 }
-                
+
                 // 如果有被替换的图片，添加占位符说明
                 if (imageCount > 0) {
                     const imagePlaceholder = `[此消息包含 ${imageCount} 张图片，已在历史记录中省略]`;
@@ -1099,8 +1063,8 @@ async initializeAuth(forceRefresh = false) {
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return this.callApi(method, model, body, isRetry, retryCount + 1);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -1393,8 +1357,8 @@ async initializeAuth(forceRefresh = false) {
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
                 return;
             }
 
@@ -1509,7 +1473,7 @@ async initializeAuth(forceRefresh = false) {
                         if (tc.stop) {
                             try {
                                 currentToolCall.input = JSON.parse(currentToolCall.input);
-                            } catch (e) {}
+                            } catch (e) { }
                             toolCalls.push(currentToolCall);
                             currentToolCall = null;
                         }
@@ -1537,7 +1501,7 @@ async initializeAuth(forceRefresh = false) {
             if (currentToolCall) {
                 try {
                     currentToolCall.input = JSON.parse(currentToolCall.input);
-                } catch (e) {}
+                } catch (e) { }
                 toolCalls.push(currentToolCall);
                 currentToolCall = null;
             }
@@ -2044,7 +2008,7 @@ async initializeAuth(forceRefresh = false) {
             origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
             resourceType: resourceType
         });
-         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL && this.profileArn) {
+        if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL && this.profileArn) {
             params.append('profileArn', this.profileArn);
         }
         const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
