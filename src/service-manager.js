@@ -79,8 +79,10 @@ export async function autoLinkProviderConfigs(config) {
             for (const [displayName, providers] of Object.entries(allNewProviders)) {
                 console.log(`  ${displayName}: ${providers.length} config(s)`);
                 providers.forEach(p => {
-                    // 获取凭据路径键
-                    const credKey = Object.keys(p).find(k => k.endsWith('_CREDS_FILE_PATH'));
+                    // 获取凭据路径键（支持 _CREDS_FILE_PATH 和 _TOKEN_FILE_PATH 两种格式）
+                    const credKey = Object.keys(p).find(k =>
+                        k.endsWith('_CREDS_FILE_PATH') || k.endsWith('_TOKEN_FILE_PATH')
+                    );
                     if (credKey) {
                         console.log(`    - ${p[credKey]}`);
                     }
@@ -376,7 +378,8 @@ export async function getProviderStatus(config, options = {}) {
         'claude-custom': 'CLAUDE_BASE_URL',
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
         'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
-        'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
+        'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
+        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
     };
     let providerPoolsSlim = [];
     let unhealthyProvideIdentifyList = [];

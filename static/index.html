@@ -510,6 +510,59 @@
                                 </div>
                             </div>
 
+                            <div class="routing-example-card" data-provider="openai-iflow-card">
+                                <div class="routing-card-header">
+                                    <i class="fas fa-wind"></i>
+                                    <h4 data-i18n="dashboard.routing.nodeName.iflow">iFlow OAuth</h4>
+                                    <span class="provider-badge oauth" data-i18n="dashboard.routing.oauth">突破限制</span>
+                                </div>
+                                <div class="routing-card-content">
+                                    <!-- 协议标签切换 -->
+                                    <div class="protocol-tabs">
+                                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                                    </div>
+                                    
+                                    <!-- OpenAI协议示例 -->
+                                    <div class="protocol-content" data-protocol="openai">
+                                        <div class="endpoint-info">
+                                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                                            <code class="endpoint-path">/openai-iflow/v1/chat/completions</code>
+                                        </div>
+                                        <div class="usage-example">
+                                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                                            <pre><code>curl http://localhost:3000/openai-iflow/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "qwen3-max",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Claude协议示例 -->
+                                    <div class="protocol-content active" data-protocol="claude">
+                                        <div class="endpoint-info">
+                                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                                            <code class="endpoint-path">/openai-iflow/v1/messages</code>
+                                        </div>
+                                        <div class="usage-example">
+                                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                                            <pre><code>curl http://localhost:3000/openai-iflow/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "qwen3-max",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
 
                         <div class="routing-tips">
@@ -579,6 +632,10 @@
                                         <input type="checkbox" value="openaiResponses-custom">
                                         <span>OpenAI Responses</span>
                                     </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" value="openai-iflow">
+                                        <span>iFlow OAuth</span>
+                                    </label>
                                 </div>
                                 <small class="form-text" data-i18n="config.modelProviderHelp">勾选启动时初始化的模型提供商 (必须至少勾选一个)</small>
                             </div>
@@ -607,6 +664,14 @@
                                                 <span>Gemini Antigravity</span>
                                             </label>
                                             <label class="checkbox-item">
+                                                <input type="checkbox" name="proxyProvider" value="openai-custom">
+                                                <span>OpenAI Custom</span>
+                                            </label>
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" name="proxyProvider" value="claude-custom">
+                                                <span>Claude Custom</span>
+                                            </label>
+                                            <label class="checkbox-item">
                                                 <input type="checkbox" name="proxyProvider" value="claude-kiro-oauth">
                                                 <span>Claude Kiro OAuth</span>
                                             </label>
@@ -615,12 +680,12 @@
                                                 <span>Qwen OAuth</span>
                                             </label>
                                             <label class="checkbox-item">
-                                                <input type="checkbox" name="proxyProvider" value="openai-custom">
-                                                <span>OpenAI Custom</span>
+                                                <input type="checkbox" name="proxyProvider" value="openaiResponses-custom">
+                                                <span>OpenAI Responses</span>
                                             </label>
                                             <label class="checkbox-item">
-                                                <input type="checkbox" name="proxyProvider" value="claude-custom">
-                                                <span>Claude Custom</span>
+                                                <input type="checkbox" name="proxyProvider" value="openai-iflow">
+                                                <span>iFlow OAuth</span>
                                             </label>
                                         </div>
                                         <small class="form-text" data-i18n="config.proxy.enabledProvidersNote">选择需要通过代理访问的提供商，未选中的提供商将直接连接</small>

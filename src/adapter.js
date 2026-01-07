@@ -5,6 +5,7 @@ import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiSe
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
+import { IFlowApiService } from './openai/iflow-core.js'; // 导入IFlowApiService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -357,6 +358,47 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// iFlow API 服务适配器
+export class IFlowApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.iflowApiService = new IFlowApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        if (!this.iflowApiService.isInitialized) {
+            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            await this.iflowApiService.initialize();
+        }
+        return this.iflowApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        if (!this.iflowApiService.isInitialized) {
+            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            await this.iflowApiService.initialize();
+        }
+        yield* this.iflowApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        if (!this.iflowApiService.isInitialized) {
+            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            await this.iflowApiService.initialize();
+        }
+        return this.iflowApiService.listModels();
+    }
+
+    async refreshToken() {
+        if (this.iflowApiService.isExpiryDateNear()) {
+            console.log(`[iFlow] Expiry date is near, refreshing API key...`);
+            await this.iflowApiService.initializeAuth(true);
+        }
+        return Promise.resolve();
+    }
+
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -388,6 +430,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.QWEN_API:
                 serviceInstances[providerKey] = new QwenApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.IFLOW_API:
+                serviceInstances[providerKey] = new IFlowApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

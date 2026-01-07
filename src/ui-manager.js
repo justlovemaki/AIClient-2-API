@@ -56,7 +56,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
-import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth } from './oauth-handlers.js';
+import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth } from './oauth-handlers.js';
 import {
     generateUUID,
     normalizePath,
@@ -1442,6 +1442,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 const result = await handleKiroOAuth(currentConfig, options);
                 authUrl = result.authUrl;
                 authInfo = result.authInfo;
+            } else if (providerType === 'openai-iflow') {
+                // iFlow OAuth 授权
+                const result = await handleIFlowOAuth(currentConfig, options);
+                authUrl = result.authUrl;
+                authInfo = result.authInfo;
             } else {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -2229,6 +2234,8 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     addToUsedPaths(usedPaths, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH);
     addToUsedPaths(usedPaths, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH);
     addToUsedPaths(usedPaths, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH);
+    addToUsedPaths(usedPaths, currentConfig.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH);
+    addToUsedPaths(usedPaths, currentConfig.IFLOW_TOKEN_FILE_PATH);
 
     // 使用最新的提供商池数据
     let providerPools = currentConfig.providerPools;
@@ -2244,6 +2251,7 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
                 addToUsedPaths(usedPaths, provider.KIRO_OAUTH_CREDS_FILE_PATH);
                 addToUsedPaths(usedPaths, provider.QWEN_OAUTH_CREDS_FILE_PATH);
                 addToUsedPaths(usedPaths, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH);
+                addToUsedPaths(usedPaths, provider.IFLOW_TOKEN_FILE_PATH);
             }
         }
     }
@@ -2403,6 +2411,17 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
         });
     }
 
+    if (currentConfig.IFLOW_TOKEN_FILE_PATH &&
+        (pathsEqual(relativePath, currentConfig.IFLOW_TOKEN_FILE_PATH) ||
+         pathsEqual(relativePath, currentConfig.IFLOW_TOKEN_FILE_PATH.replace(/\\/g, '/')))) {
+        usageInfo.usageType = 'main_config';
+        usageInfo.usageDetails.push({
+            type: 'Main Config',
+            location: 'iFlow Token file path',
+            configKey: 'IFLOW_TOKEN_FILE_PATH'
+        });
+    }
+
     // 检查提供商池中的使用情况
     if (currentConfig.providerPools) {
         // 使用 flatMap 将双重循环优化为单层循环 O(n)
@@ -2459,6 +2478,18 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
+                });
+            }
+
+            if (provider.IFLOW_TOKEN_FILE_PATH &&
+                (pathsEqual(relativePath, provider.IFLOW_TOKEN_FILE_PATH) ||
+                 pathsEqual(relativePath, provider.IFLOW_TOKEN_FILE_PATH.replace(/\\/g, '/')))) {
+                providerUsages.push({
+                    type: 'Provider Pool',
+                    location: `iFlow Token (node ${index + 1})`,
+                    providerType: providerType,
+                    providerIndex: index,
+                    configKey: 'IFLOW_TOKEN_FILE_PATH'
                 });
             }
             
@@ -2708,7 +2739,8 @@ function getProviderDisplayName(provider, providerType) {
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
         'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
         'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
-        'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH'
+        'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
+        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
     }[providerType];
 
     if (credPathKey && provider[credPathKey]) {

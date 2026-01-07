@@ -179,5 +179,35 @@
       "errorCount": 0,
       "lastErrorTime": null
     }
+  ],
+  "openai-iflow": [
+    {
+      "customName": "iFlow Token节点1",
+      "IFLOW_TOKEN_FILE_PATH": "./configs/iflow/iflow_token.json",
+      "IFLOW_BASE_URL": "https://apis.iflow.cn/v1",
+      "uuid": "11223344-5566-7788-99aa-bbccddeeff00",
+      "checkModelName": "gpt-4o",
+      "checkHealth": true,
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    },
+    {
+      "customName": "iFlow Token节点2",
+      "IFLOW_TOKEN_FILE_PATH": "./configs/iflow/iflow_token2.json",
+      "IFLOW_BASE_URL": "https://apis.iflow.cn/v1",
+      "uuid": "aabbccdd-eeff-0011-2233-445566778899",
+      "checkModelName": "gpt-4o",
+      "checkHealth": true,
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
   ]
 }

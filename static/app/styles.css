@@ -3172,7 +3172,7 @@ input:checked + .toggle-slider:before {
 }
 
 .delete-confirm-modal.unused .btn-confirm-delete {
-    background: linear-gradient(135deg, var(--warning-text-dark) 0%, var(--warning-alt) 100%);
+    /* background: linear-gradient(135deg, var(--warning-text-dark) 0%, var(--warning-alt) 100%); */
     color: var(--white);
     box-shadow: 0 4px 15px var(--warning-30);
 }
@@ -3184,7 +3184,7 @@ input:checked + .toggle-slider:before {
 }
 
 .delete-confirm-modal.unused .btn-confirm-delete:hover {
-    background: linear-gradient(135deg, var(--warning-text-darker) 0%, var(--warning-text) 100%);
+    /* background: linear-gradient(135deg, var(--warning-text-darker) 0%, var(--warning-text) 100%); */
     transform: translateY(-2px);
     box-shadow: 0 6px 20px var(--warning-40);
 }
