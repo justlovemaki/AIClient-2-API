@@ -6,6 +6,9 @@ FROM node:20-alpine
 LABEL maintainer="AIClient2API Team"
 LABEL description="Docker image for AIClient2API server"
 
+# 安装必要的系统工具（tar 用于更新功能，git 用于版本检查）
+RUN apk add --no-cache tar git
+
 # 设置工作目录
 WORKDIR /app
 
@@ -15,7 +18,7 @@ COPY package*.json ./
 # 安装依赖
 # 使用--production标志只安装生产依赖，减小镜像大小
 # 使用--omit=dev来排除开发依赖
-RUN npm install 
+RUN npm install
 
 # 复制源代码
 COPY . .
