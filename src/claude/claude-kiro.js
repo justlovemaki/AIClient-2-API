@@ -616,7 +616,7 @@ async initializeAuth(forceRefresh = false) {
                         // 上一条是字符串,当前是数组,转换为数组格式
                         lastMsg.content = [{ type: 'text', text: lastMsg.content }, ...currentMsg.content];
                     }
-                    console.log(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
+                    // console.log(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
                 } else {
                     mergedMessages.push(currentMsg);
                 }

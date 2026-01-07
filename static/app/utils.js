@@ -81,6 +81,7 @@ function getFieldLabel(key) {
         'KIRO_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'QWEN_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+        'IFLOW_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'GEMINI_BASE_URL': 'Gemini Base URL',
         'KIRO_BASE_URL': 'Base URL',
         'KIRO_REFRESH_URL': 'Refresh URL',
@@ -88,7 +89,8 @@ function getFieldLabel(key) {
         'QWEN_BASE_URL': 'Qwen Base URL',
         'QWEN_OAUTH_BASE_URL': 'OAuth Base URL',
         'ANTIGRAVITY_BASE_URL_DAILY': 'Daily Base URL',
-        'ANTIGRAVITY_BASE_URL_AUTOPUSH': 'Autopush Base URL'
+        'ANTIGRAVITY_BASE_URL_AUTOPUSH': 'Autopush Base URL',
+        'IFLOW_BASE_URL': 'iFlow Base URL'
     };
     
     return labelMap[key] || key;
@@ -234,6 +236,20 @@ function getProviderTypeFields(providerType) {
                 label: `Autopush Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://autopush-cloudcode-pa.sandbox.googleapis.com'
+            }
+        ],
+        'openai-iflow': [
+            {
+                id: 'IFLOW_OAUTH_CREDS_FILE_PATH',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+                type: 'text',
+                placeholder: isEn ? 'e.g.: configs/iflow/oauth_creds.json' : '例如: configs/iflow/oauth_creds.json'
+            },
+            {
+                id: 'IFLOW_BASE_URL',
+                label: `iFlow Base URL <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: 'https://iflow.cn/api'
             }
         ]
     };

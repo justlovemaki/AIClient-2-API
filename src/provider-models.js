@@ -38,6 +38,29 @@ export const PROVIDER_MODELS = {
     'openai-qwen-oauth': [
         'qwen3-coder-plus',
         'qwen3-coder-flash'
+    ],
+    'openai-iflow': [
+        // iFlow 特有模型
+        'iflow-rome-30ba3b',
+        // Qwen 模型
+        'qwen3-coder-plus',
+        'qwen3-max',
+        'qwen3-vl-plus',
+        'qwen3-max-preview',
+        'qwen3-32b',
+        'qwen3-235b-a22b-thinking-2507',
+        'qwen3-235b-a22b-instruct',
+        'qwen3-235b',
+        // Kimi 模型
+        'kimi-k2-0905',
+        'kimi-k2',
+        // GLM 模型
+        'glm-4.6',
+        'glm-4.7',
+        // DeepSeek 模型
+        'deepseek-v3.2',
+        'deepseek-r1',
+        'deepseek-v3'
     ]
 };
 

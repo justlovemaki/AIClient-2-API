@@ -3,6 +3,7 @@ const translations = {
     'zh-CN': {
         // Header
         'header.title': 'AIClient2API 管理控制台',
+        'header.description': 'AIClient2API 管理控制台 - 统一管理 AI 服务提供商',
         'header.github': 'GitHub 仓库',
         'header.themeToggle': '切换主题',
         'header.status.connecting': '连接中...',
@@ -83,6 +84,7 @@ const translations = {
         'dashboard.routing.nodeName.kiro': 'Claude Kiro OAuth',
         'dashboard.routing.nodeName.openai': 'OpenAI Custom',
         'dashboard.routing.nodeName.qwen': 'Qwen OAuth',
+        'dashboard.routing.nodeName.iflow': 'iFlow OAuth',
         'dashboard.contact.title': '联系与赞助',
         'dashboard.contact.wechat': '扫码进群，注明来意',
         'dashboard.contact.wechatDesc': '添加微信获取更多技术支持和交流',
@@ -130,6 +132,10 @@ const translations = {
         'oauth.kiro.step2': '使用您的 {method} 账号登录',
         'oauth.kiro.step3': '授权完成后页面会自动关闭',
         'oauth.kiro.step4': '刷新本页面查看凭据文件',
+        'oauth.iflow.step1': '点击下方按钮在浏览器中打开 iFlow 授权页面',
+        'oauth.iflow.step2': '使用您的 iFlow 账号登录并授权',
+        'oauth.iflow.step3': '授权完成后，系统会自动获取 API Key',
+        'oauth.iflow.step4': '凭据文件可在上传配置管理中查看和管理',
 
         // Config
         'config.title': '配置管理',
@@ -425,6 +431,7 @@ const translations = {
     'en-US': {
         // Header
         'header.title': 'AIClient2API Management Console',
+        'header.description': 'AIClient2API Management Console - Unified management of AI service providers',
         'header.github': 'GitHub Repository',
         'header.themeToggle': 'Toggle Theme',
         'header.status.connecting': 'Connecting...',
@@ -505,6 +512,7 @@ const translations = {
         'dashboard.routing.nodeName.kiro': 'Claude Kiro OAuth',
         'dashboard.routing.nodeName.openai': 'OpenAI Custom',
         'dashboard.routing.nodeName.qwen': 'Qwen OAuth',
+        'dashboard.routing.nodeName.iflow': 'iFlow OAuth',
         'dashboard.contact.title': 'Contact & Support',
         'dashboard.contact.wechat': 'Scan to Join Group',
         'dashboard.contact.wechatDesc': 'Add WeChat for more technical support and communication',
@@ -552,6 +560,10 @@ const translations = {
         'oauth.kiro.step2': 'Log in with your {method} account',
         'oauth.kiro.step3': 'The page will close automatically after authorization',
         'oauth.kiro.step4': 'Refresh this page to view the credentials file',
+        'oauth.iflow.step1': 'Click the button below to open the iFlow authorization page',
+        'oauth.iflow.step2': 'Log in with your iFlow account and authorize',
+        'oauth.iflow.step3': 'After authorization, the system will automatically fetch the API Key',
+        'oauth.iflow.step4': 'Credentials files can be viewed and managed in Upload Config',
 
         // Config
         'config.title': 'Configuration Management',

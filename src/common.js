@@ -28,6 +28,7 @@ export const MODEL_PROVIDER = {
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
+    IFLOW_API: 'openai-iflow',
 }
 
 /**
