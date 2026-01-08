@@ -722,7 +722,7 @@ export class IFlowApiService {
     /**
      * 调用 API
      */
-    async callApi(endpoint, body, model, retryCount = 0) {
+    async callApi(endpoint, body, model, isRetry = false, retryCount = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
 
@@ -743,6 +743,18 @@ export class IFlowApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
+            // Handle 401/400 - refresh auth and retry once
+            if ((status === 400 || status === 401) && !isRetry) {
+                console.log(`[iFlow] Received ${status}. Refreshing auth and retrying...`);
+                try {
+                    await this.initializeAuth(true);
+                    return this.callApi(endpoint, body, model, true, retryCount);
+                } catch (authError) {
+                    console.error('[iFlow] Failed to refresh auth during retry:', authError.message);
+                    throw error; // throw original error if refresh fails
+                }
+            }
+
             if (status === 401 || status === 403) {
                 console.error(`[iFlow] Received ${status}. API Key might be invalid or expired.`);
                 throw error;
@@ -753,7 +765,7 @@ export class IFlowApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[iFlow] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(endpoint, body, model, retryCount + 1);
+                return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -761,7 +773,7 @@ export class IFlowApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[iFlow] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(endpoint, body, model, retryCount + 1);
+                return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
 
             // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
@@ -770,7 +782,7 @@ export class IFlowApiService {
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
                 console.log(`[iFlow] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(endpoint, body, model, retryCount + 1);
+                return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
 
             console.error(`[iFlow] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
@@ -785,7 +797,7 @@ export class IFlowApiService {
      * - 逐行处理 SSE 数据
      * - 正确处理 data: 前缀和 [DONE] 标记
      */
-    async *streamApi(endpoint, body, model, retryCount = 0) {
+    async *streamApi(endpoint, body, model, isRetry = false, retryCount = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
 
@@ -881,6 +893,19 @@ export class IFlowApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
+            // Handle 401/400 during stream - refresh auth and retry once
+            if ((status === 400 || status === 401) && !isRetry) {
+                console.log(`[iFlow] Received ${status} during stream. Refreshing auth and retrying...`);
+                try {
+                    await this.initializeAuth(true);
+                    yield* this.streamApi(endpoint, body, model, true, retryCount);
+                    return;
+                } catch (authError) {
+                    console.error('[iFlow] Failed to refresh auth during stream retry:', authError.message);
+                    throw error;
+                }
+            }
+
             if (status === 401 || status === 403) {
                 console.error(`[iFlow] Received ${status} during stream. API Key might be invalid or expired.`);
                 throw error;
@@ -891,7 +916,7 @@ export class IFlowApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[iFlow] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApi(endpoint, body, model, retryCount + 1);
+                yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
             }
 
@@ -900,7 +925,7 @@ export class IFlowApiService {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[iFlow] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApi(endpoint, body, model, retryCount + 1);
+                yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
             }
 
@@ -910,7 +935,7 @@ export class IFlowApiService {
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
                 console.log(`[iFlow] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApi(endpoint, body, model, retryCount + 1);
+                yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
             }
 

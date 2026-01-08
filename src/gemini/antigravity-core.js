@@ -702,18 +702,20 @@ function toGeminiApiResponse(antigravityResponse) {
  * @param {Object} requestBody - 请求体
  * @returns {Object} 处理后的请求体
  */
-function ensureRolesInContents(requestBody) {
+function ensureRolesInContents(requestBody, modelName) {
     delete requestBody.model;
 
     if (requestBody.system_instruction) {
         delete requestBody.system_instruction;
     }
 
-    // 强制设置 systemInstruction
-    requestBody.systemInstruction = {
-        role: 'user',
-        parts: [{ text: ANTIGRAVITY_SYSTEM_PROMPT }]
-    };
+    // 只有非图像模型才强制设置 systemInstruction
+    if (!isImageModel(modelName)) {
+        requestBody.systemInstruction = {
+            role: 'user',
+            parts: [{ text: ANTIGRAVITY_SYSTEM_PROMPT }]
+        };
+    }
 
     if (requestBody.contents && Array.isArray(requestBody.contents)) {
         requestBody.contents.forEach(content => {
@@ -1262,9 +1264,9 @@ export class AntigravityApiService {
             selectedModel = this.availableModels[0];
         }
 
-        // 深拷贝请求体
-        const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)));
         const actualModelName = alias2ModelName(selectedModel);
+        // 深拷贝请求体
+        const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)), actualModelName);
         const isClaudeModel = isClaude(actualModelName);
 
         // 将处理后的请求体转换为 Antigravity 格式
@@ -1318,9 +1320,9 @@ export class AntigravityApiService {
             selectedModel = this.availableModels[0];
         }
 
-        // 深拷贝请求体
-        const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)));
         const actualModelName = alias2ModelName(selectedModel);
+        // 深拷贝请求体
+        const processedRequestBody = ensureRolesInContents(JSON.parse(JSON.stringify(requestBody)), actualModelName);
 
         // 将处理后的请求体转换为 Antigravity 格式
         const payload = geminiToAntigravity(actualModelName, { request: processedRequestBody }, this.projectId);
