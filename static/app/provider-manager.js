@@ -829,7 +829,7 @@ function showAuthModal(authUrl, authInfo) {
                             // 通过服务端API处理手动输入的回调URL
                             window.apiClient.post('/oauth/manual-callback', {
                                 provider: authInfo.provider,
-                                callbackUrl: localUrl.href,
+                                callbackUrl: url.href, //使用localhost访问
                                 authMethod: authInfo.authMethod
                             })
                                 .then(response => {
