@@ -289,12 +289,16 @@ export class GeminiConverter extends BaseConverter {
     toOpenAIModelList(geminiModels) {
         return {
             object: "list",
-            data: geminiModels.models.map(m => ({
-                id: m.name.startsWith('models/') ? m.name.substring(7) : m.name,
-                object: "model",
-                created: Math.floor(Date.now() / 1000),
-                owned_by: "google",
-            })),
+            data: geminiModels.models.map(m => {
+                const modelId = m.name.startsWith('models/') ? m.name.substring(7) : m.name;
+                return {
+                    id: modelId,
+                    object: "model",
+                    created: Math.floor(Date.now() / 1000),
+                    owned_by: "google",
+                    display_name: m.displayName || modelId,
+                };
+            }),
         };
     }
 
