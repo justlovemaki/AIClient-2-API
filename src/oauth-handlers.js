@@ -1479,3 +1479,151 @@ export async function refreshIFlowTokens(refreshToken) {
         apiKey: userInfo.apiKey
     };
 }
+
+/**
+ * Kiro Token 刷新常量
+ */
+const KIRO_REFRESH_CONSTANTS = {
+    REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
+    CONTENT_TYPE_JSON: 'application/json',
+    AUTH_METHOD_SOCIAL: 'social',
+    DEFAULT_PROVIDER: 'Google',
+    REQUEST_TIMEOUT: 30000,
+    DEFAULT_REGION: 'us-east-1'
+};
+
+/**
+ * 通过 refreshToken 获取 accessToken
+ * @param {string} refreshToken - Kiro 的 refresh token
+ * @param {string} region - AWS 区域 (默认: us-east-1)
+ * @returns {Promise<Object>} 包含 accessToken 等信息的对象
+ */
+async function refreshKiroToken(refreshToken, region = KIRO_REFRESH_CONSTANTS.DEFAULT_REGION) {
+    const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_URL.replace('{{region}}', region);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), KIRO_REFRESH_CONSTANTS.REQUEST_TIMEOUT);
+    
+    try {
+        const response = await fetch(refreshUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': KIRO_REFRESH_CONSTANTS.CONTENT_TYPE_JSON
+            },
+            body: JSON.stringify({ refreshToken }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.accessToken) {
+            throw new Error('Invalid refresh response: Missing accessToken');
+        }
+        
+        const expiresIn = data.expiresIn || 3600;
+        const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+        
+        return {
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken || refreshToken,
+            profileArn: data.profileArn || '',
+            expiresAt: expiresAt,
+            authMethod: KIRO_REFRESH_CONSTANTS.AUTH_METHOD_SOCIAL,
+            provider: KIRO_REFRESH_CONSTANTS.DEFAULT_PROVIDER,
+            region: region
+        };
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timeout');
+        }
+        throw error;
+    }
+}
+
+/**
+ * 批量导入 Kiro refreshToken 并生成凭据文件
+ * @param {string[]} refreshTokens - refreshToken 数组
+ * @param {string} region - AWS 区域 (默认: us-east-1)
+ * @returns {Promise<Object>} 批量处理结果
+ */
+export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_REFRESH_CONSTANTS.DEFAULT_REGION) {
+    const results = {
+        total: refreshTokens.length,
+        success: 0,
+        failed: 0,
+        details: []
+    };
+    
+    for (let i = 0; i < refreshTokens.length; i++) {
+        const refreshToken = refreshTokens[i].trim();
+        
+        if (!refreshToken) {
+            results.details.push({
+                index: i + 1,
+                success: false,
+                error: 'Empty token'
+            });
+            results.failed++;
+            continue;
+        }
+        
+        try {
+            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 正在刷新第 ${i + 1}/${refreshTokens.length} 个 token...`);
+            
+            const tokenData = await refreshKiroToken(refreshToken, region);
+            
+            // 生成文件路径: configs/kiro/{timestamp}_kiro-auth-token/{timestamp}_kiro-auth-token.json
+            const timestamp = Date.now();
+            const folderName = `${timestamp}_kiro-auth-token`;
+            const targetDir = path.join(process.cwd(), 'configs', 'kiro', folderName);
+            await fs.promises.mkdir(targetDir, { recursive: true });
+            
+            const credPath = path.join(targetDir, `${folderName}.json`);
+            await fs.promises.writeFile(credPath, JSON.stringify(tokenData, null, 2));
+            
+            const relativePath = path.relative(process.cwd(), credPath);
+            
+            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 已保存: ${relativePath}`);
+            
+            results.details.push({
+                index: i + 1,
+                success: true,
+                path: relativePath,
+                expiresAt: tokenData.expiresAt
+            });
+            results.success++;
+            
+        } catch (error) {
+            console.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 刷新失败:`, error.message);
+            
+            results.details.push({
+                index: i + 1,
+                success: false,
+                error: error.message
+            });
+            results.failed++;
+        }
+    }
+    
+    // 如果有成功的，广播事件并自动关联
+    if (results.success > 0) {
+        broadcastEvent('oauth_batch_success', {
+            provider: 'claude-kiro-oauth',
+            count: results.success,
+            timestamp: new Date().toISOString()
+        });
+        
+        // 自动关联新生成的凭据到 Pools
+        await autoLinkProviderConfigs(CONFIG);
+    }
+    
+    return results;
+}
