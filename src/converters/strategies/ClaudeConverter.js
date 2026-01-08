@@ -607,12 +607,16 @@ export class ClaudeConverter extends BaseConverter {
     toOpenAIModelList(claudeModels) {
         return {
             object: "list",
-            data: claudeModels.models.map(m => ({
-                id: m.id || m.name,
-                object: "model",
-                created: Math.floor(Date.now() / 1000),
-                owned_by: "anthropic",
-            })),
+            data: claudeModels.models.map(m => {
+                const modelId = m.id || m.name;
+                return {
+                    id: modelId,
+                    object: "model",
+                    created: Math.floor(Date.now() / 1000),
+                    owned_by: "anthropic",
+                    display_name: modelId,
+                };
+            }),
         };
     }
 
