@@ -394,6 +394,36 @@ body {
     transition: transform 0.3s ease;
 }
 
+/* KIRO 购买链接 */
+.kiro-buy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--warning-color) 0%, #f97316 100%);
+    color: var(--white);
+    text-decoration: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: var(--transition);
+    box-shadow: 0 2px 8px var(--warning-30);
+}
+
+.kiro-buy-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--warning-40);
+    background: linear-gradient(135deg, #f97316 0%, var(--warning-color) 100%);
+}
+
+.kiro-buy-link:active {
+    transform: translateY(0);
+}
+
+.kiro-buy-link i {
+    font-size: 0.875rem;
+}
+
 /* 高亮说明样式 */
 .highlight-note {
     display: inline-flex;
