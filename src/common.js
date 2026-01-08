@@ -490,6 +490,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     } else {
         await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName);
     }
+
+    // ============== API 大锅饭插件 - 开始 ==============
+    if (CONFIG.potluckApiKey) {
+        try {
+            const { recordPotluckUsage } = await import('./api-potluck/index.js');
+            await recordPotluckUsage(CONFIG.potluckApiKey);
+        } catch (e) { /* 静默失败，不影响主流程 */ }
+    }
+    // ============== API 大锅饭插件 - 结束 ==============
 }
 
 /**
