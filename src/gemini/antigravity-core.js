@@ -625,6 +625,12 @@ function toGeminiApiResponse(antigravityResponse) {
  */
 function ensureRolesInContents(requestBody, modelName) {
     delete requestBody.model;
+    // delete requestBody.system_instruction;
+    // delete requestBody.systemInstruction;
+    if (requestBody.system_instruction) {
+        requestBody.systemInstruction = requestBody.system_instruction;
+        delete requestBody.system_instruction;
+    }
 
     // 提取现有的系统提示词
     let originalSystemPrompt = requestBody.systemInstruction;
