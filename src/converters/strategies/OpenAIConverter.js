@@ -103,8 +103,25 @@ export class OpenAIConverter extends BaseConverter {
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiModelList(data);
             default:
-                return data;
+                return this.ensureDisplayName(data);
         }
+    }
+
+    /**
+     * Ensure display_name field exists in OpenAI model list
+     */
+    ensureDisplayName(openaiModels) {
+        if (!openaiModels || !openaiModels.data) {
+            return openaiModels;
+        }
+
+        return {
+            ...openaiModels,
+            data: openaiModels.data.map(model => ({
+                ...model,
+                display_name: model.display_name || model.id,
+            })),
+        };
     }
 
     // =========================================================================
