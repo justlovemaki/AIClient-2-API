@@ -489,6 +489,13 @@ function showKiroAuthMethodSelector(providerType) {
                             <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsBuilderDesc">${t('oauth.kiro.awsBuilderDesc')}</div>
                         </div>
                     </button>
+                    <button class="auth-method-btn" data-method="batch-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-file-import" style="font-size: 24px; color: #10b981;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.batchImport">${t('oauth.kiro.batchImport')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.batchImportDesc">${t('oauth.kiro.batchImportDesc')}</div>
+                        </div>
+                    </button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -522,8 +529,192 @@ function showKiroAuthMethodSelector(providerType) {
         btn.addEventListener('click', async () => {
             const method = btn.dataset.method;
             modal.remove();
-            await executeGenerateAuthUrl(providerType, { method });
+            
+            if (method === 'batch-import') {
+                showKiroBatchImportModal();
+            } else {
+                await executeGenerateAuthUrl(providerType, { method });
+            }
         });
+    });
+}
+
+/**
+ * 显示 Kiro 批量导入 refreshToken 模态框
+ */
+function showKiroBatchImportModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-import"></i> <span data-i18n="oauth.kiro.batchImport">${t('oauth.kiro.batchImport')}</span></h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="batch-import-instructions" style="margin-bottom: 16px; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 14px; color: #166534;">
+                        <i class="fas fa-info-circle"></i>
+                        <span data-i18n="oauth.kiro.batchImportInstructions">${t('oauth.kiro.batchImportInstructions')}</span>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label for="batchRefreshTokens" style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">
+                        <span data-i18n="oauth.kiro.refreshTokensLabel">${t('oauth.kiro.refreshTokensLabel')}</span>
+                    </label>
+                    <textarea 
+                        id="batchRefreshTokens" 
+                        rows="10" 
+                        style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical;"
+                        placeholder="${t('oauth.kiro.refreshTokensPlaceholder')}"
+                        data-i18n-placeholder="oauth.kiro.refreshTokensPlaceholder"
+                    ></textarea>
+                </div>
+                <div class="batch-import-stats" id="batchImportStats" style="display: none; margin-top: 12px; padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span data-i18n="oauth.kiro.tokenCount">${t('oauth.kiro.tokenCount')}</span>
+                        <span id="tokenCountValue" style="font-weight: 600;">0</span>
+                    </div>
+                </div>
+                <div class="batch-import-progress" id="batchImportProgress" style="display: none; margin-top: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-spinner fa-spin" style="color: #10b981;"></i>
+                        <span data-i18n="oauth.kiro.importing">${t('oauth.kiro.importing')}</span>
+                    </div>
+                    <div class="progress-bar" style="margin-top: 8px; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="importProgressBar" style="height: 100%; width: 0%; background: #10b981; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                <div class="batch-import-result" id="batchImportResult" style="display: none; margin-top: 16px; padding: 12px; border-radius: 8px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                <button class="btn btn-primary batch-import-submit" id="batchImportSubmit">
+                    <i class="fas fa-upload"></i>
+                    <span data-i18n="oauth.kiro.startImport">${t('oauth.kiro.startImport')}</span>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const textarea = modal.querySelector('#batchRefreshTokens');
+    const statsDiv = modal.querySelector('#batchImportStats');
+    const tokenCountValue = modal.querySelector('#tokenCountValue');
+    const progressDiv = modal.querySelector('#batchImportProgress');
+    const progressBar = modal.querySelector('#importProgressBar');
+    const resultDiv = modal.querySelector('#batchImportResult');
+    const submitBtn = modal.querySelector('#batchImportSubmit');
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    
+    // 实时统计 token 数量
+    textarea.addEventListener('input', () => {
+        const tokens = textarea.value.split('\n').filter(line => line.trim());
+        if (tokens.length > 0) {
+            statsDiv.style.display = 'block';
+            tokenCountValue.textContent = tokens.length;
+        } else {
+            statsDiv.style.display = 'none';
+        }
+    });
+    
+    // 关闭按钮事件
+    [closeBtn, cancelBtn].forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+    
+    // 提交按钮事件
+    submitBtn.addEventListener('click', async () => {
+        const tokens = textarea.value.split('\n').filter(line => line.trim());
+        
+        if (tokens.length === 0) {
+            showToast(t('common.warning'), t('oauth.kiro.noTokens'), 'warning');
+            return;
+        }
+        
+        // 禁用输入和按钮
+        textarea.disabled = true;
+        submitBtn.disabled = true;
+        cancelBtn.disabled = true;
+        progressDiv.style.display = 'block';
+        resultDiv.style.display = 'none';
+        
+        try {
+            const response = await window.apiClient.post('/kiro/batch-import-tokens', {
+                refreshTokens: tokens
+            });
+            
+            progressBar.style.width = '100%';
+            
+            if (response.success) {
+                // 显示结果
+                const isAllSuccess = response.failed === 0;
+                const isAllFailed = response.success === 0;
+                
+                let resultClass, resultIcon, resultMessage;
+                if (isAllSuccess) {
+                    resultClass = 'background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
+                    resultIcon = 'fa-check-circle';
+                    resultMessage = t('oauth.kiro.importSuccess', { count: response.success });
+                } else if (isAllFailed) {
+                    resultClass = 'background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+                    resultIcon = 'fa-times-circle';
+                    resultMessage = t('oauth.kiro.importAllFailed', { count: response.failed });
+                } else {
+                    resultClass = 'background: #fffbeb; border: 1px solid #fde68a; color: #92400e;';
+                    resultIcon = 'fa-exclamation-triangle';
+                    resultMessage = t('oauth.kiro.importPartial', { success: response.success, failed: response.failed });
+                }
+                
+                resultDiv.style.cssText = `display: block; margin-top: 16px; padding: 12px; border-radius: 8px; ${resultClass}`;
+                resultDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <i class="fas ${resultIcon}"></i>
+                        <strong>${resultMessage}</strong>
+                    </div>
+                    ${response.details && response.details.length > 0 ? `
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 12px; margin-top: 8px;">
+                            ${response.details.map(d => `
+                                <div style="padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.1);">
+                                    Token ${d.index}: ${d.success 
+                                        ? `<span style="color: #166534;">✓ ${d.path}</span>` 
+                                        : `<span style="color: #991b1b;">✗ ${d.error}</span>`}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                `;
+                
+                progressDiv.style.display = 'none';
+                
+                // 如果有成功的，刷新提供商列表
+                if (response.success > 0) {
+                    loadProviders();
+                    loadConfigList();
+                }
+            }
+        } catch (error) {
+            console.error('批量导入失败:', error);
+            resultDiv.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+            resultDiv.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-times-circle"></i>
+                    <strong>${t('oauth.kiro.importError')}: ${error.message}</strong>
+                </div>
+            `;
+            progressDiv.style.display = 'none';
+        } finally {
+            // 重新启用按钮
+            textarea.disabled = false;
+            submitBtn.disabled = false;
+            cancelBtn.disabled = false;
+        }
     });
 }
 

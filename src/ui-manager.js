@@ -56,7 +56,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
-import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth } from './oauth-handlers.js';
+import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth, batchImportKiroRefreshTokens } from './oauth-handlers.js';
 import {
     generateUUID,
     normalizePath,
@@ -2124,6 +2124,46 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             platform: process.platform
         }));
         return true;
+    }
+
+    // Batch import Kiro refresh tokens
+    // 批量导入 Kiro refreshToken
+    if (method === 'POST' && pathParam === '/api/kiro/batch-import-tokens') {
+        try {
+            const body = await getRequestBody(req);
+            const { refreshTokens, region } = body;
+            
+            if (!refreshTokens || !Array.isArray(refreshTokens) || refreshTokens.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: 'refreshTokens array is required and must not be empty'
+                }));
+                return true;
+            }
+            
+            console.log(`[Kiro Batch Import] Starting batch import of ${refreshTokens.length} tokens...`);
+            
+            const result = await batchImportKiroRefreshTokens(refreshTokens, region || 'us-east-1');
+            
+            console.log(`[Kiro Batch Import] Completed: ${result.success} success, ${result.failed} failed`);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                ...result
+            }));
+            return true;
+            
+        } catch (error) {
+            console.error('[Kiro Batch Import] Error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
+            }));
+            return true;
+        }
     }
 
     return false;
