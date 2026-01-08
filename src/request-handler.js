@@ -8,6 +8,10 @@ import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
 import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
 
+// ============== API 大锅饭插件 - 开始 ==============
+import { handlePotluckApiRoutes, potluckAuthMiddleware, sendPotluckError } from './api-potluck/index.js';
+// ============== API 大锅饭插件 - 结束 ==============
+
 /**
  * Parse request body as JSON
  */
@@ -54,13 +58,19 @@ export function createRequestHandler(config, providerPoolManager) {
         }
 
         // Serve static files for UI (除了登录页面需要认证)
-        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html') {
+        // ============== API 大锅饭插件: 添加 /potluck.html ==============
+        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html' || path === '/potluck.html') {
             const served = await serveStaticFiles(path, res);
             if (served) return;
         }
 
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
+
+        // ============== API 大锅饭插件 - 开始 ==============
+        const potluckRouteHandled = await handlePotluckApiRoutes(method, path, req, res);
+        if (potluckRouteHandled) return;
+        // ============== API 大锅饭插件 - 结束 ==============
 
         // Ollama show endpoint with model name
         if (method === 'POST' && path === '/ollama/api/show') {
@@ -144,7 +154,16 @@ export function createRequestHandler(config, providerPoolManager) {
         }
 
         // Check authentication for API requests (before Ollama handling to allow unauthenticated Ollama endpoints)
-        if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
+        // ============== API 大锅饭插件 - 开始 ==============
+        const potluckAuth = await potluckAuthMiddleware(req, requestUrl);
+        if (potluckAuth.authorized === false) {
+            sendPotluckError(res, potluckAuth.error);
+            return;
+        } else if (potluckAuth.authorized === true) {
+            currentConfig.potluckApiKey = potluckAuth.apiKey;
+            console.log(`[API Potluck] Authorized with key: ${potluckAuth.apiKey.substring(0, 12)}...`);
+        } else if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
+        // ============== API 大锅饭插件 - 结束 ==============
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
             return;

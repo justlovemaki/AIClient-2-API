@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 大锅饭 - Key 管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #e0e0e0; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid #333; flex-wrap: wrap; gap: 10px; }
+        h1 { font-size: 24px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        h1 span { font-size: 28px; }
+        .stats-bar { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
+        .stat-card { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px 25px; min-width: 150px; }
+        .stat-card .label { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #4ade80; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #4ade80; color: #000; font-weight: 600; }
+        .btn-primary:hover { background: #22c55e; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .keys-section { margin-top: 30px; }
+        .keys-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .keys-header h2 { font-size: 18px; color: #fff; }
+        .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .search-box { padding: 8px 12px; border: 1px solid #333; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; font-size: 14px; width: 200px; }
+        .search-box:focus { outline: none; border-color: #4ade80; }
+        .sort-select { padding: 8px 12px; border: 1px solid #333; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; font-size: 14px; cursor: pointer; }
+        .sort-select:focus { outline: none; border-color: #4ade80; }
+        .keys-list { display: flex; flex-direction: column; gap: 12px; }
+        .key-card { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .key-card.disabled { opacity: 0.5; }
+        .key-info { flex: 1; min-width: 200px; }
+        .key-name { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 5px; }
+        .key-id { font-family: monospace; font-size: 13px; color: #888; display: flex; align-items: center; gap: 8px; }
+        .btn-copy { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: background 0.2s; }
+        .btn-copy:hover { background: rgba(255,255,255,0.1); }
+        .key-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+        .key-stat { text-align: center; min-width: 80px; }
+        .key-stat .label { font-size: 11px; color: #666; }
+        .key-stat .value { font-size: 14px; font-weight: 600; }
+        .key-stat .value.warning { color: #fbbf24; }
+        .key-stat .value.danger { color: #ef4444; }
+        .key-stat .value.muted { color: #666; font-size: 12px; }
+        .key-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .progress-bar { width: 80px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+        .progress-bar .fill { height: 100%; background: #4ade80; transition: width 0.3s; }
+        .progress-bar .fill.warning { background: #fbbf24; }
+        .progress-bar .fill.danger { background: #ef4444; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; }
+        .modal.active { display: flex; }
+        .modal-content { background: #1e293b; border-radius: 16px; padding: 30px; max-width: 500px; width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { color: #fff; font-size: 18px; }
+        .modal-close { background: none; border: none; color: #888; font-size: 24px; cursor: pointer; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #888; font-size: 13px; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #4ade80; }
+        .key-display { background: #0f172a; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px; color: #4ade80; word-break: break-all; margin: 15px 0; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #666; }
+        .empty-state p { margin-bottom: 20px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 15px 25px; background: #1e293b; border-radius: 8px; color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.3); transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 2000; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-left: 4px solid #4ade80; }
+        .toast.error { border-left: 4px solid #ef4444; }
+        .no-results { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span>🍲</span> API 大锅饭</h1>
+            <button id="createKeyBtn" class="btn btn-primary">+ 生成新 Key</button>
+        </header>
+        <div class="stats-bar">
+            <div class="stat-card"><div class="label">总 Key 数</div><div class="value" id="totalKeys">0</div></div>
+            <div class="stat-card"><div class="label">已启用</div><div class="value" id="enabledKeys">0</div></div>
+            <div class="stat-card"><div class="label">今日总调用</div><div class="value" id="todayUsage">0</div></div>
+            <div class="stat-card"><div class="label">累计调用</div><div class="value" id="totalUsage">0</div></div>
+        </div>
+        <div class="keys-section">
+            <div class="keys-header">
+                <h2>Key 列表</h2>
+                <div class="toolbar">
+                    <input type="text" id="searchBox" class="search-box" placeholder="搜索名称或 Key...">
+                    <select id="sortSelect" class="sort-select">
+                        <option value="name-asc">名称 A-Z</option>
+                        <option value="name-desc">名称 Z-A</option>
+                        <option value="usage-desc">今日用量 ↓</option>
+                        <option value="usage-asc">今日用量 ↑</option>
+                        <option value="total-desc">累计用量 ↓</option>
+                        <option value="lastUsed-desc">最近使用 ↓</option>
+                        <option value="created-desc">创建时间 ↓</option>
+                    </select>
+                </div>
+            </div>
+            <div id="keysList" class="keys-list"></div>
+        </div>
+    </div>
+
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>生成新 API Key</h3><button class="modal-close" onclick="closeModal('createModal')">&times;</button></div>
+            <div class="form-group"><label>Key 名称 (可选)</label><input type="text" id="keyName" placeholder="例如：测试用户1"></div>
+            <div class="form-group"><label>每日调用限额</label><input type="number" id="keyLimit" value="1000" min="1"></div>
+            <button class="btn btn-primary" style="width:100%" onclick="createKey()">生成 Key</button>
+        </div>
+    </div>
+    <div id="showKeyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>🎉 Key 已生成</h3><button class="modal-close" onclick="closeModal('showKeyModal')">&times;</button></div>
+            <p style="color:#888;margin-bottom:10px">请妥善保存此 Key，关闭后将无法再次查看完整内容：</p>
+            <div class="key-display" id="newKeyDisplay"></div>
+            <button class="btn btn-secondary" style="width:100%" onclick="copyKey()">📋 复制 Key</button>
+        </div>
+    </div>
+    <div id="editLimitModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>修改每日限额</h3><button class="modal-close" onclick="closeModal('editLimitModal')">&times;</button></div>
+            <div class="form-group"><label>新的每日限额</label><input type="number" id="newLimit" min="1"></div>
+            <input type="hidden" id="editKeyId">
+            <button class="btn btn-primary" style="width:100%" onclick="updateLimit()">保存</button>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+    <script>
+        let currentNewKey = '';
+        let allKeys = [];
+        const API_BASE = '/api/potluck';
+        function getToken() { return localStorage.getItem('authToken'); }
+        async function apiRequest(url, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const response = await fetch(url, { ...options, headers });
+            const data = await response.json();
+            if (response.status === 401) { window.location.href = '/login.html'; return null; }
+            return data;
+        }
+        async function loadData() {
+            const result = await apiRequest(`${API_BASE}/keys`);
+            if (!result || !result.success) { showToast('加载失败', 'error'); return; }
+            const { keys, stats } = result.data;
+            document.getElementById('totalKeys').textContent = stats.totalKeys;
+            document.getElementById('enabledKeys').textContent = stats.enabledKeys;
+            document.getElementById('todayUsage').textContent = stats.todayTotalUsage;
+            document.getElementById('totalUsage').textContent = stats.totalUsage;
+            allKeys = keys;
+            applyFilterAndSort();
+        }
+        function applyFilterAndSort() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase().trim();
+            const sortValue = document.getElementById('sortSelect').value;
+            let filtered = allKeys;
+            if (searchTerm) {
+                filtered = allKeys.filter(k => k.name.toLowerCase().includes(searchTerm) || k.id.toLowerCase().includes(searchTerm));
+            }
+            const [field, order] = sortValue.split('-');
+            filtered.sort((a, b) => {
+                let va, vb;
+                if (field === 'name') { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+                else if (field === 'usage') { va = a.todayUsage; vb = b.todayUsage; }
+                else if (field === 'total') { va = a.totalUsage; vb = b.totalUsage; }
+                else if (field === 'lastUsed') { va = a.lastUsedAt || ''; vb = b.lastUsedAt || ''; }
+                else if (field === 'created') { va = a.createdAt || ''; vb = b.createdAt || ''; }
+                if (va < vb) return order === 'asc' ? -1 : 1;
+                if (va > vb) return order === 'asc' ? 1 : -1;
+                return 0;
+            });
+            renderKeys(filtered);
+        }
+        function formatTime(isoStr) {
+            if (!isoStr) return '从未';
+            const d = new Date(isoStr);
+            const now = new Date();
+            const diff = now - d;
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+            return d.toLocaleDateString();
+        }
+        function renderKeys(keys) {
+            const container = document.getElementById('keysList');
+            if (allKeys.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>还没有任何 API Key</p><button class="btn btn-primary" onclick="openModal(\'createModal\')">生成第一个 Key</button></div>';
+                return;
+            }
+            if (keys.length === 0) {
+                container.innerHTML = '<div class="no-results">没有匹配的结果</div>';
+                return;
+            }
+            container.innerHTML = keys.map(key => {
+                const usagePercent = key.dailyLimit > 0 ? (key.todayUsage / key.dailyLimit * 100) : 0;
+                const progressClass = usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : '';
+                const valueClass = usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : '';
+                return `<div class="key-card ${key.enabled ? '' : 'disabled'}">
+                    <div class="key-info"><div class="key-name">${escapeHtml(key.name)}</div><div class="key-id">${key.maskedKey} <button class="btn-copy" onclick="copyToClipboard('${key.id}')" title="复制完整 Key">📋</button></div></div>
+                    <div class="key-stats">
+                        <div class="key-stat"><div class="label">今日/限额</div><div class="value ${valueClass}">${key.todayUsage}/${key.dailyLimit}</div><div class="progress-bar"><div class="fill ${progressClass}" style="width:${Math.min(usagePercent, 100)}%"></div></div></div>
+                        <div class="key-stat"><div class="label">累计</div><div class="value">${key.totalUsage}</div></div>
+                        <div class="key-stat"><div class="label">最后调用</div><div class="value muted">${formatTime(key.lastUsedAt)}</div></div>
+                        <div class="key-stat"><div class="label">状态</div><div class="value" style="color:${key.enabled ? '#4ade80' : '#ef4444'}">${key.enabled ? '启用' : '禁用'}</div></div>
+                    </div>
+                    <div class="key-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="resetUsage('${key.id}')">重置</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openEditLimit('${key.id}', ${key.dailyLimit})">限额</button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleKey('${key.id}')">${key.enabled ? '禁用' : '启用'}</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteKey('${key.id}')">删除</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        async function createKey() {
+            const name = document.getElementById('keyName').value;
+            const dailyLimit = parseInt(document.getElementById('keyLimit').value) || 1000;
+            const result = await apiRequest(`${API_BASE}/keys`, { method: 'POST', body: JSON.stringify({ name, dailyLimit }) });
+            if (result && result.success) {
+                currentNewKey = result.data.id;
+                document.getElementById('newKeyDisplay').textContent = currentNewKey;
+                closeModal('createModal'); openModal('showKeyModal'); loadData();
+                document.getElementById('keyName').value = ''; document.getElementById('keyLimit').value = '1000';
+            } else { showToast(result?.error?.message || '创建失败', 'error'); }
+        }
+        function copyKey() { navigator.clipboard.writeText(currentNewKey).then(() => showToast('已复制到剪贴板', 'success')); }
+        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => showToast('Key 已复制', 'success')); }
+        async function resetUsage(keyId) {
+            if (!confirm('确定要重置该 Key 的今日调用次数吗？')) return;
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/reset`, { method: 'POST' });
+            if (result && result.success) { showToast('已重置', 'success'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+        function openEditLimit(keyId, currentLimit) {
+            document.getElementById('editKeyId').value = keyId;
+            document.getElementById('newLimit').value = currentLimit;
+            openModal('editLimitModal');
+        }
+        async function updateLimit() {
+            const keyId = document.getElementById('editKeyId').value;
+            const dailyLimit = parseInt(document.getElementById('newLimit').value);
+            if (!dailyLimit || dailyLimit < 1) { showToast('请输入有效的限额', 'error'); return; }
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/limit`, { method: 'PUT', body: JSON.stringify({ dailyLimit }) });
+            if (result && result.success) { showToast('限额已更新', 'success'); closeModal('editLimitModal'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+        async function toggleKey(keyId) {
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/toggle`, { method: 'POST' });
+            if (result && result.success) { showToast(result.message, 'success'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+        async function deleteKey(keyId) {
+            if (!confirm('确定要删除该 Key 吗？此操作不可恢复。')) return;
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
+            if (result && result.success) { showToast('已删除', 'success'); loadData(); }
+            else { showToast(result?.error?.message || '删除失败', 'error'); }
+        }
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message; toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text || ''; return div.innerHTML; }
+        document.getElementById('createKeyBtn').addEventListener('click', () => openModal('createModal'));
+        document.getElementById('searchBox').addEventListener('input', applyFilterAndSort);
+        document.getElementById('sortSelect').addEventListener('change', applyFilterAndSort);
+        if (!getToken()) { window.location.href = '/login.html'; } else { loadData(); }
+    </script>
+</body>
+</html>
