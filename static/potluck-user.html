@@ -8,958 +8,1366 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            background: #0d1117;
             min-height: 100vh; 
-            color: #e0e0e0;
+            color: #e6edf3;
+        }
+        
+        /* 顶部导航 */
+        .navbar {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 60px;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            padding: 20px;
+            justify-content: space-between;
         }
-        .container { 
-            max-width: 600px; 
-            width: 100%;
-            margin: 0 auto; 
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
         }
-        header { 
-            text-align: center;
-            padding: 40px 0 30px;
+        .navbar-brand .icon { font-size: 28px; }
+        .navbar-brand .badge {
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            color: #fff;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
         }
-        h1 { 
-            font-size: 28px; 
-            color: #fff; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            gap: 12px; 
+        .navbar-user {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
-        h1 span { font-size: 36px; }
-        .subtitle {
-            color: #888;
-            margin-top: 10px;
+        .navbar-user .welcome {
+            color: #8b949e;
             font-size: 14px;
         }
+        .navbar-user .welcome strong { color: #e6edf3; }
+        .btn-logout {
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-logout:hover { opacity: 0.9; transform: translateY(-1px); }
         
-        /* 登录区域 */
-        .login-section {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 30px;
+        /* 主容器 */
+        .main-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px 24px;
+        }
+        
+        /* Tab 导航 */
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #30363d;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #8b949e;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #e6edf3; }
+        .tab-btn.active {
+            color: #e6edf3;
+            border-bottom-color: #f472b6;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 区块标题 */
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e6edf3;
             margin-bottom: 20px;
         }
-        .login-section h2 {
+        
+        /* 统计卡片网格 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        /* 第一行：3列带边框卡片 */
+        .stats-row-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .stat-card-bordered {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+        .stat-card-bordered::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            height: 3px;
+            border-radius: 12px 12px 0 0;
+        }
+        .stat-card-bordered.purple::before { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+        .stat-card-bordered.pink::before { background: linear-gradient(90deg, #ec4899, #f472b6); }
+        .stat-card-bordered.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+        .stat-card-bordered.cyan::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+        .stat-card-bordered.orange::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .stat-card-bordered .label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 10px;
+        }
+        .stat-card-bordered .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e6edf3;
+        }
+        .stat-card-bordered .value .dim {
             font-size: 18px;
-            color: #fff;
-            margin-bottom: 20px;
+            color: #8b949e;
+            font-weight: 400;
+        }
+        .stat-card-bordered.purple .value > span:first-child { color: #a855f7; }
+        .stat-card-bordered.green .value > span:first-child { color: #10b981; }
+        .stat-card-bordered.cyan .value { color: #22d3ee; }
+        
+        /* 第二行：2列大卡片 */
+        .stats-row-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .stat-card-large {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 28px 24px;
             text-align: center;
         }
-        .login-section.hidden {
-            display: none;
+        .stat-card-large .value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
         }
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+        .stat-card-large .value .highlight { color: #22d3ee; }
+        .stat-card-large .value .highlight.green { color: #10b981; }
+        .stat-card-large .value .dim { font-size: 24px; color: #8b949e; font-weight: 400; }
+        .stat-card-large .label { font-size: 13px; color: #8b949e; }
+        
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
-        .input-group input {
-            width: 100%;
-            padding: 14px 18px;
-            border: 1px solid #333;
-            border-radius: 10px;
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-            font-size: 15px;
-            font-family: monospace;
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
         }
-        .input-group input:focus {
-            outline: none;
-            border-color: #4ade80;
+        .stat-card.purple::before { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+        .stat-card.pink::before { background: linear-gradient(90deg, #ec4899, #f472b6); }
+        .stat-card.cyan::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+        .stat-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+        .stat-card.orange::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .stat-card .label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 8px;
         }
-        .input-group input::placeholder {
-            color: #666;
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 700;
         }
-        .btn {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 600;
-            transition: all 0.2s;
-            width: 100%;
+        .stat-card.purple .value { color: #a855f7; }
+        .stat-card.pink .value { color: #ec4899; }
+        .stat-card.cyan .value { color: #22d3ee; }
+        .stat-card.green .value { color: #10b981; }
+        .stat-card.orange .value { color: #f59e0b; }
+        .stat-card .sub { font-size: 14px; color: #8b949e; }
+        
+        /* 大统计卡片 */
+        .stats-large {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
         }
-        .btn-primary {
-            background: #4ade80;
-            color: #000;
+        .stat-large {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
         }
-        .btn-primary:hover {
-            background: #22c55e;
+        .stat-large .value {
+            font-size: 42px;
+            font-weight: 700;
+            margin-bottom: 8px;
         }
-        .btn-primary:disabled {
-            background: #333;
-            color: #666;
-            cursor: not-allowed;
-        }
-        .remember-key {
+        .stat-large .value .highlight { color: #22d3ee; }
+        .stat-large .value .dim { color: #8b949e; }
+        .stat-large .label { font-size: 13px; color: #8b949e; }
+        
+        /* 操作卡片 */
+        .action-card {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            border: 1px solid #4c1d95;
+            border-radius: 12px;
+            padding: 20px 24px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: #888;
-        }
-        .remember-key input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            accent-color: #4ade80;
-        }
-        
-        /* 已登录区域 */
-        .dashboard-section {
-            display: none;
-        }
-        .dashboard-section.active {
-            display: block;
-        }
-        
-        /* 用户信息卡片 */
-        .user-card {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-        .user-header {
-            display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 10px;
+            margin-bottom: 24px;
         }
-        .user-info {
+        .action-card-content {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 16px;
         }
-        .user-avatar {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, #4ade80, #22c55e);
-            border-radius: 50%;
+        .action-card-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(168, 85, 247, 0.2);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 24px;
         }
-        .user-details .user-name {
-            font-size: 18px;
+        .action-card-text h4 {
+            font-size: 15px;
             font-weight: 600;
-            color: #fff;
-        }
-        .user-details .user-key {
-            font-family: monospace;
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
-        }
-        .user-status {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .user-status.enabled {
-            background: rgba(74, 222, 128, 0.2);
-            color: #4ade80;
-        }
-        .user-status.disabled {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-        .user-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        .action-btn {
-            background: rgba(255,255,255,0.1);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            color: #888;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .action-btn:hover {
-            background: rgba(255,255,255,0.15);
-            color: #fff;
-        }
-        .action-btn.logout {
-            color: #ef4444;
-        }
-        .action-btn.logout:hover {
-            background: rgba(239, 68, 68, 0.2);
-        }
-        
-        /* 使用量统计 */
-        .usage-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .stat-card {
-            background: rgba(255,255,255,0.03);
-            border-radius: 12px;
-            padding: 18px;
-            text-align: center;
-        }
-        .stat-card .label {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 8px;
-        }
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #4ade80;
-        }
-        .stat-card .value.warning { color: #fbbf24; }
-        .stat-card .value.danger { color: #ef4444; }
-        
-        /* 进度条 */
-        .usage-progress {
-            margin-top: 25px;
-        }
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        .progress-header .label { color: #888; }
-        .progress-header .value { color: #fff; font-weight: 600; }
-        .progress-bar {
-            height: 12px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 6px;
-            overflow: hidden;
-        }
-        .progress-bar .fill {
-            height: 100%;
-            background: linear-gradient(90deg, #4ade80, #22c55e);
-            border-radius: 6px;
-            transition: width 0.5s ease;
-        }
-        .progress-bar .fill.warning { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
-        .progress-bar .fill.danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
-        .progress-info {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 8px;
-            font-size: 12px;
-            color: #666;
-        }
-        
-        /* 上传授权文件区域 */
-        .upload-section {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-        .upload-section h3 {
-            font-size: 16px;
-            color: #fff;
-            margin-bottom: 8px;
-        }
-        .upload-desc {
-            font-size: 13px;
-            color: #888;
-            margin-bottom: 20px;
-        }
-        .upload-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-        }
-        .upload-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 18px;
-            text-align: center;
-            transition: all 0.2s;
-        }
-        .upload-card:hover {
-            border-color: rgba(74, 222, 128, 0.3);
-            background: rgba(255,255,255,0.05);
-        }
-        .upload-icon {
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-        .upload-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
+            color: #e6edf3;
             margin-bottom: 4px;
         }
-        .upload-provider {
-            font-size: 11px;
-            color: #666;
-            font-family: monospace;
-            margin-bottom: 12px;
-        }
-        .upload-btn {
-            width: 100%;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 8px;
-            background: rgba(74, 222, 128, 0.2);
-            color: #4ade80;
+        .action-card-text p {
             font-size: 13px;
-            font-weight: 500;
+            color: #8b949e;
+        }
+        .btn-action {
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
-        }
-        .upload-btn:hover {
-            background: rgba(74, 222, 128, 0.3);
-        }
-        .upload-btn:disabled {
-            background: rgba(255,255,255,0.1);
-            color: #666;
-            cursor: not-allowed;
-        }
-        .upload-btn .btn-loading {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
         }
-        .upload-status {
-            margin-top: 10px;
-            font-size: 12px;
-            min-height: 18px;
-            word-break: break-all;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-        .upload-status.success {
-            color: #4ade80;
-        }
-        .upload-status.error {
-            color: #ef4444;
-        }
+        .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
         
-        /* 详细信息 */
-        .detail-section {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 25px;
-        }
-        .detail-section h3 {
-            font-size: 16px;
-            color: #fff;
-            margin-bottom: 15px;
-        }
-        .detail-list {
+        /* 凭证列表 */
+        .credentials-list {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        .detail-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .detail-item:last-child { border-bottom: none; }
-        .detail-item .label { color: #888; font-size: 14px; }
-        .detail-item .value { color: #fff; font-size: 14px; font-weight: 500; }
-        
-        /* 错误提示 */
-        .error-message {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+        .credential-item {
+            background: #161b22;
+            border: 1px solid #30363d;
             border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            color: #ef4444;
-            display: none;
-            margin-bottom: 20px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            transition: all 0.2s;
         }
-        .error-message.active { display: block; }
-        .error-message .icon { font-size: 40px; margin-bottom: 10px; }
-        .error-message .title { font-size: 16px; font-weight: 600; margin-bottom: 5px; }
-        .error-message .desc { font-size: 14px; color: #888; }
-        
-        /* 加载状态 */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #888;
-            display: none;
+        .credential-item:hover {
+            border-color: #8b949e;
         }
-        .loading.active { display: block; }
-        .loading .spinner {
+        .credential-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+        }
+        .credential-icon {
             width: 40px;
             height: 40px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top-color: #4ade80;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            background: #21262d;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .credential-details { flex: 1; min-width: 0; }
+        .credential-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 4px;
+        }
+        .credential-path {
+            font-size: 12px;
+            color: #8b949e;
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .credential-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            flex-shrink: 0;
+        }
+        .credential-status.healthy {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+        .credential-status.unhealthy {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+        .credential-status.unknown {
+            background: rgba(139, 148, 158, 0.15);
+            color: #8b949e;
+        }
+        .credential-status.checking {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+        .credential-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .btn-icon {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover {
+            background: #30363d;
+            color: #e6edf3;
+        }
+        .btn-icon.danger:hover {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: #ef4444;
+            color: #ef4444;
+        }
         
-        /* 页脚 */
-        footer {
-            margin-top: 40px;
+        /* 空状态 */
+        .empty-state {
             text-align: center;
-            color: #666;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state p { font-size: 14px; }
+        
+        /* 登录页面 */
+        .login-container {
+            min-height: calc(100vh - 60px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .login-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-box h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #e6edf3;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .login-box .subtitle {
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+        .form-input {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #e6edf3;
+            font-size: 14px;
+            font-family: monospace;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #a855f7;
+            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+        }
+        .form-input::placeholder { color: #484f58; }
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+        }
+        .form-checkbox input {
+            width: 16px;
+            height: 16px;
+            accent-color: #a855f7;
+        }
+        .btn-login {
+            width: 100%;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            color: #fff;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-login:hover { opacity: 0.9; }
+        .btn-login:disabled {
+            background: #30363d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+        
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e6edf3;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #8b949e;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #e6edf3; }
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #30363d;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .btn-secondary {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover { background: #30363d; }
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled {
+            background: #30363d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+        
+        /* 模式切换 */
+        .mode-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .mode-btn {
+            flex: 1;
+            background: #21262d;
+            border: 2px solid #30363d;
+            color: #8b949e;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .mode-btn:hover { border-color: #8b949e; }
+        .mode-btn.active {
+            background: rgba(168, 85, 247, 0.15);
+            border-color: #a855f7;
+            color: #a855f7;
+        }
+        
+        /* 文件上传区域 */
+        .upload-zone {
+            border: 2px dashed #30363d;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+        }
+        .upload-zone:hover {
+            border-color: #a855f7;
+            background: rgba(168, 85, 247, 0.05);
+        }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 12px; }
+        .upload-zone p { color: #8b949e; font-size: 14px; }
+        .upload-zone .hint { font-size: 12px; color: #484f58; margin-top: 8px; }
+        
+        /* 文件列表 */
+        .file-list {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #161b22;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .file-item:last-child { margin-bottom: 0; }
+        .file-item-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+        .file-item-name {
+            font-size: 13px;
+            color: #e6edf3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-item-fields {
+            font-size: 11px;
+            color: #8b949e;
+        }
+        .file-item-remove {
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            padding: 4px;
+        }
+        .file-item-remove:hover { color: #ef4444; }
+        
+        /* 验证结果 */
+        .validation-result {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .validation-result.success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .validation-result.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .validation-result h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .validation-result.success h4 { color: #10b981; }
+        .validation-result.error h4 { color: #ef4444; }
+        .validation-result ul {
+            list-style: none;
             font-size: 13px;
         }
-        footer a { color: #4ade80; text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
+        .validation-result li {
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .validation-result .found { color: #10b981; }
+        .validation-result .missing { color: #ef4444; }
         
-        /* Toast 提示 */
+        /* JSON 预览 */
+        .json-preview {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .json-preview-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8b949e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .json-preview pre {
+            font-family: monospace;
+            font-size: 12px;
+            color: #7ee787;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 150px;
+            overflow: auto;
+        }
+        
+        /* 提示信息 */
+        .info-box {
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+        .info-box p {
+            font-size: 13px;
+            color: #c4b5fd;
+        }
+        .info-box code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        /* Toast */
         .toast {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: #1e293b;
+            bottom: 24px;
+            right: 24px;
+            background: #161b22;
+            border: 1px solid #30363d;
             border-radius: 8px;
-            color: #fff;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 14px 20px;
+            color: #e6edf3;
+            font-size: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
             transform: translateY(100px);
             opacity: 0;
             transition: all 0.3s;
             z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success { border-left: 4px solid #4ade80; }
+        .toast.success { border-left: 4px solid #10b981; }
         .toast.error { border-left: 4px solid #ef4444; }
         
         /* 响应式 */
-        @media (max-width: 480px) {
-            .user-info { flex-direction: column; text-align: center; }
-            .user-header { flex-direction: column; }
-            .user-actions { justify-content: center; }
-            .usage-stats { grid-template-columns: repeat(2, 1fr); }
+        @media (max-width: 768px) {
+            .navbar-inner { padding: 0 16px; }
+            .navbar-user .welcome { display: none; }
+            .btn-logout span:first-child { display: none; }
+            .main-container { padding: 20px 16px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .stats-row-3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+            .stats-row-2 { grid-template-columns: 1fr; gap: 8px; }
+            .stat-card-bordered .value { font-size: 22px; }
+            .stat-card-bordered .value .dim { font-size: 14px; }
+            .stat-card-large .value { font-size: 28px; }
+            .stat-card-large .value .dim { font-size: 18px; }
+            .stats-large { grid-template-columns: 1fr; }
+            .action-card { flex-direction: column; gap: 16px; text-align: center; }
+            .action-card-content { flex-direction: column; }
+            .credential-item { flex-direction: column; align-items: flex-start; }
+            .credential-actions { width: 100%; justify-content: flex-end; }
+            .tab-nav { overflow-x: auto; }
+            .tab-btn { white-space: nowrap; padding: 12px 16px; }
         }
-    </style>
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .stats-row-3 { grid-template-columns: 1fr; }
+            .stat-card-bordered { padding: 16px; }
+            .stat-card-bordered .value { font-size: 24px; }
+            .stat-card .value { font-size: 28px; }
+            .stat-large .value { font-size: 32px; }
+            .upload-providers-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* 提供商上传卡片 */
+        .upload-providers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .upload-provider-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .upload-provider-card:hover {
+            border-color: #8b949e;
+        }
+        .upload-provider-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+        .upload-provider-info {
+            margin-bottom: 16px;
+        }
+        .upload-provider-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 4px;
+        }
+        .upload-provider-type {
+            font-size: 11px;
+            color: #8b949e;
+            font-family: monospace;
+        }
+        .btn-upload {
+            width: 100%;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-upload:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+        .btn-upload:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .upload-provider-status {
+            margin-top: 10px;
+            font-size: 12px;
+            min-height: 18px;
+            word-break: break-all;
+        }
+        .upload-provider-status.success { color: #10b981; }
+        .upload-provider-status.error { color: #ef4444; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><span>🍲</span> API 大锅饭</h1>
-            <p class="subtitle" id="headerSubtitle">使用 API Key 登录查看用量</p>
-        </header>
-        
-        <!-- 登录区域 -->
-        <div class="login-section" id="loginSection">
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <div class="navbar-brand">
+                <span class="icon">🍲</span>
+                <span>API 大锅饭</span>
+                <span class="badge">用户版</span>
+            </div>
+            <div class="navbar-user" id="navbarUser" style="display: none;">
+                <span class="welcome">欢迎, <strong id="navUserName">-</strong></span>
+                <button class="btn-logout" onclick="logout()">
+                    <span>↪</span> 退出登录
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 登录页面 -->
+    <div class="login-container" id="loginContainer">
+        <div class="login-box">
             <h2>🔑 登录</h2>
-            <div class="input-group">
-                <input type="text" id="apiKeyInput" placeholder="请输入您的 API Key (maki_xxx...)" autocomplete="off">
-                <label class="remember-key">
+            <p class="subtitle">使用您的 API Key 登录查看用量</p>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="text" class="form-input" id="apiKeyInput" placeholder="maki_xxxxxxxx..." autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label class="form-checkbox">
                     <input type="checkbox" id="rememberKey" checked>
-                    <span>记住我的 Key（存储在本地浏览器）</span>
+                    <span>记住我的 Key</span>
                 </label>
-                <button class="btn btn-primary" id="loginBtn" onclick="login()">登录</button>
             </div>
+            <button class="btn-login" id="loginBtn" onclick="login()">登录</button>
         </div>
-        
-        <!-- 加载状态 -->
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>正在加载...</p>
-        </div>
-        
-        <!-- 错误提示 -->
-        <div class="error-message" id="errorMessage">
-            <div class="icon">⚠️</div>
-            <div class="title" id="errorTitle">登录失败</div>
-            <div class="desc" id="errorDesc">请检查您的 API Key 是否正确</div>
-        </div>
-        
-        <!-- 已登录区域 -->
-        <div class="dashboard-section" id="dashboardSection">
-            <!-- 用户信息卡片 -->
-            <div class="user-card">
-                <div class="user-header">
-                    <div class="user-info">
-                        <div class="user-avatar">👤</div>
-                        <div class="user-details">
-                            <div class="user-name" id="userName">-</div>
-                            <div class="user-key" id="userKey">-</div>
-                        </div>
-                    </div>
-                    <span class="user-status enabled" id="userStatus">启用</span>
-                </div>
-                
-                <!-- 使用量进度 -->
-                <div class="usage-progress">
-                    <div class="progress-header">
-                        <span class="label">今日使用量</span>
-                        <span class="value"><span id="usageToday">0</span> / <span id="usageLimit">0</span></span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="fill" id="progressFill" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-info">
-                        <span>剩余 <span id="usageRemaining">0</span> 次</span>
-                        <span id="usagePercent">0%</span>
-                    </div>
-                </div>
-                
-                <!-- 统计卡片 -->
-                <div class="usage-stats">
-                    <div class="stat-card">
-                        <div class="label">今日已用</div>
-                        <div class="value" id="statToday">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="label">每日限额</div>
-                        <div class="value" id="statLimit">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="label">累计调用</div>
-                        <div class="value" id="statTotal">0</div>
-                    </div>
-                </div>
-                
-                <!-- 操作按钮 -->
-                <div class="user-actions">
-                    <button class="action-btn" onclick="refreshUsage()">🔄 刷新</button>
-                    <button class="action-btn logout" onclick="logout()">🚪 退出登录</button>
-                </div>
-            </div>
-            
-            <!-- 上传授权文件 -->
-            <div class="upload-section">
-                <h3>📤 上传授权文件</h3>
-                <p class="upload-desc">上传您的 OAuth 授权文件到对应的提供商目录</p>
-                
-                <div class="upload-grid">
-                    <div class="upload-card" data-provider="gemini-cli-oauth">
-                        <div class="upload-icon">🔷</div>
-                        <div class="upload-name">Gemini CLI</div>
-                        <div class="upload-provider">gemini</div>
-                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
-                        <button class="upload-btn" onclick="triggerUpload(this)">
-                            <span class="btn-text">选择文件</span>
-                            <span class="btn-loading" style="display:none">上传中...</span>
-                        </button>
-                        <div class="upload-status"></div>
-                    </div>
-                    
-                    <div class="upload-card" data-provider="gemini-antigravity">
-                        <div class="upload-icon">🌀</div>
-                        <div class="upload-name">Antigravity</div>
-                        <div class="upload-provider">antigravity</div>
-                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
-                        <button class="upload-btn" onclick="triggerUpload(this)">
-                            <span class="btn-text">选择文件</span>
-                            <span class="btn-loading" style="display:none">上传中...</span>
-                        </button>
-                        <div class="upload-status"></div>
-                    </div>
-                    
-                    <div class="upload-card" data-provider="claude-kiro-oauth">
-                        <div class="upload-icon">🤖</div>
-                        <div class="upload-name">Kiro (Claude)</div>
-                        <div class="upload-provider">kiro</div>
-                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
-                        <button class="upload-btn" onclick="triggerUpload(this)">
-                            <span class="btn-text">选择文件</span>
-                            <span class="btn-loading" style="display:none">上传中...</span>
-                        </button>
-                        <div class="kiro-actions" style="display: flex; gap: 5px; margin-top: 8px;">
-                            <button class="upload-btn secondary" style="background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; padding: 6px;" onclick="showKiroBatchImportModal()">批量导入</button>
-                            <button class="upload-btn secondary" style="background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; padding: 6px;" onclick="showKiroAwsImportModal()">AWS导入</button>
-                        </div>
-                        <div class="upload-status"></div>
-                    </div>
-                    
-                    <div class="upload-card" data-provider="openai-qwen-oauth">
-                        <div class="upload-icon">🌐</div>
-                        <div class="upload-name">Qwen (OpenAI)</div>
-                        <div class="upload-provider">qwen</div>
-                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
-                        <button class="upload-btn" onclick="triggerUpload(this)">
-                            <span class="btn-text">选择文件</span>
-                            <span class="btn-loading" style="display:none">上传中...</span>
-                        </button>
-                        <div class="upload-status"></div>
-                    </div>
-                    
-                    <div class="upload-card" data-provider="openai-iflow">
-                        <div class="upload-icon">🔄</div>
-                        <div class="upload-name">iFlow (OpenAI)</div>
-                        <div class="upload-provider">iflow</div>
-                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
-                        <button class="upload-btn" onclick="triggerUpload(this)">
-                            <span class="btn-text">选择文件</span>
-                            <span class="btn-loading" style="display:none">上传中...</span>
-                        </button>
-                        <div class="upload-status"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 详细信息 -->
-            <div class="detail-section">
-                <h3>📊 详细信息</h3>
-                <div class="detail-list">
-                    <div class="detail-item">
-                        <span class="label">最后调用时间</span>
-                        <span class="value" id="lastUsedAt">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">配额重置日期</span>
-                        <span class="value" id="resetDate">-</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">Key 创建时间</span>
-                        <span class="value" id="createdAt">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <footer>
-            <p>需要管理 Key？<a href="/potluck.html">前往管理后台</a></p>
-        </footer>
     </div>
-    
+
+    <!-- 主内容区 -->
+    <div class="main-container" id="mainContainer" style="display: none;">
+        <!-- Tab 导航 -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="stats" onclick="switchTab('stats')">个人统计</button>
+            <button class="tab-btn" data-tab="credentials" onclick="switchTab('credentials')">凭证管理</button>
+            <button class="tab-btn" data-tab="apikey" onclick="switchTab('apikey')">API密钥</button>
+            <button class="tab-btn" data-tab="upload" onclick="switchTab('upload')">上传凭证</button>
+        </div>
+
+        <!-- 个人统计 Tab -->
+        <div class="tab-content active" id="tabStats">
+            <h3 class="section-title">个人使用统计</h3>
+            
+            <!-- 第一行：3个小统计卡片 -->
+            <div class="stats-row-3">
+                <div class="stat-card-bordered purple">
+                    <div class="label">每日用量</div>
+                    <div class="value"><span id="statToday">0</span><span class="dim"> / <span id="statLimit">0</span></span></div>
+                </div>
+                <div class="stat-card-bordered green">
+                    <div class="label">资源包</div>
+                    <div class="value"><span id="statBonusUsed">0</span><span class="dim"> / <span id="statBonusTotal">0</span></span></div>
+                </div>
+                <div class="stat-card-bordered cyan">
+                    <div class="label">累计调用</div>
+                    <div class="value" id="statTotal">0</div>
+                </div>
+            </div>
+            
+            <!-- 第二行：2个大统计卡片 -->
+            <div class="stats-row-2">
+                <div class="stat-card-large">
+                    <div class="value">
+                        <span class="highlight" id="usageToday">0</span>
+                        <span class="dim"> / <span id="usageLimit">0</span></span>
+                    </div>
+                    <div class="label">总已使用 / 总配额上限</div>
+                </div>
+                <div class="stat-card-large">
+                    <div class="value">
+                        <span class="highlight green" id="credentialCount">0</span>
+                    </div>
+                    <div class="label">有效凭证数</div>
+                </div>
+            </div>
+            
+            <!-- 操作卡片 -->
+            <div class="action-card">
+                <div class="action-card-content">
+                    <div class="action-card-icon">🎁</div>
+                    <div class="action-card-text">
+                        <h4>获取凭证，上传使用</h4>
+                        <p>通过 AWS SSO 或 OAuth 授权获取凭证文件</p>
+                    </div>
+                </div>
+                <button class="btn-action" onclick="switchTab('upload')">
+                    <span>↗</span> 立即上传
+                </button>
+            </div>
+        </div>
+
+        <!-- 凭证管理 Tab -->
+        <div class="tab-content" id="tabCredentials">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 class="section-title" style="margin-bottom: 0;">我的凭证</h3>
+                <button class="btn-secondary" onclick="loadCredentials()">🔄 刷新</button>
+            </div>
+            
+            <div class="credentials-list" id="credentialsList">
+                <div class="empty-state">
+                    <div class="icon">📭</div>
+                    <p>暂无凭证，请通过上传功能添加</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- API密钥 Tab -->
+        <div class="tab-content" id="tabApikey">
+            <h3 class="section-title">API密钥</h3>
+            
+            <!-- API Key 显示区域 -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                <input type="text" class="form-input" id="displayApiKeyFull" readonly 
+                    style="font-family: monospace; font-size: 14px; text-align: center; margin-bottom: 16px; background: #0d1117;">
+                
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button class="btn-action" style="flex: 1; max-width: 200px; background: linear-gradient(135deg, #2563eb, #3b82f6); justify-content: center;" onclick="copyApiKey()">
+                        <span id="copyKeyIcon">📋</span> <span id="copyKeyText">复制</span>
+                    </button>
+                    <button class="btn-action" style="flex: 1; max-width: 200px; background: linear-gradient(135deg, #f59e0b, #fbbf24); justify-content: center;" onclick="showRegenerateModal()">
+                        <span>🔄</span> 更改
+                    </button>
+                </div>
+            </div>
+            
+            <div class="info-box" style="background: rgba(139, 148, 158, 0.1); border-color: rgba(139, 148, 158, 0.3);">
+                <p style="color: #8b949e; font-size: 13px;">
+                    💡 API Key 用于访问 API 服务。请妥善保管，不要泄露给他人。如果 Key 泄露，请立即更改。
+                </p>
+            </div>
+        </div>
+
+        <!-- 上传凭证 Tab -->
+        <div class="tab-content" id="tabUpload">
+            <h3 class="section-title">上传授权凭证</h3>
+            
+            <!-- Kiro AWS 导入卡片 -->
+            <div class="action-card" style="margin-bottom: 16px;">
+                <div class="action-card-content">
+                    <div class="action-card-icon">☁️</div>
+                    <div class="action-card-text">
+                        <h4>Kiro AWS 导入</h4>
+                        <p>从 AWS SSO cache 导入 Kiro 凭据</p>
+                    </div>
+                </div>
+                <button class="btn-action" onclick="showAwsImportModal()">
+                    <span>📤</span> 导入
+                </button>
+            </div>
+            
+            <!-- Kiro 批量导入卡片 -->
+            <div class="action-card" style="background: linear-gradient(135deg, #134e4a 0%, #115e59 100%); border-color: #14b8a6; margin-bottom: 24px;">
+                <div class="action-card-content">
+                    <div class="action-card-icon" style="background: rgba(20, 184, 166, 0.2);">🔄</div>
+                    <div class="action-card-text">
+                        <h4>Kiro RefreshToken 批量导入</h4>
+                        <p>批量导入 Refresh Token</p>
+                    </div>
+                </div>
+                <button class="btn-action" style="background: linear-gradient(135deg, #0d9488, #14b8a6);" onclick="showBatchImportModal()">
+                    <span>📋</span> 导入
+                </button>
+            </div>
+            
+            <!-- 授权文件上传 -->
+            <h3 class="section-title" style="margin-top: 32px;">授权文件上传</h3>
+            <p style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">上传 OAuth 授权文件到对应的提供商目录</p>
+            
+            <div class="upload-providers-grid">
+                <div class="upload-provider-card" data-provider="gemini-cli-oauth">
+                    <div class="upload-provider-icon">🔷</div>
+                    <div class="upload-provider-info">
+                        <div class="upload-provider-name">Gemini CLI</div>
+                        <div class="upload-provider-type">gemini-cli-oauth</div>
+                    </div>
+                    <input type="file" class="provider-file-input" accept=".json,.txt,.key,.pem" style="display:none">
+                    <button class="btn-upload" onclick="triggerProviderUpload(this)">
+                        <span class="btn-upload-text">选择文件</span>
+                        <span class="btn-upload-loading" style="display:none">上传中...</span>
+                    </button>
+                    <div class="upload-provider-status"></div>
+                </div>
+                
+                <div class="upload-provider-card" data-provider="gemini-antigravity">
+                    <div class="upload-provider-icon">🌀</div>
+                    <div class="upload-provider-info">
+                        <div class="upload-provider-name">Antigravity</div>
+                        <div class="upload-provider-type">gemini-antigravity</div>
+                    </div>
+                    <input type="file" class="provider-file-input" accept=".json,.txt,.key,.pem" style="display:none">
+                    <button class="btn-upload" onclick="triggerProviderUpload(this)">
+                        <span class="btn-upload-text">选择文件</span>
+                        <span class="btn-upload-loading" style="display:none">上传中...</span>
+                    </button>
+                    <div class="upload-provider-status"></div>
+                </div>
+                
+                <div class="upload-provider-card" data-provider="claude-kiro-oauth">
+                    <div class="upload-provider-icon">🤖</div>
+                    <div class="upload-provider-info">
+                        <div class="upload-provider-name">Kiro (Claude)</div>
+                        <div class="upload-provider-type">claude-kiro-oauth</div>
+                    </div>
+                    <input type="file" class="provider-file-input" accept=".json,.txt,.key,.pem" style="display:none">
+                    <button class="btn-upload" onclick="triggerProviderUpload(this)">
+                        <span class="btn-upload-text">选择文件</span>
+                        <span class="btn-upload-loading" style="display:none">上传中...</span>
+                    </button>
+                    <div class="upload-provider-status"></div>
+                </div>
+                
+                <div class="upload-provider-card" data-provider="openai-qwen-oauth">
+                    <div class="upload-provider-icon">🌐</div>
+                    <div class="upload-provider-info">
+                        <div class="upload-provider-name">Qwen (OpenAI)</div>
+                        <div class="upload-provider-type">openai-qwen-oauth</div>
+                    </div>
+                    <input type="file" class="provider-file-input" accept=".json,.txt,.key,.pem" style="display:none">
+                    <button class="btn-upload" onclick="triggerProviderUpload(this)">
+                        <span class="btn-upload-text">选择文件</span>
+                        <span class="btn-upload-loading" style="display:none">上传中...</span>
+                    </button>
+                    <div class="upload-provider-status"></div>
+                </div>
+                
+                <div class="upload-provider-card" data-provider="openai-iflow">
+                    <div class="upload-provider-icon">🔄</div>
+                    <div class="upload-provider-info">
+                        <div class="upload-provider-name">iFlow (OpenAI)</div>
+                        <div class="upload-provider-type">openai-iflow</div>
+                    </div>
+                    <input type="file" class="provider-file-input" accept=".json,.txt,.key,.pem" style="display:none">
+                    <button class="btn-upload" onclick="triggerProviderUpload(this)">
+                        <span class="btn-upload-text">选择文件</span>
+                        <span class="btn-upload-loading" style="display:none">上传中...</span>
+                    </button>
+                    <div class="upload-provider-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
     <div id="toast" class="toast"></div>
 
-    <!-- Kiro 批量导入模态框 -->
-    <div id="kiroBatchModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content" style="background: #1e293b; border-radius: 16px; padding: 25px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #fff; font-size: 18px;">🔄 Kiro 批量导入</h3>
-                <button onclick="closeModal('kiroBatchModal')" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">&times;</button>
+    <!-- AWS 导入模态框 -->
+    <div class="modal-overlay" id="awsImportModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>☁️ Kiro AWS 导入</h3>
+                <button class="modal-close" onclick="closeModal('awsImportModal')">&times;</button>
             </div>
-            <div style="margin-bottom: 15px; padding: 12px; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); border-radius: 8px;">
-                <p style="color: #4ade80; font-size: 13px;">请输入 refreshToken，每行一个。系统将自动刷新并生成凭据文件。</p>
-            </div>
-            <textarea id="batchTokensInput" rows="10" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; font-family: monospace; resize: vertical;" placeholder="aorAxxxxxxxx&#10;aorAyyyyyyyy"></textarea>
-            
-            <div id="batchProgress" style="display: none; margin-top: 15px;">
-                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 5px;">
-                    <span id="batchProgressText">正在导入...</span>
-                    <span id="batchProgressPercent">0%</span>
+            <div class="modal-body">
+                <div class="info-box">
+                    <p>从 AWS SSO cache 目录导入凭据文件</p>
+                    <p style="margin-top: 8px;"><code>C:\Users\{username}\.aws\sso\cache</code></p>
                 </div>
-                <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                    <div id="batchProgressBar" style="height: 100%; width: 0%; background: #4ade80; transition: width 0.3s;"></div>
+                
+                <!-- 模式切换 -->
+                <div class="mode-toggle">
+                    <button class="mode-btn active" id="modeFileBtn" onclick="switchAwsMode('file')">
+                        📁 文件上传
+                    </button>
+                    <button class="mode-btn" id="modeJsonBtn" onclick="switchAwsMode('json')">
+                        📝 JSON 粘贴
+                    </button>
                 </div>
-                <div id="batchResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px; font-family: monospace;"></div>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                <button class="btn" style="background: rgba(255,255,255,0.1); color: #fff; width: auto;" onclick="closeModal('kiroBatchModal')">取消</button>
-                <button class="btn btn-primary" style="width: auto;" onclick="startKiroBatchImport()">开始导入</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Kiro AWS 导入模态框 -->
-    <div id="kiroAwsModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content" style="background: #1e293b; border-radius: 16px; padding: 25px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #fff; font-size: 18px;">☁️ Kiro AWS 导入</h3>
-                <button onclick="closeModal('kiroAwsModal')" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">&times;</button>
-            </div>
-            <div style="margin-bottom: 15px; padding: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px;">
-                <p style="color: #fbbf24; font-size: 13px;">请粘贴 AWS SSO cache 文件中的 JSON 内容（需包含 clientId, clientSecret, accessToken, refreshToken）。</p>
-            </div>
-            
-            <textarea id="awsJsonInput" rows="12" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; font-family: monospace; resize: vertical;" placeholder='{
+                
+                <!-- 文件上传模式 -->
+                <div id="fileModeSection">
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" id="awsFilesInput" multiple accept=".json" style="display: none;">
+                        <div class="icon">📤</div>
+                        <p>拖拽 JSON 文件到此处，或点击选择</p>
+                        <p class="hint">支持多文件上传，系统将智能合并</p>
+                    </div>
+                    
+                    <div class="file-list" id="fileList" style="display: none;"></div>
+                </div>
+                
+                <!-- JSON 输入模式 -->
+                <div id="jsonModeSection" style="display: none;">
+                    <textarea class="form-input" id="awsJsonInput" rows="10" style="resize: vertical; font-family: monospace;" placeholder='{
   "clientId": "...",
   "clientSecret": "...",
   "accessToken": "...",
   "refreshToken": "..."
 }'></textarea>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                <button class="btn" style="background: rgba(255,255,255,0.1); color: #fff; width: auto;" onclick="closeModal('kiroAwsModal')">取消</button>
-                <button class="btn btn-primary" style="width: auto;" onclick="startKiroAwsImport()">导入</button>
+                </div>
+                
+                <!-- 验证结果 -->
+                <div class="validation-result" id="validationResult" style="display: none;"></div>
+                
+                <!-- JSON 预览 -->
+                <div class="json-preview" id="jsonPreview" style="display: none;">
+                    <div class="json-preview-header">👁️ 合并预览（敏感信息已脱敏）</div>
+                    <pre id="jsonPreviewContent"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('awsImportModal')">取消</button>
+                <button class="btn-primary" id="awsImportBtn" onclick="startAwsImport()" disabled>导入</button>
             </div>
         </div>
     </div>
-    
+
+    <!-- 批量导入模态框 -->
+    <div class="modal-overlay" id="batchImportModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔄 Kiro RefreshToken 批量导入</h3>
+                <button class="modal-close" onclick="closeModal('batchImportModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-box" style="background: rgba(20, 184, 166, 0.1); border-color: rgba(20, 184, 166, 0.3);">
+                    <p style="color: #5eead4;">请输入 refreshToken，每行一个。系统将自动刷新并生成凭据文件。</p>
+                </div>
+                
+                <textarea class="form-input" id="batchTokensInput" rows="10" style="resize: vertical; font-family: monospace;" placeholder="aorAxxxxxxxx
+aorAyyyyyyyy"></textarea>
+                
+                <div id="batchProgress" style="display: none; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8b949e; margin-bottom: 8px;">
+                        <span id="batchProgressText">正在导入...</span>
+                        <span id="batchProgressPercent">0%</span>
+                    </div>
+                    <div style="height: 6px; background: #21262d; border-radius: 3px; overflow: hidden;">
+                        <div id="batchProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #14b8a6, #5eead4); transition: width 0.3s;"></div>
+                    </div>
+                    <div id="batchResults" style="margin-top: 12px; max-height: 150px; overflow-y: auto; font-size: 12px; font-family: monospace;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('batchImportModal')">取消</button>
+                <button class="btn-primary" style="background: linear-gradient(135deg, #0d9488, #14b8a6);" onclick="startBatchImport()">开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置 Key 模态框 -->
+    <div class="modal-overlay" id="regenerateKeyModal">
+        <div class="modal" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>🔑 重置 API Key</h3>
+                <button class="modal-close" onclick="closeModal('regenerateKeyModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 确认阶段 -->
+                <div id="regenerateConfirmSection">
+                    <div class="info-box" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+                        <p style="color: #fca5a5;">⚠️ 重置后旧 Key 将立即失效，请确认操作：</p>
+                    </div>
+                    <ul style="color: #8b949e; font-size: 13px; margin: 16px 0; padding-left: 20px;">
+                        <li style="margin-bottom: 8px;">旧 API Key 将无法继续使用</li>
+                        <li style="margin-bottom: 8px;">需要使用新 Key 重新配置客户端</li>
+                        <li>您的凭证数据会自动迁移到新 Key</li>
+                    </ul>
+                </div>
+                <!-- 结果阶段 -->
+                <div id="regenerateResultSection" style="display: none;">
+                    <div class="info-box" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);">
+                        <p style="color: #6ee7b7;">✅ API Key 重置成功！请妥善保存新 Key。</p>
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <label style="font-size: 12px; color: #8b949e; display: block; margin-bottom: 8px;">新 API Key</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" class="form-input" id="newKeyDisplay" readonly style="flex: 1; font-family: monospace; font-size: 13px;">
+                            <button class="btn-secondary" onclick="copyNewKey()" style="white-space: nowrap;">
+                                <span id="copyBtnText">📋 复制</span>
+                            </button>
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; color: #f59e0b; margin-top: 12px;">⚠️ 关闭此窗口后将无法再次查看完整 Key</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('regenerateKeyModal')" id="regenerateCancelBtn">取消</button>
+                <button class="btn-primary" style="background: linear-gradient(135deg, #dc2626, #ef4444);" onclick="confirmRegenerateKey()" id="regenerateConfirmBtn">确认重置</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api/potluckuser';
         let currentApiKey = '';
         let isLoggedIn = false;
         
+        // AWS 导入状态
+        let awsUploadedFiles = [];
+        let awsMergedCredentials = null;
+        let awsCurrentMode = 'file';
         
-        async function login() {
-            const apiKey = document.getElementById('apiKeyInput').value.trim();
-            
-            if (!apiKey) {
-                showToast('请输入 API Key', 'error');
-                return;
-            }
-            
-            if (!apiKey.startsWith('maki_')) {
-                showToast('API Key 格式不正确，应以 maki_ 开头', 'error');
-                return;
-            }
-            
-            currentApiKey = apiKey;
-            
-            // 显示加载状态
-            showLoading(true);
-            hideError();
-            hideLogin();
-            hideDashboard();
-            
-            try {
-                const response = await fetch(`${API_BASE}/usage`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error?.message || '登录失败');
-                }
-                
-                // 保存 Key（如果勾选了记住）
-                if (document.getElementById('rememberKey').checked) {
-                    localStorage.setItem('potluck_user_key', apiKey);
-                } else {
-                    localStorage.removeItem('potluck_user_key');
-                }
-                
-                isLoggedIn = true;
-                
-                // 显示用户信息
-                displayUserInfo(data.data);
-                showDashboard();
-                document.getElementById('headerSubtitle').textContent = '我的 API 使用量';
-                showToast('登录成功', 'success');
-                
-            } catch (error) {
-                showError(error.message);
-                showLogin();
-            } finally {
-                showLoading(false);
-            }
-        }
-        
-        async function refreshUsage() {
-            if (!currentApiKey) {
-                logout();
-                return;
-            }
-            
-            showLoading(true);
-            
-            try {
-                const response = await fetch(`${API_BASE}/usage`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${currentApiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error?.message || '刷新失败');
-                }
-                
-                displayUserInfo(data.data);
-                showToast('刷新成功', 'success');
-                
-            } catch (error) {
-                showToast(error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-        
-        function logout() {
-            currentApiKey = '';
-            isLoggedIn = false;
-            localStorage.removeItem('potluck_user_key');
-            
-            hideDashboard();
-            hideError();
-            showLogin();
-            document.getElementById('apiKeyInput').value = '';
-            document.getElementById('headerSubtitle').textContent = '使用 API Key 登录查看用量';
-            showToast('已退出登录', 'success');
-        }
-        
-        function displayUserInfo(data) {
-            // 用户信息
-            document.getElementById('userName').textContent = data.name || '未命名';
-            document.getElementById('userKey').textContent = data.maskedKey;
-            
-            // 状态
-            const statusEl = document.getElementById('userStatus');
-            if (data.enabled) {
-                statusEl.textContent = '启用';
-                statusEl.className = 'user-status enabled';
-            } else {
-                statusEl.textContent = '已禁用';
-                statusEl.className = 'user-status disabled';
-            }
-            
-            // 使用量
-            const usage = data.usage;
-            document.getElementById('usageToday').textContent = usage.today;
-            document.getElementById('usageLimit').textContent = usage.limit;
-            document.getElementById('usageRemaining').textContent = usage.remaining;
-            document.getElementById('usagePercent').textContent = usage.percent + '%';
-            
-            // 进度条
-            const progressFill = document.getElementById('progressFill');
-            progressFill.style.width = Math.min(usage.percent, 100) + '%';
-            progressFill.className = 'fill';
-            if (usage.percent >= 90) {
-                progressFill.classList.add('danger');
-            } else if (usage.percent >= 70) {
-                progressFill.classList.add('warning');
-            }
-            
-            // 统计卡片
-            document.getElementById('statToday').textContent = usage.today;
-            document.getElementById('statToday').className = 'value' + (usage.percent >= 90 ? ' danger' : usage.percent >= 70 ? ' warning' : '');
-            document.getElementById('statLimit').textContent = usage.limit;
-            document.getElementById('statTotal').textContent = data.total;
-            
-            // 详细信息
-            document.getElementById('lastUsedAt').textContent = formatTime(data.lastUsedAt);
-            document.getElementById('resetDate').textContent = usage.resetDate || '-';
-            document.getElementById('createdAt').textContent = formatDateTime(data.createdAt);
-        }
-        
-        function formatTime(isoStr) {
-            if (!isoStr) return '从未使用';
-            const d = new Date(isoStr);
-            const now = new Date();
-            const diff = now - d;
-            
-            if (diff < 60000) return '刚刚';
-            if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
-            if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
-            if (diff < 604800000) return Math.floor(diff / 86400000) + ' 天前';
-            
-            return d.toLocaleDateString('zh-CN');
-        }
-        
-        function formatDateTime(isoStr) {
-            if (!isoStr) return '-';
-            const d = new Date(isoStr);
-            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        function showLoading(show) {
-            document.getElementById('loading').classList.toggle('active', show);
-            document.getElementById('loginBtn').disabled = show;
-        }
-        
-        function showLogin() {
-            document.getElementById('loginSection').classList.remove('hidden');
-        }
-        
-        function hideLogin() {
-            document.getElementById('loginSection').classList.add('hidden');
-        }
-        
-        function showDashboard() {
-            document.getElementById('dashboardSection').classList.add('active');
-        }
-        
-        function hideDashboard() {
-            document.getElementById('dashboardSection').classList.remove('active');
-        }
-        
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            document.getElementById('errorDesc').textContent = message;
-            errorEl.classList.add('active');
-        }
-        
-        function hideError() {
-            document.getElementById('errorMessage').classList.remove('active');
-        }
-        
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
-        
-        // 提供商映射
-        const providerMap = {
-            'gemini-cli-oauth': 'gemini',
-            'gemini-antigravity': 'antigravity',
-            'claude-kiro-oauth': 'kiro',
-            'openai-qwen-oauth': 'qwen',
-            'openai-iflow': 'iflow'
+        // 提供商配置
+        const providerIcons = {
+            'claude-kiro-oauth': '🤖',
+            'gemini-cli-oauth': '🔷',
+            'gemini-antigravity': '🌀',
+            'openai-qwen-oauth': '🌐',
+            'openai-iflow': '🔄'
+        };
+        const providerNames = {
+            'claude-kiro-oauth': 'Kiro (Claude)',
+            'gemini-cli-oauth': 'Gemini CLI',
+            'gemini-antigravity': 'Antigravity',
+            'openai-qwen-oauth': 'Qwen (OpenAI)',
+            'openai-iflow': 'iFlow (OpenAI)'
         };
         
-        // 触发文件上传
-        function triggerUpload(btn) {
-            const card = btn.closest('.upload-card');
-            const input = card.querySelector('.upload-input');
-            input.click();
-        }
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initUploadZone();
+            initProviderUploads();
+            
+            const savedKey = localStorage.getItem('potluck_user_key');
+            if (savedKey) {
+                document.getElementById('apiKeyInput').value = savedKey;
+                login();
+            }
+            
+            document.getElementById('apiKeyInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+            
+            document.getElementById('awsJsonInput').addEventListener('input', () => {
+                if (awsCurrentMode === 'json') validateAwsJsonInput();
+            });
+        });
         
-        // 初始化上传事件监听
-        function initUploadListeners() {
-            document.querySelectorAll('.upload-card').forEach(card => {
-                const input = card.querySelector('.upload-input');
-                const btn = card.querySelector('.upload-btn');
-                const status = card.querySelector('.upload-status');
+        // 初始化提供商上传
+        function initProviderUploads() {
+            document.querySelectorAll('.upload-provider-card').forEach(card => {
+                const input = card.querySelector('.provider-file-input');
+                const btn = card.querySelector('.btn-upload');
+                const status = card.querySelector('.upload-provider-status');
                 const providerType = card.dataset.provider;
                 
                 input.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
                     
-                    // 验证文件类型
                     const allowedExtensions = ['.json', '.txt', '.key', '.pem', '.p12', '.pfx'];
                     const ext = '.' + file.name.split('.').pop().toLowerCase();
                     if (!allowedExtensions.includes(ext)) {
                         status.textContent = '不支持的文件类型';
-                        status.className = 'upload-status error';
+                        status.className = 'upload-provider-status error';
                         input.value = '';
                         return;
                     }
                     
-                    // 验证文件大小 (5MB)
                     if (file.size > 5 * 1024 * 1024) {
                         status.textContent = '文件大小不能超过 5MB';
-                        status.className = 'upload-status error';
+                        status.className = 'upload-provider-status error';
                         input.value = '';
                         return;
                     }
                     
-                    // 显示上传中状态
                     btn.disabled = true;
-                    btn.querySelector('.btn-text').style.display = 'none';
-                    btn.querySelector('.btn-loading').style.display = 'inline';
+                    btn.querySelector('.btn-upload-text').style.display = 'none';
+                    btn.querySelector('.btn-upload-loading').style.display = 'inline';
                     status.textContent = '';
-                    status.className = 'upload-status';
+                    status.className = 'upload-provider-status';
                     
                     try {
                         const formData = new FormData();
@@ -968,9 +1376,7 @@
                         
                         const response = await fetch(`${API_BASE}/upload`, {
                             method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${currentApiKey}`
-                            },
+                            headers: { 'Authorization': `Bearer ${currentApiKey}` },
                             body: formData
                         });
                         
@@ -978,69 +1384,593 @@
                         
                         if (response.ok && data.success) {
                             status.textContent = '✓ ' + (data.filePath || '上传成功');
-                            status.className = 'upload-status success';
+                            status.className = 'upload-provider-status success';
                             showToast('文件上传成功', 'success');
+                            loadCredentials();
                         } else {
                             throw new Error(data.error?.message || '上传失败');
                         }
                     } catch (error) {
                         status.textContent = '✗ ' + error.message;
-                        status.className = 'upload-status error';
+                        status.className = 'upload-provider-status error';
                         showToast('上传失败: ' + error.message, 'error');
                     } finally {
                         btn.disabled = false;
-                        btn.querySelector('.btn-text').style.display = 'inline';
-                        btn.querySelector('.btn-loading').style.display = 'none';
+                        btn.querySelector('.btn-upload-text').style.display = 'inline';
+                        btn.querySelector('.btn-upload-loading').style.display = 'none';
                         input.value = '';
                     }
                 });
             });
         }
         
-        // 页面加载完成后初始化上传监听器
-        document.addEventListener('DOMContentLoaded', () => {
-            initUploadListeners();
-            
-            const savedKey = localStorage.getItem('potluck_user_key');
-            if (savedKey) {
-                document.getElementById('apiKeyInput').value = savedKey;
-                // 自动登录
-                login();
+        // 触发提供商文件上传
+        function triggerProviderUpload(btn) {
+            const card = btn.closest('.upload-provider-card');
+            const input = card.querySelector('.provider-file-input');
+            input.click();
+        }
+        
+        // 登录
+        async function login() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                showToast('请输入 API Key', 'error');
+                return;
+            }
+            if (!apiKey.startsWith('maki_')) {
+                showToast('API Key 格式不正确', 'error');
+                return;
             }
             
-            // 回车键登录
-            document.getElementById('apiKeyInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    login();
+            currentApiKey = apiKey;
+            document.getElementById('loginBtn').disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/usage`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error?.message || '登录失败');
                 }
-            });
-        });
-
-        // 模态框控制
-        function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
+                
+                if (document.getElementById('rememberKey').checked) {
+                    localStorage.setItem('potluck_user_key', apiKey);
+                }
+                
+                isLoggedIn = true;
+                displayUserInfo(data.data);
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
+                document.getElementById('navbarUser').style.display = 'flex';
+                
+                loadCredentials();
+                showToast('登录成功', 'success');
+                
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                document.getElementById('loginBtn').disabled = false;
+            }
         }
-
-        function showKiroBatchImportModal() {
-            document.getElementById('kiroBatchModal').style.display = 'flex';
+        
+        // 退出登录
+        function logout() {
+            currentApiKey = '';
+            isLoggedIn = false;
+            localStorage.removeItem('potluck_user_key');
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('mainContainer').style.display = 'none';
+            document.getElementById('navbarUser').style.display = 'none';
+            document.getElementById('apiKeyInput').value = '';
+            showToast('已退出登录', 'success');
+        }
+        
+        // 显示用户信息
+        function displayUserInfo(data) {
+            document.getElementById('navUserName').textContent = data.name || '用户';
+            // 每日用量: 已用/限额
+            document.getElementById('statToday').textContent = data.usage.today;
+            document.getElementById('statLimit').textContent = data.usage.limit;
+            // 资源包: 已用/总量
+            const bonusUsed = data.bonusUsed || 0;
+            const bonusTotal = data.bonusTotal || 0;
+            document.getElementById('statBonusUsed').textContent = bonusUsed;
+            document.getElementById('statBonusTotal').textContent = bonusTotal;
+            // 累计调用
+            document.getElementById('statTotal').textContent = data.total || 0;
+            // 总使用 = 每日已用 + 资源包已用
+            const totalUsed = data.usage.today + bonusUsed;
+            document.getElementById('usageToday').textContent = totalUsed;
+            // 总配额上限 = 每日限额 + 资源包总量
+            const totalQuota = data.usage.limit + bonusTotal;
+            document.getElementById('usageLimit').textContent = totalQuota;
+            // 显示完整 API Key（在 API密钥 Tab）
+            document.getElementById('displayApiKeyFull').value = currentApiKey;
+        }
+        
+        // 复制到剪贴板（兼容方案）
+        function copyToClipboardFallback(text, successMsg = '已复制到剪贴板') {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(successMsg, 'success');
+            } catch (err) {
+                showToast('复制失败，请手动复制', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        // 复制 API Key
+        function copyApiKey() {
+            const text = currentApiKey;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    document.getElementById('copyKeyIcon').textContent = '✓';
+                    document.getElementById('copyKeyText').textContent = '已复制';
+                    showToast('已复制到剪贴板', 'success');
+                    setTimeout(() => {
+                        document.getElementById('copyKeyIcon').textContent = '📋';
+                        document.getElementById('copyKeyText').textContent = '复制';
+                    }, 2000);
+                }).catch(() => copyToClipboardFallback(text));
+            } else {
+                copyToClipboardFallback(text);
+            }
+        }
+        
+        // 打开重置 Key 模态框
+        function showRegenerateModal() {
+            // 重置模态框状态
+            document.getElementById('regenerateConfirmSection').style.display = 'block';
+            document.getElementById('regenerateResultSection').style.display = 'none';
+            document.getElementById('regenerateConfirmBtn').style.display = 'inline-flex';
+            document.getElementById('regenerateCancelBtn').textContent = '取消';
+            document.getElementById('regenerateKeyModal').classList.add('active');
+        }
+        
+        // 确认重置 Key
+        async function confirmRegenerateKey() {
+            const confirmBtn = document.getElementById('regenerateConfirmBtn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '重置中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/regenerate-key`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${currentApiKey}` }
+                });
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error?.message || data.error || '重置失败');
+                }
+                
+                const newKey = data.data.newKey;
+                
+                // 更新本地存储和当前 Key
+                currentApiKey = newKey;
+                if (localStorage.getItem('potluck_user_key')) {
+                    localStorage.setItem('potluck_user_key', newKey);
+                }
+                
+                // 显示结果
+                document.getElementById('regenerateConfirmSection').style.display = 'none';
+                document.getElementById('regenerateResultSection').style.display = 'block';
+                document.getElementById('newKeyDisplay').value = newKey;
+                document.getElementById('regenerateConfirmBtn').style.display = 'none';
+                document.getElementById('regenerateCancelBtn').textContent = '关闭';
+                
+                // 更新 API密钥 Tab 的显示
+                document.getElementById('displayApiKeyFull').value = newKey;
+                showToast('API Key 已重置', 'success');
+                
+            } catch (error) {
+                showToast('重置失败: ' + error.message, 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '确认重置';
+            }
+        }
+        
+        // 复制新 Key（模态框中）
+        function copyNewKey() {
+            const text = document.getElementById('newKeyDisplay').value;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const btnText = document.getElementById('copyBtnText');
+                    btnText.textContent = '✓ 已复制';
+                    showToast('已复制到剪贴板', 'success');
+                    setTimeout(() => { btnText.textContent = '📋 复制'; }, 2000);
+                }).catch(() => copyToClipboardFallback(text));
+            } else {
+                copyToClipboardFallback(text);
+            }
+        }
+        
+        // Tab 切换
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabId);
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === `tab${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`);
+            });
+            
+            if (tabId === 'credentials') loadCredentials();
+        }
+        
+        // 加载凭证列表（自动检查健康状态）
+        async function loadCredentials(autoCheck = true) {
+            const listEl = document.getElementById('credentialsList');
+            listEl.innerHTML = '<div style="text-align: center; color: #8b949e; padding: 40px;">加载中...</div>';
+            
+            try {
+                let credentials;
+                
+                if (autoCheck) {
+                    // 调用批量检查 API，同时获取最新状态
+                    const response = await fetch(`${API_BASE}/credentials/check-all`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${currentApiKey}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (!response.ok || !data.success) throw new Error(data.error?.message || '加载失败');
+                    credentials = data.data.credentials || [];
+                } else {
+                    // 仅获取列表，不检查
+                    const response = await fetch(`${API_BASE}/credentials`, {
+                        headers: { 'Authorization': `Bearer ${currentApiKey}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (!response.ok || !data.success) throw new Error(data.error?.message || '加载失败');
+                    credentials = data.data || [];
+                }
+                
+                document.getElementById('credentialCount').textContent = credentials.filter(c => c.isHealthy).length;
+                
+                if (credentials.length === 0) {
+                    listEl.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无凭证，请通过上传功能添加</p></div>';
+                    return;
+                }
+                
+                // 按添加时间倒序排序
+                credentials.sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
+                
+                listEl.innerHTML = '';
+                credentials.forEach(cred => {
+                    listEl.appendChild(createCredentialItem(cred));
+                });
+                
+            } catch (error) {
+                listEl.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 40px;">加载失败: ${error.message}</div>`;
+            }
+        }
+        
+        // 创建凭证项
+        function createCredentialItem(cred) {
+            const item = document.createElement('div');
+            item.className = 'credential-item';
+            
+            const icon = providerIcons[cred.provider] || '📄';
+            const name = providerNames[cred.provider] || cred.provider;
+            const shortPath = cred.path.length > 50 ? '...' + cred.path.slice(-47) : cred.path;
+            
+            // 格式化添加日期
+            let addedDateStr = '';
+            if (cred.addedAt) {
+                const d = new Date(cred.addedAt);
+                addedDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
+            
+            let statusClass = 'unknown', statusText = '未检查', statusIcon = '❓';
+            if (cred.isHealthy === true) {
+                statusClass = 'healthy';
+                statusText = cred.healthMessage || '正常';
+                statusIcon = '✓';
+            } else if (cred.isHealthy === false) {
+                statusClass = 'unhealthy';
+                statusText = cred.healthMessage || '异常';
+                statusIcon = '✗';
+            }
+            
+            // 资源包信息
+            let bonusHtml = '';
+            if (cred.bonus) {
+                const usedPercent = cred.bonus.total > 0 ? Math.round((cred.bonus.usedCount / cred.bonus.total) * 100) : 0;
+                const bonusColor = cred.bonus.remaining > 0 ? '#10b981' : '#8b949e';
+                bonusHtml = `
+                    <div class="credential-bonus" style="display: flex; align-items: center; gap: 8px; margin-left: 12px;">
+                        <span style="font-size: 12px; color: #8b949e;">资源包:</span>
+                        <span style="font-size: 13px; font-weight: 600; color: ${bonusColor};">${cred.bonus.remaining}/${cred.bonus.total}</span>
+                    </div>
+                `;
+            }
+            
+            item.innerHTML = `
+                <div class="credential-info">
+                    <div class="credential-icon">${icon}</div>
+                    <div class="credential-details">
+                        <div class="credential-name">${name}${addedDateStr ? `<span style="color: #8b949e; font-weight: 400; font-size: 12px; margin-left: 8px;">${addedDateStr}</span>` : ''}</div>
+                        <div class="credential-path" title="${cred.path}">${shortPath}</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    ${bonusHtml}
+                    <div class="credential-status ${statusClass}" id="status-${cred.id}">
+                        <span>${statusIcon}</span>
+                        <span>${statusText}</span>
+                    </div>
+                </div>
+            `;
+            return item;
+        }
+        
+        // 模态框控制
+        function showAwsImportModal() {
+            awsUploadedFiles = [];
+            awsMergedCredentials = null;
+            awsCurrentMode = 'file';
+            
+            document.getElementById('awsFilesInput').value = '';
+            document.getElementById('awsJsonInput').value = '';
+            document.getElementById('fileList').style.display = 'none';
+            document.getElementById('fileList').innerHTML = '';
+            document.getElementById('validationResult').style.display = 'none';
+            document.getElementById('jsonPreview').style.display = 'none';
+            document.getElementById('awsImportBtn').disabled = true;
+            
+            switchAwsMode('file');
+            document.getElementById('awsImportModal').classList.add('active');
+        }
+        
+        function showBatchImportModal() {
             document.getElementById('batchTokensInput').value = '';
             document.getElementById('batchProgress').style.display = 'none';
             document.getElementById('batchResults').innerHTML = '';
+            document.getElementById('batchImportModal').classList.add('active');
         }
-
-        function showKiroAwsImportModal() {
-            document.getElementById('kiroAwsModal').style.display = 'flex';
-            document.getElementById('awsJsonInput').value = '';
+        
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
         }
-
-        // Kiro 批量导入逻辑
-        async function startKiroBatchImport() {
+        
+        // AWS 模式切换
+        function switchAwsMode(mode) {
+            awsCurrentMode = mode;
+            document.getElementById('modeFileBtn').classList.toggle('active', mode === 'file');
+            document.getElementById('modeJsonBtn').classList.toggle('active', mode === 'json');
+            document.getElementById('fileModeSection').style.display = mode === 'file' ? 'block' : 'none';
+            document.getElementById('jsonModeSection').style.display = mode === 'json' ? 'block' : 'none';
+            
+            if (mode === 'file') validateAwsFiles();
+            else validateAwsJsonInput();
+        }
+        
+        // 初始化上传区域
+        function initUploadZone() {
+            const zone = document.getElementById('uploadZone');
+            const input = document.getElementById('awsFilesInput');
+            
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.style.borderColor = '#a855f7';
+                zone.style.background = 'rgba(168, 85, 247, 0.05)';
+            });
+            zone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                zone.style.borderColor = '#30363d';
+                zone.style.background = 'transparent';
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.style.borderColor = '#30363d';
+                zone.style.background = 'transparent';
+                const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.json'));
+                if (files.length > 0) processAwsFiles(files);
+            });
+            input.addEventListener('change', () => {
+                const files = Array.from(input.files);
+                if (files.length > 0) processAwsFiles(files);
+            });
+        }
+        
+        // 处理上传文件
+        async function processAwsFiles(files) {
+            for (const file of files) {
+                const existingIndex = awsUploadedFiles.findIndex(f => f.name === file.name);
+                try {
+                    const content = await file.text();
+                    const json = JSON.parse(content);
+                    if (existingIndex >= 0) {
+                        awsUploadedFiles[existingIndex] = { name: file.name, content: json };
+                    } else {
+                        awsUploadedFiles.push({ name: file.name, content: json });
+                    }
+                } catch (error) {
+                    showToast(`解析失败: ${file.name}`, 'error');
+                }
+            }
+            renderFileList();
+            document.getElementById('awsFilesInput').value = '';
+            validateAwsFiles();
+        }
+        
+        // 渲染文件列表
+        function renderFileList() {
+            const listEl = document.getElementById('fileList');
+            if (awsUploadedFiles.length === 0) {
+                listEl.style.display = 'none';
+                return;
+            }
+            
+            listEl.style.display = 'block';
+            listEl.innerHTML = awsUploadedFiles.map(file => {
+                const fields = Object.keys(file.content).slice(0, 3).join(', ');
+                return `
+                    <div class="file-item">
+                        <div class="file-item-info">
+                            <span>📄</span>
+                            <div>
+                                <div class="file-item-name">${file.name}</div>
+                                <div class="file-item-fields">${fields}...</div>
+                            </div>
+                        </div>
+                        <button class="file-item-remove" onclick="removeFile('${file.name}')">✕</button>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function removeFile(filename) {
+            awsUploadedFiles = awsUploadedFiles.filter(f => f.name !== filename);
+            renderFileList();
+            validateAwsFiles();
+        }
+        
+        // 验证文件
+        function validateAwsFiles() {
+            if (awsUploadedFiles.length === 0) {
+                hideValidation();
+                return;
+            }
+            
+            awsMergedCredentials = {};
+            let expiresAtFromRefreshTokenFile = null;
+            for (const file of awsUploadedFiles) {
+                if (file.content.refreshToken && file.content.expiresAt) {
+                    expiresAtFromRefreshTokenFile = file.content.expiresAt;
+                }
+                Object.assign(awsMergedCredentials, file.content);
+            }
+            if (expiresAtFromRefreshTokenFile) {
+                awsMergedCredentials.expiresAt = expiresAtFromRefreshTokenFile;
+            }
+            
+            showValidationResult();
+        }
+        
+        // 验证 JSON 输入
+        function validateAwsJsonInput() {
+            const inputValue = document.getElementById('awsJsonInput').value.trim();
+            if (!inputValue) {
+                hideValidation();
+                return;
+            }
+            
+            try {
+                awsMergedCredentials = JSON.parse(inputValue);
+                showValidationResult();
+            } catch (error) {
+                document.getElementById('validationResult').style.display = 'block';
+                document.getElementById('validationResult').className = 'validation-result error';
+                document.getElementById('validationResult').innerHTML = `<h4>❌ JSON 解析错误</h4><p style="font-size: 12px; color: #8b949e;">${error.message}</p>`;
+                document.getElementById('jsonPreview').style.display = 'none';
+                document.getElementById('awsImportBtn').disabled = true;
+                awsMergedCredentials = null;
+            }
+        }
+        
+        function hideValidation() {
+            document.getElementById('validationResult').style.display = 'none';
+            document.getElementById('jsonPreview').style.display = 'none';
+            document.getElementById('awsImportBtn').disabled = true;
+            awsMergedCredentials = null;
+        }
+        
+        function showValidationResult() {
+            const fields = [
+                { key: 'clientId', has: !!awsMergedCredentials.clientId },
+                { key: 'clientSecret', has: !!awsMergedCredentials.clientSecret },
+                { key: 'accessToken', has: !!awsMergedCredentials.accessToken },
+                { key: 'refreshToken', has: !!awsMergedCredentials.refreshToken }
+            ];
+            const isValid = fields.every(f => f.has);
+            
+            const resultEl = document.getElementById('validationResult');
+            resultEl.style.display = 'block';
+            resultEl.className = `validation-result ${isValid ? 'success' : 'error'}`;
+            resultEl.innerHTML = `
+                <h4>${isValid ? '✅ 验证通过' : '❌ 验证失败'}</h4>
+                <ul>
+                    ${fields.map(f => `<li><span class="${f.has ? 'found' : 'missing'}">${f.has ? '✓' : '✗'}</span> ${f.key}</li>`).join('')}
+                </ul>
+            `;
+            
+            document.getElementById('awsImportBtn').disabled = !isValid;
+            
+            // 显示预览
+            const previewEl = document.getElementById('jsonPreview');
+            const contentEl = document.getElementById('jsonPreviewContent');
+            previewEl.style.display = 'block';
+            
+            const previewData = { ...awsMergedCredentials };
+            if (previewData.clientSecret) previewData.clientSecret = previewData.clientSecret.substring(0, 8) + '...' + previewData.clientSecret.slice(-4);
+            if (previewData.accessToken) previewData.accessToken = previewData.accessToken.substring(0, 20) + '...' + previewData.accessToken.slice(-10);
+            if (previewData.refreshToken) previewData.refreshToken = previewData.refreshToken.substring(0, 10) + '...' + previewData.refreshToken.slice(-6);
+            contentEl.textContent = JSON.stringify(previewData, null, 2);
+        }
+        
+        // AWS 导入
+        async function startAwsImport() {
+            if (!awsMergedCredentials) return;
+            
+            const btn = document.getElementById('awsImportBtn');
+            btn.disabled = true;
+            btn.textContent = '导入中...';
+            
+            try {
+                if (!awsMergedCredentials.authMethod) {
+                    awsMergedCredentials.authMethod = 'builder-id';
+                }
+                
+                const response = await fetch(`${API_BASE}/kiro/import-aws-credentials`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ credentials: awsMergedCredentials })
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    showToast('AWS 凭据导入成功', 'success');
+                    closeModal('awsImportModal');
+                    loadCredentials();
+                } else if (data.error === 'duplicate') {
+                    showToast('凭据已存在', 'error');
+                } else {
+                    throw new Error(data.error || '导入失败');
+                }
+            } catch (error) {
+                showToast('导入错误: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '导入';
+            }
+        }
+        
+        // 批量导入
+        async function startBatchImport() {
             const tokens = document.getElementById('batchTokensInput').value.split('\n').filter(t => t.trim());
             if (tokens.length === 0) {
                 showToast('请输入至少一个 refreshToken', 'error');
                 return;
             }
-
+            
             const progressDiv = document.getElementById('batchProgress');
             const progressBar = document.getElementById('batchProgressBar');
             const progressText = document.getElementById('batchProgressText');
@@ -1060,11 +1990,11 @@
                     },
                     body: JSON.stringify({ refreshTokens: tokens })
                 });
-
+                
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
-
+                
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -1072,7 +2002,7 @@
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
-
+                    
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
@@ -1083,7 +2013,7 @@
                                     progressPercent.textContent = percent + '%';
                                     progressText.textContent = `正在导入 ${data.index}/${data.total}`;
                                     
-                                    const color = data.current.success ? '#4ade80' : '#ef4444';
+                                    const color = data.current.success ? '#10b981' : '#ef4444';
                                     const icon = data.current.success ? '✓' : '✗';
                                     const msg = data.current.success ? data.current.path : data.current.error;
                                     resultsDiv.innerHTML += `<div style="color:${color}">${icon} Token ${data.current.index}: ${msg}</div>`;
@@ -1091,7 +2021,8 @@
                                 }
                                 if (data.successCount !== undefined) {
                                     showToast(`导入完成: 成功 ${data.successCount}, 失败 ${data.failedCount}`, 'success');
-                                    setTimeout(() => closeModal('kiroBatchModal'), 2000);
+                                    loadCredentials();
+                                    setTimeout(() => closeModal('batchImportModal'), 2000);
                                 }
                             } catch (e) {}
                         }
@@ -1101,36 +2032,13 @@
                 showToast('导入失败: ' + error.message, 'error');
             }
         }
-
-        // Kiro AWS 导入逻辑
-        async function startKiroAwsImport() {
-            const jsonStr = document.getElementById('awsJsonInput').value.trim();
-            if (!jsonStr) {
-                showToast('请输入 JSON 内容', 'error');
-                return;
-            }
-
-            try {
-                const credentials = JSON.parse(jsonStr);
-                const response = await fetch(`${API_BASE}/kiro/import-aws-credentials`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${currentApiKey}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ credentials })
-                });
-
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    showToast('AWS 凭据导入成功', 'success');
-                    closeModal('kiroAwsModal');
-                } else {
-                    throw new Error(data.error || '导入失败');
-                }
-            } catch (error) {
-                showToast('导入错误: ' + error.message, 'error');
-            }
+        
+        // Toast
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
         }
     </script>
 </body>
