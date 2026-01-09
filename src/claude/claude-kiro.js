@@ -1721,6 +1721,9 @@ export class KiroApiService {
             const toolCalls = [];
             let currentToolCall = null;
 
+            const estimatedInputTokens = this.estimateInputTokens(requestBody);
+            const tokenBreakdown = this._lastTokenBreakdown || {};
+
             yield {
                 type: "message_start",
                 message: {
@@ -1729,7 +1732,7 @@ export class KiroApiService {
                     role: "assistant",
                     model: model,
                     usage: {
-                        input_tokens: 0,
+                        input_tokens: estimatedInputTokens,
                         output_tokens: 0,
                         cache_creation_input_tokens: 0,
                         cache_read_input_tokens: 0
@@ -1742,6 +1745,19 @@ export class KiroApiService {
                 if (event.type === 'contextUsage' && event.percentage) {
                     contextUsagePercentage = event.percentage;
                     inputTokens = this.calculateInputTokensFromPercentage(contextUsagePercentage);
+                    
+                    if (Math.abs(inputTokens - estimatedInputTokens) > estimatedInputTokens * 0.1) {
+                        yield {
+                            type: "message_delta",
+                            delta: {},
+                            usage: {
+                                input_tokens: inputTokens,
+                                output_tokens: 0,
+                                cache_creation_input_tokens: 0,
+                                cache_read_input_tokens: 0
+                            }
+                        };
+                    }
                 } else if (event.type === 'content' && event.content) {
                     totalContent += event.content;
 
@@ -1894,7 +1910,7 @@ export class KiroApiService {
 
             if (contextUsagePercentage === null) {
                 console.warn('[Kiro Stream] contextUsagePercentage not received, using estimation');
-                inputTokens = this.countTextTokens(JSON.stringify(requestBody.messages || []));
+                inputTokens = estimatedInputTokens;
             }
 
             const bracketToolCalls = parseBracketToolCalls(totalContent);
@@ -2002,36 +2018,115 @@ export class KiroApiService {
         return inputTokens;
     }
 
-    /**
-     * @deprecated Use contextUsagePercentage from API response instead
-     * Calculate input tokens from request body using Claude's official tokenizer
-     */
     estimateInputTokens(requestBody) {
-        console.warn('[Kiro] estimateInputTokens() is deprecated. Use contextUsagePercentage from API response instead.');
         let totalTokens = 0;
+        const OVERHEAD_MULTIPLIERS = {
+            system: 1.0,
+            message: 1.0,
+            tools: 1.0,
+            thinking: 1.0,
+            tool_result: 1.0,
+            tool_use_input: 1.0,
+            image: 1500
+        };
 
-        // Count system prompt tokens
+        const breakdown = {
+            system: 0,
+            thinking: 0,
+            text: 0,
+            tool_result: 0,
+            tool_use_input: 0,
+            image: 0,
+            thinking_content: 0,
+            tools_def: 0
+        };
+
         if (requestBody.system) {
             const systemText = this.getContentText(requestBody.system);
-            totalTokens += this.countTextTokens(systemText);
+            const systemTokens = this.countTextTokens(systemText);
+            const counted = Math.ceil(systemTokens * OVERHEAD_MULTIPLIERS.system);
+            breakdown.system = counted;
+            totalTokens += counted;
         }
 
-        // Count all messages tokens
+        if (requestBody.thinking?.type === 'enabled') {
+            const budget = this._normalizeThinkingBudgetTokens(requestBody.thinking.budget_tokens);
+            const prefixText = `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
+            const prefixTokens = this.countTextTokens(prefixText);
+            const counted = Math.ceil(prefixTokens * OVERHEAD_MULTIPLIERS.thinking);
+            breakdown.thinking = counted;
+            totalTokens += counted;
+        }
+
         if (requestBody.messages && Array.isArray(requestBody.messages)) {
             for (const message of requestBody.messages) {
-                if (message.content) {
-                    const contentText = this.getContentText(message);
-                    totalTokens += this.countTextTokens(contentText);
+                if (!message.content) {
+                    continue;
+                }
+
+                if (Array.isArray(message.content)) {
+                    for (const part of message.content) {
+                        if (part.type === 'text' && part.text) {
+                            const counted = Math.ceil(this.countTextTokens(part.text) * OVERHEAD_MULTIPLIERS.message);
+                            breakdown.text += counted;
+                            totalTokens += counted;
+                        }
+                        else if (part.type === 'tool_result') {
+                            const toolResultText = this.getContentText(part.content);
+                            const counted = Math.ceil(this.countTextTokens(toolResultText) * OVERHEAD_MULTIPLIERS.tool_result);
+                            breakdown.tool_result += counted;
+                            totalTokens += counted;
+                        }
+                        else if (part.type === 'tool_use' && part.input) {
+                            const inputJson = JSON.stringify(part.input);
+                            const counted = Math.ceil(this.countTextTokens(inputJson) * OVERHEAD_MULTIPLIERS.tool_use_input);
+                            breakdown.tool_use_input += counted;
+                            totalTokens += counted;
+                        }
+                        else if (part.type === 'image') {
+                            breakdown.image += OVERHEAD_MULTIPLIERS.image;
+                            totalTokens += OVERHEAD_MULTIPLIERS.image;
+                        }
+                        else if (part.type === 'thinking' && part.thinking) {
+                            const counted = Math.ceil(this.countTextTokens(part.thinking) * OVERHEAD_MULTIPLIERS.message);
+                            breakdown.thinking_content += counted;
+                            totalTokens += counted;
+                        }
+                    }
+                }
+                else if (typeof message.content === 'string') {
+                    const counted = Math.ceil(this.countTextTokens(message.content) * OVERHEAD_MULTIPLIERS.message);
+                    breakdown.text += counted;
+                    totalTokens += counted;
                 }
             }
         }
 
-        // Count tools definitions tokens if present
         if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            totalTokens += this.countTextTokens(JSON.stringify(requestBody.tools));
+            for (const tool of requestBody.tools) {
+                const toolJson = JSON.stringify(tool);
+                const toolTokens = this.countTextTokens(toolJson);
+                const counted = Math.ceil(toolTokens * OVERHEAD_MULTIPLIERS.tools);
+                breakdown.tools_def += counted;
+                totalTokens += counted;
+            }
         }
 
-        return totalTokens;
+        const hasTools = requestBody.tools && requestBody.tools.length > 0;
+        const toolsDefTokens = breakdown.tools_def || 0;
+        const isSmallToolsDef = toolsDefTokens > 0 && toolsDefTokens < 21000;
+
+        const KIRO_BASE_OVERHEAD = 400;
+        const KIRO_PERCENTAGE_OVERHEAD = hasTools 
+            ? (isSmallToolsDef ? 0.18 : 0.08)
+            : 0.25;
+
+        const baseOverhead = KIRO_BASE_OVERHEAD;
+        const percentageOverhead = Math.ceil(totalTokens * KIRO_PERCENTAGE_OVERHEAD);
+        totalTokens += baseOverhead + percentageOverhead;
+        
+        this._lastTokenBreakdown = breakdown;
+        return Math.ceil(totalTokens);
     }
 
     /**
