@@ -67,21 +67,63 @@ class PluginManager {
                 const content = await fs.readFile(PLUGINS_CONFIG_FILE, 'utf8');
                 this.pluginsConfig = JSON.parse(content);
             } else {
-                // 创建默认配置
-                this.pluginsConfig = {
-                    plugins: {
-                        'api-potluck': {
-                            enabled: true,
-                            description: 'API 大锅饭 - Key 管理和用量统计'
-                        }
-                    }
-                };
+                // 扫描 plugins 目录生成默认配置
+                this.pluginsConfig = await this.generateDefaultConfig();
                 await this.saveConfig();
             }
         } catch (error) {
             console.error('[PluginManager] Failed to load config:', error.message);
             this.pluginsConfig = { plugins: {} };
         }
+    }
+
+    /**
+     * 扫描 plugins 目录生成默认配置
+     * @returns {Promise<Object>} 默认插件配置
+     */
+    async generateDefaultConfig() {
+        const defaultConfig = { plugins: {} };
+        const pluginsDir = path.join(process.cwd(), 'src', 'plugins');
+        
+        try {
+            if (!existsSync(pluginsDir)) {
+                return defaultConfig;
+            }
+            
+            const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
+            
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                
+                const pluginPath = path.join(pluginsDir, entry.name, 'index.js');
+                if (!existsSync(pluginPath)) continue;
+                
+                try {
+                    // 动态导入插件以获取其元信息
+                    const pluginModule = await import(`file://${pluginPath}`);
+                    const plugin = pluginModule.default || pluginModule;
+                    
+                    if (plugin && plugin.name) {
+                        defaultConfig.plugins[plugin.name] = {
+                            enabled: true,
+                            description: plugin.description || ''
+                        };
+                        console.log(`[PluginManager] Found plugin for default config: ${plugin.name}`);
+                    }
+                } catch (importError) {
+                    // 如果导入失败，使用目录名作为插件名
+                    defaultConfig.plugins[entry.name] = {
+                        enabled: true,
+                        description: ''
+                    };
+                    console.warn(`[PluginManager] Could not import plugin ${entry.name}, using directory name:`, importError.message);
+                }
+            }
+        } catch (error) {
+            console.error('[PluginManager] Failed to scan plugins directory:', error.message);
+        }
+        
+        return defaultConfig;
     }
 
     /**
@@ -368,30 +410,6 @@ class PluginManager {
     isPluginStaticPath(path) {
         const staticPaths = this.getStaticPaths();
         return staticPaths.some(sp => path === sp || path === '/' + sp);
-    }
-
-    /**
-     * 获取所有插件的公开 API 路径（不需要 UI 管理 API token 验证）
-     * @returns {string[]}
-     */
-    getPublicApiPaths() {
-        const paths = [];
-        for (const plugin of this.getEnabledPlugins()) {
-            if (Array.isArray(plugin.publicApiPaths)) {
-                paths.push(...plugin.publicApiPaths);
-            }
-        }
-        return paths;
-    }
-
-    /**
-     * 检查路径是否是插件公开 API 路径（不需要 UI 管理 API token 验证）
-     * @param {string} path - 请求路径
-     * @returns {boolean}
-     */
-    isPluginPublicApiPath(path) {
-        const publicPaths = this.getPublicApiPaths();
-        return publicPaths.some(pp => path === pp || path.startsWith(pp + '/'));
     }
 
     /**
