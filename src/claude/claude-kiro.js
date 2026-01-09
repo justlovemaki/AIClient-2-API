@@ -1459,12 +1459,33 @@ export class KiroApiService {
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
 
-        let inputTokens = 0;
-        let contextUsagePercentage = null;
+        // 预先估算 inputTokens 作为保底值，如果收到 contextUsagePercentage 会被覆盖
+        let inputTokens = this.estimateInputTokens(requestBody);
         const messageId = `${uuidv4()}`;
 
-        let messageStartSent = false;
-        const bufferedEvents = [];
+        // 立即发送 message_start，不等待 contextUsagePercentage
+        yield {
+            type: "message_start",
+            message: {
+                id: messageId,
+                type: "message",
+                role: "assistant",
+                model: model,
+                usage: {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cache_creation_input_tokens: 0,
+                    cache_read_input_tokens: 0
+                },
+                content: []
+            }
+        };
+
+        yield {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "text", text: "" }
+        };
 
         try {
             let totalContent = '';
@@ -1474,54 +1495,16 @@ export class KiroApiService {
 
             for await (const event of this.streamApiReal('', finalModel, requestBody)) {
                 if (event.type === 'contextUsage' && event.percentage) {
-                    contextUsagePercentage = event.percentage;
-                    inputTokens = this.calculateInputTokensFromPercentage(contextUsagePercentage);
-
-                    if (!messageStartSent) {
-                        yield {
-                            type: "message_start",
-                            message: {
-                                id: messageId,
-                                type: "message",
-                                role: "assistant",
-                                model: model,
-                                usage: {
-                                    input_tokens: inputTokens,
-                                    output_tokens: 0,
-                                    cache_creation_input_tokens: 0,
-                                    cache_read_input_tokens: 0
-                                },
-                                content: []
-                            }
-                        };
-
-                        yield {
-                            type: "content_block_start",
-                            index: 0,
-                            content_block: { type: "text", text: "" }
-                        };
-
-                        messageStartSent = true;
-
-                        for (const buffered of bufferedEvents) {
-                            yield buffered;
-                        }
-                        bufferedEvents.length = 0;
-                    }
+                    // 收到 contextUsagePercentage 时更新 inputTokens，用于最终的 message_delta
+                    inputTokens = this.calculateInputTokensFromPercentage(event.percentage);
                 } else if (event.type === 'content' && event.content) {
                     totalContent += event.content;
 
-                    const contentEvent = {
+                    yield {
                         type: "content_block_delta",
                         index: 0,
                         delta: { type: "text_delta", text: event.content }
                     };
-
-                    if (messageStartSent) {
-                        yield contentEvent;
-                    } else {
-                        bufferedEvents.push(contentEvent);
-                    }
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
                     // 工具调用事件（包含 name 和 toolUseId）
@@ -1583,12 +1566,6 @@ export class KiroApiService {
                 } catch (e) { }
                 toolCalls.push(currentToolCall);
                 currentToolCall = null;
-            }
-
-            // Fallback: 如果 contextUsagePercentage 没有收到，抛出错误
-            if (!messageStartSent) {
-                console.error('[Kiro Stream] contextUsagePercentage not received from API - cannot calculate accurate input tokens');
-                throw new Error('Failed to receive contextUsagePercentage from Kiro API. Input token calculation requires this data.');
             }
 
             // 检查文本内容中的 bracket 格式工具调用
@@ -1697,11 +1674,10 @@ export class KiroApiService {
     }
 
     /**
-     * @deprecated Use contextUsagePercentage from API response instead
-     * Calculate input tokens from request body using Claude's official tokenizer
+     * Estimate input tokens from request body using Claude's official tokenizer
+     * Used as fallback when contextUsagePercentage is not available from API
      */
     estimateInputTokens(requestBody) {
-        console.warn('[Kiro] estimateInputTokens() is deprecated. Use contextUsagePercentage from API response instead.');
         let totalTokens = 0;
 
         // Count system prompt tokens
