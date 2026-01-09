@@ -4,6 +4,7 @@ node_modules
 CLAUDE.md
 config.json
 provider_pools.json
+plugins.json
 fetch_system_prompt.txt
 input_system_prompt.txt
 token-store.json

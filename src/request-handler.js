@@ -1,5 +1,5 @@
 import deepmerge from 'deepmerge';
-import { handleError, isAuthorized } from './common.js';
+import { handleError } from './common.js';
 import { handleUIApiRequests, serveStaticFiles } from './ui-manager.js';
 import { handleAPIRequests } from './api-manager.js';
 import { getApiService, getProviderStatus } from './service-manager.js';
@@ -7,10 +7,7 @@ import { getProviderPoolManager } from './service-manager.js';
 import { MODEL_PROVIDER } from './common.js';
 import { PROMPT_LOG_FILENAME } from './config-manager.js';
 import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
-
-// ============== API 大锅饭插件 - 开始 ==============
-import { handlePotluckApiRoutes, potluckAuthMiddleware, sendPotluckError } from './api-potluck/index.js';
-// ============== API 大锅饭插件 - 结束 ==============
+import { getPluginManager } from './plugin-manager.js';
 
 /**
  * Parse request body as JSON
@@ -58,8 +55,10 @@ export function createRequestHandler(config, providerPoolManager) {
         }
 
         // Serve static files for UI (除了登录页面需要认证)
-        // ============== API 大锅饭插件: 添加 /potluck.html ==============
-        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html' || path === '/potluck.html') {
+        // 检查是否是插件静态文件
+        const pluginManager = getPluginManager();
+        const isPluginStatic = pluginManager.isPluginStaticPath(path);
+        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html' || isPluginStatic) {
             const served = await serveStaticFiles(path, res);
             if (served) return;
         }
@@ -67,10 +66,9 @@ export function createRequestHandler(config, providerPoolManager) {
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
 
-        // ============== API 大锅饭插件 - 开始 ==============
-        const potluckRouteHandled = await handlePotluckApiRoutes(method, path, req, res);
-        if (potluckRouteHandled) return;
-        // ============== API 大锅饭插件 - 结束 ==============
+        // 执行插件路由
+        const pluginRouteHandled = await pluginManager.executeRoutes(method, path, req, res);
+        if (pluginRouteHandled) return;
 
         // Ollama show endpoint with model name
         if (method === 'POST' && path === '/ollama/api/show') {
@@ -153,19 +151,23 @@ export function createRequestHandler(config, providerPoolManager) {
             }
         }
 
-        // Check authentication for API requests (before Ollama handling to allow unauthenticated Ollama endpoints)
-        // ============== API 大锅饭插件 - 开始 ==============
-        const potluckAuth = await potluckAuthMiddleware(req, requestUrl);
-        if (potluckAuth.authorized === false) {
-            sendPotluckError(res, potluckAuth.error);
+        // 1. 执行认证流程（只有 type='auth' 的插件参与）
+        const authResult = await pluginManager.executeAuth(req, res, requestUrl, currentConfig);
+        if (authResult.handled) {
+            // 认证插件已处理请求（如发送了错误响应）
             return;
-        } else if (potluckAuth.authorized === true) {
-            currentConfig.potluckApiKey = potluckAuth.apiKey;
-            console.log(`[API Potluck] Authorized with key: ${potluckAuth.apiKey.substring(0, 12)}...`);
-        } else if (!isAuthorized(req, requestUrl, currentConfig.REQUIRED_API_KEY)) {
-        // ============== API 大锅饭插件 - 结束 ==============
+        }
+        if (!authResult.authorized) {
+            // 没有认证插件授权，返回 401
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
+            return;
+        }
+        
+        // 2. 执行普通中间件（type!='auth' 的插件）
+        const middlewareResult = await pluginManager.executeMiddleware(req, res, requestUrl, currentConfig);
+        if (middlewareResult.handled) {
+            // 中间件已处理请求
             return;
         }
 

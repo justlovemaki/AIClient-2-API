@@ -4,6 +4,7 @@ import { initApiService, autoLinkProviderConfigs } from './service-manager.js';
 import { initializeUIManagement } from './ui-manager.js';
 import { initializeAPIManagement } from './api-manager.js';
 import { createRequestHandler } from './request-handler.js';
+import { discoverPlugins, getPluginManager } from './plugin-manager.js';
 
 /**
  * @license
@@ -223,6 +224,22 @@ async function startServer() {
     // 自动关联 configs 目录中的配置文件到对应的提供商
     console.log('[Initialization] Checking for unlinked provider configs...');
     await autoLinkProviderConfigs(CONFIG);
+
+    // Initialize plugin system
+    console.log('[Initialization] Discovering and initializing plugins...');
+    await discoverPlugins();
+    const pluginManager = getPluginManager();
+    await pluginManager.initAll(CONFIG);
+    
+    // Log loaded plugins
+    const pluginList = pluginManager.getPluginList();
+    if (pluginList.length > 0) {
+        console.log(`[Plugins] Loaded ${pluginList.length} plugin(s):`);
+        pluginList.forEach(p => {
+            const status = p.enabled ? '✓' : '✗';
+            console.log(`  ${status} ${p.name} v${p.version} - ${p.description}`);
+        });
+    }
 
     // Initialize API services
     const services = await initApiService(CONFIG);
