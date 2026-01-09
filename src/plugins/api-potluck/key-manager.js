@@ -8,17 +8,43 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-// 配置
+// 配置常量
 const KEYS_STORE_FILE = path.join(process.cwd(), 'configs', 'api-potluck-keys.json');
 const KEY_PREFIX = 'maki_';
-const DEFAULT_DAILY_LIMIT = 1000;
-const PERSIST_INTERVAL = 5000; // 5秒持久化一次
+
+// 默认配置（会被 user-data-manager 的配置覆盖）
+const DEFAULT_CONFIG = {
+    defaultDailyLimit: 500,
+    persistInterval: 5000
+};
+
+// 配置获取函数（由外部注入）
+let configGetter = null;
+
+/**
+ * 设置配置获取函数
+ * @param {Function} getter - 返回配置对象的函数
+ */
+export function setConfigGetter(getter) {
+    configGetter = getter;
+}
+
+/**
+ * 获取当前配置
+ */
+function getConfig() {
+    if (configGetter) {
+        return configGetter();
+    }
+    return DEFAULT_CONFIG;
+}
 
 // 内存缓存
 let keyStore = null;
 let isDirty = false;
 let isWriting = false;
 let persistTimer = null;
+let currentPersistInterval = DEFAULT_CONFIG.persistInterval;
 
 /**
  * 初始化：从文件加载数据到内存
@@ -29,6 +55,18 @@ function ensureLoaded() {
         if (existsSync(KEYS_STORE_FILE)) {
             const content = readFileSync(KEYS_STORE_FILE, 'utf8');
             keyStore = JSON.parse(content);
+            // 兼容历史数据：为旧 Key 添加 bonusRemaining 字段
+            let needsMigration = false;
+            for (const keyData of Object.values(keyStore.keys)) {
+                if (keyData.bonusRemaining === undefined) {
+                    keyData.bonusRemaining = 0;
+                    needsMigration = true;
+                }
+            }
+            if (needsMigration) {
+                console.log('[API Potluck] Migrated legacy keys: added bonusRemaining field');
+                markDirty();
+            }
         } else {
             keyStore = { keys: {} };
             syncWriteToFile();
@@ -37,9 +75,14 @@ function ensureLoaded() {
         console.error('[API Potluck] Failed to load key store:', error.message);
         keyStore = { keys: {} };
     }
+    
+    // 获取配置的持久化间隔
+    const config = getConfig();
+    currentPersistInterval = config.persistInterval || DEFAULT_CONFIG.persistInterval;
+    
     // 启动定期持久化
     if (!persistTimer) {
-        persistTimer = setInterval(persistIfDirty, PERSIST_INTERVAL);
+        persistTimer = setInterval(persistIfDirty, currentPersistInterval);
         // 进程退出时保存
         process.on('beforeExit', () => persistIfDirty());
         process.on('SIGINT', () => { persistIfDirty(); process.exit(0); });
@@ -93,10 +136,23 @@ function markDirty() {
 }
 
 /**
- * 生成随机 API Key
+ * 生成随机 API Key（确保不重复）
  */
 function generateApiKey() {
-    return `${KEY_PREFIX}${crypto.randomBytes(16).toString('hex')}`;
+    ensureLoaded();
+    let apiKey;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    do {
+        apiKey = `${KEY_PREFIX}${crypto.randomBytes(16).toString('hex')}`;
+        attempts++;
+        if (attempts >= maxAttempts) {
+            throw new Error('Failed to generate unique API key after multiple attempts');
+        }
+    } while (keyStore.keys[apiKey]);
+    
+    return apiKey;
 }
 
 /**
@@ -121,9 +177,14 @@ function checkAndResetDailyCount(keyData) {
 
 /**
  * 创建新的 API Key
+ * @param {string} name - Key 名称
+ * @param {number} [dailyLimit] - 每日限额，不传则使用配置的默认值
  */
-export async function createKey(name = '', dailyLimit = DEFAULT_DAILY_LIMIT) {
+export async function createKey(name = '', dailyLimit = null) {
     ensureLoaded();
+    const config = getConfig();
+    const actualDailyLimit = dailyLimit ?? config.defaultDailyLimit ?? DEFAULT_CONFIG.defaultDailyLimit;
+    
     const apiKey = generateApiKey();
     const now = new Date().toISOString();
     const today = getTodayDateString();
@@ -132,12 +193,13 @@ export async function createKey(name = '', dailyLimit = DEFAULT_DAILY_LIMIT) {
         id: apiKey,
         name: name || `Key-${Object.keys(keyStore.keys).length + 1}`,
         createdAt: now,
-        dailyLimit,
+        dailyLimit: actualDailyLimit,
         todayUsage: 0,
         totalUsage: 0,
         lastResetDate: today,
         lastUsedAt: null,
-        enabled: true
+        enabled: true,
+        bonusRemaining: 0           // 剩余资源包总次数（由同步检查更新）
     };
 
     keyStore.keys[apiKey] = keyData;
@@ -233,7 +295,44 @@ export async function updateKeyName(keyId, newName) {
 }
 
 /**
- * 验证 API Key 是否有效且有配额
+ * 重新生成 API Key（保留原有数据，更换 Key ID）
+ * @param {string} oldKeyId - 原 Key ID
+ * @returns {Promise<{oldKey: string, newKey: string, keyData: Object}|null>}
+ */
+export async function regenerateKey(oldKeyId) {
+    ensureLoaded();
+    const oldKeyData = keyStore.keys[oldKeyId];
+    if (!oldKeyData) return null;
+    
+    // 生成新的唯一 Key
+    const newKeyId = generateApiKey();
+    
+    // 复制数据到新 Key
+    const newKeyData = {
+        ...oldKeyData,
+        id: newKeyId,
+        regeneratedAt: new Date().toISOString(),
+        regeneratedFrom: oldKeyId.substring(0, 12) + '...'
+    };
+    
+    // 删除旧 Key，添加新 Key
+    delete keyStore.keys[oldKeyId];
+    keyStore.keys[newKeyId] = newKeyData;
+    
+    markDirty();
+    await persistIfDirty(); // 立即持久化
+    
+    console.log(`[API Potluck] Regenerated key: ${oldKeyId.substring(0, 12)}... -> ${newKeyId.substring(0, 12)}...`);
+    
+    return {
+        oldKey: oldKeyId,
+        newKey: newKeyId,
+        keyData: newKeyData
+    };
+}
+
+/**
+ * 验证 API Key 是否有效且有配额（每日限额 + 资源包）
  */
 export async function validateKey(apiKey) {
     ensureLoaded();
@@ -246,27 +345,65 @@ export async function validateKey(apiKey) {
 
     // 直接在内存中检查和重置
     checkAndResetDailyCount(keyData);
-    if (keyData.todayUsage >= keyData.dailyLimit) {
-        return { valid: false, reason: 'quota_exceeded', keyData };
+    
+    // 检查每日限额
+    if (keyData.todayUsage < keyData.dailyLimit) {
+        return { valid: true, keyData, useBonus: false };
     }
-    return { valid: true, keyData };
+    
+    // 每日限额用尽，检查资源包
+    const bonusRemaining = keyData.bonusRemaining || 0;
+    if (bonusRemaining > 0) {
+        return { valid: true, keyData, useBonus: true, bonusRemaining };
+    }
+    
+    return { valid: false, reason: 'quota_exceeded', keyData };
 }
 
 /**
  * 增加 Key 的使用次数（原子操作，直接修改内存）
+ * 优先消耗每日限额，用尽后消耗资源包
+ * @param {string} apiKey - API Key
+ * @param {Function} [onBonusUsed] - 资源包消耗回调，用于更新 data 中的 usedCount
  */
-export async function incrementUsage(apiKey) {
+export async function incrementUsage(apiKey, onBonusUsed = null) {
     ensureLoaded();
     const keyData = keyStore.keys[apiKey];
     if (!keyData) return null;
 
     checkAndResetDailyCount(keyData);
-    keyData.todayUsage += 1;
+    
+    let usedBonus = false;
+    
+    // 优先消耗每日限额
+    if (keyData.todayUsage < keyData.dailyLimit) {
+        keyData.todayUsage += 1;
+    } else {
+        // 每日限额用尽，消耗资源包
+        const bonusRemaining = keyData.bonusRemaining || 0;
+        
+        if (bonusRemaining > 0) {
+            keyData.bonusRemaining = bonusRemaining - 1;
+            usedBonus = true;
+            
+            // 触发回调更新 data 中的 usedCount
+            if (onBonusUsed) {
+                await onBonusUsed(apiKey);
+            }
+        } else {
+            // 无可用配额
+            return null;
+        }
+    }
+    
     keyData.totalUsage += 1;
     keyData.lastUsedAt = new Date().toISOString();
     markDirty();
-    // 不立即持久化，由定时器批量写入
-    return keyData;
+    
+    return {
+        ...keyData,
+        usedBonus
+    };
 }
 
 /**
@@ -293,5 +430,79 @@ export async function getStats() {
     };
 }
 
+// ============ 凭证资源包管理 ============
+
+/**
+ * 更新 Key 的剩余资源包次数（由同步检查调用）
+ * @param {string} keyId - Key ID
+ * @param {number} bonusRemaining - 剩余资源包总次数
+ * @returns {Promise<boolean>}
+ */
+export async function updateBonusRemaining(keyId, bonusRemaining) {
+    ensureLoaded();
+    const keyData = keyStore.keys[keyId];
+    if (!keyData) return false;
+    
+    keyData.bonusRemaining = Math.max(0, bonusRemaining);
+    markDirty();
+    return true;
+}
+
+/**
+ * 获取 Key 的资源包信息
+ * @param {string} keyId - Key ID
+ * @param {Function} getConfigFn - 获取配置的函数（从 user-data-manager 传入）
+ * @returns {Promise<Object|null>}
+ */
+export async function getBonusInfo(keyId, getConfigFn = null) {
+    ensureLoaded();
+    const keyData = keyStore.keys[keyId];
+    if (!keyData) return null;
+    
+    // 从 user-data-manager 获取配置
+    const config = getConfigFn ? getConfigFn() : { bonusPerCredential: 300, bonusValidityDays: 30 };
+    
+    return {
+        bonusRemaining: keyData.bonusRemaining || 0,
+        bonusPerCredential: config.bonusPerCredential,
+        validityDays: config.bonusValidityDays
+    };
+}
+
+/**
+ * 批量更新所有 Key 的每日限额
+ * @param {number} newLimit - 新的每日限额
+ * @returns {Promise<{total: number, updated: number}>}
+ */
+export async function applyDailyLimitToAllKeys(newLimit) {
+    ensureLoaded();
+    const keys = Object.values(keyStore.keys);
+    let updated = 0;
+    
+    for (const keyData of keys) {
+        if (keyData.dailyLimit !== newLimit) {
+            keyData.dailyLimit = newLimit;
+            updated++;
+        }
+    }
+    
+    if (updated > 0) {
+        markDirty();
+        await persistIfDirty();
+    }
+    
+    console.log(`[API Potluck] Applied daily limit ${newLimit} to ${updated}/${keys.length} keys`);
+    return { total: keys.length, updated };
+}
+
+/**
+ * 获取所有 Key ID 列表
+ * @returns {string[]}
+ */
+export function getAllKeyIds() {
+    ensureLoaded();
+    return Object.keys(keyStore.keys);
+}
+
 // 导出常量
-export { KEY_PREFIX, DEFAULT_DAILY_LIMIT };
+export { KEY_PREFIX };

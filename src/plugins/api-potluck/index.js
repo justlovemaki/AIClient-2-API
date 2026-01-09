@@ -21,7 +21,7 @@ import {
     incrementUsage,
     getStats,
     KEY_PREFIX,
-    DEFAULT_DAILY_LIMIT
+    setConfigGetter
 } from './key-manager.js';
 
 import {
@@ -30,14 +30,16 @@ import {
     sendPotluckError
 } from './middleware.js';
 
-import { handlePotluckApiRoutes, handlePotluckUserApiRoutes } from './api-routes.js';
+import { consumeBonus, getConfig } from './user-data-manager.js';
+
+import { handlePotluckApiRoutes, handlePotluckUserApiRoutes, startHealthCheckScheduler, stopHealthCheckScheduler } from './api-routes.js';
 
 /**
  * 插件定义
  */
 const apiPotluckPlugin = {
     name: 'api-potluck',
-    version: '1.0.0',
+    version: '1.0.1',
     description: 'API 大锅饭 - Key 管理和用量统计插件',
     
     // 插件类型：认证插件
@@ -52,7 +54,10 @@ const apiPotluckPlugin = {
      */
     async init(config) {
         console.log('[API Potluck Plugin] Initializing...');
-        // 插件初始化逻辑（如果需要）
+        // 注入配置获取函数
+        setConfigGetter(getConfig);
+        // 启动定时健康检查
+        startHealthCheckScheduler();
     },
 
     /**
@@ -60,7 +65,8 @@ const apiPotluckPlugin = {
      */
     async destroy() {
         console.log('[API Potluck Plugin] Destroying...');
-        // 清理逻辑（如果需要）
+        // 停止定时健康检查
+        stopHealthCheckScheduler();
     },
 
     /**
@@ -108,7 +114,7 @@ const apiPotluckPlugin = {
                 'invalid_format': 'Invalid API key format',
                 'not_found': 'API key not found',
                 'disabled': 'API key has been disabled',
-                'quota_exceeded': 'Daily quota exceeded for this API key'
+                'quota_exceeded': 'Quota exceeded for this API key'
             };
 
             const statusCodes = {
@@ -153,7 +159,10 @@ const apiPotluckPlugin = {
         async onContentGenerated(config) {
             if (config.potluckApiKey) {
                 try {
-                    await incrementUsage(config.potluckApiKey);
+                    // 传入资源包消耗回调
+                    await incrementUsage(config.potluckApiKey, async (apiKey) => {
+                        await consumeBonus(apiKey);
+                    });
                 } catch (e) {
                     // 静默失败，不影响主流程
                     console.error('[API Potluck Plugin] Failed to record usage:', e.message);
@@ -176,7 +185,7 @@ const apiPotluckPlugin = {
         incrementUsage,
         getStats,
         KEY_PREFIX,
-        DEFAULT_DAILY_LIMIT,
+        getConfig,
         extractPotluckKey,
         isPotluckRequest
     }
@@ -198,7 +207,7 @@ export {
     incrementUsage,
     getStats,
     KEY_PREFIX,
-    DEFAULT_DAILY_LIMIT,
+    getConfig,
     extractPotluckKey,
     isPotluckRequest
 };

@@ -82,7 +82,7 @@ export async function potluckAuthMiddleware(req, requestUrl) {
             'invalid_format': 'Invalid API key format',
             'not_found': 'API key not found',
             'disabled': 'API key has been disabled',
-            'quota_exceeded': 'Daily quota exceeded for this API key'
+            'quota_exceeded': 'Quota exceeded for this API key'
         };
 
         const statusCodes = {
