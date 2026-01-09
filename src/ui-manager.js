@@ -56,6 +56,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
+import { getPluginManager } from './plugin-manager.js';
 import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth, batchImportKiroRefreshTokens, batchImportKiroRefreshTokensStream, importAwsCredentials } from './oauth-handlers.js';
 import {
     generateUUID,
@@ -517,8 +518,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return true;
     }
     
-    // Handle UI management API requests (需要token验证，除了登录接口、健康检查和Events接口)
-    if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events') {
+    // Handle UI management API requests (需要token验证，除了登录接口、健康检查、Events接口和插件公开API路径)
+    const pluginManager = getPluginManager();
+    const isPluginPublicApi = pluginManager.isPluginPublicApiPath(pathParam);
+    if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events' && !isPluginPublicApi) {
         // 检查token验证
         const isAuth = await checkAuth(req);
         if (!isAuth) {
@@ -539,84 +542,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
     // 文件上传API
     if (method === 'POST' && pathParam === '/api/upload-oauth-credentials') {
-        const uploadMiddleware = upload.single('file');
-        
-        uploadMiddleware(req, res, async (err) => {
-            if (err) {
-                console.error('[UI API] File upload error:', err.message);
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    error: {
-                        message: err.message || 'File upload failed'
-                    }
-                }));
-                return;
-            }
-
-            try {
-                if (!req.file) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({
-                        error: {
-                            message: 'No file was uploaded'
-                        }
-                    }));
-                    return;
-                }
-
-                // multer执行完成后，表单字段已解析到req.body中
-                const provider = req.body.provider || 'common';
-                const tempFilePath = req.file.path;
-                
-                // 根据实际的provider移动文件到正确的目录
-                let targetDir = path.join(process.cwd(), 'configs', provider);
-                
-                // 如果是kiro类型的凭证，需要再包裹一层文件夹
-                if (provider === 'kiro') {
-                    // 使用时间戳作为子文件夹名称，确保每个上传的文件都有独立的目录
-                    const timestamp = Date.now();
-                    const originalNameWithoutExt = path.parse(req.file.originalname).name;
-                    const subFolder = `${timestamp}_${originalNameWithoutExt}`;
-                    targetDir = path.join(targetDir, subFolder);
-                }
-                
-                await fs.mkdir(targetDir, { recursive: true });
-                
-                const targetFilePath = path.join(targetDir, req.file.filename);
-                await fs.rename(tempFilePath, targetFilePath);
-                
-                const relativePath = path.relative(process.cwd(), targetFilePath);
-
-                // 广播更新事件
-                broadcastEvent('config_update', {
-                    action: 'add',
-                    filePath: relativePath,
-                    provider: provider,
-                    timestamp: new Date().toISOString()
-                });
-
-                console.log(`[UI API] OAuth credentials file uploaded: ${targetFilePath} (provider: ${provider})`);
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    success: true,
-                    message: 'File uploaded successfully',
-                    filePath: relativePath,
-                    originalName: req.file.originalname,
-                    provider: provider
-                }));
-
-            } catch (error) {
-                console.error('[UI API] File upload processing error:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    error: {
-                        message: 'File upload processing failed: ' + error.message
-                    }
-                }));
-            }
-        });
-        return true;
+        return handleUploadOAuthCredentials(req, res);
     }
 
     // Update admin password
@@ -3341,4 +3267,111 @@ async function copyRecursive(src, dest) {
     } else {
         await fs.copyFile(src, dest);
     }
+}
+
+/**
+ * 处理 OAuth 凭据文件上传
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {Object} options - 可选配置
+ * @param {Object} options.providerMap - 提供商类型映射表
+ * @param {string} options.logPrefix - 日志前缀
+ * @param {string} options.userInfo - 用户信息（用于日志）
+ * @param {Object} options.customUpload - 自定义 multer 实例
+ * @returns {Promise<boolean>} 始终返回 true 表示请求已处理
+ */
+export function handleUploadOAuthCredentials(req, res, options = {}) {
+    const {
+        providerMap = {},
+        logPrefix = '[UI API]',
+        userInfo = '',
+        customUpload = null
+    } = options;
+    
+    const uploadMiddleware = customUpload ? customUpload.single('file') : upload.single('file');
+    
+    return new Promise((resolve) => {
+        uploadMiddleware(req, res, async (err) => {
+            if (err) {
+                console.error(`${logPrefix} File upload error:`, err.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: err.message || 'File upload failed'
+                    }
+                }));
+                resolve(true);
+                return;
+            }
+
+            try {
+                if (!req.file) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: {
+                            message: 'No file was uploaded'
+                        }
+                    }));
+                    resolve(true);
+                    return;
+                }
+
+                // multer执行完成后，表单字段已解析到req.body中
+                const providerType = req.body.provider || 'common';
+                // 应用提供商映射（如果有）
+                const provider = providerMap[providerType] || providerType;
+                const tempFilePath = req.file.path;
+                
+                // 根据实际的provider移动文件到正确的目录
+                let targetDir = path.join(process.cwd(), 'configs', provider);
+                
+                // 如果是kiro类型的凭证，需要再包裹一层文件夹
+                if (provider === 'kiro') {
+                    // 使用时间戳作为子文件夹名称，确保每个上传的文件都有独立的目录
+                    const timestamp = Date.now();
+                    const originalNameWithoutExt = path.parse(req.file.originalname).name;
+                    const subFolder = `${timestamp}_${originalNameWithoutExt}`;
+                    targetDir = path.join(targetDir, subFolder);
+                }
+                
+                await fs.mkdir(targetDir, { recursive: true });
+                
+                const targetFilePath = path.join(targetDir, req.file.filename);
+                await fs.rename(tempFilePath, targetFilePath);
+                
+                const relativePath = path.relative(process.cwd(), targetFilePath);
+
+                // 广播更新事件
+                broadcastEvent('config_update', {
+                    action: 'add',
+                    filePath: relativePath,
+                    provider: provider,
+                    timestamp: new Date().toISOString()
+                });
+
+                const userInfoStr = userInfo ? `, ${userInfo}` : '';
+                console.log(`${logPrefix} OAuth credentials file uploaded: ${targetFilePath} (provider: ${provider}${userInfoStr})`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'File uploaded successfully',
+                    filePath: relativePath,
+                    originalName: req.file.originalname,
+                    provider: provider
+                }));
+                resolve(true);
+
+            } catch (error) {
+                console.error(`${logPrefix} File upload processing error:`, error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: 'File upload processing failed: ' + error.message
+                    }
+                }));
+                resolve(true);
+            }
+        });
+    });
 }

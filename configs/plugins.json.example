@@ -1,0 +1,12 @@
+{
+  "plugins": {
+    "api-potluck": {
+      "enabled": true,
+      "description": "API 大锅饭 - Key 管理和用量统计插件"
+    },
+    "default-auth": {
+      "enabled": true,
+      "description": "默认 API Key 认证插件（内置）"
+    }
+  }
+}
