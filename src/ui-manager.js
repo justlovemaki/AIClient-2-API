@@ -56,8 +56,8 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
-import { getPluginManager } from './plugin-manager.js';
 import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth, batchImportKiroRefreshTokens, batchImportKiroRefreshTokensStream, importAwsCredentials } from './oauth-handlers.js';
+import { getPluginManager } from './plugin-manager.js';
 import {
     generateUUID,
     normalizePath,
@@ -518,10 +518,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return true;
     }
     
-    // Handle UI management API requests (需要token验证，除了登录接口、健康检查、Events接口和插件公开API路径)
-    const pluginManager = getPluginManager();
-    const isPluginPublicApi = pluginManager.isPluginPublicApiPath(pathParam);
-    if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events' && !isPluginPublicApi) {
+    // Handle UI management API requests (需要token验证，除了登录接口、健康检查和Events接口)
+    if (pathParam.startsWith('/api/') && pathParam !== '/api/login' && pathParam !== '/api/health' && pathParam !== '/api/events' ) {
         // 检查token验证
         const isAuth = await checkAuth(req);
         if (!isAuth) {
@@ -2191,6 +2189,77 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.end(JSON.stringify({
                 success: false,
                 error: error.message
+            }));
+            return true;
+        }
+    }
+
+    // Get plugins list
+    if (method === 'GET' && pathParam === '/api/plugins') {
+        try {
+            const pluginManager = getPluginManager();
+            const plugins = pluginManager.getPluginList();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ plugins }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to get plugins:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Failed to get plugins list: ' + error.message
+                }
+            }));
+            return true;
+        }
+    }
+
+    // Toggle plugin status
+    const togglePluginMatch = pathParam.match(/^\/api\/plugins\/(.+)\/toggle$/);
+    if (method === 'POST' && togglePluginMatch) {
+        try {
+            const pluginName = decodeURIComponent(togglePluginMatch[1]);
+            const body = await getRequestBody(req);
+            const { enabled } = body;
+
+            if (typeof enabled !== 'boolean') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: 'Enabled status must be a boolean'
+                    }
+                }));
+                return true;
+            }
+
+            const pluginManager = getPluginManager();
+            await pluginManager.setPluginEnabled(pluginName, enabled);
+
+            // 广播更新事件
+            broadcastEvent('plugin_update', {
+                action: 'toggle',
+                pluginName,
+                enabled,
+                timestamp: new Date().toISOString()
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: `Plugin ${pluginName} ${enabled ? 'enabled' : 'disabled'} successfully`,
+                plugin: {
+                    name: pluginName,
+                    enabled
+                }
+            }));
+            return true;
+        } catch (error) {
+            console.error('[UI API] Failed to toggle plugin:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Failed to toggle plugin: ' + error.message
+                }
             }));
             return true;
         }

@@ -63,12 +63,12 @@ export function createRequestHandler(config, providerPoolManager) {
             if (served) return;
         }
 
-        const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
-        if (uiHandled) return;
-
         // 执行插件路由
         const pluginRouteHandled = await pluginManager.executeRoutes(method, path, req, res);
         if (pluginRouteHandled) return;
+
+        const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
+        if (uiHandled) return;
 
         // Ollama show endpoint with model name
         if (method === 'POST' && path === '/ollama/api/show') {
