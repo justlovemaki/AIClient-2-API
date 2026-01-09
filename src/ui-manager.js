@@ -56,7 +56,7 @@ import { getAllProviderModels, getProviderModels } from './provider-models.js';
 import { CONFIG } from './config-manager.js';
 import { serviceInstances, getServiceAdapter } from './adapter.js';
 import { initApiService } from './service-manager.js';
-import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth, batchImportKiroRefreshTokens } from './oauth-handlers.js';
+import { handleGeminiCliOAuth, handleGeminiAntigravityOAuth, handleQwenOAuth, handleKiroOAuth, handleIFlowOAuth, batchImportKiroRefreshTokens, batchImportKiroRefreshTokensStream, importAwsCredentials } from './oauth-handlers.js';
 import {
     generateUUID,
     normalizePath,
@@ -2126,8 +2126,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return true;
     }
 
-    // Batch import Kiro refresh tokens
-    // 批量导入 Kiro refreshToken
+    // Batch import Kiro refresh tokens with SSE (real-time progress)
+    // 批量导入 Kiro refreshToken（带实时进度 SSE）
     if (method === 'POST' && pathParam === '/api/kiro/batch-import-tokens') {
         try {
             const body = await getRequestBody(req);
@@ -2142,21 +2142,125 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
             
-            console.log(`[Kiro Batch Import] Starting batch import of ${refreshTokens.length} tokens...`);
+            console.log(`[Kiro Batch Import] Starting batch import of ${refreshTokens.length} tokens with SSE...`);
             
-            const result = await batchImportKiroRefreshTokens(refreshTokens, region || 'us-east-1');
+            // 设置 SSE 响应头
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            });
+            
+            // 发送 SSE 事件的辅助函数
+            const sendSSE = (event, data) => {
+                res.write(`event: ${event}\n`);
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            
+            // 发送开始事件
+            sendSSE('start', { total: refreshTokens.length });
+            
+            // 执行流式批量导入
+            const result = await batchImportKiroRefreshTokensStream(
+                refreshTokens, 
+                region || 'us-east-1',
+                (progress) => {
+                    // 每处理完一个 token 发送进度更新
+                    sendSSE('progress', progress);
+                }
+            );
             
             console.log(`[Kiro Batch Import] Completed: ${result.success} success, ${result.failed} failed`);
             
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
+            // 发送完成事件
+            sendSSE('complete', {
                 success: true,
-                ...result
-            }));
+                total: result.total,
+                successCount: result.success,
+                failedCount: result.failed,
+                details: result.details
+            });
+            
+            res.end();
             return true;
             
         } catch (error) {
             console.error('[Kiro Batch Import] Error:', error);
+            // 如果已经开始发送 SSE，则发送错误事件
+            if (res.headersSent) {
+                res.write(`event: error\n`);
+                res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+                res.end();
+            } else {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
+                }));
+            }
+            return true;
+        }
+    }
+
+    // Import AWS SSO credentials for Kiro
+    // 导入 AWS SSO 凭据用于 Kiro
+    if (method === 'POST' && pathParam === '/api/kiro/import-aws-credentials') {
+        try {
+            const body = await getRequestBody(req);
+            const { credentials } = body;
+            
+            if (!credentials || typeof credentials !== 'object') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: 'credentials object is required'
+                }));
+                return true;
+            }
+            
+            // 验证必需字段 - 需要四个字段都存在
+            const missingFields = [];
+            if (!credentials.clientId) missingFields.push('clientId');
+            if (!credentials.clientSecret) missingFields.push('clientSecret');
+            if (!credentials.accessToken) missingFields.push('accessToken');
+            if (!credentials.refreshToken) missingFields.push('refreshToken');
+            
+            if (missingFields.length > 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: `Missing required fields: ${missingFields.join(', ')}`
+                }));
+                return true;
+            }
+            
+            console.log('[Kiro AWS Import] Starting AWS credentials import...');
+            
+            const result = await importAwsCredentials(credentials);
+            
+            if (result.success) {
+                console.log(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    path: result.path,
+                    message: 'AWS credentials imported successfully'
+                }));
+            } else {
+                // 重复凭据返回 409 Conflict，其他错误返回 500
+                const statusCode = result.error === 'duplicate' ? 409 : 500;
+                res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: result.error,
+                    existingPath: result.existingPath || null
+                }));
+            }
+            return true;
+            
+        } catch (error) {
+            console.error('[Kiro AWS Import] Error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
