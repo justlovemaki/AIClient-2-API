@@ -673,10 +673,10 @@ function showKiroBatchImportModal() {
         const details = [];
         
         try {
-            // 使用 fetch + SSE 获取流式响应
+            // 使用 fetch + SSE 获取流式响应（需要带认证头）
             const response = await fetch('/api/kiro/batch-import-tokens', {
                 method: 'POST',
-                headers: {
+                headers: window.apiClient ? window.apiClient.getAuthHeaders() : {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ refreshTokens: tokens })
