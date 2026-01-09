@@ -69,12 +69,6 @@ const apiPotluckPlugin = {
     staticPaths: ['potluck.html', 'potluck-user.html'],
 
     /**
-     * 公开 API 路径（不需要 UI 管理 API 的 token 验证）
-     * 这些路径将跳过 handleUIApiRequests 中的 checkAuth 验证
-     */
-    publicApiPaths: ['/api/potluckuser'],
-
-    /**
      * 路由定义
      */
     routes: [

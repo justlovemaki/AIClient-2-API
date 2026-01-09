@@ -1,5 +1,6 @@
 // 工具函数
 import { t, getCurrentLanguage } from './i18n.js';
+import { apiClient } from './auth.js';
 
 /**
  * 格式化运行时间
@@ -275,6 +276,18 @@ function getProviderStats(providerStats) {
     };
 }
 
+/**
+ * 通用 API 请求函数
+ * @param {string} url - API 端点 URL
+ * @param {Object} options - fetch 选项
+ * @returns {Promise<any>} 响应数据
+ */
+async function apiRequest(url, options = {}) {
+    // 如果 URL 以 /api 开头，去掉它（因为 apiClient.request 会自动添加）
+    const endpoint = url.startsWith('/api') ? url.slice(4) : url;
+    return apiClient.request(endpoint, options);
+}
+
 // 导出所有工具函数
 export {
     formatUptime,
@@ -282,5 +295,6 @@ export {
     showToast,
     getFieldLabel,
     getProviderTypeFields,
-    getProviderStats
+    getProviderStats,
+    apiRequest
 };

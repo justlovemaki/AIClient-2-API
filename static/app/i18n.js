@@ -31,6 +31,7 @@ const translations = {
         'nav.upload': '配置管理',
         'nav.usage': '用量查询',
         'nav.logs': '实时日志',
+        'nav.plugins': '插件管理',
         
         // Dashboard
         'dashboard.title': '系统概览',
@@ -436,6 +437,26 @@ const translations = {
         'logs.autoScroll.on': '自动滚动: 开',
         'logs.autoScroll.off': '自动滚动: 关',
         
+        // Plugins
+        'plugins.title': '插件管理',
+        'plugins.description': '插件系统允许您扩展系统功能，启用或禁用插件需要重启服务才能生效',
+        'plugins.stats.total': '总插件数',
+        'plugins.stats.enabled': '已启用',
+        'plugins.stats.disabled': '已禁用',
+        'plugins.refresh': '刷新插件列表',
+        'plugins.loading': '正在加载插件列表...',
+        'plugins.empty': '暂无已安装的插件',
+        'plugins.noDescription': '暂无描述',
+        'plugins.status.enabled': '已启用',
+        'plugins.status.disabled': '已禁用',
+        'plugins.badge.middleware.title': '包含中间件',
+        'plugins.badge.routes.title': '包含路由',
+        'plugins.badge.hooks.title': '包含钩子',
+        'plugins.toggle.success': '插件 {name} 已{status}',
+        'plugins.toggle.failed': '切换插件状态失败',
+        'plugins.load.failed': '加载插件列表失败',
+        'plugins.restart.required': '更改已保存，请重启服务以生效',
+
         // Common
         'common.confirm': '确定',
         'common.cancel': '取消',
@@ -505,6 +526,7 @@ const translations = {
         'nav.upload': 'Config Management',
         'nav.usage': 'Usage Query',
         'nav.logs': 'Real-time Logs',
+        'nav.plugins': 'Plugin Management',
         
         // Dashboard
         'dashboard.title': 'System Overview',
@@ -910,11 +932,33 @@ const translations = {
         'logs.autoScroll.on': 'Auto Scroll: On',
         'logs.autoScroll.off': 'Auto Scroll: Off',
         
+        // Plugins
+        'plugins.title': 'Plugin Management',
+        'plugins.description': 'The plugin system allows you to extend system functionality. Enabling or disabling plugins requires a service restart to take effect.',
+        'plugins.stats.total': 'Total Plugins',
+        'plugins.stats.enabled': 'Enabled',
+        'plugins.stats.disabled': 'Disabled',
+        'plugins.refresh': 'Refresh Plugins',
+        'plugins.loading': 'Loading plugins...',
+        'plugins.empty': 'No installed plugins',
+        'plugins.noDescription': 'No description',
+        'plugins.status.enabled': 'Enabled',
+        'plugins.status.disabled': 'Disabled',
+        'plugins.badge.middleware.title': 'Contains Middleware',
+        'plugins.badge.routes.title': 'Contains Routes',
+        'plugins.badge.hooks.title': 'Contains Hooks',
+        'plugins.toggle.success': 'Plugin {name} {status}',
+        'plugins.toggle.failed': 'Failed to toggle plugin status',
+        'plugins.load.failed': 'Failed to load plugins list',
+        'plugins.restart.required': 'Changes saved, please restart service to take effect',
+
         // Common
         'common.togglePassword': 'Show/Hide Password',
         'common.confirm': 'Confirm',
         'common.cancel': 'Cancel',
         'common.success': 'Success',
+        'common.enabled': 'Enabled',
+        'common.disabled': 'Disabled',
         'common.error': 'Error',
         'common.warning': 'Warning',
         'common.info': 'Info',
