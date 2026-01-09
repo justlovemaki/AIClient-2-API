@@ -951,11 +951,39 @@ export class KiroApiService {
             }
             userInputMessageContext.toolResults = uniqueToolResults;
         }
+        const historyHasToolCalling = history.some(h =>
+            h.assistantResponseMessage?.toolUses ||
+            h.userInputMessage?.userInputMessageContext?.toolResults
+        );
+
         if (Object.keys(toolsContext).length > 0 && toolsContext.tools) {
             userInputMessageContext.tools = toolsContext.tools;
+        } else if (historyHasToolCalling && !toolsContext.tools) {
+            const toolNamesInHistory = new Set();
+            history.forEach(h => {
+                if (h.assistantResponseMessage?.toolUses) {
+                    h.assistantResponseMessage.toolUses.forEach(tu => {
+                        toolNamesInHistory.add(tu.name);
+                    });
+                }
+            });
+
+            if (toolNamesInHistory.size > 0) {
+                userInputMessageContext.tools = Array.from(toolNamesInHistory).map(name => ({
+                    toolSpecification: {
+                        name: name,
+                        description: "Tool",
+                        inputSchema: {
+                            json: {
+                                type: "object",
+                                properties: {}
+                            }
+                        }
+                    }
+                }));
+            }
         }
 
-        // 只有当 userInputMessageContext 有内容时才添加
         if (Object.keys(userInputMessageContext).length > 0) {
             userInputMessage.userInputMessageContext = userInputMessageContext;
         }
