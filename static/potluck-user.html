@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 大锅饭 - 我的用量</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            min-height: 100vh; 
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 600px; 
+            width: 100%;
+            margin: 0 auto; 
+        }
+        header { 
+            text-align: center;
+            padding: 40px 0 30px;
+        }
+        h1 { 
+            font-size: 28px; 
+            color: #fff; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            gap: 12px; 
+        }
+        h1 span { font-size: 36px; }
+        .subtitle {
+            color: #888;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        /* 登录区域 */
+        .login-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .login-section h2 {
+            font-size: 18px;
+            color: #fff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .login-section.hidden {
+            display: none;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 15px;
+            font-family: monospace;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        .input-group input::placeholder {
+            color: #666;
+        }
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-primary {
+            background: #4ade80;
+            color: #000;
+        }
+        .btn-primary:hover {
+            background: #22c55e;
+        }
+        .btn-primary:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        .remember-key {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #888;
+        }
+        .remember-key input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #4ade80;
+        }
+        
+        /* 已登录区域 */
+        .dashboard-section {
+            display: none;
+        }
+        .dashboard-section.active {
+            display: block;
+        }
+        
+        /* 用户信息卡片 */
+        .user-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .user-details .user-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .user-details .user-key {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .user-status {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .user-status.enabled {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+        .user-status.disabled {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .action-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: #888;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .action-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        .action-btn.logout {
+            color: #ef4444;
+        }
+        .action-btn.logout:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        
+        /* 使用量统计 */
+        .usage-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        .stat-card .value.warning { color: #fbbf24; }
+        .stat-card .value.danger { color: #ef4444; }
+        
+        /* 进度条 */
+        .usage-progress {
+            margin-top: 25px;
+        }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .progress-header .label { color: #888; }
+        .progress-header .value { color: #fff; font-weight: 600; }
+        .progress-bar {
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+        }
+        .progress-bar .fill.warning { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .progress-bar .fill.danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        /* 上传授权文件区域 */
+        .upload-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .upload-section h3 {
+            font-size: 16px;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .upload-desc {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+        .upload-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .upload-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .upload-card:hover {
+            border-color: rgba(74, 222, 128, 0.3);
+            background: rgba(255,255,255,0.05);
+        }
+        .upload-icon {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .upload-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .upload-provider {
+            font-size: 11px;
+            color: #666;
+            font-family: monospace;
+            margin-bottom: 12px;
+        }
+        .upload-btn {
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-btn:hover {
+            background: rgba(74, 222, 128, 0.3);
+        }
+        .upload-btn:disabled {
+            background: rgba(255,255,255,0.1);
+            color: #666;
+            cursor: not-allowed;
+        }
+        .upload-btn .btn-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .upload-status {
+            margin-top: 10px;
+            font-size: 12px;
+            min-height: 18px;
+            word-break: break-all;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .upload-status.success {
+            color: #4ade80;
+        }
+        .upload-status.error {
+            color: #ef4444;
+        }
+        
+        /* 详细信息 */
+        .detail-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 25px;
+        }
+        .detail-section h3 {
+            font-size: 16px;
+            color: #fff;
+            margin-bottom: 15px;
+        }
+        .detail-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .detail-item:last-child { border-bottom: none; }
+        .detail-item .label { color: #888; font-size: 14px; }
+        .detail-item .value { color: #fff; font-size: 14px; font-weight: 500; }
+        
+        /* 错误提示 */
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #ef4444;
+            display: none;
+            margin-bottom: 20px;
+        }
+        .error-message.active { display: block; }
+        .error-message .icon { font-size: 40px; margin-bottom: 10px; }
+        .error-message .title { font-size: 16px; font-weight: 600; margin-bottom: 5px; }
+        .error-message .desc { font-size: 14px; color: #888; }
+        
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            display: none;
+        }
+        .loading.active { display: block; }
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* 页脚 */
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+        }
+        footer a { color: #4ade80; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        
+        /* Toast 提示 */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #1e293b;
+            border-radius: 8px;
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 2000;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-left: 4px solid #4ade80; }
+        .toast.error { border-left: 4px solid #ef4444; }
+        
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .user-info { flex-direction: column; text-align: center; }
+            .user-header { flex-direction: column; }
+            .user-actions { justify-content: center; }
+            .usage-stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span>🍲</span> API 大锅饭</h1>
+            <p class="subtitle" id="headerSubtitle">使用 API Key 登录查看用量</p>
+        </header>
+        
+        <!-- 登录区域 -->
+        <div class="login-section" id="loginSection">
+            <h2>🔑 登录</h2>
+            <div class="input-group">
+                <input type="text" id="apiKeyInput" placeholder="请输入您的 API Key (maki_xxx...)" autocomplete="off">
+                <label class="remember-key">
+                    <input type="checkbox" id="rememberKey" checked>
+                    <span>记住我的 Key（存储在本地浏览器）</span>
+                </label>
+                <button class="btn btn-primary" id="loginBtn" onclick="login()">登录</button>
+            </div>
+        </div>
+        
+        <!-- 加载状态 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在加载...</p>
+        </div>
+        
+        <!-- 错误提示 -->
+        <div class="error-message" id="errorMessage">
+            <div class="icon">⚠️</div>
+            <div class="title" id="errorTitle">登录失败</div>
+            <div class="desc" id="errorDesc">请检查您的 API Key 是否正确</div>
+        </div>
+        
+        <!-- 已登录区域 -->
+        <div class="dashboard-section" id="dashboardSection">
+            <!-- 用户信息卡片 -->
+            <div class="user-card">
+                <div class="user-header">
+                    <div class="user-info">
+                        <div class="user-avatar">👤</div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">-</div>
+                            <div class="user-key" id="userKey">-</div>
+                        </div>
+                    </div>
+                    <span class="user-status enabled" id="userStatus">启用</span>
+                </div>
+                
+                <!-- 使用量进度 -->
+                <div class="usage-progress">
+                    <div class="progress-header">
+                        <span class="label">今日使用量</span>
+                        <span class="value"><span id="usageToday">0</span> / <span id="usageLimit">0</span></span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span>剩余 <span id="usageRemaining">0</span> 次</span>
+                        <span id="usagePercent">0%</span>
+                    </div>
+                </div>
+                
+                <!-- 统计卡片 -->
+                <div class="usage-stats">
+                    <div class="stat-card">
+                        <div class="label">今日已用</div>
+                        <div class="value" id="statToday">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">每日限额</div>
+                        <div class="value" id="statLimit">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">累计调用</div>
+                        <div class="value" id="statTotal">0</div>
+                    </div>
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div class="user-actions">
+                    <button class="action-btn" onclick="refreshUsage()">🔄 刷新</button>
+                    <button class="action-btn logout" onclick="logout()">🚪 退出登录</button>
+                </div>
+            </div>
+            
+            <!-- 上传授权文件 -->
+            <div class="upload-section">
+                <h3>📤 上传授权文件</h3>
+                <p class="upload-desc">上传您的 OAuth 授权文件到对应的提供商目录</p>
+                
+                <div class="upload-grid">
+                    <div class="upload-card" data-provider="gemini-cli-oauth">
+                        <div class="upload-icon">🔷</div>
+                        <div class="upload-name">Gemini CLI</div>
+                        <div class="upload-provider">gemini</div>
+                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
+                        <button class="upload-btn" onclick="triggerUpload(this)">
+                            <span class="btn-text">选择文件</span>
+                            <span class="btn-loading" style="display:none">上传中...</span>
+                        </button>
+                        <div class="upload-status"></div>
+                    </div>
+                    
+                    <div class="upload-card" data-provider="gemini-antigravity">
+                        <div class="upload-icon">🌀</div>
+                        <div class="upload-name">Antigravity</div>
+                        <div class="upload-provider">antigravity</div>
+                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
+                        <button class="upload-btn" onclick="triggerUpload(this)">
+                            <span class="btn-text">选择文件</span>
+                            <span class="btn-loading" style="display:none">上传中...</span>
+                        </button>
+                        <div class="upload-status"></div>
+                    </div>
+                    
+                    <div class="upload-card" data-provider="claude-kiro-oauth">
+                        <div class="upload-icon">🤖</div>
+                        <div class="upload-name">Kiro (Claude)</div>
+                        <div class="upload-provider">kiro</div>
+                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
+                        <button class="upload-btn" onclick="triggerUpload(this)">
+                            <span class="btn-text">选择文件</span>
+                            <span class="btn-loading" style="display:none">上传中...</span>
+                        </button>
+                        <div class="kiro-actions" style="display: flex; gap: 5px; margin-top: 8px;">
+                            <button class="upload-btn secondary" style="background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; padding: 6px;" onclick="showKiroBatchImportModal()">批量导入</button>
+                            <button class="upload-btn secondary" style="background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; padding: 6px;" onclick="showKiroAwsImportModal()">AWS导入</button>
+                        </div>
+                        <div class="upload-status"></div>
+                    </div>
+                    
+                    <div class="upload-card" data-provider="openai-qwen-oauth">
+                        <div class="upload-icon">🌐</div>
+                        <div class="upload-name">Qwen (OpenAI)</div>
+                        <div class="upload-provider">qwen</div>
+                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
+                        <button class="upload-btn" onclick="triggerUpload(this)">
+                            <span class="btn-text">选择文件</span>
+                            <span class="btn-loading" style="display:none">上传中...</span>
+                        </button>
+                        <div class="upload-status"></div>
+                    </div>
+                    
+                    <div class="upload-card" data-provider="openai-iflow">
+                        <div class="upload-icon">🔄</div>
+                        <div class="upload-name">iFlow (OpenAI)</div>
+                        <div class="upload-provider">iflow</div>
+                        <input type="file" class="upload-input" accept=".json,.txt,.key,.pem" style="display:none">
+                        <button class="upload-btn" onclick="triggerUpload(this)">
+                            <span class="btn-text">选择文件</span>
+                            <span class="btn-loading" style="display:none">上传中...</span>
+                        </button>
+                        <div class="upload-status"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 详细信息 -->
+            <div class="detail-section">
+                <h3>📊 详细信息</h3>
+                <div class="detail-list">
+                    <div class="detail-item">
+                        <span class="label">最后调用时间</span>
+                        <span class="value" id="lastUsedAt">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">配额重置日期</span>
+                        <span class="value" id="resetDate">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Key 创建时间</span>
+                        <span class="value" id="createdAt">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>需要管理 Key？<a href="/potluck.html">前往管理后台</a></p>
+        </footer>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+
+    <!-- Kiro 批量导入模态框 -->
+    <div id="kiroBatchModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="background: #1e293b; border-radius: 16px; padding: 25px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: #fff; font-size: 18px;">🔄 Kiro 批量导入</h3>
+                <button onclick="closeModal('kiroBatchModal')" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px; padding: 12px; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); border-radius: 8px;">
+                <p style="color: #4ade80; font-size: 13px;">请输入 refreshToken，每行一个。系统将自动刷新并生成凭据文件。</p>
+            </div>
+            <textarea id="batchTokensInput" rows="10" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; font-family: monospace; resize: vertical;" placeholder="aorAxxxxxxxx&#10;aorAyyyyyyyy"></textarea>
+            
+            <div id="batchProgress" style="display: none; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 5px;">
+                    <span id="batchProgressText">正在导入...</span>
+                    <span id="batchProgressPercent">0%</span>
+                </div>
+                <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                    <div id="batchProgressBar" style="height: 100%; width: 0%; background: #4ade80; transition: width 0.3s;"></div>
+                </div>
+                <div id="batchResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px; font-family: monospace;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn" style="background: rgba(255,255,255,0.1); color: #fff; width: auto;" onclick="closeModal('kiroBatchModal')">取消</button>
+                <button class="btn btn-primary" style="width: auto;" onclick="startKiroBatchImport()">开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kiro AWS 导入模态框 -->
+    <div id="kiroAwsModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="background: #1e293b; border-radius: 16px; padding: 25px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: #fff; font-size: 18px;">☁️ Kiro AWS 导入</h3>
+                <button onclick="closeModal('kiroAwsModal')" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px; padding: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px;">
+                <p style="color: #fbbf24; font-size: 13px;">请粘贴 AWS SSO cache 文件中的 JSON 内容（需包含 clientId, clientSecret, accessToken, refreshToken）。</p>
+            </div>
+            
+            <textarea id="awsJsonInput" rows="12" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; font-family: monospace; resize: vertical;" placeholder='{
+  "clientId": "...",
+  "clientSecret": "...",
+  "accessToken": "...",
+  "refreshToken": "..."
+}'></textarea>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn" style="background: rgba(255,255,255,0.1); color: #fff; width: auto;" onclick="closeModal('kiroAwsModal')">取消</button>
+                <button class="btn btn-primary" style="width: auto;" onclick="startKiroAwsImport()">导入</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api/potluckuser';
+        let currentApiKey = '';
+        let isLoggedIn = false;
+        
+        
+        async function login() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            
+            if (!apiKey) {
+                showToast('请输入 API Key', 'error');
+                return;
+            }
+            
+            if (!apiKey.startsWith('maki_')) {
+                showToast('API Key 格式不正确，应以 maki_ 开头', 'error');
+                return;
+            }
+            
+            currentApiKey = apiKey;
+            
+            // 显示加载状态
+            showLoading(true);
+            hideError();
+            hideLogin();
+            hideDashboard();
+            
+            try {
+                const response = await fetch(`${API_BASE}/usage`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error?.message || '登录失败');
+                }
+                
+                // 保存 Key（如果勾选了记住）
+                if (document.getElementById('rememberKey').checked) {
+                    localStorage.setItem('potluck_user_key', apiKey);
+                } else {
+                    localStorage.removeItem('potluck_user_key');
+                }
+                
+                isLoggedIn = true;
+                
+                // 显示用户信息
+                displayUserInfo(data.data);
+                showDashboard();
+                document.getElementById('headerSubtitle').textContent = '我的 API 使用量';
+                showToast('登录成功', 'success');
+                
+            } catch (error) {
+                showError(error.message);
+                showLogin();
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        async function refreshUsage() {
+            if (!currentApiKey) {
+                logout();
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE}/usage`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${currentApiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error?.message || '刷新失败');
+                }
+                
+                displayUserInfo(data.data);
+                showToast('刷新成功', 'success');
+                
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        function logout() {
+            currentApiKey = '';
+            isLoggedIn = false;
+            localStorage.removeItem('potluck_user_key');
+            
+            hideDashboard();
+            hideError();
+            showLogin();
+            document.getElementById('apiKeyInput').value = '';
+            document.getElementById('headerSubtitle').textContent = '使用 API Key 登录查看用量';
+            showToast('已退出登录', 'success');
+        }
+        
+        function displayUserInfo(data) {
+            // 用户信息
+            document.getElementById('userName').textContent = data.name || '未命名';
+            document.getElementById('userKey').textContent = data.maskedKey;
+            
+            // 状态
+            const statusEl = document.getElementById('userStatus');
+            if (data.enabled) {
+                statusEl.textContent = '启用';
+                statusEl.className = 'user-status enabled';
+            } else {
+                statusEl.textContent = '已禁用';
+                statusEl.className = 'user-status disabled';
+            }
+            
+            // 使用量
+            const usage = data.usage;
+            document.getElementById('usageToday').textContent = usage.today;
+            document.getElementById('usageLimit').textContent = usage.limit;
+            document.getElementById('usageRemaining').textContent = usage.remaining;
+            document.getElementById('usagePercent').textContent = usage.percent + '%';
+            
+            // 进度条
+            const progressFill = document.getElementById('progressFill');
+            progressFill.style.width = Math.min(usage.percent, 100) + '%';
+            progressFill.className = 'fill';
+            if (usage.percent >= 90) {
+                progressFill.classList.add('danger');
+            } else if (usage.percent >= 70) {
+                progressFill.classList.add('warning');
+            }
+            
+            // 统计卡片
+            document.getElementById('statToday').textContent = usage.today;
+            document.getElementById('statToday').className = 'value' + (usage.percent >= 90 ? ' danger' : usage.percent >= 70 ? ' warning' : '');
+            document.getElementById('statLimit').textContent = usage.limit;
+            document.getElementById('statTotal').textContent = data.total;
+            
+            // 详细信息
+            document.getElementById('lastUsedAt').textContent = formatTime(data.lastUsedAt);
+            document.getElementById('resetDate').textContent = usage.resetDate || '-';
+            document.getElementById('createdAt').textContent = formatDateTime(data.createdAt);
+        }
+        
+        function formatTime(isoStr) {
+            if (!isoStr) return '从未使用';
+            const d = new Date(isoStr);
+            const now = new Date();
+            const diff = now - d;
+            
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + ' 天前';
+            
+            return d.toLocaleDateString('zh-CN');
+        }
+        
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '-';
+            const d = new Date(isoStr);
+            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+            document.getElementById('loginBtn').disabled = show;
+        }
+        
+        function showLogin() {
+            document.getElementById('loginSection').classList.remove('hidden');
+        }
+        
+        function hideLogin() {
+            document.getElementById('loginSection').classList.add('hidden');
+        }
+        
+        function showDashboard() {
+            document.getElementById('dashboardSection').classList.add('active');
+        }
+        
+        function hideDashboard() {
+            document.getElementById('dashboardSection').classList.remove('active');
+        }
+        
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            document.getElementById('errorDesc').textContent = message;
+            errorEl.classList.add('active');
+        }
+        
+        function hideError() {
+            document.getElementById('errorMessage').classList.remove('active');
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        // 提供商映射
+        const providerMap = {
+            'gemini-cli-oauth': 'gemini',
+            'gemini-antigravity': 'antigravity',
+            'claude-kiro-oauth': 'kiro',
+            'openai-qwen-oauth': 'qwen',
+            'openai-iflow': 'iflow'
+        };
+        
+        // 触发文件上传
+        function triggerUpload(btn) {
+            const card = btn.closest('.upload-card');
+            const input = card.querySelector('.upload-input');
+            input.click();
+        }
+        
+        // 初始化上传事件监听
+        function initUploadListeners() {
+            document.querySelectorAll('.upload-card').forEach(card => {
+                const input = card.querySelector('.upload-input');
+                const btn = card.querySelector('.upload-btn');
+                const status = card.querySelector('.upload-status');
+                const providerType = card.dataset.provider;
+                
+                input.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    // 验证文件类型
+                    const allowedExtensions = ['.json', '.txt', '.key', '.pem', '.p12', '.pfx'];
+                    const ext = '.' + file.name.split('.').pop().toLowerCase();
+                    if (!allowedExtensions.includes(ext)) {
+                        status.textContent = '不支持的文件类型';
+                        status.className = 'upload-status error';
+                        input.value = '';
+                        return;
+                    }
+                    
+                    // 验证文件大小 (5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        status.textContent = '文件大小不能超过 5MB';
+                        status.className = 'upload-status error';
+                        input.value = '';
+                        return;
+                    }
+                    
+                    // 显示上传中状态
+                    btn.disabled = true;
+                    btn.querySelector('.btn-text').style.display = 'none';
+                    btn.querySelector('.btn-loading').style.display = 'inline';
+                    status.textContent = '';
+                    status.className = 'upload-status';
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('provider', providerType);
+                        
+                        const response = await fetch(`${API_BASE}/upload`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${currentApiKey}`
+                            },
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            status.textContent = '✓ ' + (data.filePath || '上传成功');
+                            status.className = 'upload-status success';
+                            showToast('文件上传成功', 'success');
+                        } else {
+                            throw new Error(data.error?.message || '上传失败');
+                        }
+                    } catch (error) {
+                        status.textContent = '✗ ' + error.message;
+                        status.className = 'upload-status error';
+                        showToast('上传失败: ' + error.message, 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.querySelector('.btn-text').style.display = 'inline';
+                        btn.querySelector('.btn-loading').style.display = 'none';
+                        input.value = '';
+                    }
+                });
+            });
+        }
+        
+        // 页面加载完成后初始化上传监听器
+        document.addEventListener('DOMContentLoaded', () => {
+            initUploadListeners();
+            
+            const savedKey = localStorage.getItem('potluck_user_key');
+            if (savedKey) {
+                document.getElementById('apiKeyInput').value = savedKey;
+                // 自动登录
+                login();
+            }
+            
+            // 回车键登录
+            document.getElementById('apiKeyInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
+        });
+
+        // 模态框控制
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function showKiroBatchImportModal() {
+            document.getElementById('kiroBatchModal').style.display = 'flex';
+            document.getElementById('batchTokensInput').value = '';
+            document.getElementById('batchProgress').style.display = 'none';
+            document.getElementById('batchResults').innerHTML = '';
+        }
+
+        function showKiroAwsImportModal() {
+            document.getElementById('kiroAwsModal').style.display = 'flex';
+            document.getElementById('awsJsonInput').value = '';
+        }
+
+        // Kiro 批量导入逻辑
+        async function startKiroBatchImport() {
+            const tokens = document.getElementById('batchTokensInput').value.split('\n').filter(t => t.trim());
+            if (tokens.length === 0) {
+                showToast('请输入至少一个 refreshToken', 'error');
+                return;
+            }
+
+            const progressDiv = document.getElementById('batchProgress');
+            const progressBar = document.getElementById('batchProgressBar');
+            const progressText = document.getElementById('batchProgressText');
+            const progressPercent = document.getElementById('batchProgressPercent');
+            const resultsDiv = document.getElementById('batchResults');
+            
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            resultsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/kiro/batch-import-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ refreshTokens: tokens })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.current) {
+                                    const percent = Math.round((data.index / data.total) * 100);
+                                    progressBar.style.width = percent + '%';
+                                    progressPercent.textContent = percent + '%';
+                                    progressText.textContent = `正在导入 ${data.index}/${data.total}`;
+                                    
+                                    const color = data.current.success ? '#4ade80' : '#ef4444';
+                                    const icon = data.current.success ? '✓' : '✗';
+                                    const msg = data.current.success ? data.current.path : data.current.error;
+                                    resultsDiv.innerHTML += `<div style="color:${color}">${icon} Token ${data.current.index}: ${msg}</div>`;
+                                    resultsDiv.scrollTop = resultsDiv.scrollHeight;
+                                }
+                                if (data.successCount !== undefined) {
+                                    showToast(`导入完成: 成功 ${data.successCount}, 失败 ${data.failedCount}`, 'success');
+                                    setTimeout(() => closeModal('kiroBatchModal'), 2000);
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (error) {
+                showToast('导入失败: ' + error.message, 'error');
+            }
+        }
+
+        // Kiro AWS 导入逻辑
+        async function startKiroAwsImport() {
+            const jsonStr = document.getElementById('awsJsonInput').value.trim();
+            if (!jsonStr) {
+                showToast('请输入 JSON 内容', 'error');
+                return;
+            }
+
+            try {
+                const credentials = JSON.parse(jsonStr);
+                const response = await fetch(`${API_BASE}/kiro/import-aws-credentials`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ credentials })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    showToast('AWS 凭据导入成功', 'success');
+                    closeModal('kiroAwsModal');
+                } else {
+                    throw new Error(data.error || '导入失败');
+                }
+            } catch (error) {
+                showToast('导入错误: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

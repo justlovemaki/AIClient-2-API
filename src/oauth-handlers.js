@@ -1485,6 +1485,7 @@ export async function refreshIFlowTokens(refreshToken) {
  */
 const KIRO_REFRESH_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
+    REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     CONTENT_TYPE_JSON: 'application/json',
     AUTH_METHOD_SOCIAL: 'social',
     DEFAULT_PROVIDER: 'Google',

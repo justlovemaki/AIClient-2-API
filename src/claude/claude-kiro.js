@@ -372,9 +372,17 @@ export class KiroApiService {
     }
 
     async initializeAuth(forceRefresh = false) {
+        // 如果已有 accessToken 且不是强制刷新，直接返回
         if (this.accessToken && !forceRefresh) {
             console.debug('[Kiro Auth] Access token already available and not forced refresh.');
             return;
+        }
+
+        // 如果是强制刷新且已有 refreshToken，跳过凭证加载，直接刷新
+        if (forceRefresh && this.refreshToken) {
+            console.debug('[Kiro Auth] Force refresh requested, skipping credential loading.');
+            // 直接跳转到刷新逻辑
+            return this._refreshAccessToken();
         }
 
         // Helper to load credentials from a file
@@ -486,64 +494,95 @@ export class KiroApiService {
             console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
         }
 
-        // Refresh token if forced or if access token is missing but refresh token is available
-        if (forceRefresh || (!this.accessToken && this.refreshToken)) {
-            if (!this.refreshToken) {
-                throw new Error('No refresh token available to refresh access token.');
-            }
-            try {
-                const requestBody = {
-                    refreshToken: this.refreshToken,
-                };
-
-                let refreshUrl = this.refreshUrl;
-                if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                    refreshUrl = this.refreshIDCUrl;
-                    requestBody.clientId = this.clientId;
-                    requestBody.clientSecret = this.clientSecret;
-                    requestBody.grantType = 'refresh_token';
-                }
-
-                let response = null;
-                if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                    response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
-                    console.log('[Kiro Auth] Token refresh social response: ok');
-                } else {
-                    response = await this.axiosInstance.post(refreshUrl, requestBody);
-                    console.log('[Kiro Auth] Token refresh idc response: ok');
-                }
-
-                if (response.data && response.data.accessToken) {
-                    this.accessToken = response.data.accessToken;
-                    this.refreshToken = response.data.refreshToken;
-                    this.profileArn = response.data.profileArn;
-                    const expiresIn = response.data.expiresIn;
-                    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-                    this.expiresAt = expiresAt;
-                    console.info('[Kiro Auth] Access token refreshed successfully');
-
-                    // Update the token file - use specified path if configured, otherwise use default
-                    const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-                    const updatedTokenData = {
-                        accessToken: this.accessToken,
-                        refreshToken: this.refreshToken,
-                        expiresAt: expiresAt,
-                    };
-                    if (this.profileArn) {
-                        updatedTokenData.profileArn = this.profileArn;
-                    }
-                    await saveCredentialsToFile(tokenFilePath, updatedTokenData);
-                } else {
-                    throw new Error('Invalid refresh response: Missing accessToken');
-                }
-            } catch (error) {
-                console.error('[Kiro Auth] Token refresh failed:', error.message);
-                throw new Error(`Token refresh failed: ${error.message}`);
-            }
+        // Refresh token if access token is missing but refresh token is available
+        if (!this.accessToken && this.refreshToken) {
+            await this._refreshAccessToken();
         }
 
         if (!this.accessToken) {
             throw new Error('No access token available after initialization and refresh attempts.');
+        }
+    }
+
+    /**
+     * 内部方法：刷新 access token
+     * @private
+     */
+    async _refreshAccessToken() {
+        if (!this.refreshToken) {
+            throw new Error('No refresh token available to refresh access token.');
+        }
+
+        // Helper to save credentials to a file
+        const saveCredentialsToFile = async (filePath, newData) => {
+            try {
+                let existingData = {};
+                try {
+                    const fileContent = await fs.readFile(filePath, 'utf8');
+                    existingData = JSON.parse(fileContent);
+                } catch (readError) {
+                    if (readError.code === 'ENOENT') {
+                        console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+                    } else {
+                        console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
+                    }
+                }
+                const mergedData = { ...existingData, ...newData };
+                await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
+                console.info(`[Kiro Auth] Updated token file: ${filePath}`);
+            } catch (error) {
+                console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
+            }
+        };
+
+        try {
+            const requestBody = {
+                refreshToken: this.refreshToken,
+            };
+
+            let refreshUrl = this.refreshUrl;
+            if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                refreshUrl = this.refreshIDCUrl;
+                requestBody.clientId = this.clientId;
+                requestBody.clientSecret = this.clientSecret;
+                requestBody.grantType = 'refresh_token';
+            }
+
+            let response = null;
+            if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
+                console.log('[Kiro Auth] Token refresh social response: ok');
+            } else {
+                response = await this.axiosInstance.post(refreshUrl, requestBody);
+                console.log('[Kiro Auth] Token refresh idc response: ok');
+            }
+
+            if (response.data && response.data.accessToken) {
+                this.accessToken = response.data.accessToken;
+                this.refreshToken = response.data.refreshToken;
+                this.profileArn = response.data.profileArn;
+                const expiresIn = response.data.expiresIn;
+                const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+                this.expiresAt = expiresAt;
+                console.info('[Kiro Auth] Access token refreshed successfully');
+
+                // Update the token file - use specified path if configured, otherwise use default
+                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+                const updatedTokenData = {
+                    accessToken: this.accessToken,
+                    refreshToken: this.refreshToken,
+                    expiresAt: expiresAt,
+                };
+                if (this.profileArn) {
+                    updatedTokenData.profileArn = this.profileArn;
+                }
+                await saveCredentialsToFile(tokenFilePath, updatedTokenData);
+            } else {
+                throw new Error('Invalid refresh response: Missing accessToken');
+            }
+        } catch (error) {
+            console.error('[Kiro Auth] Token refresh failed:', error.message);
+            throw new Error(`Token refresh failed: ${error.message}`);
         }
     }
 
