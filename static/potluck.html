@@ -227,8 +227,37 @@
                 document.getElementById('keyName').value = ''; document.getElementById('keyLimit').value = '1000';
             } else { showToast(result?.error?.message || '创建失败', 'error'); }
         }
-        function copyKey() { navigator.clipboard.writeText(currentNewKey).then(() => showToast('已复制到剪贴板', 'success')); }
-        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => showToast('Key 已复制', 'success')); }
+        function copyToClipboardFallback(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast('已复制到剪贴板', 'success');
+            } catch (err) {
+                showToast('复制失败，请手动复制', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+        function copyKey() {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(currentNewKey).then(() => showToast('已复制到剪贴板', 'success')).catch(() => copyToClipboardFallback(currentNewKey));
+            } else {
+                copyToClipboardFallback(currentNewKey);
+            }
+        }
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => showToast('Key 已复制', 'success')).catch(() => copyToClipboardFallback(text));
+            } else {
+                copyToClipboardFallback(text);
+            }
+        }
         async function resetUsage(keyId) {
             if (!confirm('确定要重置该 Key 的今日调用次数吗？')) return;
             const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/reset`, { method: 'POST' });
