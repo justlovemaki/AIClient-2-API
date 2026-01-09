@@ -76,6 +76,11 @@ import {
     initImageZoom
 } from './image-zoom.js';
 
+import {
+    initPluginManager,
+    togglePlugin
+} from './plugin-manager.js';
+
 /**
  * 加载初始数据
  */
@@ -111,6 +116,7 @@ function initApp() {
     initUploadConfigManager(); // 初始化配置管理功能
     initUsageManager(); // 初始化用量管理功能
     initImageZoom(); // 初始化图片放大功能
+    initPluginManager(); // 初始化插件管理功能
     loadInitialData();
     
     // 显示欢迎消息
@@ -163,6 +169,9 @@ window.reloadConfig = reloadConfig;
 
 // 用量管理相关全局函数
 window.refreshUsage = refreshUsage;
+
+// 插件管理相关全局函数
+window.togglePlugin = togglePlugin;
 
 // 导出调试函数
 window.getProviderStats = () => getProviderStats(providerStats);
