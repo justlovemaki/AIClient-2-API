@@ -14,7 +14,7 @@ import {
     CLAUDE_DEFAULT_TEMPERATURE,
     CLAUDE_DEFAULT_TOP_P
 } from '../utils.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
     generateResponseCreated,
     generateResponseInProgress,
@@ -24,7 +24,7 @@ import {
     generateContentPartDone,
     generateOutputItemDone,
     generateResponseCompleted
-} from '../../openai/openai-responses-core.mjs';
+} from '../../providers/openai/openai-responses-core.mjs';
 
 /**
  * Gemini转换器类

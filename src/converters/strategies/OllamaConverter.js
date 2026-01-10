@@ -6,7 +6,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import { BaseConverter } from '../BaseConverter.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
     OLLAMA_DEFAULT_CONTEXT_LENGTH,
     OLLAMA_DEFAULT_MAX_OUTPUT_TOKENS,

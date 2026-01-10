@@ -1,4 +1,4 @@
-import { getRequestBody } from '../common.js';
+import { getRequestBody } from '../utils/common.js';
 import { 
     handleGeminiCliOAuth, 
     handleGeminiAntigravityOAuth, 
@@ -7,7 +7,7 @@ import {
     handleIFlowOAuth, 
     batchImportKiroRefreshTokensStream, 
     importAwsCredentials 
-} from '../oauth-handlers.js';
+} from '../auth/oauth-handlers.js';
 
 /**
  * 生成 OAuth 授权 URL

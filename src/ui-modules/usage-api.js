@@ -1,6 +1,6 @@
-import { CONFIG } from '../config-manager.js';
-import { serviceInstances, getServiceAdapter } from '../adapter.js';
-import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from '../usage-service.js';
+import { CONFIG } from '../core/config-manager.js';
+import { serviceInstances, getServiceAdapter } from '../providers/adapter.js';
+import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from '../services/usage-service.js';
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
 import path from 'path';
 

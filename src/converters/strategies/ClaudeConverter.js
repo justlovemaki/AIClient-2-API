@@ -18,7 +18,7 @@ import {
     GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
     GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
     generateResponseCreated,
     generateResponseInProgress,
@@ -28,7 +28,7 @@ import {
     generateContentPartDone,
     generateOutputItemDone,
     generateResponseCompleted
-} from '../../openai/openai-responses-core.mjs';
+} from '../../providers/openai/openai-responses-core.mjs';
 
 /**
  * Claude转换器类

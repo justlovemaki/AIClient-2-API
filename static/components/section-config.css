@@ -262,46 +262,68 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 4px 12px var(--primary-40);
 }
 
-/* 复选框列表样式 */
-.provider-checklist {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 10px;
-    padding: 15px;
-    background: var(--bg-tertiary);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.checkbox-item {
+/* 提供商标签选择器样式 */
+.provider-tags {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--bg-primary);
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
 }
 
-.checkbox-item:hover {
+.provider-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.provider-tag:hover {
     background: var(--bg-secondary);
     border-color: var(--primary-color);
-    box-shadow: var(--shadow-sm);
+    color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--neutral-shadow-10);
 }
 
-.checkbox-item input[type="checkbox"] {
-    margin: 0;
+.provider-tag.selected {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 12px var(--primary-30);
 }
 
-.checkbox-item span {
+.provider-tag.selected:hover {
+    background: linear-gradient(135deg, var(--btn-primary-hover) 0%, var(--primary-color) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px var(--primary-40);
+    color: white;
+}
+
+.provider-tag i {
     font-size: 0.875rem;
-    color: var(--text-primary);
-    font-weight: 500;
+    opacity: 0.8;
 }
+
+.provider-tag.selected i {
+    opacity: 1;
+}
+
+.provider-tag span {
+    white-space: nowrap;
+}
+
 
 /* 高级配置区域 */
 .advanced-config-section {

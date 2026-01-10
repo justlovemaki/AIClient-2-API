@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { addToUsedPaths, isPathUsed, pathsEqual } from '../provider-utils.js';
+import { addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
 
 /**
  * 扫描和分析配置文件

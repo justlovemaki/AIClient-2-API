@@ -1,5 +1,5 @@
-import { getPluginManager } from '../plugin-manager.js';
-import { getRequestBody } from '../common.js';
+import { getPluginManager } from '../core/plugin-manager.js';
+import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from './event-broadcast.js';
 
 /**

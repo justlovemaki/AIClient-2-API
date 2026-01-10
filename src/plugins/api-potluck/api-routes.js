@@ -36,9 +36,9 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import multer from 'multer';
-import { batchImportKiroRefreshTokensStream, importAwsCredentials } from '../../oauth-handlers.js';
-import { autoLinkProviderConfigs, getProviderPoolManager } from '../../service-manager.js';
-import { CONFIG } from '../../config-manager.js';
+import { batchImportKiroRefreshTokensStream, importAwsCredentials } from '../../auth/oauth-handlers.js';
+import { autoLinkProviderConfigs, getProviderPoolManager } from '../../services/service-manager.js';
+import { CONFIG } from '../../core/config-manager.js';
 
 /**
  * 解析请求体

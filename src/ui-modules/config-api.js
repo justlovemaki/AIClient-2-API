@@ -1,11 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { CONFIG } from '../config-manager.js';
-import { serviceInstances } from '../adapter.js';
-import { initApiService } from '../service-manager.js';
-import { getRequestBody } from '../common.js';
-import { broadcastEvent } from './event-broadcast.js';
+import { CONFIG } from '../core/config-manager.js';
+import { serviceInstances } from '../providers/adapter.js';
+import { initApiService } from '../services/service-manager.js';
+import { getRequestBody } from '../utils/common.js';
+import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 
 /**
  * 重载配置文件
@@ -15,7 +15,7 @@ import { broadcastEvent } from './event-broadcast.js';
 export async function reloadConfig(providerPoolManager) {
     try {
         // Import config manager dynamically
-        const { initializeConfig } = await import('../config-manager.js');
+        const { initializeConfig } = await import('../core/config-manager.js');
         
         // Reload main config
         const newConfig = await initializeConfig(process.argv.slice(2), 'configs/config.json');

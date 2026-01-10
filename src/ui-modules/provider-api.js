@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { getRequestBody } from '../common.js';
-import { getAllProviderModels, getProviderModels } from '../provider-models.js';
-import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFromPath, addToUsedPaths, isPathUsed, pathsEqual } from '../provider-utils.js';
+import { getRequestBody } from '../utils/common.js';
+import { getAllProviderModels, getProviderModels } from '../providers/provider-models.js';
+import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFromPath, addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
 import { broadcastEvent } from './event-broadcast.js';
 
 /**
