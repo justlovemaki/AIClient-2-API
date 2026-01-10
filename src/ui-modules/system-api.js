@@ -103,7 +103,7 @@ export async function handleRestartService(req, res) {
                 success: false,
                 message: 'Service is running in standalone mode. Please use master.js to enable auto-restart feature.',
                 mode: 'standalone',
-                hint: 'Start the service with: node src/master.js [args]'
+                hint: 'Start the service with: node src/core/master.js [args]'
             }));
         }
         return true;
