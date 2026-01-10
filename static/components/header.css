@@ -1,0 +1,161 @@
+/* Header - 玻璃拟态效果 */
+.header {
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    transition: var(--transition);
+}
+
+.header-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0.75rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    letter-spacing: -0.025em;
+}
+
+.header h1 i {
+    margin-right: 0.5rem;
+}
+
+.header-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.status-badge i {
+    color: var(--success-color);
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    font-size: 0.6rem;
+}
+
+.status-badge.error i {
+    color: var(--danger-color);
+}
+
+.logout-btn {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.logout-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.logout-btn:active {
+    transform: scale(0.98);
+}
+
+.logout-btn i {
+    font-size: 14px;
+}
+
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.125rem;
+    transition: var(--transition);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.github-link:hover {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.github-link:active {
+    transform: translateY(0);
+}
+
+.github-link i {
+    transition: transform 0.3s ease;
+}
+
+/* KIRO 购买链接 */
+.kiro-buy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--warning-color) 0%, #f97316 100%);
+    color: var(--white);
+    text-decoration: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: var(--transition);
+    box-shadow: 0 2px 8px var(--warning-30);
+}
+
+.kiro-buy-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--warning-40);
+    background: linear-gradient(135deg, #f97316 0%, var(--warning-color) 100%);
+}
+
+.kiro-buy-link:active {
+    transform: translateY(0);
+}
+
+.kiro-buy-link i {
+    font-size: 0.875rem;
+}
+
+/* 暗黑主题适配 */
+[data-theme="dark"] .header {
+    background: var(--bg-glass);
+}

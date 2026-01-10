@@ -117,6 +117,7 @@ function initApp() {
     initUsageManager(); // 初始化用量管理功能
     initImageZoom(); // 初始化图片放大功能
     initPluginManager(); // 初始化插件管理功能
+    initMobileMenu(); // 初始化移动端菜单
     loadInitialData();
     
     // 显示欢迎消息
@@ -147,8 +148,75 @@ function initApp() {
 
 }
 
-// DOM加载完成后初始化应用
-document.addEventListener('DOMContentLoaded', initApp);
+/**
+ * 初始化移动端菜单
+ */
+function initMobileMenu() {
+    const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+    const headerControls = document.getElementById('headerControls');
+    
+    if (!mobileMenuToggle || !headerControls) {
+        console.log('Mobile menu elements not found');
+        return;
+    }
+    
+    // 默认隐藏header-controls
+    headerControls.style.display = 'none';
+    
+    let isMenuOpen = false;
+    
+    mobileMenuToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('Mobile menu toggle clicked, current state:', isMenuOpen);
+        
+        isMenuOpen = !isMenuOpen;
+        
+        if (isMenuOpen) {
+            headerControls.style.display = 'flex';
+            mobileMenuToggle.innerHTML = '<i class="fas fa-times"></i>';
+            console.log('Menu opened');
+        } else {
+            headerControls.style.display = 'none';
+            mobileMenuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+            console.log('Menu closed');
+        }
+    });
+    
+    // 点击页面其他地方关闭菜单
+    document.addEventListener('click', (e) => {
+        if (isMenuOpen && !mobileMenuToggle.contains(e.target) && !headerControls.contains(e.target)) {
+            isMenuOpen = false;
+            headerControls.style.display = 'none';
+            mobileMenuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+            console.log('Menu closed by clicking outside');
+        }
+    });
+}
+
+// 等待组件加载完成后初始化应用
+// 组件加载器会在所有组件加载完成后触发 'componentsLoaded' 事件
+window.addEventListener('componentsLoaded', initApp);
+
+// 如果组件已经加载完成（例如页面刷新后），也需要初始化
+// 检查是否有组件已经存在
+document.addEventListener('DOMContentLoaded', () => {
+    // 如果 sidebar 和 content 已经有内容，说明组件已加载
+    const sidebarContainer = document.getElementById('sidebar-container');
+    const contentContainer = document.getElementById('content-container');
+    
+    // 如果容器不存在或为空，说明使用的是组件加载方式，等待 componentsLoaded 事件
+    // 如果容器已有内容，说明是静态 HTML，直接初始化
+    if (sidebarContainer && contentContainer) {
+        const hasContent = sidebarContainer.children.length > 0 || contentContainer.children.length > 0;
+        if (hasContent) {
+            // 静态 HTML 方式，直接初始化
+            initApp();
+        }
+        // 否则等待 componentsLoaded 事件
+    }
+});
 
 // 导出全局函数供其他模块使用
 window.loadProviders = loadProviders;

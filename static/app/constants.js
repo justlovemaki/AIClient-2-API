@@ -14,19 +14,19 @@ let providerStats = {
     providerTypeStats: {} // 详细按类型统计
 };
 
-// DOM元素
+// DOM元素 - 使用 getter 延迟获取，以支持动态加载的组件
 const elements = {
-    serverStatus: document.getElementById('serverStatus'),
-    restartBtn: document.getElementById('restartBtn'),
-    sections: document.querySelectorAll('.section'),
-    navItems: document.querySelectorAll('.nav-item'),
-    logsContainer: document.getElementById('logsContainer'),
-    clearLogsBtn: document.getElementById('clearLogs'),
-    toggleAutoScrollBtn: document.getElementById('toggleAutoScroll'),
-    saveConfigBtn: document.getElementById('saveConfig'),
-    resetConfigBtn: document.getElementById('resetConfig'),
-    toastContainer: document.getElementById('toastContainer'),
-    modelProvider: document.getElementById('modelProvider'),
+    get serverStatus() { return document.getElementById('serverStatus'); },
+    get restartBtn() { return document.getElementById('restartBtn'); },
+    get sections() { return document.querySelectorAll('.section'); },
+    get navItems() { return document.querySelectorAll('.nav-item'); },
+    get logsContainer() { return document.getElementById('logsContainer'); },
+    get clearLogsBtn() { return document.getElementById('clearLogs'); },
+    get toggleAutoScrollBtn() { return document.getElementById('toggleAutoScroll'); },
+    get saveConfigBtn() { return document.getElementById('saveConfig'); },
+    get resetConfigBtn() { return document.getElementById('resetConfig'); },
+    get toastContainer() { return document.getElementById('toastContainer'); },
+    get modelProvider() { return document.getElementById('modelProvider'); },
 };
 
 // 定期刷新间隔

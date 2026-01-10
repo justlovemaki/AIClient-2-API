@@ -1,0 +1,67 @@
+/* 侧边栏 */
+.sidebar {
+    width: 260px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
+    position: sticky;
+    top: 5rem;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: var(--transition);
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-lg);
+    user-select: none;
+}
+
+.nav-item:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    background: var(--primary-10);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.nav-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 1.1em;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 0 1rem;
+    }
+}

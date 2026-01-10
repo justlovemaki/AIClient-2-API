@@ -1,0 +1,512 @@
+<link rel="stylesheet" href="components/section-dashboard.css">
+<!-- Dashboard Section -->
+<section id="dashboard" class="section active" aria-labelledby="dashboard-title">
+    <h2 id="dashboard-title" data-i18n="dashboard.title">系统概览</h2>
+    <div class="dashboard-top-row">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="uptime">--</h3>
+                    <p data-i18n="dashboard.uptime">运行时间</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Contact and Sponsor Section -->
+        <div class="contact-section dashboard-contact">
+            <div class="contact-grid">
+                <div class="contact-card">
+                    <h3><i id="wechat-icon" class="fab fa-weixin"></i> <span id="wechat-title" data-i18n="dashboard.contact.wechat">扫码进群，注明来意</span></h3>
+                    <div class="qr-container">
+                        <img src="static/wechat.png" id="wechat-img" alt="微信二维码" class="qr-code clickable-qr">
+                    </div>
+                    <p class="qr-description" id="wechat-desc" data-i18n="dashboard.contact.wechatDesc">添加微信获取更多技术支持和交流</p>
+                </div>
+                <div class="contact-card" id="sponsor-card">
+                    <h3><i class="fas fa-heart"></i> <span id="sponsor-title" data-i18n="dashboard.contact.sponsor">扫码赞助</span></h3>
+                    <div class="qr-container">
+                        <img src="static/sponsor.png" id="sponsor-img" alt="赞助二维码" class="qr-code clickable-qr">
+                    </div>
+                    <p class="qr-description" id="sponsor-desc" data-i18n="dashboard.contact.sponsorDesc">您的赞助是项目持续发展的动力</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information Panel -->
+    <div class="system-info-panel">
+        <div class="system-info-header">
+            <h3 data-i18n="dashboard.systemInfo">系统信息</h3>
+            <div class="update-controls">
+                <button id="checkUpdateBtn" class="btn btn-outline btn-sm" data-i18n-title="dashboard.update.checkTitle" title="检查更新">
+                    <i class="fas fa-sync-alt"></i> <span data-i18n="dashboard.update.check">检查更新</span>
+                </button>
+                <button id="performUpdateBtn" class="btn btn-primary btn-sm" style="display: none;" data-i18n-title="dashboard.update.performTitle" title="执行更新">
+                    <i class="fas fa-download"></i> <span data-i18n="dashboard.update.perform">立即更新</span>
+                </button>
+            </div>
+        </div>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-tag"></i> <span data-i18n="dashboard.version">版本号</span>
+                </span>
+                <div class="version-display-wrapper">
+                    <span class="info-value" id="appVersion">--</span>
+                    <span class="update-badge" id="updateBadge" style="display: none;">
+                        <i class="fas fa-arrow-up"></i> <span id="latestVersionText">--</span>
+                    </span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-code"></i> <span data-i18n="dashboard.nodeVersion">Node.js版本</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="nodeVersion">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-clock"></i> <span data-i18n="dashboard.serverTime">服务器时间</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="serverTime">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-desktop"></i> <span data-i18n="dashboard.platform">操作系统</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="platformInfo">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-memory"></i> <span data-i18n="dashboard.memoryUsage">内存使用</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="memoryUsage">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-microchip"></i> <span data-i18n="dashboard.cpuUsage">CPU 使用</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="cpuUsage">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-cogs"></i> <span data-i18n="dashboard.serviceMode">运行模式</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="serviceMode">--</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">
+                    <i class="fas fa-microchip"></i> <span data-i18n="dashboard.processPid">进程 PID</span>
+                </span>
+                <div class="version-display-wrapper">
+                <span class="info-value" id="processPid">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Path Routing Examples Panel -->
+    <div class="routing-examples-panel">
+        <h3><i class="fas fa-route"></i> <span data-i18n="dashboard.routing.title">路径路由调用示例</span></h3>
+        <p class="routing-description" data-i18n="dashboard.routing.description">通过不同路径路由访问不同的AI模型提供商，支持灵活的模型切换</p>
+        
+        <div class="routing-examples-grid">
+            <div class="routing-example-card" data-provider="gemini-cli-oauth-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-gem"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.gemini">Gemini CLI OAuth</h4>
+                    <span class="provider-badge oauth" data-i18n="dashboard.routing.oauth">突破限制</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/gemini-cli-oauth/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/gemini-cli-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "gemini-2.0-flash-exp",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/gemini-cli-oauth/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/gemini-cli-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "gemini-2.0-flash-exp",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routing-example-card" data-provider="gemini-antigravity-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-rocket"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.antigravity">Gemini Antigravity</h4>
+                    <span class="provider-badge oauth" data-i18n="dashboard.routing.experimental">突破限制/实验性</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/gemini-antigravity/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/gemini-antigravity/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "gemini-3-pro-preview",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/gemini-antigravity/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/gemini-antigravity/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "gemini-3-pro-preview",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routing-example-card" data-provider="claude-custom-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-brain"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.claude">Claude Custom</h4>
+                    <span class="provider-badge official" data-i18n="dashboard.routing.official">官方API/三方</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/claude-custom/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/claude-custom/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "claude-3-sonnet-20240229",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/claude-custom/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/claude-custom/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "claude-3-sonnet-20240229",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routing-example-card" data-provider="claude-kiro-oauth-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-robot"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.kiro">Claude Kiro OAuth</h4>
+                    <span class="provider-badge oauth" data-i18n="dashboard.routing.free">突破限制/免费使用</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/claude-kiro-oauth/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "claude-3-5-sonnet-20241022",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/claude-kiro-oauth/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/claude-kiro-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routing-example-card" data-provider="openai-custom-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-comments"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.openai">OpenAI Custom</h4>
+                    <span class="provider-badge official" data-i18n="dashboard.routing.official">官方API/三方</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-custom/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-custom/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-custom/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-custom/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "gpt-4",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="routing-example-card" data-provider="openai-qwen-oauth-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-code"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.qwen">Qwen OAuth</h4>
+                    <span class="provider-badge oauth" data-i18n="dashboard.routing.oauth">突破限制</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-qwen-oauth/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "qwen-turbo",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-qwen-oauth/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-qwen-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "qwen-turbo",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routing-example-card" data-provider="openai-iflow-card">
+                <div class="routing-card-header">
+                    <i class="fas fa-wind"></i>
+                    <h4 data-i18n="dashboard.routing.nodeName.iflow">iFlow OAuth</h4>
+                    <span class="provider-badge oauth" data-i18n="dashboard.routing.oauth">突破限制</span>
+                </div>
+                <div class="routing-card-content">
+                    <!-- 协议标签切换 -->
+                    <div class="protocol-tabs">
+                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
+                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
+                    </div>
+                    
+                    <!-- OpenAI协议示例 -->
+                    <div class="protocol-content" data-protocol="openai">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-iflow/v1/chat/completions</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-iflow/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "qwen3-max",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Claude协议示例 -->
+                    <div class="protocol-content active" data-protocol="claude">
+                        <div class="endpoint-info">
+                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
+                            <code class="endpoint-path">/openai-iflow/v1/messages</code>
+                        </div>
+                        <div class="usage-example">
+                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
+                            <pre><code>curl http://localhost:3000/openai-iflow/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "model": "qwen3-max",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="routing-tips">
+            <h4><i class="fas fa-lightbulb"></i> <span data-i18n="dashboard.routing.tips">使用提示</span></h4>
+            <ul>
+                <li data-i18n="dashboard.routing.tip1"><strong>即时切换:</strong> 通过修改URL路径即可切换不同的AI模型提供商</li>
+                <li data-i18n="dashboard.routing.tip2"><strong>客户端配置:</strong> 在Cherry-Studio、NextChat、Cline等客户端中设置API端点为对应路径</li>
+                <li data-i18n="dashboard.routing.tip3"><strong>跨协议调用:</strong> 支持OpenAI协议调用Claude模型，或Claude协议调用OpenAI模型</li>
+            </ul>
+        </div>
+    </div>
+    
+</section>

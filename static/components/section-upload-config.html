@@ -1,0 +1,58 @@
+<link rel="stylesheet" href="components/section-upload-config.css">
+<!-- Upload Configuration Section -->
+<section id="upload-config" class="section" aria-labelledby="upload-config-title">
+    <h2 id="upload-config-title" data-i18n="upload.title">配置管理</h2>
+    <div class="upload-config-panel">
+        <!-- 搜索和过滤区域 -->
+        <div class="config-search-panel">
+            <div class="search-controls">
+                <div class="form-group">
+                    <label for="configSearch" data-i18n="upload.search">搜索配置</label>
+                    <div class="search-input-group">
+                        <input type="text" id="configSearch" class="form-control" data-i18n-placeholder="upload.searchPlaceholder" placeholder="输入文件名">
+                        <button type="button" class="btn btn-outline" id="searchConfigBtn" data-i18n-title="common.search" aria-label="搜索配置" data-i18n-aria-label="common.search">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="configStatusFilter" data-i18n="upload.statusFilter">关联状态</label>
+                    <select id="configStatusFilter" class="form-control">
+                        <option value="" data-i18n="upload.statusFilter.all">全部状态</option>
+                        <option value="used" data-i18n="upload.statusFilter.used">已关联</option>
+                        <option value="unused" data-i18n="upload.statusFilter.unused">未关联</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <div class="config-actions">
+                        <button class="btn btn-outline" id="refreshConfigList" aria-label="Refresh Config List" data-i18n-aria-label="upload.refresh">
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="upload.refresh">刷新</span>
+                        </button>
+                        <button class="btn btn-outline" id="downloadAllConfigs" aria-label="Download All Configs" data-i18n-aria-label="upload.downloadAll">
+                            <i class="fas fa-file-archive"></i> <span data-i18n="upload.downloadAll">打包下载</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 配置列表 -->
+        <div class="config-list-container">
+            <div class="config-list-header">
+                <h3 data-i18n="upload.listTitle">配置文件列表</h3>
+                <div class="config-stats">
+                    <span id="configCount" data-i18n="upload.count" data-i18n-params='{"count":"0"}'>共 0 个配置文件</span>
+                    <span id="usedConfigCount" class="status-used" data-i18n="upload.usedCount" data-i18n-params='{"count":"0"}'>已关联: 0</span>
+                    <span id="unusedConfigCount" class="status-unused" data-i18n="upload.unusedCount" data-i18n-params='{"count":"0"}'>未关联: 0</span>
+                    <button id="batchLinkKiroBtn" class="btn-batch-link" data-i18n-title="upload.batchLink" title="批量关联 configs/ 下的未关联配置">
+                        <i class="fas fa-link"></i> <span data-i18n="upload.batchLink">自动关联oauth</span>
+                    </button>
+                </div>
+            </div>
+            <div id="configList" class="config-list">
+                <!-- 配置文件列表将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+</section>

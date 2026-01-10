@@ -1,0 +1,67 @@
+<link rel="stylesheet" href="components/section-plugins.css">
+<!-- Plugins Section -->
+<section id="plugins" class="section" aria-labelledby="plugins-title">
+    <h2 id="plugins-title" data-i18n="plugins.title">插件管理</h2>
+    <div class="plugins-panel">
+        <div class="plugins-description">
+            <div class="highlight-note">
+                <i class="fas fa-info-circle"></i>
+                <span data-i18n="plugins.description">插件系统允许您扩展系统功能，启用或禁用插件需要重启服务才能生效</span>
+            </div>
+        </div>
+        
+        <!-- 插件统计 -->
+        <div class="stats-grid plugins-stats">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-puzzle-piece"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalPlugins">0</h3>
+                    <p data-i18n="plugins.stats.total">总插件数</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="enabledPlugins">0</h3>
+                    <p data-i18n="plugins.stats.enabled">已启用</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="disabledPlugins">0</h3>
+                    <p data-i18n="plugins.stats.disabled">已禁用</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 插件操作按钮 -->
+        <div class="plugins-controls">
+            <button class="btn btn-primary" id="refreshPluginsBtn" aria-label="Refresh Plugins" data-i18n-aria-label="plugins.refresh">
+                <i class="fas fa-sync-alt"></i> <span data-i18n="plugins.refresh">刷新插件列表</span>
+            </button>
+        </div>
+        
+        <!-- 插件加载状态 -->
+        <div class="plugins-loading" id="pluginsLoading" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i> <span data-i18n="plugins.loading">正在加载插件列表...</span>
+        </div>
+        
+        <!-- 插件列表 -->
+        <div class="plugins-list-container">
+            <div id="pluginsList" class="plugins-list">
+                <!-- 插件列表将在这里动态生成 -->
+            </div>
+            <div class="plugins-empty" id="pluginsEmpty">
+                <i class="fas fa-puzzle-piece"></i>
+                <p data-i18n="plugins.empty">暂无已安装的插件</p>
+            </div>
+        </div>
+    </div>
+</section>

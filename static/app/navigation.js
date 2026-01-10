@@ -27,6 +27,9 @@ function initNavigation() {
                     section.classList.add('active');
                 }
             });
+
+            // 滚动到顶部
+            scrollToTop();
         });
     });
 }
@@ -51,6 +54,23 @@ function switchToSection(sectionId) {
             section.classList.add('active');
         }
     });
+
+    // 滚动到顶部
+    scrollToTop();
+}
+
+/**
+ * 滚动到页面顶部
+ */
+function scrollToTop() {
+    // 尝试滚动内容区域
+    const contentContainer = document.getElementById('content-container');
+    if (contentContainer) {
+        contentContainer.scrollTop = 0;
+    }
+    
+    // 同时滚动窗口到顶部
+    window.scrollTo(0, 0);
 }
 
 /**

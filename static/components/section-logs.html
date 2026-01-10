@@ -1,0 +1,16 @@
+<link rel="stylesheet" href="components/section-logs.css">
+<!-- Logs Section -->
+<section id="logs" class="section" aria-labelledby="logs-title">
+    <h2 id="logs-title" data-i18n="logs.title">实时日志</h2>
+    <div class="logs-controls">
+        <button class="btn btn-danger" id="clearLogs" aria-label="Clear All Logs" data-i18n-aria-label="logs.clear">
+            <i class="fas fa-trash" aria-hidden="true"></i> <span data-i18n="logs.clear">清空日志</span>
+        </button>
+        <button class="btn btn-primary" id="toggleAutoScroll" data-enabled="true" aria-label="Toggle Auto-scroll" data-i18n-aria-label="logs.autoScroll">
+            <i class="fas fa-arrow-down" aria-hidden="true"></i> <span data-i18n="logs.autoScroll.on">自动滚动: 开</span>
+        </button>
+    </div>
+    <div class="logs-container" id="logsContainer" role="log" aria-live="polite" aria-atomic="false">
+        <!-- Logs will appear here -->
+    </div>
+</section>
