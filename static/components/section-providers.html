@@ -1,0 +1,46 @@
+<link rel="stylesheet" href="components/section-providers.css">
+<!-- Provider Pools Section -->
+<section id="providers" class="section" aria-labelledby="providers-title">
+    <h2 id="providers-title" data-i18n="providers.title">提供商池管理</h2>
+    <div class="pool-description">
+        <div class="highlight-note">
+            <i class="fas fa-info-circle"></i>
+            <span data-i18n="providers.note">使用默认路径配置需添加一个空节点</span>
+        </div>
+    </div>
+    <!-- Provider Pool Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-server"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="activeConnections">0</h3>
+                <p data-i18n="providers.activeConnections">活动连接</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="activeProviders">0</h3>
+                <p data-i18n="providers.activeProviders">活跃提供商</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="healthyProviders">0</h3>
+                <p data-i18n="providers.healthyProviders">健康提供商</p>
+            </div>
+        </div>
+    </div>
+    <div class="providers-container">
+        <div id="providersList" class="providers-list">
+            <!-- Providers will be loaded here -->
+        </div>
+    </div>
+</section>

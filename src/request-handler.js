@@ -58,7 +58,7 @@ export function createRequestHandler(config, providerPoolManager) {
         // 检查是否是插件静态文件
         const pluginManager = getPluginManager();
         const isPluginStatic = pluginManager.isPluginStaticPath(path);
-        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path === '/login.html' || isPluginStatic) {
+        if (path.startsWith('/static/') || path === '/' || path === '/favicon.ico' || path === '/index.html' || path.startsWith('/app/') || path.startsWith('/components/') || path === '/login.html' || isPluginStatic) {
             const served = await serveStaticFiles(path, res);
             if (served) return;
         }

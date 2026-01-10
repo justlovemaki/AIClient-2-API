@@ -28,17 +28,24 @@
 /* 移动端汉堡菜单按钮 */
 .mobile-menu-toggle {
     display: none;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--primary-color);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    font-size: 1.25rem;
+    color: var(--text-primary);
     cursor: pointer;
     padding: 0.5rem;
     transition: var(--transition);
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
 }
 
 .mobile-menu-toggle:hover {
-    color: var(--secondary-color);
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
 /* 移动端覆盖层 */
@@ -60,12 +67,23 @@
     opacity: 1;
 }
 
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* ========================================
    平板设备适配 (768px - 1024px)
    ======================================== */
 @media (max-width: 1024px) {
     .header-content {
-        padding: 1rem 1.5rem;
+        padding: 0.75rem 1.5rem;
     }
 
     .content {
@@ -80,9 +98,14 @@
     .config-form {
         max-width: 100%;
     }
+}
 
-    .logout-btn {
-        line-height: 0;
+/* ========================================
+   桌面端确保header-controls显示 (最小宽度 769px)
+   ======================================== */
+@media (min-width: 769px) {
+    .header .header-controls {
+        display: flex !important;
     }
 }
 
@@ -90,63 +113,218 @@
    移动端适配 (最大宽度 768px)
    ======================================== */
 @media (max-width: 768px) {
-    /* Header 优化 */
+    /* Header 重新设计 - 两行布局 */
     .header-content {
-        padding: 0.75rem 1rem;
+        padding: 0.625rem 1rem;
         flex-wrap: wrap;
-        gap: 0.75rem;
-        justify-content: center;
+        gap: 0.5rem;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .header h1 {
-        font-size: 1.25rem;
-        flex: 1 1 100%;
+        font-size: 1rem;
+        flex: 1 1 auto;
         min-width: 0;
-        text-align: center;
-        order: -1;
+        text-align: left;
+        order: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: calc(100% - 50px);
     }
 
     .header h1 i {
-        margin-right: 0.25rem;
+        margin-right: 0.375rem;
+        font-size: 0.875rem;
+        flex-shrink: 0;
     }
 
-    .header-controls {
+    .header-title {
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+
+    /* 显示汉堡菜单按钮 */
+    .mobile-menu-toggle {
+        display: inline-flex !important;
+        order: 2;
+        z-index: 101;
+        position: relative;
+    }
+
+    /* 默认隐藏header-controls */
+    .header .header-controls {
+        display: none !important;
         gap: 0.5rem;
         flex-wrap: wrap;
-        justify-content: center;
-        flex: 1 1 100%;
+        justify-content: flex-end;
+        flex: 0 0 auto;
+        order: 3;
+        width: 100%;
+        z-index: 100;
+        position: relative;
     }
 
-    .status-badge {
-        padding: 0.375rem 0.75rem;
+    /* 当通过JS设置display: flex时显示 */
+    .header .header-controls[style*="display: flex"] {
+        display: flex !important;
+        animation: slideDown 0.3s ease;
+        background: var(--bg-glass);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 0.75rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        margin-top: 0.5rem;
+        gap: 0.5rem;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* 统一header-controls内所有元素的大小 */
+    .header .header-controls[style*="display: flex"] > * {
+        flex: 0 0 auto;
+    }
+
+    /* 状态徽章 */
+    .header .header-controls[style*="display: flex"] .status-badge {
+        padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
+        border-radius: var(--radius-full);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    /* GitHub链接 */
+    .header .header-controls[style*="display: flex"] .github-link {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 主题切换按钮 */
+    .header .header-controls[style*="display: flex"] .theme-toggle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 登出按钮 - 与语言切换按钮样式一致 */
+    .header .header-controls[style*="display: flex"] .logout-btn {
+        padding: 0.5rem 1rem;
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .header .header-controls[style*="display: flex"] .logout-btn:hover {
+        background: var(--bg-tertiary);
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+
+    .header .header-controls[style*="display: flex"] .logout-btn span {
+        display: inline;
+    }
+
+    /* 重启按钮 - 与语言切换按钮样式一致 */
+    .header .header-controls[style*="display: flex"] #restartBtn {
+        padding: 0.5rem 1rem;
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .header .header-controls[style*="display: flex"] #restartBtn:hover {
+        background: var(--bg-tertiary);
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+
+    .header .header-controls[style*="display: flex"] #restartBtn .btn-text {
+        display: inline;
+    }
+
+    /* 隐藏次要元素 */
+    .kiro-buy-link {
+        display: none;
+    }
+
+    /* 状态徽章 */
+    .status-badge {
+        padding: 0.375rem 0.625rem;
+        font-size: 0.6875rem;
+        gap: 0.375rem;
+    }
+
+    .status-badge i {
+        font-size: 0.5rem;
     }
 
     /* 主内容区域 */
     .main-content {
         flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
     }
 
-    /* 侧边栏移动端样式 */
+    /* 侧边栏移动端样式 - 底部导航栏 */
     .sidebar {
         width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-        padding: 0;
+        border: none;
+        border-radius: var(--radius-xl);
+        padding: 0.5rem;
         position: sticky;
-        top: 73px;
+        top: 0;
         z-index: 90;
-        background: var(--bg-primary);
+        background: var(--bg-glass);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: var(--shadow-md);
+        margin-bottom: 0.5rem;
     }
 
     .sidebar-nav {
         flex-direction: row;
         overflow-x: auto;
         overflow-y: hidden;
-        padding: 0.5rem 1rem;
-        gap: 0.5rem;
+        padding: 0.25rem;
+        gap: 0.375rem;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        justify-content: flex-start;
     }
 
     .sidebar-nav::-webkit-scrollbar {
@@ -154,97 +332,104 @@
     }
 
     .nav-item {
-        padding: 0.625rem 1rem;
+        padding: 0.5rem 0.75rem;
         white-space: nowrap;
-        border-radius: 0.375rem;
-        border-right: none;
-        font-size: 0.875rem;
+        border-radius: var(--radius-md);
+        font-size: 0.75rem;
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
         touch-action: manipulation;
-    }
-
-    .nav-item.active {
-        background: var(--primary-color) !important;
-        color: white !important;
-        border-right: none;
-    }
-
-    .nav-item:active {
-        opacity: 0.8;
-        transform: scale(0.98);
+        gap: 0.375rem;
+        min-width: fit-content;
+        flex-shrink: 0;
     }
 
     .nav-item i {
-        width: 16px;
+        width: 14px;
         font-size: 0.875rem;
         pointer-events: none;
     }
 
     .nav-item span {
         pointer-events: none;
+        font-weight: 500;
+    }
+
+    .nav-item.active {
+        background: var(--primary-color) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px var(--primary-30);
+    }
+
+    .nav-item:active {
+        opacity: 0.8;
+        transform: scale(0.96);
     }
 
     /* 内容区域 */
     .content {
-        padding: 1rem;
+        padding: 0;
     }
 
     .section h2 {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         margin-bottom: 1rem;
+        padding: 0 0.25rem;
     }
 
     /* 统计卡片 */
     .stats-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
     }
 
     .stat-card {
-        padding: 1rem;
+        padding: 0.875rem;
+        border-radius: var(--radius-lg);
     }
 
     .stat-icon {
-        width: 48px;
-        height: 48px;
-        font-size: 1.25rem;
+        width: 40px;
+        height: 40px;
+        font-size: 1.125rem;
     }
 
     .stat-info h3 {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
     }
 
     .stat-info p {
-        font-size: 0.8125rem;
+        font-size: 0.75rem;
     }
 
     /* 表单优化 */
     .config-panel {
         padding: 1rem;
-        border-radius: 0.375rem;
+        border-radius: var(--radius-lg);
     }
 
     .form-row,
     .config-row {
         grid-template-columns: 1fr;
-        gap: 1rem;
+        gap: 0.875rem;
     }
 
     .form-group {
-        margin-bottom: 1rem;
+        margin-bottom: 0.875rem;
     }
 
     .form-group label {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         margin-bottom: 0.375rem;
+        font-weight: 500;
     }
 
     .form-control {
-        padding: 0.625rem;
+        padding: 0.625rem 0.875rem;
         font-size: 0.875rem;
+        border-radius: var(--radius-md);
     }
 
     textarea.form-control {
@@ -254,13 +439,14 @@
     /* 按钮优化 */
     .btn {
         padding: 0.625rem 1rem;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
+        border-radius: var(--radius-md);
     }
 
     .form-actions {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.625rem;
     }
 
     .form-actions .btn {
@@ -270,31 +456,45 @@
     /* 单选按钮组 */
     .radio-group {
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.625rem;
     }
 
     /* 高级配置区域 */
     .advanced-config-section {
         padding: 1rem;
         margin-top: 1rem;
+        border-radius: var(--radius-lg);
     }
 
     .advanced-config-section h3 {
-        font-size: 1.125rem;
-        margin-bottom: 1rem;
+        font-size: 1rem;
+        margin-bottom: 0.875rem;
     }
 
     /* 系统信息面板 */
     .system-info-panel {
         padding: 1rem;
+        border-radius: var(--radius-lg);
     }
 
     .system-info-panel h3 {
-        font-size: 1.125rem;
-        margin-bottom: 1rem;
+        font-size: 1rem;
+        margin-bottom: 0.875rem;
+    }
+
+    .system-info-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .update-controls {
+        width: 100%;
+        justify-content: flex-start;
     }
 
     .info-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
         gap: 0.75rem;
     }
 
@@ -302,15 +502,37 @@
         padding: 0.75rem;
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.375rem;
+        gap: 0.5rem;
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
     }
 
     .info-label {
-        font-size: 0.8125rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .info-label i {
+        font-size: 0.75rem;
+        width: 14px;
     }
 
     .info-value {
         font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .version-display-wrapper {
+        padding-left: 0;
+        width: 100%;
+    }
+
+    .update-badge {
+        font-size: 0.625rem;
+        padding: 0.125rem 0.5rem;
+        margin-left: 0.5rem;
     }
 
     /* 提供商列表 */
@@ -323,31 +545,183 @@
     }
 
     .provider-card {
-        padding: 1rem;
+        padding: 0.875rem;
+        border-radius: var(--radius-lg);
+    }
+
+    /* Provider Item Header 移动端优化 */
+    .provider-item-header {
+        padding: 0.875rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .provider-item-header .provider-info {
+        width: 100%;
+    }
+
+    .provider-item-header .provider-name {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .provider-item-header .provider-meta {
+        font-size: 0.75rem;
+        line-height: 1.3;
+    }
+
+    .provider-item-header .provider-health-meta {
+        font-size: 0.6875rem;
+        margin-top: 0.375rem;
+    }
+
+    .provider-item-header .provider-actions-group {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .provider-item-header .provider-actions-group .btn {
+        flex: 1;
+        min-width: 80px;
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .provider-item-header .health-status {
+        font-size: 0.6875rem;
+        padding: 0.1875rem 0.5rem;
+    }
+
+    .provider-item-header .disabled-status {
+        font-size: 0.6875rem;
+        padding: 0.1875rem 0.5rem;
+    }
+
+    .provider-item-header .provider-error-info {
+        padding: 0.5rem 0.625rem;
+        font-size: 0.6875rem;
+        margin-top: 0.5rem;
+    }
+
+    .provider-item-header .provider-error-info i {
+        font-size: 0.75rem;
+    }
+
+    .provider-item-header .provider-error-info .error-label {
+        font-size: 0.6875rem;
+    }
+
+    .provider-item-header .provider-error-info .error-message {
+        font-size: 0.6875rem;
     }
 
     .provider-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.75rem;
+        gap: 0.625rem;
+    }
+
+    .provider-header-left {
+        width: 100%;
+        margin-bottom: 0.25rem;
+    }
+
+    .provider-name {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .provider-status {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .provider-header-right {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 0.5rem;
     }
 
     .provider-actions {
         width: 100%;
         justify-content: flex-start;
         gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .provider-actions-group {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        width: 100%;
     }
 
     .provider-actions .btn {
         flex: 1;
         min-width: 0;
+        font-size: 0.8125rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .provider-summary {
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+    }
+
+    .provider-summary h4 {
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .provider-summary p {
+        font-size: 0.75rem;
+        line-height: 1.4;
+    }
+
+    .provider-models {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .provider-models span {
+        display: inline-block;
+        padding: 0.125rem 0.375rem;
+        margin: 0.125rem;
+        font-size: 0.6875rem;
+    }
+
+    /* 提供商统计信息 */
+    .provider-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+    }
+
+    .provider-stat {
+        padding: 0.625rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+    }
+
+    .provider-stat-label {
+        font-size: 0.6875rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .provider-stat-value {
+        font-size: 1rem;
     }
 
     /* 提供商详情 */
     .provider-summary {
         flex-direction: column;
         align-items: flex-start;
-        gap: 1rem;
+        gap: 0.875rem;
     }
 
     .provider-summary-actions {
@@ -366,14 +740,29 @@
         max-height: 90vh;
         margin: 5vh auto;
         padding: 1rem;
+        border-radius: var(--radius-xl);
     }
 
     .provider-modal-header {
         padding: 1rem;
         margin: -1rem -1rem 1rem -1rem;
+        border-bottom: 1px solid var(--border-color);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
     }
 
     .provider-modal-header h2 {
+        font-size: 1.125rem;
+        flex: 1;
+    }
+
+    .provider-modal-header .modal-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 32px;
+        height: 32px;
         font-size: 1.25rem;
     }
 
@@ -382,36 +771,110 @@
         max-height: calc(90vh - 140px);
     }
 
+    .provider-summary {
+        padding: 0.875rem;
+        margin-bottom: 0.875rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .provider-summary-item {
+        padding: 0.5rem;
+        width: 100%;
+    }
+
+    .provider-summary-item .label {
+        font-size: 0.75rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .provider-summary-item .value {
+        font-size: 1.125rem;
+    }
+
+    .provider-summary-actions {
+        width: 100%;
+        margin-left: 0;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .provider-summary-actions .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+
     .config-section {
-        padding: 1rem;
-        margin-bottom: 1rem;
+        padding: 0.875rem;
+        margin-bottom: 0.875rem;
+        border-radius: var(--radius-md);
     }
 
     .config-section h3 {
-        font-size: 1.125rem;
+        font-size: 1rem;
         margin-bottom: 0.75rem;
     }
 
     .config-item {
-        padding: 0.75rem;
+        padding: 0.625rem;
         gap: 0.5rem;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .config-item label {
+        font-size: 0.8125rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .config-item input,
+    .config-item textarea,
+    .config-item select {
+        padding: 0.625rem;
+        font-size: 0.875rem;
     }
 
     .config-label {
-        font-size: 0.8125rem;
-        min-width: 80px;
+        font-size: 0.75rem;
+        min-width: 70px;
+        font-weight: 500;
     }
 
     .config-value {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .form-group {
+        margin-bottom: 0.75rem;
+    }
+
+    .form-group label {
+        font-size: 0.8125rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    .form-actions .btn {
+        width: 100%;
     }
 
     /* 日志容器 */
     .logs-container {
         height: calc(100vh - 280px);
         min-height: 300px;
-        font-size: 0.75rem;
-        padding: 0.75rem;
+        font-size: 0.6875rem;
+        padding: 0.625rem;
+        border-radius: var(--radius-lg);
     }
 
     .logs-controls {
@@ -422,18 +885,20 @@
 
     .logs-controls .btn {
         flex: 1;
-        min-width: 120px;
+        min-width: 100px;
+        font-size: 0.75rem;
     }
 
     .log-entry {
-        padding: 0.5rem;
-        margin-bottom: 0.375rem;
-        font-size: 0.75rem;
+        padding: 0.375rem;
+        margin-bottom: 0.25rem;
+        font-size: 0.6875rem;
         line-height: 1.4;
+        border-radius: var(--radius-sm);
     }
 
     .log-timestamp {
-        font-size: 0.6875rem;
+        font-size: 0.625rem;
     }
 
     /* Toast 通知 */
@@ -446,8 +911,8 @@
 
     .toast {
         padding: 0.75rem 1rem;
-        font-size: 0.875rem;
-        border-radius: 0.375rem;
+        font-size: 0.8125rem;
+        border-radius: var(--radius-md);
         pointer-events: auto;
     }
 
@@ -463,7 +928,7 @@
 
     /* 切换开关 */
     .toggle-switch {
-        transform: scale(0.9);
+        transform: scale(0.85);
     }
 
     /* OAuth刷新切换 */
@@ -478,14 +943,15 @@
         grid-template-columns: 1fr;
     }
 
-    /* 路径路由示例移动端优化 */
+    /* 路由路由示例移动端优化 */
     .routing-examples-panel {
         padding: 1rem;
         margin-bottom: 1rem;
+        border-radius: var(--radius-lg);
     }
 
     .routing-examples-panel h3 {
-        font-size: 1.125rem;
+        font-size: 1rem;
     }
 
     .routing-description {
@@ -494,11 +960,11 @@
 
     .routing-examples-grid {
         grid-template-columns: 1fr;
-        gap: 1rem;
+        gap: 0.875rem;
     }
 
     .routing-example-card {
-        border-radius: 0.375rem;
+        border-radius: var(--radius-lg);
     }
 
     .routing-card-header {
@@ -508,97 +974,192 @@
     }
 
     .routing-card-header h4 {
-        font-size: 0.9rem;
+        font-size: 0.875rem;
         flex-basis: 100%;
         margin-bottom: 0.25rem;
     }
 
     .routing-card-header i {
-        font-size: 1rem;
+        font-size: 0.875rem;
     }
 
     .provider-badge {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.4rem;
+        font-size: 0.625rem;
+        padding: 0.1875rem 0.375rem;
     }
 
     .routing-card-content {
-        padding: 1rem;
+        padding: 0.875rem;
     }
 
     .endpoint-path {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.6rem;
+        font-size: 0.6875rem;
+        padding: 0.375rem 0.5rem;
         padding-right: 2rem;
         word-break: break-all;
+        border-radius: var(--radius-sm);
     }
 
     .copy-btn {
-        right: 0.4rem;
-        padding: 0.2rem;
-        min-width: 32px;
-        min-height: 32px;
+        right: 0.375rem;
+        padding: 0.1875rem;
+        min-width: 28px;
+        min-height: 28px;
     }
 
     .usage-example pre {
-        font-size: 0.7rem;
-        padding: 0.75rem;
+        font-size: 0.6875rem;
+        padding: 0.625rem;
         overflow-x: auto;
         white-space: pre-wrap;
+        border-radius: var(--radius-md);
     }
 
     .routing-tips {
-        padding: 1rem;
+        padding: 0.875rem;
+        border-radius: var(--radius-md);
     }
 
     .routing-tips h4 {
-        font-size: 0.9rem;
+        font-size: 0.875rem;
     }
 
     .routing-tips ul {
-        padding-left: 1.25rem;
+        padding-left: 1.125rem;
     }
 
     .routing-tips li {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         margin-bottom: 0.5rem;
     }
 
     .routing-tips code {
-        font-size: 0.7rem;
-        padding: 0.1rem 0.2rem;
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.25rem;
     }
 
     /* 协议标签移动端优化 */
     .protocol-tabs {
         margin-bottom: 0.75rem;
+        gap: 0.375rem;
     }
 
     .protocol-tab {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.8rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.75rem;
+        border-radius: var(--radius-md);
     }
 
     /* 池配置部分 */
     .pool-section {
-        margin-top: 1rem;
+        margin-top: 0.875rem;
     }
 
     .pool-section small {
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
     }
 
     /* 系统提示部分 */
     .system-prompt-section {
-        margin-top: 1rem;
+        margin-top: 0.875rem;
     }
 
     .system-prompt-section textarea {
         min-height: 120px;
     }
 
-    .logout-btn {
-        line-height: 0;
+    /* Contact Grid 移动端优化 */
+    .contact-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .contact-card {
+        padding: 1rem;
+        border-radius: var(--radius-lg);
+    }
+
+    .contact-card h3 {
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+        gap: 0.375rem;
+    }
+
+    .contact-card h3 i {
+        font-size: 0.875rem;
+    }
+
+    .qr-container {
+        margin: 1rem 0;
+    }
+
+    .qr-code {
+        width: 150px;
+        height: 150px;
+        border-width: 2px;
+        padding: 0.375rem;
+    }
+
+    .qr-description {
+        font-size: 0.75rem;
+        line-height: 1.4;
+    }
+
+    /* Config Stats 移动端优化 */
+    .config-stats {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-start;
+    }
+
+    .config-stats span {
+        font-size: 0.75rem;
+        padding: 0.1875rem 0.5rem;
+        border-radius: 0.375rem;
+    }
+
+    /* Dashboard Top Row 移动端优化 */
+    .dashboard-top-row {
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .dashboard-top-row .stats-grid {
+        margin-bottom: 0;
+    }
+
+    .dashboard-top-row .dashboard-contact {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .dashboard-top-row .dashboard-contact .contact-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem;
+    }
+
+    .dashboard-top-row .dashboard-contact .contact-card {
+        padding: 0.875rem;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-container {
+        margin: 0.5rem 0;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-code {
+        width: 120px;
+        height: 120px;
+    }
+
+    .dashboard-top-row .dashboard-contact .contact-card h3 {
+        font-size: 0.875rem;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-description {
+        font-size: 0.6875rem;
     }
 }
 
@@ -607,44 +1168,80 @@
    ======================================== */
 @media (max-width: 480px) {
     /* Header 进一步优化 */
+    .header-content {
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
+    }
+
     .header h1 {
-        font-size: 1.125rem;
+        font-size: 0.875rem;
+        max-width: calc(100% - 45px);
+    }
+
+    .header h1 i {
+        font-size: 0.75rem;
+        margin-right: 0.25rem;
+        flex-shrink: 0;
     }
 
     .header-controls {
-        width: 100%;
-        justify-content: space-between;
+        gap: 0.375rem;
     }
 
     .status-badge {
-        flex: 1;
-        justify-content: center;
+        padding: 0.3125rem 0.5rem;
+        font-size: 0.625rem;
     }
 
-    /* 按钮文字简化 */
-    #refreshBtn .fa-sync-alt::after {
-        content: '';
+    /* 按钮进一步缩小 */
+    .github-link,
+    .theme-toggle {
+        width: 32px;
+        height: 32px;
+        font-size: 0.75rem;
+    }
+
+    .github-link i,
+    .theme-toggle i {
+        font-size: 0.75rem;
     }
 
     /* 侧边栏导航 */
+    .sidebar {
+        padding: 0.375rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .sidebar-nav {
+        gap: 0.25rem;
+        padding: 0.125rem;
+    }
+
     .nav-item {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.8125rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.6875rem;
+        gap: 0.25rem;
     }
 
     .nav-item i {
-        margin-right: 0.375rem;
+        width: 12px;
+        font-size: 0.75rem;
     }
 
     /* 统计卡片 */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 0.625rem;
+    }
+
     .stat-icon {
-        width: 40px;
-        height: 40px;
-        font-size: 1.125rem;
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
     }
 
     .stat-info h3 {
-        font-size: 1.375rem;
+        font-size: 1.125rem;
     }
 
     /* 表单控件 */
@@ -667,14 +1264,135 @@
 
     /* 提供商卡片 */
     .provider-card {
-        padding: 0.75rem;
+        padding: 0.625rem;
     }
 
     .provider-name {
-        font-size: 1rem;
+        font-size: 0.875rem;
     }
 
-    /* 模态框 */
+    /* 提供商卡片进一步优化 */
+    .provider-header {
+        gap: 0.5rem;
+    }
+
+    .provider-status {
+        font-size: 0.6875rem;
+        padding: 0.1875rem 0.375rem;
+    }
+
+    .provider-header-right {
+        gap: 0.375rem;
+    }
+
+    .provider-actions {
+        gap: 0.375rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .provider-actions-group {
+        gap: 0.375rem;
+    }
+
+    .provider-actions .btn {
+        font-size: 0.75rem;
+        padding: 0.4375rem 0.625rem;
+    }
+
+    /* Provider Item Header 进一步优化 */
+    .provider-item-header {
+        padding: 0.625rem;
+        gap: 0.5rem;
+    }
+
+    .provider-item-header .provider-name {
+        font-size: 0.875rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .provider-item-header .provider-meta {
+        font-size: 0.6875rem;
+    }
+
+    .provider-item-header .provider-health-meta {
+        font-size: 0.625rem;
+        margin-top: 0.25rem;
+    }
+
+    .provider-item-header .provider-actions-group {
+        gap: 0.375rem;
+    }
+
+    .provider-item-header .provider-actions-group .btn {
+        min-width: 70px;
+        font-size: 0.6875rem;
+        padding: 0.375rem 0.625rem;
+    }
+
+    .provider-item-header .health-status {
+        font-size: 0.625rem;
+        padding: 0.125rem 0.375rem;
+    }
+
+    .provider-item-header .disabled-status {
+        font-size: 0.625rem;
+        padding: 0.125rem 0.375rem;
+    }
+
+    .provider-item-header .provider-error-info {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.625rem;
+        margin-top: 0.375rem;
+    }
+
+    .provider-item-header .provider-error-info i {
+        font-size: 0.6875rem;
+    }
+
+    .provider-item-header .provider-error-info .error-label {
+        font-size: 0.625rem;
+    }
+
+    .provider-item-header .provider-error-info .error-message {
+        font-size: 0.625rem;
+    }
+
+    .provider-summary {
+        padding: 0.5rem;
+        margin-top: 0.375rem;
+    }
+
+    .provider-summary h4 {
+        font-size: 0.8125rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .provider-summary p {
+        font-size: 0.6875rem;
+    }
+
+    .provider-models {
+        font-size: 0.6875rem;
+        margin-top: 0.375rem;
+    }
+
+    .provider-models span {
+        padding: 0.125rem 0.25rem;
+        margin: 0.0625rem;
+        font-size: 0.625rem;
+    }
+
+    /* Config Stats 进一步优化 */
+    .config-stats {
+        gap: 0.375rem;
+    }
+
+    .config-stats span {
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.375rem;
+    }
+
+    /* 模态框进一步优化 */
     .provider-modal-content {
         width: 98%;
         max-width: 98%;
@@ -684,37 +1402,238 @@
     .provider-modal-header {
         padding: 0.75rem;
         margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+        gap: 0.5rem;
     }
 
     .provider-modal-header h2 {
-        font-size: 1.125rem;
+        font-size: 1rem;
     }
 
-    .close-modal {
-        width: 32px;
-        height: 32px;
-        font-size: 1.25rem;
+    .provider-modal-header .modal-close {
+        width: 28px;
+        height: 28px;
+        font-size: 1rem;
+        top: 0.75rem;
+        right: 0.75rem;
+    }
+
+    .provider-summary {
+        padding: 0.625rem;
+        margin-bottom: 0.625rem;
+        gap: 0.5rem;
+    }
+
+    .provider-summary-item {
+        padding: 0.375rem;
+    }
+
+    .provider-summary-item .label {
+        font-size: 0.6875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .provider-summary-item .value {
+        font-size: 1rem;
+    }
+
+    .provider-summary-actions {
+        gap: 0.375rem;
+    }
+
+    .provider-summary-actions .btn {
+        min-width: 100px;
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .config-section {
+        padding: 0.625rem;
+        margin-bottom: 0.625rem;
+    }
+
+    .config-section h3 {
+        font-size: 0.875rem;
+        margin-bottom: 0.625rem;
+    }
+
+    .config-item {
+        padding: 0.5rem;
+        gap: 0.375rem;
+    }
+
+    .config-item label {
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .config-item input,
+    .config-item textarea,
+    .config-item select {
+        padding: 0.5rem;
+        font-size: 0.8125rem;
+    }
+
+    .form-grid {
+        gap: 0.625rem;
+    }
+
+    .form-group {
+        margin-bottom: 0.625rem;
+    }
+
+    .form-group label {
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .form-actions {
+        gap: 0.5rem;
+    }
+
+    .form-actions .btn {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
     }
 
     /* 日志 */
     .logs-container {
-        font-size: 0.6875rem;
+        font-size: 0.625rem;
         padding: 0.5rem;
+        height: calc(100vh - 260px);
     }
 
     .log-entry {
-        padding: 0.375rem;
-        font-size: 0.6875rem;
+        padding: 0.3125rem;
+        font-size: 0.625rem;
     }
 
     /* Toast */
     .toast {
-        font-size: 0.8125rem;
-        padding: 0.625rem 0.875rem;
+        font-size: 0.75rem;
+        padding: 0.625rem 0.75rem;
     }
 
-    .logout-btn {
-        line-height: 0;
+    /* Section标题 */
+    .section h2 {
+        font-size: 1.125rem;
+    }
+
+    /* System Info Panel 进一步优化 */
+    .system-info-panel {
+        padding: 0.875rem;
+    }
+
+    .system-info-panel h3 {
+        font-size: 0.875rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .system-info-header {
+        gap: 0.625rem;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.625rem;
+    }
+
+    .info-item {
+        padding: 0.625rem;
+        gap: 0.375rem;
+    }
+
+    .info-label {
+        font-size: 0.6875rem;
+    }
+
+    .info-label i {
+        font-size: 0.6875rem;
+        width: 12px;
+    }
+
+    .info-value {
+        font-size: 0.8125rem;
+    }
+
+    .update-badge {
+        font-size: 0.5625rem;
+        padding: 0.125rem 0.375rem;
+    }
+
+    /* Contact Grid 进一步优化 */
+    .contact-grid {
+        gap: 0.75rem;
+    }
+
+    .contact-card {
+        padding: 0.875rem;
+    }
+
+    .contact-card h3 {
+        font-size: 0.875rem;
+        margin-bottom: 0.625rem;
+    }
+
+    .contact-card h3 i {
+        font-size: 0.75rem;
+    }
+
+    .qr-container {
+        margin: 0.75rem 0;
+    }
+
+    .qr-code {
+        width: 120px;
+        height: 120px;
+        border-width: 2px;
+        padding: 0.25rem;
+    }
+
+    .qr-description {
+        font-size: 0.6875rem;
+        line-height: 1.3;
+    }
+
+    /* Dashboard Top Row 进一步优化 */
+    .dashboard-top-row .dashboard-contact .contact-card {
+        padding: 0.75rem;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-container {
+        margin: 0.375rem 0;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-code {
+        width: 100px;
+        height: 100px;
+    }
+
+    .dashboard-top-row .dashboard-contact .contact-card h3 {
+        font-size: 0.8125rem;
+    }
+
+    .dashboard-top-row .dashboard-contact .qr-description {
+        font-size: 0.625rem;
+    }
+
+    /* Provider Stats 进一步优化 */
+    .provider-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.625rem;
+        margin-top: 0.625rem;
+    }
+
+    .provider-stat {
+        padding: 0.5rem;
+    }
+
+    .provider-stat-label {
+        font-size: 0.625rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .provider-stat-value {
+        font-size: 0.875rem;
     }
 }
 
@@ -725,14 +1644,15 @@
     .sidebar {
         position: relative;
         top: 0;
+        margin-bottom: 0.5rem;
     }
 
     .sidebar-nav {
-        padding: 0.375rem 1rem;
+        padding: 0.25rem;
     }
 
     .nav-item {
-        padding: 0.5rem 0.875rem;
+        padding: 0.375rem 0.625rem;
     }
 
     .logs-container {
@@ -747,10 +1667,6 @@
     .provider-modal-body {
         max-height: calc(85vh - 120px);
     }
-
-    .logout-btn {
-        line-height: 0;
-    }
 }
 
 /* ========================================
@@ -759,15 +1675,24 @@
 @media (hover: none) and (pointer: coarse) {
     /* 增加可点击区域 */
     .btn {
-        min-height: 10px;
-        padding: 0.5rem;
+        min-height: 44px;
+        padding: 0.625rem 1rem;
     }
 
     .nav-item {
         min-height: 44px;
+        padding: 0.625rem 0.875rem;
     }
 
     .password-toggle {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .github-link,
+    .theme-toggle,
+    .logout-btn,
+    .mobile-menu-toggle {
         min-width: 44px;
         min-height: 44px;
     }
@@ -778,7 +1703,7 @@
     }
 
     .nav-item:active {
-        background: var(--bg-secondary);
+        background: var(--bg-tertiary);
     }
 
     .btn:hover {
@@ -786,7 +1711,7 @@
     }
 
     .btn:active {
-        transform: scale(0.98);
+        transform: scale(0.96);
     }
 
     /* 优化滚动 */
@@ -794,10 +1719,6 @@
     .logs-container,
     .provider-modal-body {
         -webkit-overflow-scrolling: touch;
-    }
-
-    .logout-btn {
-        line-height: 0;
     }
 }
 
@@ -860,6 +1781,6 @@
     }
 
     .nav-item.active {
-        border-right: 4px solid var(--primary-color);
+        border: 2px solid var(--primary-color);
     }
 }

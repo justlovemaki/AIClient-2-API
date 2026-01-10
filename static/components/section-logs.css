@@ -1,0 +1,89 @@
+/* 日志 */
+.logs-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.logs-container {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    height: 800px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-md);
+}
+
+.log-entry {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.log-time {
+    color: var(--log-time);
+}
+
+.log-level-info {
+    color: var(--log-info);
+}
+
+.log-level-error {
+    color: var(--log-error);
+}
+
+.log-level-warn {
+    color: var(--log-warn);
+}
+
+/* 系统信息卡片样式 */
+.system-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-card {
+    background: var(--bg-primary);
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.info-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+/* 暗黑主题适配 */
+[data-theme="dark"] .logs-container {
+    background: var(--code-bg);
+    color: var(--code-text);
+}

@@ -1,0 +1,30 @@
+<link rel="stylesheet" href="components/section-usage.css">
+<!-- Usage Section -->
+<section id="usage" class="section" aria-labelledby="usage-title">
+    <h2 id="usage-title" data-i18n="usage.title">用量查询</h2>
+    <div class="usage-panel">
+        <div class="usage-controls">
+            <button class="btn btn-primary" id="refreshUsageBtn" aria-label="Refresh Usage" data-i18n-aria-label="usage.refresh">
+                <i class="fas fa-sync-alt"></i> <span data-i18n="usage.refresh">刷新用量</span>
+            </button>
+            <span class="usage-last-update" id="usageLastUpdate" data-i18n="usage.lastUpdate" data-i18n-params='{"time":"--"}'>上次更新: --</span>
+        </div>
+        
+        <div class="usage-loading" id="usageLoading" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i> <span data-i18n="usage.loading">正在加载用量数据...</span>
+        </div>
+        
+        <div class="usage-error" id="usageError" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="usageErrorMessage"></span>
+        </div>
+        
+        <div class="usage-content" id="usageContent">
+            <!-- 用量数据将在这里动态生成 -->
+            <div class="usage-empty" id="usageEmpty">
+                <i class="fas fa-chart-bar"></i>
+                <p data-i18n="usage.empty">点击"刷新用量"按钮获取授权文件用量信息</p>
+            </div>
+        </div>
+    </div>
+</section>

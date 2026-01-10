@@ -1,0 +1,416 @@
+/* 统计卡片 */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-primary);
+    padding: 1.5rem;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-30);
+}
+
+.stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    background: var(--primary-10);
+    flex-shrink: 0;
+}
+
+.stat-info h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.stat-info p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* System Info Panel in Dashboard */
+.system-info-panel {
+    background: var(--bg-primary);
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-md);
+    margin-top: 1.5rem;
+}
+
+.system-info-panel h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.system-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.update-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.update-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+    border: 1px solid var(--warning-bg-light);
+    animation: bounce-in 0.5s ease-out;
+}
+
+@keyframes bounce-in {
+    0% { transform: scale(0.8); opacity: 0; }
+    70% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-item .info-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.info-item .info-label i {
+    color: var(--primary-color);
+    width: 16px;
+    text-align: center;
+}
+
+.info-item .info-value {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.version-display-wrapper {
+    display: flex;
+    align-items: center;
+    padding-left: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.status-healthy {
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+.status-unhealthy {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+/* Dashboard Top Row Layout */
+.dashboard-top-row {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.dashboard-top-row .stats-grid {
+    flex: 1;
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-top-row .stats-grid .stat-card {
+    flex: 1;
+    height: 100%;
+}
+
+.dashboard-top-row .dashboard-contact {
+    flex: 1;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.dashboard-top-row .dashboard-contact .contact-grid {
+    margin-top: 0;
+    height: 100%;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.dashboard-top-row .dashboard-contact .contact-card {
+    padding: 1.25rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.dashboard-top-row .dashboard-contact .qr-container {
+    margin: 0.75rem 0;
+}
+
+.dashboard-top-row .dashboard-contact .qr-code {
+    width: 100px;
+    height: 100px;
+}
+
+.dashboard-top-row .dashboard-contact .contact-card h3 {
+    font-size: 1rem;
+}
+
+.dashboard-top-row .dashboard-contact .qr-description {
+    font-size: 0.75rem;
+}
+
+/* Contact and Sponsor Section */
+.contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 1.5rem;
+}
+
+.contact-card {
+    background: var(--bg-primary);
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-md);
+    text-align: center;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+
+.contact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-color);
+}
+
+.contact-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.contact-card h3 i {
+    color: var(--primary-color);
+}
+
+.qr-container {
+    margin: 1.5rem 0;
+    display: flex;
+    justify-content: center;
+}
+
+.qr-code {
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    border: 4px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    background: white;
+    transition: var(--transition);
+}
+
+.qr-code:hover {
+    border-color: var(--primary-color);
+    transform: scale(1.05);
+}
+
+.clickable-qr {
+    cursor: zoom-in;
+}
+
+/* Image Zoom Overlay */
+.image-zoom-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--neutral-shadow-85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-zoom-overlay.show {
+    display: flex;
+    opacity: 1;
+}
+
+.image-zoom-overlay img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 20px var(--neutral-shadow-50);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.image-zoom-overlay.show img {
+    transform: scale(1);
+}
+
+.qr-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Contact section styling for dashboard */
+.contact-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.contact-section h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.contact-section h3 i {
+    color: var(--primary-color);
+}
+
+/* 响应式调整 */
+@media (max-width: 1024px) {
+    .dashboard-top-row {
+        flex-direction: column;
+    }
+    
+    .dashboard-top-row .stats-grid {
+        flex: none;
+    }
+    
+    .dashboard-top-row .dashboard-contact .qr-code {
+        width: 160px;
+        height: 160px;
+    }
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    .contact-card {
+        padding: 1.5rem;
+    }
+    .qr-code {
+        width: 180px;
+        height: 180px;
+    }
+}
+
+@media (max-width: 480px) {
+    .qr-code {
+        width: 150px;
+        height: 150px;
+    }
+    .contact-card {
+        padding: 1rem;
+    }
+}
+
+/* 暗黑主题适配 */
+[data-theme="dark"] .stat-card {
+    background: var(--bg-primary);
+}
+
+[data-theme="dark"] .status-healthy {
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+[data-theme="dark"] .status-unhealthy {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+[data-theme="dark"] .update-badge {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    border-color: var(--warning-border);
+}
+
+[data-theme="dark"] .contact-card {
+    background: var(--bg-primary);
+}
+
+[data-theme="dark"] .qr-code {
+    background: white;
+}
+
+[data-theme="dark"] .image-zoom-overlay {
+    background: var(--neutral-shadow-95);
+}

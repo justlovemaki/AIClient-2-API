@@ -1,0 +1,151 @@
+/* 插件管理样式 */
+.plugins-panel {
+    background: var(--bg-primary);
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.plugins-description {
+    margin-bottom: 2rem;
+}
+
+.plugins-stats {
+    margin-bottom: 2rem;
+}
+
+.plugins-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1.5rem;
+}
+
+.plugins-list-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.plugins-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+
+.plugin-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.plugin-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.plugin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.plugin-title h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.plugin-version {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    margin-top: 0.25rem;
+    display: inline-block;
+}
+
+.plugin-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    flex: 1;
+}
+
+.plugin-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.plugin-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.plugin-badge.middleware { background: var(--info-bg); color: var(--info-text); }
+.plugin-badge.routes { background: var(--success-bg); color: var(--success-text); }
+.plugin-badge.hooks { background: var(--warning-bg); color: var(--warning-text); }
+
+.plugin-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.plugin-card.enabled .plugin-status {
+    color: var(--success-color);
+}
+
+.plugin-card.disabled .plugin-status {
+    color: var(--text-secondary);
+}
+
+.plugin-card.disabled {
+    opacity: 0.8;
+    background: var(--bg-secondary);
+}
+
+.plugins-loading,
+.plugins-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.plugins-empty {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.plugins-empty i {
+    font-size: 3rem;
+    opacity: 0.5;
+}
+
+/* 暗黑主题适配 */
+[data-theme="dark"] .plugins-list-container { background: var(--bg-secondary); }
+[data-theme="dark"] .plugin-card { background: var(--bg-primary); }
+[data-theme="dark"] .plugin-card.disabled { background: var(--bg-tertiary); }
+[data-theme="dark"] .plugin-badge.middleware { background: var(--info-bg); color: var(--info-text); }
+[data-theme="dark"] .plugin-badge.routes { background: var(--success-bg); color: var(--success-text); }
+[data-theme="dark"] .plugin-badge.hooks { background: var(--warning-bg); color: var(--warning-text); }

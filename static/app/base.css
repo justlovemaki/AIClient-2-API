@@ -1,0 +1,694 @@
+/* CSS变量 - 亮色主题（默认） */
+:root {
+    /* 主色调 */
+    --primary-color: #059669;
+    --primary-hover: #047857;
+    --primary-light: #34d399;
+    
+    /* 辅助色 */
+    --secondary-color: #10b981;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --info-color: #3b82f6;
+
+    /* 背景色 */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-glass: rgba(255, 255, 255, 0.8);
+    --bg-glass-strong: rgba(255, 255, 255, 0.95);
+    
+    /* 文本色 */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    
+    /* 边框和分割线 */
+    --border-color: #e2e8f0;
+    --border-hover: #cbd5e1;
+    
+    /* 阴影 - 更加柔和现代 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+    --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    
+    /* 圆角 */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-full: 9999px;
+
+    /* 动画 */
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* 品牌色 */
+    --indigo-500: #6366f1;
+    --indigo-600: #4f46e5;
+    
+    /* 辅助色透明度版本 */
+    --primary-10: rgba(5, 150, 105, 0.1);
+    --primary-20: rgba(5, 150, 105, 0.2);
+    --primary-30: rgba(5, 150, 105, 0.3);
+    --primary-40: rgba(5, 150, 105, 0.4);
+    
+    --success-10: rgba(16, 185, 129, 0.1);
+    
+    --warning-15: rgba(245, 158, 11, 0.15);
+    --warning-20: rgba(245, 158, 11, 0.2);
+    --warning-25: rgba(245, 158, 11, 0.25);
+    --warning-30: rgba(245, 158, 11, 0.3);
+    --warning-40: rgba(245, 158, 11, 0.4);
+    --warning-50: rgba(245, 158, 11, 0.5);
+    
+    --danger-30: rgba(220, 53, 69, 0.3);
+    --danger-40: rgba(220, 53, 69, 0.4);
+    --danger-70: rgba(220, 53, 69, 0.7);
+    
+    --neutral-shadow-sm: rgba(0, 0, 0, 0.05);
+    --neutral-shadow-md: rgba(0, 0, 0, 0.1);
+    --neutral-shadow-lg: rgba(0, 0, 0, 0.15);
+    --neutral-shadow-20: rgba(0, 0, 0, 0.2);
+    --neutral-shadow-30: rgba(0, 0, 0, 0.3);
+    --neutral-shadow-40: rgba(0, 0, 0, 0.4);
+    --neutral-shadow-50: rgba(0, 0, 0, 0.5);
+    --neutral-shadow-85: rgba(0, 0, 0, 0.85);
+    --neutral-shadow-95: rgba(0, 0, 0, 0.95);
+    
+    --indigo-30: rgba(99, 102, 241, 0.3);
+    --indigo-40: rgba(99, 102, 241, 0.4);
+    
+    --white-20: rgba(255, 255, 255, 0.2);
+    
+    /* 基础颜色 */
+    --white: #ffffff;
+    --black: #000000;
+    
+    /* 遮罩背景 */
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    
+    /* 代码块和日志区域 */
+    --code-bg: #1e1e1e;
+    --code-text: #d4d4d4;
+    
+    /* 主题切换按钮 */
+    --theme-toggle-bg: var(--bg-tertiary);
+    --theme-toggle-icon: var(--text-secondary);
+    
+    /* 警告/高亮颜色 */
+    --warning-bg: #fef3c7;
+    --warning-bg-light: #fde68a;
+    --warning-bg-dark: #78350f;
+    --warning-border: #fbbf24;
+    --warning-text: #92400e;
+    --warning-text-dark: #d97706;
+    --warning-text-darker: #b45309;
+    --warning-bg-alt: #fffbeb;
+    
+    /* 成功/健康颜色 */
+    --success-bg: #d1fae5;
+    --success-bg-light: #ecfdf5;
+    --success-bg-alt: #f0fdf4;
+    --success-text: #065f46;
+    --success-text-light: #6ee7b7;
+    
+    /* 错误/危险颜色 */
+    --danger-bg: #fee2e2;
+    --danger-bg-light: #fef2f2;
+    --danger-bg-alt: #fff5f5;
+    --danger-bg-medium: #fed7d7;
+    --danger-border: #fca5a5;
+    --danger-border-light: #feb2b2;
+    --danger-border-dark: #fecaca;
+    --danger-text: #991b1b;
+    --danger-text-light: #7f1d1d;
+    --danger-text-dark: #742a2a;
+    --danger-icon: #e53e3e;
+    --danger-label: #c53030;
+    --danger-alt: #dc3545;
+    --danger-secondary: #fd7e14;
+    
+    /* 信息/蓝色颜色 */
+    --info-bg: #dbeafe;
+    --info-bg-light: #e0f2fe;
+    --info-bg-lighter: #eff6ff;
+    --info-bg-alt: #f0f9ff;
+    --info-text: #1e40af;
+    --info-text-dark: #0369a1;
+    --info-text-darker: #075985;
+    --info-border: #0ea5e9;
+    --info-hover: #bae6fd;
+    --info-color: #3b82f6;
+    --info-color-dark: #2563eb;
+    
+    /* 中性灰色 */
+    --neutral-100: #f8f9fa;
+    --neutral-200: #e9ecef;
+    --neutral-300: #dee2e6;
+    --neutral-400: #adb5bd;
+    --neutral-500: #6c757d;
+    --neutral-600: #495057;
+    --neutral-700: #2c3e50;
+    --neutral-800: #8b95a5;
+    --neutral-alt: #f1f3f4;
+    
+    /* 日志颜色 */
+    --log-time: #858585;
+    --log-info: #4ec9b0;
+    --log-error: #f48771;
+    --log-warn: #dcdcaa;
+    
+    /* 按钮颜色 */
+    --btn-success: #28a745;
+    --btn-success-secondary: #20c997;
+    --btn-primary-hover: #047857;
+}
+
+/* CSS变量 - 暗黑主题 */
+[data-theme="dark"] {
+    --primary-color: #34d399;
+    --primary-hover: #10b981;
+    --primary-light: #6ee7b7;
+    
+    --secondary-color: #34d399;
+    --success-color: #34d399;
+    --danger-color: #f87171;
+    --warning-color: #fbbf24;
+    --info-color: #60a5fa;
+
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-glass: rgba(15, 23, 42, 0.8);
+    --bg-glass-strong: rgba(15, 23, 42, 0.95);
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #64748b;
+    
+    --border-color: #334155;
+    --border-hover: #475569;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    
+    /* 辅助色透明度版本 - 暗色 */
+    --primary-10: rgba(16, 185, 129, 0.1);
+    --primary-20: rgba(16, 185, 129, 0.2);
+    --primary-30: rgba(16, 185, 129, 0.3);
+    --primary-40: rgba(16, 185, 129, 0.4);
+    
+    --success-10: rgba(16, 185, 129, 0.1);
+    
+    --warning-15: rgba(251, 191, 36, 0.15);
+    --warning-20: rgba(251, 191, 36, 0.2);
+    --warning-25: rgba(251, 191, 36, 0.25);
+    --warning-30: rgba(251, 191, 36, 0.3);
+    --warning-40: rgba(251, 191, 36, 0.4);
+    --warning-50: rgba(251, 191, 36, 0.5);
+    
+    --danger-30: rgba(248, 113, 113, 0.3);
+    --danger-40: rgba(248, 113, 113, 0.4);
+    --danger-70: rgba(248, 113, 113, 0.7);
+    
+    /* 基础颜色 */
+    --white: #ffffff;
+    --black: #000000;
+    
+    /* 遮罩背景 */
+    --overlay-bg: rgba(0, 0, 0, 0.8);
+    
+    /* 代码块和日志区域 */
+    --code-bg: #0d1117;
+    --code-text: #e6edf3;
+    
+    /* 主题切换按钮 */
+    --theme-toggle-bg: var(--bg-tertiary);
+    --theme-toggle-icon: #fbbf24;
+    
+    /* 警告/高亮颜色 */
+    --warning-bg: #78350f;
+    --warning-bg-light: #92400e;
+    --warning-bg-dark: #78350f;
+    --warning-border: #b45309;
+    --warning-text: #fef3c7;
+    --warning-text-dark: #fde68a;
+    --warning-text-darker: #fde68a;
+    --warning-bg-alt: #78350f;
+    
+    /* 成功/健康颜色 */
+    --success-bg: #064e3b;
+    --success-bg-light: #065f46;
+    --success-bg-alt: #064e3b;
+    --success-text: #6ee7b7;
+    --success-text-light: #6ee7b7;
+    
+    /* 错误/危险颜色 */
+    --danger-bg: #7f1d1d;
+    --danger-bg-light: #7f1d1d;
+    --danger-bg-alt: #7f1d1d;
+    --danger-bg-medium: #991b1b;
+    --danger-border: #dc2626;
+    --danger-border-light: #dc2626;
+    --danger-border-dark: #dc2626;
+    --danger-text: #fca5a5;
+    --danger-text-light: #fecaca;
+    --danger-text-dark: #fecaca;
+    --danger-icon: #fca5a5;
+    --danger-label: #fca5a5;
+    --danger-alt: #dc2626;
+    --danger-secondary: #dc2626;
+    
+    /* 信息/蓝色颜色 */
+    --info-bg: #1e3a5f;
+    --info-bg-light: #1e3a5f;
+    --info-bg-lighter: #1e3a5f;
+    --info-bg-alt: #1e3a5f;
+    --info-text: #93c5fd;
+    --info-text-dark: #93c5fd;
+    --info-text-darker: #93c5fd;
+    --info-border: #3b82f6;
+    --info-hover: #1e3a5f;
+    --info-color: #3b82f6;
+    --info-color-dark: #3b82f6;
+    
+    /* 中性灰色 */
+    --neutral-100: var(--bg-secondary);
+    --neutral-200: var(--border-color);
+    --neutral-300: var(--border-color);
+    --neutral-400: var(--text-secondary);
+    --neutral-500: var(--text-secondary);
+    --neutral-600: var(--text-primary);
+    --neutral-700: var(--text-primary);
+    --neutral-800: var(--text-secondary);
+    --neutral-alt: var(--bg-tertiary);
+    
+    /* 日志颜色 */
+    --log-time: #858585;
+    --log-info: #4ec9b0;
+    --log-error: #f48771;
+    --log-warn: #dcdcaa;
+    
+    /* 按钮颜色 */
+    --btn-success: #28a745;
+    --btn-success-secondary: #20c997;
+    --btn-primary-hover: #047857;
+}
+
+/* 基础样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    background-image:
+        radial-gradient(at 0% 0%, rgba(var(--primary-rgb), 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(var(--indigo-rgb), 0.05) 0px, transparent 50%);
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
+
+/* 容器 */
+.container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* 主要内容区域 */
+.main-content {
+    display: flex;
+    flex: 1;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem;
+    gap: 1.5rem;
+}
+
+/* 内容区域 */
+.content {
+    flex: 1;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+}
+
+.section h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* 按钮基础样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    line-height: 1.25;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 4px 6px -1px var(--primary-20);
+}
+
+.btn-secondary {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-secondary);
+    border-color: var(--text-secondary);
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 4px 6px -1px var(--success-10);
+}
+
+.btn-danger {
+    background: var(--bg-primary);
+    color: var(--danger-color);
+    border-color: var(--danger-border);
+}
+
+.btn-danger:hover {
+    background: var(--danger-bg);
+    border-color: var(--danger-color);
+}
+
+.btn-small {
+    padding: 8px 12px;
+    font-size: 12px;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+/* 文本辅助类 */
+.text-success { color: var(--success-color) !important; }
+.text-warning { color: var(--warning-color) !important; }
+.text-danger { color: var(--danger-color) !important; }
+
+/* 动画 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 主题切换动画 */
+body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.header, .sidebar, .content, .stat-card, .config-panel, .providers-container, 
+.routing-examples-panel, .system-info-panel, .upload-config-panel, .usage-panel, 
+.logs-container, .toast, .modal-content, .provider-modal-content {
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 通用通知容器 */
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    box-shadow: var(--shadow-lg);
+    min-width: 300px;
+    animation: slideIn 0.3s ease;
+    pointer-events: auto;
+}
+
+.toast.success { border-left: 4px solid var(--success-color); }
+.toast.error { border-left: 4px solid var(--danger-color); }
+
+/* 复选框和单选框通用样式 */
+.checkbox-item, .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    font-size: 0.9rem;
+    transition: var(--transition);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 4px var(--primary-10);
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: var(--theme-toggle-bg);
+    color: var(--theme-toggle-icon);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.125rem;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.theme-toggle:active {
+    transform: translateY(0);
+}
+
+.theme-toggle .fa-sun { display: none; }
+.theme-toggle .fa-moon { display: inline-block; }
+[data-theme="dark"] .theme-toggle .fa-sun { display: inline-block; }
+[data-theme="dark"] .theme-toggle .fa-moon { display: none; }
+
+/* 语言切换器通用部分 */
+.language-switcher {
+    position: relative;
+    display: inline-block;
+}
+
+.language-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.language-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.language-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-lg);
+    min-width: 150px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.language-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.language-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    transition: var(--transition);
+}
+
+.language-option:hover {
+    background: var(--bg-secondary);
+}
+
+.language-option.active i {
+    opacity: 1;
+}
+
+.language-option i {
+    font-size: 0.875rem;
+    color: var(--primary-color);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.status-used {
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+.status-unused {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+.status-invalid {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.status-success { color: var(--success-color); }
+.status-error { color: var(--danger-color); }
+
+/* 响应式调整通用部分 */
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
