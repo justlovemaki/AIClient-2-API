@@ -344,6 +344,17 @@ async function performTarballUpdate(localVersion, latestTag) {
             ? readFileSync(path.join(appDir, 'package.json'), 'utf-8')
             : null;
         
+        // 5.5 在解压前删除 src/ 和 static/ 目录，确保旧代码被完全清除
+        const dirsToClean = ['src', 'static'];
+        for (const dirName of dirsToClean) {
+            const dirPath = path.join(appDir, dirName);
+            if (existsSync(dirPath)) {
+                console.log(`[Update] Removing old ${dirName}/ directory before extraction...`);
+                await fs.rm(dirPath, { recursive: true, force: true });
+                console.log(`[Update] Old ${dirName}/ directory removed`);
+            }
+        }
+        
         // 6. 定义需要保留的目录和文件（不被覆盖）
         const preservePaths = [
             'configs',           // 用户配置目录
