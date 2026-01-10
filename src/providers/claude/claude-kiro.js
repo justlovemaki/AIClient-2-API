@@ -631,17 +631,80 @@ async initializeAuth(forceRefresh = false) {
 
         const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
         
+        // 动态压缩 tools（保留全部工具）
         let toolsContext = {};
         if (tools && Array.isArray(tools) && tools.length > 0) {
-            toolsContext = {
-                tools: tools.map(tool => ({
-                    toolSpecification: {
-                        name: tool.name,
-                        description: tool.description || "",
-                        inputSchema: { json: tool.input_schema || {} }
+            const TARGET_SIZE = 20000;
+
+            const simplifySchema = (schema) => {
+                if (!schema || typeof schema !== 'object') return { type: 'object' };
+                const result = { type: schema.type || 'object' };
+                if (schema.properties && typeof schema.properties === 'object') {
+                    result.properties = {};
+                    for (const [key, value] of Object.entries(schema.properties)) {
+                        result.properties[key] = { type: value.type || 'string' };
+                        if (value.enum) result.properties[key].enum = value.enum;
                     }
-                }))
+                }
+                if (schema.required && Array.isArray(schema.required) && schema.required.length > 0) {
+                    result.required = schema.required;
+                }
+                return result;
             };
+
+            const buildTools = (maxDescLen, useSimplifiedSchema) => {
+                return tools.map(tool => {
+                    let desc = tool.description || "";
+                    if (maxDescLen !== null && desc.length > maxDescLen) {
+                        desc = desc.substring(0, maxDescLen) + "...";
+                    }
+                    return {
+                        toolSpecification: {
+                            name: tool.name,
+                            description: desc,
+                            inputSchema: {
+                                json: useSimplifiedSchema
+                                    ? simplifySchema(tool.input_schema)
+                                    : (tool.input_schema || {})
+                            }
+                        }
+                    };
+                });
+            };
+
+            // 先尝试原始大小
+            let kiroTools = buildTools(null, false);
+            let size = JSON.stringify(kiroTools).length;
+            const originalSize = size;
+
+            // 超过限制则压缩
+            if (size > TARGET_SIZE) {
+                // 简化 schema
+                kiroTools = buildTools(null, true);
+                size = JSON.stringify(kiroTools).length;
+
+                // 缩短描述
+                if (size > TARGET_SIZE) {
+                    const ratio = TARGET_SIZE / size;
+                    const totalDescLen = tools.reduce((sum, t) => sum + (t.description || "").length, 0);
+                    const avgDescLen = totalDescLen / tools.length;
+                    let targetDescLen = Math.floor(avgDescLen * ratio * 0.8);
+                    targetDescLen = Math.max(50, Math.min(500, targetDescLen));
+
+                    kiroTools = buildTools(targetDescLen, true);
+                    size = JSON.stringify(kiroTools).length;
+
+                    while (size > TARGET_SIZE && targetDescLen > 50) {
+                        targetDescLen = Math.floor(targetDescLen * 0.7);
+                        targetDescLen = Math.max(50, targetDescLen);
+                        kiroTools = buildTools(targetDescLen, true);
+                        size = JSON.stringify(kiroTools).length;
+                    }
+                }
+                console.log(`[Kiro] Tools compressed: ${originalSize} -> ${size} bytes (${tools.length} tools)`);
+            }
+
+            toolsContext = { tools: kiroTools };
         }
 
         const history = [];
@@ -926,7 +989,7 @@ async initializeAuth(forceRefresh = false) {
         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
             request.profileArn = this.profileArn;
         }
-        
+
         // fs.writeFile('claude-kiro-request'+Date.now()+'.json', JSON.stringify(request));
         return request;
     }
