@@ -398,11 +398,21 @@ export class ProviderPoolManager {
 
         const provider = this._findProvider(providerType, providerConfig.uuid);
         if (provider) {
-            provider.config.errorCount++;
+            const now = Date.now();
+            const lastErrorTime = provider.config.lastErrorTime ? new Date(provider.config.lastErrorTime).getTime() : 0;
+            const errorWindowMs = 10000; // 10 秒窗口期
+
+            // 如果距离上次错误超过窗口期，重置错误计数
+            if (now - lastErrorTime > errorWindowMs) {
+                provider.config.errorCount = 1;
+            } else {
+                provider.config.errorCount++;
+            }
+
             provider.config.lastErrorTime = new Date().toISOString();
             // 更新 lastUsed 时间，避免因 LRU 策略导致失败节点被重复选中
             provider.config.lastUsed = new Date().toISOString();
-            
+
             // 保存错误信息
             if (errorMessage) {
                 provider.config.lastErrorMessage = errorMessage;
@@ -414,7 +424,7 @@ export class ProviderPoolManager {
             } else {
                 this._log('warn', `Provider ${providerConfig.uuid} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
             }
-            
+
             this._debouncedSave(providerType);
         }
     }
