@@ -28,7 +28,7 @@
   "scripts": {
     "start": "node src/core/master.js",
     "start:standalone": "node src/services/api-server.js",
-    "start:dev": "node src/master.js --dev",
+    "start:dev": "node src/core/master.js --dev",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

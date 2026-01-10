@@ -8,7 +8,7 @@
  * - 提供 IPC 通信
  * 
  * 使用方式：
- * node src/master.js [原有的命令行参数]
+ * node src/core/master.js [原有的命令行参数]
  */
 
 import { fork } from 'child_process';
