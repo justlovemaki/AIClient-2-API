@@ -3,7 +3,7 @@
  * 使用工厂模式管理转换器实例的创建和缓存
  */
 
-import { MODEL_PROTOCOL_PREFIX } from '../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../utils/common.js';
 
 /**
  * 转换器工厂（单例模式 + 工厂模式）

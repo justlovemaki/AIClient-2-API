@@ -455,7 +455,7 @@ const translations = {
         'plugins.toggle.success': '插件 {name} 已{status}',
         'plugins.toggle.failed': '切换插件状态失败',
         'plugins.load.failed': '加载插件列表失败',
-        'plugins.restart.required': '更改已保存，请重启服务以生效',
+        'plugins.restart.required': '更改已保存',
 
         // Common
         'common.confirm': '确定',
@@ -950,7 +950,7 @@ const translations = {
         'plugins.toggle.success': 'Plugin {name} {status}',
         'plugins.toggle.failed': 'Failed to toggle plugin status',
         'plugins.load.failed': 'Failed to load plugins list',
-        'plugins.restart.required': 'Changes saved, please restart service to take effect',
+        'plugins.restart.required': 'Changes saved',
 
         // Common
         'common.togglePassword': 'Show/Hide Password',

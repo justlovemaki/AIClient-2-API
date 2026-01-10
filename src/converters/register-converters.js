@@ -3,7 +3,7 @@
  * 用于注册所有转换器到工厂，避免循环依赖问题
  */
 
-import { MODEL_PROTOCOL_PREFIX } from '../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../utils/common.js';
 import { ConverterFactory } from './ConverterFactory.js';
 import { OpenAIConverter } from './strategies/OpenAIConverter.js';
 import { OpenAIResponsesConverter } from './strategies/OpenAIResponsesConverter.js';

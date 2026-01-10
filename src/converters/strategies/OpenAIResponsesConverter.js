@@ -4,7 +4,7 @@
  */
 
 import { BaseConverter } from '../BaseConverter.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
+import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
     extractAndProcessSystemMessages as extractSystemMessages,
     extractTextFromMessageContent as extractText,

@@ -24,34 +24,46 @@ async function loadConfiguration() {
         if (portEl) portEl.value = data.SERVER_PORT || 3000;
         
         if (modelProviderEl) {
-            // 处理多选 MODEL_PROVIDER (复选框)
+            // 处理多选 MODEL_PROVIDER (标签按钮)
             const providers = Array.isArray(data.DEFAULT_MODEL_PROVIDERS)
                 ? data.DEFAULT_MODEL_PROVIDERS
                 : (typeof data.MODEL_PROVIDER === 'string' ? data.MODEL_PROVIDER.split(',') : []);
             
-            const checkboxes = modelProviderEl.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = providers.includes(checkbox.value);
+            const tags = modelProviderEl.querySelectorAll('.provider-tag');
+            tags.forEach(tag => {
+                const value = tag.getAttribute('data-value');
+                if (providers.includes(value)) {
+                    tag.classList.add('selected');
+                } else {
+                    tag.classList.remove('selected');
+                }
             });
             
             // 如果没有任何选中的，默认选中第一个（保持兼容性）
-            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-            if (!anyChecked && checkboxes.length > 0) {
-                checkboxes[0].checked = true;
+            const anySelected = Array.from(tags).some(tag => tag.classList.contains('selected'));
+            if (!anySelected && tags.length > 0) {
+                tags[0].classList.add('selected');
             }
 
-            // 为复选框添加事件监听，防止取消勾选最后一个
-            checkboxes.forEach(checkbox => {
-                // 移除旧的监听器（如果有的话，虽然这里大概率没有）
-                const newCheckbox = checkbox.cloneNode(true);
-                checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+            // 为标签按钮添加点击事件监听
+            tags.forEach(tag => {
+                // 移除旧的监听器（通过克隆节点）
+                const newTag = tag.cloneNode(true);
+                tag.parentNode.replaceChild(newTag, tag);
                 
-                newCheckbox.addEventListener('change', (e) => {
-                    const checkedCount = modelProviderEl.querySelectorAll('input[type="checkbox"]:checked').length;
-                    if (checkedCount === 0) {
-                        newCheckbox.checked = true;
+                newTag.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const isSelected = newTag.classList.contains('selected');
+                    const selectedCount = modelProviderEl.querySelectorAll('.provider-tag.selected').length;
+                    
+                    // 如果当前是选中状态且只剩一个选中的，不允许取消
+                    if (isSelected && selectedCount === 1) {
                         showToast(t('common.warning'), t('config.modelProviderRequired'), 'warning');
+                        return;
                     }
+                    
+                    // 切换选中状态
+                    newTag.classList.toggle('selected');
                 });
             });
         }
@@ -105,12 +117,34 @@ async function loadConfiguration() {
         const proxyUrlEl = document.getElementById('proxyUrl');
         if (proxyUrlEl) proxyUrlEl.value = data.PROXY_URL || '';
         
-        // 加载启用代理的提供商
-        const proxyProviderCheckboxes = document.querySelectorAll('input[name="proxyProvider"]');
-        const enabledProviders = data.PROXY_ENABLED_PROVIDERS || [];
-        proxyProviderCheckboxes.forEach(checkbox => {
-            checkbox.checked = enabledProviders.includes(checkbox.value);
-        }); 
+        // 加载启用代理的提供商 (标签按钮)
+        const proxyProvidersEl = document.getElementById('proxyProviders');
+        if (proxyProvidersEl) {
+            const enabledProviders = data.PROXY_ENABLED_PROVIDERS || [];
+            const proxyTags = proxyProvidersEl.querySelectorAll('.provider-tag');
+            
+            proxyTags.forEach(tag => {
+                const value = tag.getAttribute('data-value');
+                if (enabledProviders.includes(value)) {
+                    tag.classList.add('selected');
+                } else {
+                    tag.classList.remove('selected');
+                }
+            });
+            
+            // 为代理提供商标签按钮添加点击事件监听
+            proxyTags.forEach(tag => {
+                // 移除旧的监听器（通过克隆节点）
+                const newTag = tag.cloneNode(true);
+                tag.parentNode.replaceChild(newTag, tag);
+                
+                newTag.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // 代理提供商可以全部取消选择，所以不需要检查最少选择数量
+                    newTag.classList.toggle('selected');
+                });
+            });
+        }
         
     } catch (error) {
         console.error('Failed to load configuration:', error);
@@ -124,9 +158,9 @@ async function saveConfiguration() {
     const modelProviderEl = document.getElementById('modelProvider');
     let selectedProviders = [];
     if (modelProviderEl) {
-        // 从复选框中获取选中的提供商
-        selectedProviders = Array.from(modelProviderEl.querySelectorAll('input[type="checkbox"]:checked'))
-            .map(cb => cb.value);
+        // 从标签按钮中获取选中的提供商
+        selectedProviders = Array.from(modelProviderEl.querySelectorAll('.provider-tag.selected'))
+            .map(tag => tag.getAttribute('data-value'));
     }
 
     // 校验：必须至少勾选一个
@@ -187,9 +221,14 @@ async function saveConfiguration() {
     // 保存代理配置
     config.PROXY_URL = document.getElementById('proxyUrl')?.value?.trim() || null;
     
-    // 获取启用代理的提供商列表
-    const proxyProviderCheckboxes = document.querySelectorAll('input[name="proxyProvider"]:checked');
-    config.PROXY_ENABLED_PROVIDERS = Array.from(proxyProviderCheckboxes).map(cb => cb.value);
+    // 获取启用代理的提供商列表 (从标签按钮)
+    const proxyProvidersEl = document.getElementById('proxyProviders');
+    if (proxyProvidersEl) {
+        config.PROXY_ENABLED_PROVIDERS = Array.from(proxyProvidersEl.querySelectorAll('.provider-tag.selected'))
+            .map(tag => tag.getAttribute('data-value'));
+    } else {
+        config.PROXY_ENABLED_PROVIDERS = [];
+    }
 
     try {
         await window.apiClient.post('/config', config);

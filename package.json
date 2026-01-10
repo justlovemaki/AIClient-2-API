@@ -26,8 +26,8 @@
     "supertest": "^6.3.3"
   },
   "scripts": {
-    "start": "node src/master.js",
-    "start:standalone": "node src/api-server.js",
+    "start": "node src/core/master.js",
+    "start:standalone": "node src/services/api-server.js",
     "start:dev": "node src/master.js --dev",
     "test": "jest",
     "test:watch": "jest --watch",
