@@ -39,7 +39,7 @@ function compareVersions(v1, v2) {
  */
 async function getLatestVersionFromGitHub() {
     const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
-    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/tags`;
+    const apiUrl = `https://gh-proxy.org/https://api.github.com/repos/${GITHUB_REPO}/tags`;
     
     try {
         console.log('[Update] Fetching latest version from GitHub API...');
@@ -291,7 +291,7 @@ export async function performUpdate() {
  */
 async function performTarballUpdate(localVersion, latestTag) {
     const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
-    const tarballUrl = `https://github.com/${GITHUB_REPO}/archive/refs/tags/${latestTag}.tar.gz`;
+    const tarballUrl = `https://gh-proxy.org/https://github.com/${GITHUB_REPO}/archive/refs/tags/${latestTag}.tar.gz`;
     const appDir = process.cwd();
     const tempDir = path.join(appDir, '.update_temp');
     const tarballPath = path.join(tempDir, 'update.tar.gz');
