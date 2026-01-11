@@ -35,7 +35,7 @@ const KIRO_CONSTANTS = {
     AUTH_METHOD_SOCIAL: 'social',
     CHAT_TRIGGER_TYPE_MANUAL: 'MANUAL',
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
-    TOTAL_CONTEXT_TOKENS: 200000, // 总上下文 200k tokens
+    TOTAL_CONTEXT_TOKENS: 172500, // 总上下文 173k tokens
 };
 
 // 从 provider-models.js 获取支持的模型列表
@@ -730,9 +730,23 @@ async initializeAuth(forceRefresh = false) {
 
         const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
         
-        // 动态压缩 tools（保留全部工具）
+        // 动态压缩 tools（保留全部工具，但过滤掉 web_search/websearch）
         let toolsContext = {};
         if (tools && Array.isArray(tools) && tools.length > 0) {
+            // 过滤掉 web_search 或 websearch 工具（忽略大小写）
+            const filteredTools = tools.filter(tool => {
+                const name = (tool.name || '').toLowerCase();
+                const shouldIgnore = name === 'web_search' || name === 'websearch';
+                if (shouldIgnore) {
+                    console.log(`[Kiro] Ignoring tool: ${tool.name}`);
+                }
+                return !shouldIgnore;
+            });
+            
+            if (filteredTools.length === 0) {
+                // 所有工具都被过滤掉了，不添加 tools 上下文
+                console.log('[Kiro] All tools were filtered out');
+            } else {
             const TARGET_SIZE = 20000;
 
             const simplifySchema = (schema) => {
@@ -752,7 +766,7 @@ async initializeAuth(forceRefresh = false) {
             };
 
             const buildTools = (maxDescLen, useSimplifiedSchema) => {
-                return tools.map(tool => {
+                return filteredTools.map(tool => {
                     let desc = tool.description || "";
                     if (maxDescLen !== null && desc.length > maxDescLen) {
                         desc = desc.substring(0, maxDescLen) + "...";
@@ -800,10 +814,11 @@ async initializeAuth(forceRefresh = false) {
                         size = JSON.stringify(kiroTools).length;
                     }
                 }
-                console.log(`[Kiro] Tools compressed: ${originalSize} -> ${size} bytes (${tools.length} tools)`);
+                console.log(`[Kiro] Tools compressed: ${originalSize} -> ${size} bytes (${filteredTools.length} tools)`);
             }
 
             toolsContext = { tools: kiroTools };
+            }
         }
 
         const history = [];
@@ -1825,6 +1840,13 @@ async initializeAuth(forceRefresh = false) {
                     yield* pushEvents(events);
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
+                    // 统计工具调用的内容到 totalContent（用于 token 计算）
+                    if (tc.name) {
+                        totalContent += tc.name;
+                    }
+                    if (tc.input) {
+                        totalContent += tc.input;
+                    }
                     // 工具调用事件（包含 name 和 toolUseId）
                     if (tc.name && tc.toolUseId) {
                         // 检查是否是同一个工具调用的续传（相同 toolUseId）
@@ -1860,6 +1882,10 @@ async initializeAuth(forceRefresh = false) {
                     }
                 } else if (event.type === 'toolUseInput') {
                     // 工具调用的 input 续传事件
+                    // 统计 input 内容到 totalContent（用于 token 计算）
+                    if (event.input) {
+                        totalContent += event.input;
+                    }
                     if (currentToolCall) {
                         currentToolCall.input += event.input || '';
                     }
