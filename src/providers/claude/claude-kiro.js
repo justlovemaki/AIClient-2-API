@@ -26,7 +26,7 @@ const KIRO_CONSTANTS = {
     AUTH_METHOD_SOCIAL: 'social',
     CHAT_TRIGGER_TYPE_MANUAL: 'MANUAL',
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
-    TOTAL_CONTEXT_TOKENS: 160000, // 总上下文 160k tokens
+    TOTAL_CONTEXT_TOKENS: 172500, // 总上下文 173k tokens
 };
 
 // 从 provider-models.js 获取支持的模型列表
