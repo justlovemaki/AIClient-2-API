@@ -40,7 +40,7 @@ import { handlePotluckApiRoutes, handlePotluckUserApiRoutes, startHealthCheckSch
 const apiPotluckPlugin = {
     name: 'api-potluck',
     version: '1.0.1',
-    description: 'API 大锅饭 - Key 管理和用量统计插件',
+    description: 'API 大锅饭 - Key 管理和用量统计插件<br>管理端：<a href="potluck.html" target="_blank">potluck.html</a><br>用户端：<a href="potluck-user.html" target="_blank">potluck-user.html</a>',
     
     // 插件类型：认证插件
     type: 'auth',
