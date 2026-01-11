@@ -96,6 +96,8 @@ function getSystemRuntimeInfo() {
     };
 }
 
+// Helper functions for tool calls and JSON parsing
+
 function isQuoteCharAt(text, index) {
     if (index < 0 || index >= text.length) return false;
     const ch = text[index];
@@ -941,6 +943,7 @@ async initializeAuth(forceRefresh = false) {
                         : `${KIRO_THINKING.START_TAG}${thinkingText}${KIRO_THINKING.END_TAG}`;
                 }
 
+                // 只添加非空字段
                 if (toolUses.length > 0) {
                     assistantResponseMessage.toolUses = toolUses;
                 }
@@ -1618,7 +1621,8 @@ async initializeAuth(forceRefresh = false) {
     // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
-
+        
+        // 检查 token 是否即将过期,如果是则先刷新
         if (this.isExpiryDateNear()) {
             console.log('[Kiro] Token is near expiry, refreshing before generateContentStream request...');
             await this.initializeAuth(true);
@@ -1708,11 +1712,12 @@ async initializeAuth(forceRefresh = false) {
             let totalContent = '';
             let outputTokens = 0;
             const toolCalls = [];
-            let currentToolCall = null;
+            let currentToolCall = null; // 用于累积结构化工具调用
 
             const estimatedInputTokens = this.estimateInputTokens(requestBody);
             const tokenBreakdown = this._lastTokenBreakdown || {};
 
+            // 1. 先发送 message_start 事件
             yield {
                 type: "message_start",
                 message: {
@@ -1730,8 +1735,10 @@ async initializeAuth(forceRefresh = false) {
                 }
             };
 
+            // 2. 流式接收并发送每个 content_block_delta
             for await (const event of this.streamApiReal('', finalModel, requestBody)) {
                 if (event.type === 'contextUsage' && event.percentage) {
+                    // 捕获上下文使用百分比
                     contextUsagePercentage = event.percentage;
                     inputTokens = this.calculateInputTokensFromPercentage(contextUsagePercentage);
                     
@@ -1818,22 +1825,31 @@ async initializeAuth(forceRefresh = false) {
                     yield* pushEvents(events);
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
+                    // 工具调用事件（包含 name 和 toolUseId）
                     if (tc.name && tc.toolUseId) {
+                        // 检查是否是同一个工具调用的续传（相同 toolUseId）
                         if (currentToolCall && currentToolCall.toolUseId === tc.toolUseId) {
+                            // 同一个工具调用，累积 input
                             currentToolCall.input += tc.input || '';
                         } else {
+                            // 不同的工具调用
+                            // 如果有未完成的工具调用，先保存它
                             if (currentToolCall) {
                                 try {
                                     currentToolCall.input = JSON.parse(currentToolCall.input);
-                                } catch (e) {}
+                                } catch (e) {
+                                    // input 不是有效 JSON，保持原样
+                                }
                                 toolCalls.push(currentToolCall);
                             }
+                            // 开始新的工具调用
                             currentToolCall = {
                                 toolUseId: tc.toolUseId,
                                 name: tc.name,
                                 input: tc.input || ''
                             };
                         }
+                        // 如果这个事件包含 stop，完成工具调用
                         if (tc.stop) {
                             try {
                                 currentToolCall.input = JSON.parse(currentToolCall.input);
@@ -1843,20 +1859,25 @@ async initializeAuth(forceRefresh = false) {
                         }
                     }
                 } else if (event.type === 'toolUseInput') {
+                    // 工具调用的 input 续传事件
                     if (currentToolCall) {
                         currentToolCall.input += event.input || '';
                     }
                 } else if (event.type === 'toolUseStop') {
+                    // 工具调用结束事件
                     if (currentToolCall && event.stop) {
                         try {
                             currentToolCall.input = JSON.parse(currentToolCall.input);
-                        } catch (e) {}
+                        } catch (e) {
+                            // input 不是有效 JSON，保持原样
+                        }
                         toolCalls.push(currentToolCall);
                         currentToolCall = null;
                     }
                 }
             }
             
+            // 处理未完成的工具调用（如果流提前结束）
             if (currentToolCall) {
                 try {
                     currentToolCall.input = JSON.parse(currentToolCall.input);
@@ -1888,6 +1909,7 @@ async initializeAuth(forceRefresh = false) {
                 inputTokens = estimatedInputTokens;
             }
 
+            // 检查文本内容中的 bracket 格式工具调用
             const bracketToolCalls = parseBracketToolCalls(totalContent);
             if (bracketToolCalls && bracketToolCalls.length > 0) {
                 for (const btc of bracketToolCalls) {
@@ -1899,6 +1921,7 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
 
+            // 3. 处理工具调用（如果有）
             if (toolCalls.length > 0) {
                 const baseIndex = streamState.nextBlockIndex;
                 for (let i = 0; i < toolCalls.length; i++) {
@@ -1941,6 +1964,7 @@ async initializeAuth(forceRefresh = false) {
                 outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
             }
 
+            // 4. 发送 message_delta 事件
             yield {
                 type: "message_delta",
                 delta: { stop_reason: toolCalls.length > 0 ? "tool_use" : "end_turn" },
@@ -1952,6 +1976,7 @@ async initializeAuth(forceRefresh = false) {
                 }
             };
 
+            // 5. 发送 message_stop 事件
             yield { type: "message_stop" };
 
         } catch (error) {
@@ -1976,6 +2001,8 @@ async initializeAuth(forceRefresh = false) {
      */
     estimateInputTokens(requestBody) {
         let totalTokens = 0;
+        
+        // 定义各类内容的开销乘数
         const OVERHEAD_MULTIPLIERS = {
             system: 1.0,
             message: 1.0,
@@ -1997,6 +2024,7 @@ async initializeAuth(forceRefresh = false) {
             tools_def: 0
         };
 
+        // Count system prompt tokens
         if (requestBody.system) {
             const systemText = this.getContentText(requestBody.system);
             const systemTokens = this.countTextTokens(systemText);
@@ -2014,6 +2042,7 @@ async initializeAuth(forceRefresh = false) {
             totalTokens += counted;
         }
 
+        // Count all messages tokens
         if (requestBody.messages && Array.isArray(requestBody.messages)) {
             for (const message of requestBody.messages) {
                 if (!message.content) {
@@ -2058,6 +2087,7 @@ async initializeAuth(forceRefresh = false) {
             }
         }
 
+        // Count tools definitions tokens if present
         if (requestBody.tools && Array.isArray(requestBody.tools)) {
             for (const tool of requestBody.tools) {
                 const toolJson = JSON.stringify(tool);
