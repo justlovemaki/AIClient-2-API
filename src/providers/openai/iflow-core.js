@@ -105,12 +105,16 @@ class IFlowTokenStorage {
  */
 async function loadTokenFromFile(filePath) {
     try {
-        const absolutePath = path.isAbsolute(filePath) 
-            ? filePath 
+        const absolutePath = path.isAbsolute(filePath)
+            ? filePath
             : path.join(process.cwd(), filePath);
         
         const data = await fs.readFile(absolutePath, 'utf-8');
         const json = JSON.parse(data);
+        
+        // 记录加载的 token 信息
+        const refreshToken = json.refreshToken || json.refresh_token || '';
+        console.log(`[iFlow] Token loaded from: ${filePath} (refresh_token: ${refreshToken ? refreshToken.substring(0, 8) + '...' : 'EMPTY'})`);
         
         return IFlowTokenStorage.fromJSON(json);
     } catch (error) {
@@ -129,8 +133,8 @@ async function loadTokenFromFile(filePath) {
  */
 async function saveTokenToFile(filePath, tokenStorage) {
     try {
-        const absolutePath = path.isAbsolute(filePath) 
-            ? filePath 
+        const absolutePath = path.isAbsolute(filePath)
+            ? filePath
             : path.join(process.cwd(), filePath);
         
         // 确保目录存在
@@ -139,9 +143,18 @@ async function saveTokenToFile(filePath, tokenStorage) {
         
         // 写入文件
         const json = tokenStorage.toJSON();
+        
+        // 验证关键字段是否存在
+        if (!json.refresh_token || json.refresh_token.trim() === '') {
+            console.error('[iFlow] WARNING: Attempting to save token file with empty refresh_token!');
+        }
+        if (!json.apiKey || json.apiKey.trim() === '') {
+            console.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
+        }
+        
         await fs.writeFile(absolutePath, JSON.stringify(json, null, 2), 'utf-8');
         
-        console.log(`[iFlow] Token saved to: ${filePath}`);
+        console.log(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
     } catch (error) {
         throw new Error(`[iFlow] Failed to save token to file: ${error.message}`);
     }
@@ -575,12 +588,17 @@ export class IFlowApiService {
         }
         
         // 调用刷新函数
-        const tokenData = await refreshOAuthTokens(this.tokenStorage.refreshToken, this.axiosInstance);
+        const oldRefreshToken = this.tokenStorage.refreshToken;
+        const tokenData = await refreshOAuthTokens(oldRefreshToken, this.axiosInstance);
         
-        // 更新 tokenStorage
+        // 更新 tokenStorage - 必须更新 refreshToken，因为 OAuth 服务器可能返回新的 refresh_token
         this.tokenStorage.accessToken = tokenData.accessToken;
-        if (tokenData.refreshToken) {
-            this.tokenStorage.refreshToken = tokenData.refreshToken;
+        // 始终更新 refreshToken，即使服务器没有返回新的（tokenData.refreshToken 会回退到旧值）
+        this.tokenStorage.refreshToken = tokenData.refreshToken;
+        
+        // 记录 refresh_token 是否发生变化
+        if (tokenData.refreshToken !== oldRefreshToken) {
+            console.log(`[iFlow] refresh_token has been rotated (old: ${this._maskToken(oldRefreshToken)}, new: ${this._maskToken(tokenData.refreshToken)})`);
         }
         if (tokenData.apiKey) {
             this.tokenStorage.apiKey = tokenData.apiKey;
