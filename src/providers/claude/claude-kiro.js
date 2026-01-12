@@ -576,7 +576,7 @@ async initializeAuth(forceRefresh = false) {
     if (!this.accessToken) {
         throw new Error('No access token available after initialization and refresh attempts.');
     }
-    }
+}
 
     /**
      * Extract text content from OpenAI message format
@@ -1231,7 +1231,7 @@ async initializeAuth(forceRefresh = false) {
     async callApi(method, model, body, isRetry = false, retryCount = 0) {
         if (!this.isInitialized) await this.initialize();
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
-        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
         const requestData = this.buildCodewhispererRequest(body.messages, model, body.tools, body.system, body.thinking);
 
@@ -1730,7 +1730,6 @@ async initializeAuth(forceRefresh = false) {
             let currentToolCall = null; // 用于累积结构化工具调用
 
             const estimatedInputTokens = this.estimateInputTokens(requestBody);
-            const tokenBreakdown = this._lastTokenBreakdown || {};
 
             // 1. 先发送 message_start 事件
             yield {
@@ -1752,23 +1751,9 @@ async initializeAuth(forceRefresh = false) {
 
             // 2. 流式接收并发送每个 content_block_delta
             for await (const event of this.streamApiReal('', finalModel, requestBody)) {
-                if (event.type === 'contextUsage' && event.percentage) {
-                    // 捕获上下文使用百分比
-                    contextUsagePercentage = event.percentage;
-                    inputTokens = this.calculateInputTokensFromPercentage(contextUsagePercentage);
-                    
-                    if (Math.abs(inputTokens - estimatedInputTokens) > estimatedInputTokens * 0.1) {
-                        yield {
-                            type: "message_delta",
-                            delta: {},
-                            usage: {
-                                input_tokens: inputTokens,
-                                output_tokens: 0,
-                                cache_creation_input_tokens: 0,
-                                cache_read_input_tokens: 0
-                            }
-                        };
-                    }
+                if (event.type === 'contextUsage' && event.contextUsagePercentage) {
+                    // 捕获上下文使用百分比（包含输入和输出的总使用量）
+                    contextUsagePercentage = event.contextUsagePercentage;
                 } else if (event.type === 'content' && event.content) {
                     totalContent += event.content;
 
@@ -1930,11 +1915,6 @@ async initializeAuth(forceRefresh = false) {
 
             yield* pushEvents(stopBlock(streamState.textBlockIndex));
 
-            if (contextUsagePercentage === null) {
-                console.warn('[Kiro Stream] contextUsagePercentage not received, using estimation');
-                inputTokens = estimatedInputTokens;
-            }
-
             // 检查文本内容中的 bracket 格式工具调用
             const bracketToolCalls = parseBracketToolCalls(totalContent);
             if (bracketToolCalls && bracketToolCalls.length > 0) {
@@ -1978,6 +1958,7 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
 
+            // 计算 output tokens
             const contentBlocksForCount = thinkingRequested
                 ? this._toClaudeContentBlocksFromKiroText(totalContent)
                 : [{ type: "text", text: totalContent }];
@@ -1988,6 +1969,19 @@ async initializeAuth(forceRefresh = false) {
 
             for (const tc of toolCalls) {
                 outputTokens += this.countTextTokens(JSON.stringify(tc.input || {}));
+            }
+
+            // 计算 input tokens
+            // contextUsagePercentage 是包含输入和输出的总使用量百分比
+            // 总 token = TOTAL_CONTEXT_TOKENS * contextUsagePercentage / 100
+            // input token = 总 token - output token
+            if (contextUsagePercentage !== null && contextUsagePercentage > 0) {
+                const totalTokens = Math.round(KIRO_CONSTANTS.TOTAL_CONTEXT_TOKENS * contextUsagePercentage / 100);
+                inputTokens = Math.max(0, totalTokens - outputTokens);
+                console.log(`[Kiro] Token calculation from contextUsagePercentage: total=${totalTokens}, output=${outputTokens}, input=${inputTokens}`);
+            } else {
+                console.warn('[Kiro Stream] contextUsagePercentage not received, using estimation');
+                inputTokens = estimatedInputTokens;
             }
 
             // 4. 发送 message_delta 事件
@@ -2011,6 +2005,9 @@ async initializeAuth(forceRefresh = false) {
         }
     }
 
+    /**
+     * Count tokens for a given text using Claude's official tokenizer
+     */
     countTextTokens(text) {
         if (!text) return 0;
         try {
@@ -2028,117 +2025,50 @@ async initializeAuth(forceRefresh = false) {
     estimateInputTokens(requestBody) {
         let totalTokens = 0;
         
-        // 定义各类内容的开销乘数
-        const OVERHEAD_MULTIPLIERS = {
-            system: 1.0,
-            message: 1.0,
-            tools: 1.0,
-            thinking: 1.0,
-            tool_result: 1.0,
-            tool_use_input: 1.0,
-            image: 1500
-        };
-
-        const breakdown = {
-            system: 0,
-            thinking: 0,
-            text: 0,
-            tool_result: 0,
-            tool_use_input: 0,
-            image: 0,
-            thinking_content: 0,
-            tools_def: 0
-        };
-
         // Count system prompt tokens
         if (requestBody.system) {
             const systemText = this.getContentText(requestBody.system);
-            const systemTokens = this.countTextTokens(systemText);
-            const counted = Math.ceil(systemTokens * OVERHEAD_MULTIPLIERS.system);
-            breakdown.system = counted;
-            totalTokens += counted;
+            totalTokens += this.countTextTokens(systemText);
         }
-
+        
+        // Count thinking prefix tokens if thinking is enabled
         if (requestBody.thinking?.type === 'enabled') {
             const budget = this._normalizeThinkingBudgetTokens(requestBody.thinking.budget_tokens);
             const prefixText = `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
-            const prefixTokens = this.countTextTokens(prefixText);
-            const counted = Math.ceil(prefixTokens * OVERHEAD_MULTIPLIERS.thinking);
-            breakdown.thinking = counted;
-            totalTokens += counted;
+            totalTokens += this.countTextTokens(prefixText);
         }
-
+        
         // Count all messages tokens
         if (requestBody.messages && Array.isArray(requestBody.messages)) {
             for (const message of requestBody.messages) {
-                if (!message.content) {
-                    continue;
-                }
-
-                if (Array.isArray(message.content)) {
-                    for (const part of message.content) {
-                        if (part.type === 'text' && part.text) {
-                            const counted = Math.ceil(this.countTextTokens(part.text) * OVERHEAD_MULTIPLIERS.message);
-                            breakdown.text += counted;
-                            totalTokens += counted;
+                if (message.content) {
+                    if (Array.isArray(message.content)) {
+                        for (const part of message.content) {
+                            if (part.type === 'text' && part.text) {
+                                totalTokens += this.countTextTokens(part.text);
+                            } else if (part.type === 'thinking' && part.thinking) {
+                                totalTokens += this.countTextTokens(part.thinking);
+                            } else if (part.type === 'tool_result') {
+                                const resultContent = this.getContentText(part.content);
+                                totalTokens += this.countTextTokens(resultContent);
+                            } else if (part.type === 'tool_use' && part.input) {
+                                totalTokens += this.countTextTokens(JSON.stringify(part.input));
+                            }
                         }
-                        else if (part.type === 'tool_result') {
-                            const toolResultText = this.getContentText(part.content);
-                            const counted = Math.ceil(this.countTextTokens(toolResultText) * OVERHEAD_MULTIPLIERS.tool_result);
-                            breakdown.tool_result += counted;
-                            totalTokens += counted;
-                        }
-                        else if (part.type === 'tool_use' && part.input) {
-                            const inputJson = JSON.stringify(part.input);
-                            const counted = Math.ceil(this.countTextTokens(inputJson) * OVERHEAD_MULTIPLIERS.tool_use_input);
-                            breakdown.tool_use_input += counted;
-                            totalTokens += counted;
-                        }
-                        else if (part.type === 'image') {
-                            breakdown.image += OVERHEAD_MULTIPLIERS.image;
-                            totalTokens += OVERHEAD_MULTIPLIERS.image;
-                        }
-                        else if (part.type === 'thinking' && part.thinking) {
-                            const counted = Math.ceil(this.countTextTokens(part.thinking) * OVERHEAD_MULTIPLIERS.message);
-                            breakdown.thinking_content += counted;
-                            totalTokens += counted;
-                        }
+                    } else {
+                        const contentText = this.getContentText(message);
+                        totalTokens += this.countTextTokens(contentText);
                     }
                 }
-                else if (typeof message.content === 'string') {
-                    const counted = Math.ceil(this.countTextTokens(message.content) * OVERHEAD_MULTIPLIERS.message);
-                    breakdown.text += counted;
-                    totalTokens += counted;
-                }
             }
         }
-
+        
         // Count tools definitions tokens if present
         if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            for (const tool of requestBody.tools) {
-                const toolJson = JSON.stringify(tool);
-                const toolTokens = this.countTextTokens(toolJson);
-                const counted = Math.ceil(toolTokens * OVERHEAD_MULTIPLIERS.tools);
-                breakdown.tools_def += counted;
-                totalTokens += counted;
-            }
+            totalTokens += this.countTextTokens(JSON.stringify(requestBody.tools));
         }
-
-        const hasTools = requestBody.tools && requestBody.tools.length > 0;
-        const toolsDefTokens = breakdown.tools_def || 0;
-        const isSmallToolsDef = toolsDefTokens > 0 && toolsDefTokens < 21000;
-
-        const KIRO_BASE_OVERHEAD = 400;
-        const KIRO_PERCENTAGE_OVERHEAD = hasTools 
-            ? (isSmallToolsDef ? 0.18 : 0.08)
-            : 0.25;
-
-        const baseOverhead = KIRO_BASE_OVERHEAD;
-        const percentageOverhead = Math.ceil(totalTokens * KIRO_PERCENTAGE_OVERHEAD);
-        totalTokens += baseOverhead + percentageOverhead;
         
-        this._lastTokenBreakdown = breakdown;
-        return Math.ceil(totalTokens);
+        return totalTokens;
     }
 
     /**
