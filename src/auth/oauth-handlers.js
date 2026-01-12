@@ -8,6 +8,7 @@ import open from 'open';
 import { broadcastEvent } from '../services/ui-manager.js';
 import { autoLinkProviderConfigs } from '../services/service-manager.js';
 import { CONFIG } from '../core/config-manager.js';
+import { getGoogleAuthProxyConfig, getProxyConfigForProvider } from '../utils/proxy-utils.js';
 
 /**
  * OAuth 提供商配置
@@ -134,6 +135,26 @@ const activeKiroServers = new Map();
  * 活动的 Kiro 轮询任务管理（用于 Builder ID Device Code）
  */
 const activeKiroPollingTasks = new Map();
+
+/**
+ * 创建带代理支持的 fetch 请求
+ * @param {string} url - 请求 URL
+ * @param {Object} options - fetch 选项
+ * @param {string} providerType - 提供商类型，用于获取代理配置
+ * @returns {Promise<Response>}
+ */
+async function fetchWithProxy(url, options = {}, providerType) {
+    const proxyConfig = getProxyConfigForProvider(CONFIG, providerType);
+
+    if (proxyConfig) {
+        // 根据 URL 协议选择合适的 agent
+        const urlObj = new URL(url);
+        const agent = urlObj.protocol === 'https:' ? proxyConfig.httpsAgent : proxyConfig.httpAgent;
+        options.dispatcher = agent;
+    }
+
+    return fetch(url, options);
+}
 
 /**
  * 生成 HTML 响应页面
@@ -322,8 +343,22 @@ async function handleGoogleOAuth(providerKey, currentConfig, options = {}) {
     const port = parseInt(options.port) || config.port;
     const host = 'localhost';
     const redirectUri = `http://${host}:${port}`;
-    
-    const authClient = new OAuth2Client(config.clientId, config.clientSecret);
+
+    // 获取代理配置
+    const proxyConfig = getGoogleAuthProxyConfig(currentConfig, providerKey);
+
+    // 构建 OAuth2Client 选项
+    const oauth2Options = {
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+    };
+
+    if (proxyConfig) {
+        oauth2Options.transporterOptions = proxyConfig;
+        console.log(`${config.logPrefix} Using proxy for OAuth token exchange`);
+    }
+
+    const authClient = new OAuth2Client(oauth2Options);
     authClient.redirectUri = redirectUri;
     
     const authUrl = authClient.generateAuthUrl({
@@ -451,14 +486,14 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
             .join('&');
         
         try {
-            const response = await fetch(QWEN_OAUTH_CONFIG.tokenEndpoint, {
+            const response = await fetchWithProxy(QWEN_OAUTH_CONFIG.tokenEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Accept': 'application/json'
                 },
                 body: formBody
-            });
+            }, 'openai-qwen-oauth');
             
             const data = await response.json();
             
@@ -556,14 +591,14 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
         .join('&');
     
     try {
-        const response = await fetch(QWEN_OAUTH_CONFIG.deviceCodeEndpoint, {
+        const response = await fetchWithProxy(QWEN_OAUTH_CONFIG.deviceCodeEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Accept': 'application/json'
             },
             body: formBody
-        });
+        }, 'openai-qwen-oauth');
         
         if (!response.ok) {
             throw new Error(`Qwen OAuth请求失败: ${response.status} ${response.statusText}`);
@@ -706,7 +741,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
     }
 
     // 1. 注册 OIDC 客户端
-    const regResponse = await fetch(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/client/register`, {
+    const regResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/client/register`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -718,7 +753,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             scopes: KIRO_OAUTH_CONFIG.scopes,
             grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token']
         })
-    });
+    }, 'claude-kiro-oauth');
     
     if (!regResponse.ok) {
         throw new Error(`Kiro OAuth 客户端注册失败: ${regResponse.status}`);
@@ -727,7 +762,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
     const regData = await regResponse.json();
     
     // 2. 启动设备授权
-    const authResponse = await fetch(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/device_authorization`, {
+    const authResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/device_authorization`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -738,7 +773,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             clientSecret: regData.clientSecret,
             startUrl: KIRO_OAUTH_CONFIG.builderIDStartURL
         })
-    });
+    }, 'claude-kiro-oauth');
     
     if (!authResponse.ok) {
         throw new Error(`Kiro OAuth 设备授权失败: ${authResponse.status}`);
@@ -810,7 +845,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
         attempts++;
         
         try {
-            const response = await fetch(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/token`, {
+            const response = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/token`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -822,7 +857,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                     deviceCode,
                     grantType: 'urn:ietf:params:oauth:grant-type:device_code'
                 })
-            });
+            }, 'claude-kiro-oauth');
             
             const data = await response.json();
             
@@ -986,7 +1021,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     }
                     
                     // 交换 Code 获取 Token（使用动态的 redirect_uri）
-                    const tokenResponse = await fetch(`${KIRO_OAUTH_CONFIG.authServiceEndpoint}/oauth/token`, {
+                    const tokenResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.authServiceEndpoint}/oauth/token`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -997,7 +1032,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                             code_verifier: codeVerifier,
                             redirect_uri: redirectUri
                         })
-                    });
+                    }, 'claude-kiro-oauth');
                     
                     if (!tokenResponse.ok) {
                         const errorText = await tokenResponse.text();
@@ -1114,8 +1149,8 @@ async function exchangeIFlowCodeForTokens(code, redirectUri) {
     
     // 生成 Basic Auth 头
     const basicAuth = Buffer.from(`${IFLOW_OAUTH_CONFIG.clientId}:${IFLOW_OAUTH_CONFIG.clientSecret}`).toString('base64');
-    
-    const response = await fetch(IFLOW_OAUTH_CONFIG.tokenEndpoint, {
+
+    const response = await fetchWithProxy(IFLOW_OAUTH_CONFIG.tokenEndpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -1123,8 +1158,8 @@ async function exchangeIFlowCodeForTokens(code, redirectUri) {
             'Authorization': `Basic ${basicAuth}`
         },
         body: form.toString()
-    });
-    
+    }, 'openai-iflow');
+
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`iFlow token exchange failed: ${response.status} ${errorText}`);
@@ -1157,13 +1192,13 @@ async function fetchIFlowUserInfo(accessToken) {
     }
     
     const endpoint = `${IFLOW_OAUTH_CONFIG.userInfoEndpoint}?accessToken=${encodeURIComponent(accessToken)}`;
-    
-    const response = await fetch(endpoint, {
+
+    const response = await fetchWithProxy(endpoint, {
         method: 'GET',
         headers: {
             'Accept': 'application/json'
         }
-    });
+    }, 'openai-iflow');
     
     if (!response.ok) {
         const errorText = await response.text();
@@ -1445,8 +1480,8 @@ export async function refreshIFlowTokens(refreshToken) {
     
     // 生成 Basic Auth 头
     const basicAuth = Buffer.from(`${IFLOW_OAUTH_CONFIG.clientId}:${IFLOW_OAUTH_CONFIG.clientSecret}`).toString('base64');
-    
-    const response = await fetch(IFLOW_OAUTH_CONFIG.tokenEndpoint, {
+
+    const response = await fetchWithProxy(IFLOW_OAUTH_CONFIG.tokenEndpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -1454,8 +1489,8 @@ export async function refreshIFlowTokens(refreshToken) {
             'Authorization': `Basic ${basicAuth}`
         },
         body: form.toString()
-    });
-    
+    }, 'openai-iflow');
+
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`iFlow token refresh failed: ${response.status} ${errorText}`);
@@ -1506,14 +1541,14 @@ async function refreshKiroToken(refreshToken, region = KIRO_REFRESH_CONSTANTS.DE
     const timeoutId = setTimeout(() => controller.abort(), KIRO_REFRESH_CONSTANTS.REQUEST_TIMEOUT);
     
     try {
-        const response = await fetch(refreshUrl, {
+        const response = await fetchWithProxy(refreshUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': KIRO_REFRESH_CONSTANTS.CONTENT_TYPE_JSON
             },
             body: JSON.stringify({ refreshToken }),
             signal: controller.signal
-        });
+        }, 'claude-kiro-oauth');
         
         clearTimeout(timeoutId);
         
@@ -1901,7 +1936,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             const region = credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION;
             const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', region);
             
-            const refreshResponse = await fetch(refreshUrl, {
+            const refreshResponse = await fetchWithProxy(refreshUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1912,7 +1947,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
                     clientSecret: credentials.clientSecret,
                     grantType: 'refresh_token'
                 })
-            });
+            }, 'claude-kiro-oauth');
             
             if (refreshResponse.ok) {
                 const tokenData = await refreshResponse.json();
