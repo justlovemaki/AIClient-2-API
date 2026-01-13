@@ -627,7 +627,13 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     // 5. Call the appropriate stream or unary handler, passing the provider info.
     // 创建重试上下文，包含 CONFIG 以便在认证错误时切换凭证重试
-    const retryContext = providerPoolManager ? { CONFIG, currentRetry: 0, maxRetries: 2 } : null;
+    // 凭证切换重试次数（默认 5），可在配置中自定义更大的值
+    // 注意：这与底层的 429/5xx 重试（REQUEST_MAX_RETRIES）是不同层次的重试机制
+    // - 底层重试：同一凭证遇到 429/5xx 时的重试
+    // - 凭证切换重试：凭证被标记不健康后切换到其他凭证
+    // 当没有不同的健康凭证可用时，重试会自动停止
+    const credentialSwitchMaxRetries = CONFIG.CREDENTIAL_SWITCH_MAX_RETRIES || 5;
+    const retryContext = providerPoolManager ? { CONFIG, currentRetry: 0, maxRetries: credentialSwitchMaxRetries } : null;
     
     if (isStream) {
         await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);
