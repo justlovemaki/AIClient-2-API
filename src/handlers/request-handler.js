@@ -44,8 +44,9 @@ export function createRequestHandler(config, providerPoolManager) {
 
         // Set CORS headers for all requests
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, Model-Provider, X-Requested-With, Accept, Origin');
+        res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours cache for preflight
 
         // Handle CORS preflight requests
         if (method === 'OPTIONS') {

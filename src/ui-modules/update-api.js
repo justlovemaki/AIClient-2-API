@@ -3,8 +3,69 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { CONFIG } from '../core/config-manager.js';
+import { parseProxyUrl } from '../utils/proxy-utils.js';
 
 const execAsync = promisify(exec);
+
+/**
+ * 获取更新检查使用的代理配置
+ * @returns {Object|null} 代理配置对象或 null
+ */
+function getUpdateProxyConfig() {
+    if (!CONFIG || !CONFIG.PROXY_URL) {
+        return null;
+    }
+    
+    const proxyConfig = parseProxyUrl(CONFIG.PROXY_URL);
+    if (proxyConfig) {
+        console.log(`[Update] Using ${proxyConfig.proxyType} proxy for update check: ${CONFIG.PROXY_URL}`);
+    }
+    return proxyConfig;
+}
+
+/**
+ * 带代理支持的 fetch 封装
+ * @param {string} url - 请求 URL
+ * @param {Object} options - fetch 选项
+ * @returns {Promise<Response>}
+ */
+async function fetchWithProxy(url, options = {}) {
+    const proxyConfig = getUpdateProxyConfig();
+    
+    if (proxyConfig) {
+        // 使用 undici 的 fetch 支持代理
+        const fetchOptions = {
+            ...options,
+            dispatcher: undefined
+        };
+        
+        // 根据 URL 协议选择合适的 agent
+        const urlObj = new URL(url);
+        if (urlObj.protocol === 'https:') {
+            fetchOptions.agent = proxyConfig.httpsAgent;
+        } else {
+            fetchOptions.agent = proxyConfig.httpAgent;
+        }
+        
+        // Node.js 原生 fetch 不直接支持 agent，需要使用 undici 或 node-fetch
+        // 这里使用动态导入 undici 来支持代理
+        try {
+            const { fetch: undiciFetch, ProxyAgent } = await import('undici');
+            const proxyAgent = new ProxyAgent(CONFIG.PROXY_URL);
+            return await undiciFetch(url, {
+                ...options,
+                dispatcher: proxyAgent
+            });
+        } catch (importError) {
+            // 如果 undici 不可用，回退到原生 fetch（不使用代理）
+            console.warn('[Update] undici not available, falling back to native fetch without proxy');
+            return await fetch(url, options);
+        }
+    }
+    
+    return await fetch(url, options);
+}
 
 /**
  * 比较版本号
@@ -43,7 +104,7 @@ async function getLatestVersionFromGitHub() {
     
     try {
         console.log('[Update] Fetching latest version from GitHub API...');
-        const response = await fetch(apiUrl, {
+        const response = await fetchWithProxy(apiUrl, {
             headers: {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'AIClient2API-UpdateChecker'
@@ -306,7 +367,7 @@ async function performTarballUpdate(localVersion, latestTag) {
         
         // 2. 下载 tarball
         console.log('[Update] Downloading tarball...');
-        const response = await fetch(tarballUrl, {
+        const response = await fetchWithProxy(tarballUrl, {
             headers: {
                 'User-Agent': 'AIClient2API-Updater'
             },
