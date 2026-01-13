@@ -57,6 +57,7 @@ export class OrchidsApiService {
         
         // axios 实例
         this.axiosInstance = null;
+        
     }
 
     async initialize() {
@@ -419,7 +420,6 @@ ${systemPrompt}
 
 ${userMessage}
 </user_request>
-
 <CRITICAL>
   - **Task Alignment**: Strictly align with the user's latest prompt. If the user asks for a story, provide a story immediately without referencing internal constraints.
   - **Politeness**: Maintain a helpful and accommodating tone at all times.
@@ -450,60 +450,223 @@ Today's date: ${dateStr}
         };
     }
 
-    _handleFsOperation(operation) {
-        return null;
+    /**
+     * 发送 fs_operation_response 到 WebSocket
+     * 参考 simple_api.py 的实现：收到 fs_operation 后需要返回响应，否则 Orchids 会一直等待
+     */
+    _createFsOperationResponse(opId, success = true, data = null) {
+        return {
+            type: 'fs_operation_response',
+            id: opId,
+            success: success,
+            data: data,
+        };
     }
 
     _convertToAnthropicSSE(orchidsMessage, state) {
         const msgType = orchidsMessage.type;
         const events = [];
         
-        if (msgType === 'coding_agent.reasoning.started') {
-            if (!state.reasoningStarted) {
-                state.reasoningStarted = true;
-                state.currentBlockIndex = 0;
-                events.push({
-                    type: 'content_block_start',
-                    index: 0,
-                    content_block: {
-                        type: 'thinking',
-                        thinking: '',
-                    },
-                });
-            }
-            return events.length > 0 ? events : null;
+        // ========================================================================
+        // 注意：Orchids API 会同时发送两种事件流：
+        // 1. model 事件 - 底层模型事件（reasoning-delta, text-delta 等）
+        // 2. coding_agent.* 事件 - 高层代理事件（reasoning.chunk, response.chunk 等）
+        //
+        // 这两种事件包含相同的内容，为避免重复处理导致叠字，
+        // 我们只处理 model 事件，忽略 coding_agent.reasoning 和 coding_agent.response 事件
+        // ========================================================================
+        
+        // 忽略 coding_agent.reasoning 事件（使用 model.reasoning-* 代替）
+        if (msgType === 'coding_agent.reasoning.started' ||
+            msgType === 'coding_agent.reasoning.chunk' ||
+            msgType === 'coding_agent.reasoning.completed') {
+            return null;
         }
         
-        if (msgType === 'coding_agent.reasoning.chunk') {
-            const text = orchidsMessage.data?.text || '';
-            return {
-                type: 'content_block_delta',
-                index: 0,
-                delta: {
-                    type: 'thinking_delta',
-                    thinking: text,
-                },
-            };
-        }
-        
-        if (msgType === 'coding_agent.reasoning.completed') {
-            if (state.reasoningStarted) {
-                events.push({
-                    type: 'content_block_stop',
-                    index: 0,
-                });
-            }
-            return events.length > 0 ? events : null;
-        }
-        
+        // ========================================================================
+        // 处理 model 事件（底层模型事件）- 主要事件源
+        // ========================================================================
         if (msgType === 'model') {
             const event = orchidsMessage.event || {};
             const eventType = event.type || '';
             
+            // --------------------------------------------------------------------
+            // 处理 reasoning 事件（模型级别的思考）
+            // --------------------------------------------------------------------
+            if (eventType === 'reasoning-start') {
+                if (!state.reasoningStarted) {
+                    state.reasoningStarted = true;
+                    state.currentBlockIndex = 0;
+                    events.push({
+                        type: 'content_block_start',
+                        index: 0,
+                        content_block: {
+                            type: 'thinking',
+                            thinking: '',
+                        },
+                    });
+                }
+                return events.length > 0 ? events : null;
+            }
+            
+            if (eventType === 'reasoning-delta') {
+                const text = event.delta || '';
+                if (text && state.reasoningStarted) {
+                    return {
+                        type: 'content_block_delta',
+                        index: 0,
+                        delta: {
+                            type: 'thinking_delta',
+                            thinking: text,
+                        },
+                    };
+                }
+                return null;
+            }
+            
+            if (eventType === 'reasoning-end') {
+                if (state.reasoningStarted && !state.reasoningEnded) {
+                    state.reasoningEnded = true;
+                    events.push({
+                        type: 'content_block_stop',
+                        index: 0,
+                    });
+                }
+                return events.length > 0 ? events : null;
+            }
+            
+            // --------------------------------------------------------------------
+            // 处理 tool-input 事件（工具调用）
+            // 这是 Orchids 原生工具调用的核心事件
+            // --------------------------------------------------------------------
+            if (eventType === 'tool-input-start') {
+                const toolCallId = event.id || `toolu_${uuidv4().replace(/-/g, '').substring(0, 12)}`;
+                const toolName = event.toolName || 'unknown';
+                
+                // 关闭之前的文本块（如果有）
+                if (state.responseStarted && !state.textBlockClosed) {
+                    events.push({
+                        type: 'content_block_stop',
+                        index: state.currentBlockIndex,
+                    });
+                    state.textBlockClosed = true;
+                }
+                
+                // 确定工具调用的索引
+                // 索引计算：reasoning块(0) + 文本块(如果有) + 之前的工具块
+                let toolIndex = 0;
+                if (state.reasoningStarted) {
+                    toolIndex = 1; // reasoning 块占用索引 0
+                }
+                if (state.responseStarted) {
+                    toolIndex = state.currentBlockIndex + 1; // 文本块之后
+                }
+                // 如果已经有工具调用，使用 toolUseIndex
+                if (state.toolUseIndex > 1) {
+                    toolIndex = state.toolUseIndex;
+                }
+                
+                state.currentToolIndex = toolIndex;
+                state.currentToolId = toolCallId;
+                state.currentToolName = toolName;
+                state.currentToolInput = '';
+                state.toolUseIndex = toolIndex + 1;
+                
+                // 记录到 pendingTools
+                state.pendingTools[toolCallId] = {
+                    id: toolCallId,
+                    name: toolName,
+                    input: {},
+                };
+                
+                console.log(`[Orchids] Tool call started: ${toolName} (${toolCallId})`);
+                
+                events.push({
+                    type: 'content_block_start',
+                    index: toolIndex,
+                    content_block: {
+                        type: 'tool_use',
+                        id: toolCallId,
+                        name: toolName,
+                        input: {},
+                    },
+                });
+                
+                return events.length > 0 ? events : null;
+            }
+            
+            if (eventType === 'tool-input-delta') {
+                const delta = event.delta || '';
+                if (delta && state.currentToolId) {
+                    state.currentToolInput += delta;
+                    
+                    events.push({
+                        type: 'content_block_delta',
+                        index: state.currentToolIndex,
+                        delta: {
+                            type: 'input_json_delta',
+                            partial_json: delta,
+                        },
+                    });
+                }
+                return events.length > 0 ? events : null;
+            }
+            
+            if (eventType === 'tool-input-end') {
+                // 工具输入结束，解析完整的 JSON 参数
+                if (state.currentToolId && state.currentToolInput) {
+                    try {
+                        const parsedInput = JSON.parse(state.currentToolInput);
+                        if (state.pendingTools[state.currentToolId]) {
+                            state.pendingTools[state.currentToolId].input = parsedInput;
+                        }
+                    } catch (e) {
+                        console.warn(`[Orchids] Failed to parse tool input: ${e.message}`);
+                    }
+                }
+                return null;
+            }
+            
+            if (eventType === 'tool-call') {
+                // 完整的工具调用信息，可以用来验证/补充
+                const toolCallId = event.toolCallId || state.currentToolId;
+                const toolName = event.toolName || state.currentToolName;
+                const inputStr = event.input || '';
+                
+                if (toolCallId && state.pendingTools[toolCallId]) {
+                    try {
+                        const parsedInput = JSON.parse(inputStr);
+                        state.pendingTools[toolCallId].input = parsedInput;
+                    } catch (e) {
+                        // 忽略解析错误
+                    }
+                }
+                
+                // 关闭工具调用块
+                if (state.currentToolIndex !== undefined) {
+                    events.push({
+                        type: 'content_block_stop',
+                        index: state.currentToolIndex,
+                    });
+                    
+                    // 重置当前工具状态
+                    state.currentToolId = null;
+                    state.currentToolName = null;
+                    state.currentToolInput = '';
+                    state.currentToolIndex = undefined;
+                }
+                
+                return events.length > 0 ? events : null;
+            }
+            
+            // --------------------------------------------------------------------
+            // 处理 text 事件（文本输出）
+            // --------------------------------------------------------------------
             if (eventType === 'text-start') {
                 if (!state.responseStarted) {
                     state.responseStarted = true;
                     state.currentBlockIndex = state.reasoningStarted ? 1 : 0;
+                    state.textBlockClosed = false;
                     events.push({
                         type: 'content_block_start',
                         index: state.currentBlockIndex,
@@ -519,9 +682,13 @@ Today's date: ${dateStr}
             if (eventType === 'text-delta') {
                 const text = event.delta || '';
                 if (text) {
+                    // 累积文本用于后续解析 XML 工具调用
+                    state.accumulatedText += text;
+                    
                     if (!state.responseStarted) {
                         state.responseStarted = true;
                         state.currentBlockIndex = state.reasoningStarted ? 1 : 0;
+                        state.textBlockClosed = false;
                         events.push({
                             type: 'content_block_start',
                             index: state.currentBlockIndex,
@@ -544,38 +711,343 @@ Today's date: ${dateStr}
             }
             
             if (eventType === 'text-end') {
+                // 文本块结束，但不立即关闭，等待可能的工具调用
+                return null;
+            }
+            
+            // --------------------------------------------------------------------
+            // 处理 finish 事件（模型完成）
+            // --------------------------------------------------------------------
+            if (eventType === 'finish') {
+                const finishReason = event.finishReason || 'stop';
+                const usage = event.usage || {};
+                
+                // 更新 usage 信息
+                if (usage.inputTokens !== undefined) {
+                    state.usage.input_tokens = usage.inputTokens;
+                }
+                if (usage.outputTokens !== undefined) {
+                    state.usage.output_tokens = usage.outputTokens;
+                }
+                if (usage.cachedInputTokens !== undefined) {
+                    state.usage.cache_read_input_tokens = usage.cachedInputTokens;
+                }
+                
+                // 设置 finish reason
+                if (finishReason === 'tool-calls') {
+                    state.finishReason = 'tool_use';
+                } else if (finishReason === 'stop') {
+                    state.finishReason = 'end_turn';
+                } else {
+                    state.finishReason = finishReason;
+                }
+                
+                console.log(`[Orchids] Model finish: reason=${finishReason}, usage=${JSON.stringify(usage)}`);
+                return null;
+            }
+            
+            // --------------------------------------------------------------------
+            // 处理 stream-start 事件
+            // --------------------------------------------------------------------
+            if (eventType === 'stream-start') {
+                // 流开始，不需要特殊处理
                 return null;
             }
             
             return null;
         }
         
-        if (msgType === 'coding_agent.response.chunk') {
-            const text = orchidsMessage.data?.text || '';
+        // ========================================================================
+        // 处理 coding_agent.Edit 事件（文件编辑工具调用）
+        // ========================================================================
+        if (msgType === 'coding_agent.Edit.edit.started') {
+            const filePath = orchidsMessage.data?.file_path || '';
+            const toolCallId = `toolu_edit_${uuidv4().replace(/-/g, '').substring(0, 8)}`;
             
-            if (!state.responseStarted) {
-                state.responseStarted = true;
-                state.currentBlockIndex = state.reasoningStarted ? 1 : 0;
+            // 关闭之前的文本块（如果有）
+            if (state.responseStarted && !state.textBlockClosed) {
                 events.push({
-                    type: 'content_block_start',
+                    type: 'content_block_stop',
                     index: state.currentBlockIndex,
-                    content_block: {
-                        type: 'text',
-                        text: '',
-                    },
                 });
+                state.textBlockClosed = true;
             }
             
+            // 确定工具调用的索引
+            let toolIndex = 0;
+            if (state.reasoningStarted) {
+                toolIndex = 1;
+            }
+            if (state.responseStarted) {
+                toolIndex = state.currentBlockIndex + 1;
+            }
+            if (state.toolUseIndex > 1) {
+                toolIndex = state.toolUseIndex;
+            }
+            
+            state.currentEditToolIndex = toolIndex;
+            state.currentEditToolId = toolCallId;
+            state.currentEditFilePath = filePath;
+            state.currentEditOldString = '';
+            state.currentEditNewString = '';
+            state.toolUseIndex = toolIndex + 1;
+            
+            console.log(`[Orchids] Edit started: ${filePath} (${toolCallId})`);
+            
+            // 记录到 pendingTools
+            state.pendingTools[toolCallId] = {
+                id: toolCallId,
+                name: 'Edit',
+                input: { file_path: filePath },
+            };
+            
             events.push({
-                type: 'content_block_delta',
-                index: state.currentBlockIndex,
-                delta: {
-                    type: 'text_delta',
-                    text: text,
+                type: 'content_block_start',
+                index: toolIndex,
+                content_block: {
+                    type: 'tool_use',
+                    id: toolCallId,
+                    name: 'Edit',
+                    input: { file_path: filePath },
                 },
             });
             
             return events.length > 0 ? events : null;
+        }
+        
+        if (msgType === 'coding_agent.Edit.edit.chunk') {
+            // 编辑内容的增量更新
+            const text = orchidsMessage.data?.text || '';
+            if (text && state.currentEditToolId) {
+                state.currentEditNewString += text;
+            }
+            return null;
+        }
+        
+        if (msgType === 'coding_agent.Edit.edit.completed') {
+            // 编辑完成，但不关闭工具调用块，等待 edit_file.completed
+            return null;
+        }
+        
+        if (msgType === 'coding_agent.edit_file.started') {
+            // 文件编辑开始，可能是新的编辑或继续之前的编辑
+            const filePath = orchidsMessage.data?.file_path || '';
+            if (!state.currentEditToolId) {
+                // 如果没有当前编辑工具，创建一个新的
+                const toolCallId = `toolu_edit_${uuidv4().replace(/-/g, '').substring(0, 8)}`;
+                
+                // 关闭之前的文本块（如果有）
+                if (state.responseStarted && !state.textBlockClosed) {
+                    events.push({
+                        type: 'content_block_stop',
+                        index: state.currentBlockIndex,
+                    });
+                    state.textBlockClosed = true;
+                }
+                
+                // 确定工具调用的索引
+                let toolIndex = 0;
+                if (state.reasoningStarted) {
+                    toolIndex = 1;
+                }
+                if (state.responseStarted) {
+                    toolIndex = state.currentBlockIndex + 1;
+                }
+                if (state.toolUseIndex > 1) {
+                    toolIndex = state.toolUseIndex;
+                }
+                
+                state.currentEditToolIndex = toolIndex;
+                state.currentEditToolId = toolCallId;
+                state.currentEditFilePath = filePath;
+                state.toolUseIndex = toolIndex + 1;
+                
+                state.pendingTools[toolCallId] = {
+                    id: toolCallId,
+                    name: 'Edit',
+                    input: { file_path: filePath },
+                };
+                
+                events.push({
+                    type: 'content_block_start',
+                    index: toolIndex,
+                    content_block: {
+                        type: 'tool_use',
+                        id: toolCallId,
+                        name: 'Edit',
+                        input: { file_path: filePath },
+                    },
+                });
+            }
+            return events.length > 0 ? events : null;
+        }
+        
+        if (msgType === 'coding_agent.edit_file.chunk') {
+            // 文件内容块，通常包含完整的新文件内容
+            return null;
+        }
+        
+        if (msgType === 'coding_agent.edit_file.completed') {
+            const data = orchidsMessage.data || {};
+            const filePath = data.file_path || state.currentEditFilePath || '';
+            const oldCode = data.old_code || '';
+            const newCode = data.new_code || '';
+            const oldString = data.old_string || state.currentEditOldString || '';
+            const newString = data.new_string || state.currentEditNewString || '';
+            
+            if (state.currentEditToolId) {
+                // 更新工具输入参数
+                const toolInput = {
+                    file_path: filePath,
+                    old_string: oldString || oldCode?.substring(0, 100) || '',
+                    new_string: newString || newCode?.substring(0, 100) || '',
+                };
+                
+                if (state.pendingTools[state.currentEditToolId]) {
+                    state.pendingTools[state.currentEditToolId].input = toolInput;
+                }
+                
+                // 发送工具参数增量
+                events.push({
+                    type: 'content_block_delta',
+                    index: state.currentEditToolIndex,
+                    delta: {
+                        type: 'input_json_delta',
+                        partial_json: JSON.stringify(toolInput),
+                    },
+                });
+                
+                // 关闭工具调用块
+                events.push({
+                    type: 'content_block_stop',
+                    index: state.currentEditToolIndex,
+                });
+                
+                console.log(`[Orchids] Edit completed: ${filePath}`);
+                
+                // 重置编辑状态
+                state.currentEditToolId = null;
+                state.currentEditToolIndex = undefined;
+                state.currentEditFilePath = '';
+                state.currentEditOldString = '';
+                state.currentEditNewString = '';
+            }
+            
+            return events.length > 0 ? events : null;
+        }
+        
+        // ========================================================================
+        // 处理 coding_agent.todo_write 事件（待办列表工具调用）
+        // ========================================================================
+        if (msgType === 'coding_agent.todo_write.started') {
+            const todos = orchidsMessage.data?.todos || [];
+            const toolCallId = `toolu_todo_${uuidv4().replace(/-/g, '').substring(0, 8)}`;
+            
+            // 关闭之前的文本块（如果有）
+            if (state.responseStarted && !state.textBlockClosed) {
+                events.push({
+                    type: 'content_block_stop',
+                    index: state.currentBlockIndex,
+                });
+                state.textBlockClosed = true;
+            }
+            
+            // 确定工具调用的索引
+            let toolIndex = 0;
+            if (state.reasoningStarted) {
+                toolIndex = 1;
+            }
+            if (state.responseStarted) {
+                toolIndex = state.currentBlockIndex + 1;
+            }
+            if (state.toolUseIndex > 1) {
+                toolIndex = state.toolUseIndex;
+            }
+            state.toolUseIndex = toolIndex + 1;
+            
+            state.pendingTools[toolCallId] = {
+                id: toolCallId,
+                name: 'TodoWrite',
+                input: { todos },
+            };
+            
+            events.push({
+                type: 'content_block_start',
+                index: toolIndex,
+                content_block: {
+                    type: 'tool_use',
+                    id: toolCallId,
+                    name: 'TodoWrite',
+                    input: { todos },
+                },
+            });
+            
+            events.push({
+                type: 'content_block_delta',
+                index: toolIndex,
+                delta: {
+                    type: 'input_json_delta',
+                    partial_json: JSON.stringify({ todos }),
+                },
+            });
+            
+            events.push({
+                type: 'content_block_stop',
+                index: toolIndex,
+            });
+            
+            return events.length > 0 ? events : null;
+        }
+        
+        if (msgType === 'coding_agent.todo_write.completed') {
+            // 待办列表写入完成，不需要额外处理
+            return null;
+        }
+        
+        // ========================================================================
+        // 忽略 coding_agent.response.chunk 事件（使用 model.text-delta 代替）
+        // 这两种事件包含相同的内容，为避免重复处理导致叠字
+        // ========================================================================
+        if (msgType === 'coding_agent.response.chunk') {
+            return null;
+        }
+        
+        // ========================================================================
+        // 忽略 output_text_delta 事件（使用 model.text-delta 代替）
+        // 这两种事件包含相同的内容，为避免重复处理导致叠字
+        // ========================================================================
+        if (msgType === 'output_text_delta') {
+            return null;
+        }
+        
+        // ========================================================================
+        // 处理 run_item_stream_event 事件（工具调用项）
+        // ========================================================================
+        if (msgType === 'run_item_stream_event') {
+            const item = orchidsMessage.item || {};
+            if (item.type === 'tool_call_item') {
+                const rawItem = item.rawItem || {};
+                if (rawItem.type === 'function_call' && rawItem.status === 'completed') {
+                    // 这是一个已完成的工具调用，通常在 response_done 之后
+                    // 不需要额外处理，因为我们已经在 response_done 中处理了
+                    console.log(`[Orchids] Tool call item: ${rawItem.name} (${rawItem.callId})`);
+                }
+            }
+            return null;
+        }
+        
+        // ========================================================================
+        // 处理 tool_call_output_item 事件（工具调用结果）
+        // ========================================================================
+        if (msgType === 'tool_call_output_item') {
+            const rawItem = orchidsMessage.rawItem || {};
+            if (rawItem.type === 'function_call_result') {
+                const toolName = rawItem.name || 'unknown';
+                const callId = rawItem.callId || '';
+                const output = rawItem.output?.text || orchidsMessage.output || '';
+                console.log(`[Orchids] Tool result: ${toolName} (${callId}) -> ${output.substring(0, 100)}...`);
+            }
+            return null;
         }
         
         return null;
@@ -667,12 +1139,28 @@ Today's date: ${dateStr}
         // 状态跟踪
         const state = {
             reasoningStarted: false,
+            reasoningEnded: false,
             responseStarted: false,
+            textBlockClosed: false,
             currentBlockIndex: -1,
             toolUseIndex: 1,
             pendingTools: {},
             inEditMode: false,
             responseDoneReceived: false,
+            accumulatedText: '', // 累积文本用于解析 XML 工具调用
+            // 当前工具调用状态（model.tool-input-* 事件）
+            currentToolId: null,
+            currentToolName: null,
+            currentToolInput: '',
+            currentToolIndex: undefined,
+            // 当前编辑工具状态（coding_agent.Edit.* 事件）
+            currentEditToolId: null,
+            currentEditToolIndex: undefined,
+            currentEditFilePath: '',
+            currentEditOldString: '',
+            currentEditNewString: '',
+            // finish 信息
+            finishReason: null,
             usage: {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -827,16 +1315,27 @@ Today's date: ${dateStr}
                 }
                 
                 // 处理文件操作
+                // 参考 simple_api.py：收到 fs_operation 后需要返回 fs_operation_response，否则 Orchids 会一直等待
                 if (msgType === 'fs_operation') {
                     const opId = message.id;
                     const opType = message.operation || '';
                     
-                    console.log(`[Orchids FS] Forwarding to client: ${opType}: ${message.path || message.command || ''}`);
+                    console.log(`[Orchids FS] Received: ${opType}: ${message.path || message.command || ''}`);
                     
+                    // 发送 fs_operation_response 让 Orchids 继续
+                    // 对于所有操作类型，都返回空响应，让客户端处理实际的工具调用
+                    const fsResponse = this._createFsOperationResponse(opId, true, null);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify(fsResponse));
+                        console.log(`[Orchids FS] Responded: ${opId}`);
+                    }
+                    
+                    // edit 操作不转发给客户端（Orchids 内部操作）
                     if (opType === 'edit') {
                         continue;
                     }
                     
+                    // 将文件操作转换为 tool_use 事件转发给客户端
                     state.pendingTools[opId] = message;
                     
                     if (!state.reasoningStarted && state.toolUseIndex === 1) {
@@ -885,19 +1384,96 @@ Today's date: ${dateStr}
                             }
                             console.log(`[Orchids] Response usage: input=${state.usage.input_tokens}, output=${state.usage.output_tokens}, cached=${state.usage.cache_read_input_tokens}`);
                         }
+                        
+                        // 处理 response_done 中的 function_call 输出（原生工具调用）
+                        const outputs = message.response?.output || [];
+                        for (const output of outputs) {
+                            if (output.type === 'function_call' && output.status === 'completed') {
+                                const toolCallId = output.callId || `toolu_${uuidv4().replace(/-/g, '').substring(0, 12)}`;
+                                const toolName = output.name || 'unknown';
+                                let toolInput = {};
+                                
+                                try {
+                                    toolInput = JSON.parse(output.arguments || '{}');
+                                } catch (e) {
+                                    console.warn(`[Orchids] Failed to parse function_call arguments: ${e.message}`);
+                                }
+                                
+                                // 如果这个工具调用还没有被处理过（通过 tool-input-* 事件）
+                                if (!state.pendingTools[toolCallId]) {
+                                    console.log(`[Orchids] Processing function_call from response_done: ${toolName} (${toolCallId})`);
+                                    
+                                    // 关闭之前的文本块（如果有且未关闭）
+                                    if (state.responseStarted && !state.textBlockClosed) {
+                                        yield {
+                                            type: 'content_block_stop',
+                                            index: state.currentBlockIndex,
+                                        };
+                                        state.textBlockClosed = true;
+                                    }
+                                    
+                                    // 确定工具调用的索引
+                                    let toolIndex = 0;
+                                    if (state.reasoningStarted) {
+                                        toolIndex = 1;
+                                    }
+                                    if (state.responseStarted) {
+                                        toolIndex = state.currentBlockIndex + 1;
+                                    }
+                                    if (state.toolUseIndex > 1) {
+                                        toolIndex = state.toolUseIndex;
+                                    }
+                                    state.toolUseIndex = toolIndex + 1;
+                                    
+                                    // 记录到 pendingTools
+                                    state.pendingTools[toolCallId] = {
+                                        id: toolCallId,
+                                        name: toolName,
+                                        input: toolInput,
+                                    };
+                                    
+                                    // 生成 tool_use 事件
+                                    yield {
+                                        type: 'content_block_start',
+                                        index: toolIndex,
+                                        content_block: {
+                                            type: 'tool_use',
+                                            id: toolCallId,
+                                            name: toolName,
+                                            input: toolInput,
+                                        },
+                                    };
+                                    
+                                    // 发送完整的 JSON 参数
+                                    yield {
+                                        type: 'content_block_delta',
+                                        index: toolIndex,
+                                        delta: {
+                                            type: 'input_json_delta',
+                                            partial_json: JSON.stringify(toolInput),
+                                        },
+                                    };
+                                    
+                                    // 关闭工具调用块
+                                    yield { type: 'content_block_stop', index: toolIndex };
+                                }
+                            }
+                        }
                     }
                     
-                    // 确定 stop_reason
-                    const hasToolUse = Object.keys(state.pendingTools).length > 0;
-                    const stopReason = hasToolUse ? 'tool_use' : 'end_turn';
-                    
-                    // 关闭当前内容块（如果有）
-                    if (state.responseStarted) {
+                    // 关闭当前文本内容块（如果有且未关闭）
+                    if (state.responseStarted && !state.textBlockClosed) {
                         yield {
                             type: 'content_block_stop',
                             index: state.currentBlockIndex,
                         };
+                        state.textBlockClosed = true;
                     }
+                    
+                    // 确定 stop_reason
+                    const hasToolUse = Object.keys(state.pendingTools).length > 0;
+                    // 优先使用 model.finish 事件中的 finishReason
+                    const stopReason = state.finishReason || (hasToolUse ? 'tool_use' : 'end_turn');
                     
                     // 发送 message_delta
                     yield {
