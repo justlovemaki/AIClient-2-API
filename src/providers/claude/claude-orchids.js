@@ -5,6 +5,7 @@ import WebSocket from 'ws';
 import axios from 'axios';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
+import { acquireFileLock } from '../../utils/file-lock.js';
 
 // ============================================================================
 // 常量定义
@@ -263,6 +264,8 @@ export class OrchidsApiService {
     }
 
     async _updateCredentialsFile() {
+        // 获取文件锁，防止并发写入
+        const releaseLock = await acquireFileLock(this.credPath);
         try {
             const fileContent = await fs.readFile(this.credPath, 'utf8');
             const credentials = JSON.parse(fileContent);
@@ -271,6 +274,9 @@ export class OrchidsApiService {
             console.debug('[Orchids Auth] Updated credentials file with new expiry');
         } catch (error) {
             console.warn(`[Orchids Auth] Failed to update credentials file: ${error.message}`);
+        } finally {
+            // 确保锁被释放
+            releaseLock();
         }
     }
 

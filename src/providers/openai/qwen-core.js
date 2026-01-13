@@ -12,6 +12,7 @@ import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../../auth/oauth-handlers.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError } from '../../utils/common.js';
+import { acquireFileLock } from '../../utils/file-lock.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
@@ -388,9 +389,18 @@ export class QwenApiService {
 
     async _cacheQwenCredentials(credentials) {
         const filePath = this._getQwenCachedCredentialPath();
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        const credString = JSON.stringify(credentials, null, 2);
-        await fs.writeFile(filePath, credString);
+        // 获取文件锁，防止并发写入
+        const releaseLock = await acquireFileLock(filePath);
+        try {
+            await fs.mkdir(path.dirname(filePath), { recursive: true });
+            const credString = JSON.stringify(credentials, null, 2);
+            await fs.writeFile(filePath, credString);
+            console.log(`[Qwen Auth] Credentials cached to ${filePath}`);
+        } catch (error) {
+            console.error(`[Qwen Auth] Failed to cache credentials to ${filePath}: ${error.message}`);
+        } finally {
+            releaseLock();
+        }
     }
     
     getCurrentEndpoint(resourceUrl) {
@@ -841,10 +851,17 @@ class SharedTokenManager {
     }
     
     async saveCredentialsToFile(context, credentials) {
-        await fs.mkdir(path.dirname(context.credentialFilePath), { recursive: true, mode: 0o700 });
-        await fs.writeFile(context.credentialFilePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
-        const stats = await fs.stat(context.credentialFilePath);
-        context.memoryCache.fileModTime = stats.mtimeMs;
+        // 获取文件锁，防止并发写入
+        const releaseLock = await acquireFileLock(context.credentialFilePath);
+        try {
+            await fs.mkdir(path.dirname(context.credentialFilePath), { recursive: true, mode: 0o700 });
+            await fs.writeFile(context.credentialFilePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+            const stats = await fs.stat(context.credentialFilePath);
+            context.memoryCache.fileModTime = stats.mtimeMs;
+        } finally {
+            // 确保锁被释放
+            releaseLock();
+        }
     }
 
     isTokenValid(credentials) {
