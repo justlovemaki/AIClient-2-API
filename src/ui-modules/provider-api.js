@@ -521,7 +521,18 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
                         message: 'Healthy'
                     });
                 } else {
-                    providerPoolManager.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
+                    // 检查是否为认证错误（401/403），如果是则立即标记为不健康
+                    const errorMessage = healthResult.errorMessage || 'Check failed';
+                    const isAuthError = /\b(401|403)\b/.test(errorMessage) ||
+                                       /\b(Unauthorized|Forbidden|AccessDenied|InvalidToken|ExpiredToken)\b/i.test(errorMessage);
+                    
+                    if (isAuthError) {
+                        providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
+                        console.log(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+                    } else {
+                        providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
+                    }
+                    
                     providerStatus.config.lastHealthCheckTime = new Date().toISOString();
                     if (healthResult.modelName) {
                         providerStatus.config.lastHealthCheckModel = healthResult.modelName;
@@ -530,15 +541,28 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
                         uuid: providerConfig.uuid,
                         success: false,
                         modelName: healthResult.modelName,
-                        message: healthResult.errorMessage || 'Check failed'
+                        message: errorMessage,
+                        isAuthError: isAuthError
                     });
                 }
             } catch (error) {
-                providerPoolManager.markProviderUnhealthy(providerType, providerConfig, error.message);
+                const errorMessage = error.message || 'Unknown error';
+                // 检查是否为认证错误（401/403），如果是则立即标记为不健康
+                const isAuthError = /\b(401|403)\b/.test(errorMessage) ||
+                                   /\b(Unauthorized|Forbidden|AccessDenied|InvalidToken|ExpiredToken)\b/i.test(errorMessage);
+                
+                if (isAuthError) {
+                    providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
+                    console.log(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+                } else {
+                    providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
+                }
+                
                 results.push({
                     uuid: providerConfig.uuid,
                     success: false,
-                    message: error.message
+                    message: errorMessage,
+                    isAuthError: isAuthError
                 });
             }
         }
