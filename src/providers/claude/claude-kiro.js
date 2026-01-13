@@ -748,68 +748,31 @@ async initializeAuth(forceRefresh = false) {
                 console.log('[Kiro] All tools were filtered out');
             } else {
             const MAX_DESCRIPTION_LENGTH = 9216;
-            const TARGET_TOTAL_SIZE = 200000;
 
-            const simplifySchema = (schema) => {
-                if (!schema || typeof schema !== 'object') return { type: 'object' };
-                const result = { type: schema.type || 'object' };
-                if (schema.properties && typeof schema.properties === 'object') {
-                    result.properties = {};
-                    for (const [key, value] of Object.entries(schema.properties)) {
-                        result.properties[key] = { type: value.type || 'string' };
-                        if (value.enum) result.properties[key].enum = value.enum;
-                    }
+            let truncatedCount = 0;
+            const kiroTools = filteredTools.map(tool => {
+                let desc = tool.description || "";
+                const originalLength = desc.length;
+                
+                if (desc.length > MAX_DESCRIPTION_LENGTH) {
+                    desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
+                    truncatedCount++;
+                    console.log(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
                 }
-                if (schema.required && Array.isArray(schema.required) && schema.required.length > 0) {
-                    result.required = schema.required;
-                }
-                return result;
-            };
-
-            const buildToolsWithPerToolTruncation = (useSimplifiedSchema) => {
-                let truncatedCount = 0;
-                const tools = filteredTools.map(tool => {
-                    let desc = tool.description || "";
-                    const originalLength = desc.length;
-                    
-                    if (desc.length > MAX_DESCRIPTION_LENGTH) {
-                        desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
-                        truncatedCount++;
-                        console.log(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
-                    }
-                    
-                    return {
-                        toolSpecification: {
-                            name: tool.name,
-                            description: desc,
-                            inputSchema: {
-                                json: useSimplifiedSchema
-                                    ? simplifySchema(tool.input_schema)
-                                    : (tool.input_schema || {})
-                            }
+                
+                return {
+                    toolSpecification: {
+                        name: tool.name,
+                        description: desc,
+                        inputSchema: {
+                            json: tool.input_schema || {}
                         }
-                    };
-                });
-                
-                if (truncatedCount > 0) {
-                    console.log(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
-                }
-                
-                return tools;
-            };
-
-            // 先尝试原始大小
-            let kiroTools = buildToolsWithPerToolTruncation(false);
-            let size = JSON.stringify(kiroTools).length;
-            const originalSize = size;
-
-            // 超过限制则压缩
-            if (size > TARGET_TOTAL_SIZE) {
-                console.log(`[Kiro] Total tools size ${size} exceeds target ${TARGET_TOTAL_SIZE}, simplifying schemas...`);
-                // 简化 schema
-                kiroTools = buildToolsWithPerToolTruncation(true);
-                size = JSON.stringify(kiroTools).length;
-                console.log(`[Kiro] Tools compressed: ${originalSize} -> ${size} bytes (${filteredTools.length} tools)`);
+                    }
+                };
+            });
+            
+            if (truncatedCount > 0) {
+                console.log(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
             }
 
             toolsContext = { tools: kiroTools };
