@@ -1604,6 +1604,14 @@ async initializeAuth(forceRefresh = false) {
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
 
+        if (!requestBody.thinking || requestBody.thinking.type !== 'enabled') {
+            requestBody.thinking = {
+                type: 'enabled',
+                budget_tokens: KIRO_THINKING.DEFAULT_BUDGET_TOKENS
+            };
+            console.log('[Kiro] Force-enabled thinking for consistent behavior');
+        }
+
         let inputTokens = 0;
         let contextUsagePercentage = null;
         const messageId = `${uuidv4()}`;
