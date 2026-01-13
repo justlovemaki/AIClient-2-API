@@ -93,6 +93,40 @@
     overflow-y: auto;
 }
 
+/* 无配置文件提示样式 */
+.no-configs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-radius: 0.5rem;
+    margin: 1rem;
+}
+
+.no-configs p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: 1rem 2rem;
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    border-radius: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.no-configs p::before {
+    content: '\f07c';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 400;
+    font-size: 1.25rem;
+    color: var(--text-tertiary);
+}
+
 .config-item-manager {
     padding: 1.5rem;
     border-bottom: 1px solid var(--border-color);
@@ -394,6 +428,96 @@
     .delete-modal-content { width: 95%; max-height: 90vh; }
     .config-info-item { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
     .delete-modal-footer { flex-direction: column; }
+}
+
+/* 删除未绑定按钮样式 */
+.btn-delete-unbound {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px var(--danger-30);
+    font-weight: 500;
+}
+
+.btn-delete-unbound:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+}
+
+.btn-delete-unbound:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 配置列表头部的刷新按钮样式 */
+.btn-refresh {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    font-weight: 500;
+}
+
+.btn-refresh:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.btn-refresh:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 配置列表头部的打包下载按钮样式 */
+.btn-download {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    font-weight: 500;
+}
+
+.btn-download:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+.btn-download:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* 暗黑主题适配 */

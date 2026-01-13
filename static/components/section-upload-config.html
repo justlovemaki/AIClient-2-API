@@ -1,7 +1,7 @@
 <link rel="stylesheet" href="components/section-upload-config.css">
 <!-- Upload Configuration Section -->
 <section id="upload-config" class="section" aria-labelledby="upload-config-title">
-    <h2 id="upload-config-title" data-i18n="upload.title">配置管理</h2>
+    <h2 id="upload-config-title" data-i18n="upload.title">凭据文件管理</h2>
     <div class="upload-config-panel">
         <!-- 搜索和过滤区域 -->
         <div class="config-search-panel">
@@ -16,23 +16,24 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label for="configProviderFilter" data-i18n="upload.providerFilter">提供商类型</label>
+                    <select id="configProviderFilter" class="form-control">
+                        <option value="" data-i18n="upload.providerFilter.all">全部提供商</option>
+                        <option value="claude-kiro-oauth" data-i18n="upload.providerFilter.kiro">Kiro OAuth</option>
+                        <option value="gemini-cli-oauth" data-i18n="upload.providerFilter.gemini">Gemini OAuth</option>
+                        <option value="openai-qwen-oauth" data-i18n="upload.providerFilter.qwen">Qwen OAuth</option>
+                        <option value="gemini-antigravity" data-i18n="upload.providerFilter.antigravity">Antigravity</option>
+                        <option value="claude-orchids-oauth" data-i18n="upload.providerFilter.orchids">Orchids OAuth</option>
+                        <option value="other" data-i18n="upload.providerFilter.other">其他/未识别</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="configStatusFilter" data-i18n="upload.statusFilter">关联状态</label>
                     <select id="configStatusFilter" class="form-control">
                         <option value="" data-i18n="upload.statusFilter.all">全部状态</option>
                         <option value="used" data-i18n="upload.statusFilter.used">已关联</option>
                         <option value="unused" data-i18n="upload.statusFilter.unused">未关联</option>
                     </select>
-                </div>
-                <div class="form-group">
-                    <label>&nbsp;</label>
-                    <div class="config-actions">
-                        <button class="btn btn-outline" id="refreshConfigList" aria-label="Refresh Config List" data-i18n-aria-label="upload.refresh">
-                            <i class="fas fa-sync-alt"></i> <span data-i18n="upload.refresh">刷新</span>
-                        </button>
-                        <button class="btn btn-outline" id="downloadAllConfigs" aria-label="Download All Configs" data-i18n-aria-label="upload.downloadAll">
-                            <i class="fas fa-file-archive"></i> <span data-i18n="upload.downloadAll">打包下载</span>
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -47,6 +48,15 @@
                     <span id="unusedConfigCount" class="status-unused" data-i18n="upload.unusedCount" data-i18n-params='{"count":"0"}'>未关联: 0</span>
                     <button id="batchLinkKiroBtn" class="btn-batch-link" data-i18n-title="upload.batchLink" title="批量关联 configs/ 下的未关联配置">
                         <i class="fas fa-link"></i> <span data-i18n="upload.batchLink">自动关联oauth</span>
+                    </button>
+                    <button id="deleteUnboundBtn" class="btn-delete-unbound" data-i18n-title="upload.deleteUnbound" title="删除所有未关联的配置文件">
+                        <i class="fas fa-trash-alt"></i> <span data-i18n="upload.deleteUnbound">删除未关联</span>
+                    </button>
+                    <button class="btn-refresh" id="refreshConfigList" aria-label="Refresh Config List" data-i18n-aria-label="upload.refresh">
+                        <i class="fas fa-sync-alt"></i> <span data-i18n="upload.refresh">刷新</span>
+                    </button>
+                    <button class="btn-download" id="downloadAllConfigs" aria-label="Download All Configs" data-i18n-aria-label="upload.downloadAll">
+                        <i class="fas fa-file-archive"></i> <span data-i18n="upload.downloadAll">打包下载</span>
                     </button>
                 </div>
             </div>
