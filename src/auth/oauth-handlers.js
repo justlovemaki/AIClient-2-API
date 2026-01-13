@@ -665,7 +665,7 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
 export async function handleKiroOAuth(currentConfig, options = {}) {
-    const method = options.method || 'google';  // 默认使用 Google
+    const method = options.method || options.authMethod || 'google';  // 默认使用 Google，同时支持 authMethod 参数
     
     console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Starting OAuth with method: ${method}`);
     
@@ -740,6 +740,10 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
         }
     }
 
+    // 获取 Builder ID Start URL（优先使用前端传入的值，否则使用默认值）
+    const builderIDStartURL = options.builderIDStartURL || KIRO_OAUTH_CONFIG.builderIDStartURL;
+    console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Using Builder ID Start URL: ${builderIDStartURL}`);
+
     // 1. 注册 OIDC 客户端
     const regResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/client/register`, {
         method: 'POST',
@@ -771,7 +775,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
         body: JSON.stringify({
             clientId: regData.clientId,
             clientSecret: regData.clientSecret,
-            startUrl: KIRO_OAUTH_CONFIG.builderIDStartURL
+            startUrl: builderIDStartURL
         })
     }, 'claude-kiro-oauth');
     

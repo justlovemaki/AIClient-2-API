@@ -137,7 +137,57 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await providerApi.handleAddProvider(req, res, currentConfig, providerPoolManager);
     }
 
+    // Reset all providers health status for a specific provider type
+    // NOTE: This must be before the generic /{providerType}/{uuid} route to avoid matching 'reset-health' as UUID
+    const resetHealthMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/reset-health$/);
+    if (method === 'POST' && resetHealthMatch) {
+        const providerType = decodeURIComponent(resetHealthMatch[1]);
+        return await providerApi.handleResetProviderHealth(req, res, currentConfig, providerPoolManager, providerType);
+    }
+
+    // Perform health check for all providers of a specific type
+    // NOTE: This must be before the generic /{providerType}/{uuid} route to avoid matching 'health-check' as UUID
+    const healthCheckMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/health-check$/);
+    if (method === 'POST' && healthCheckMatch) {
+        const providerType = decodeURIComponent(healthCheckMatch[1]);
+        return await providerApi.handleHealthCheck(req, res, currentConfig, providerPoolManager, providerType);
+    }
+
+    // Delete all unhealthy providers for a specific type
+    // NOTE: This must be before the generic /{providerType}/{uuid} route to avoid matching 'delete-unhealthy' as UUID
+    const deleteUnhealthyMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/delete-unhealthy$/);
+    if (method === 'DELETE' && deleteUnhealthyMatch) {
+        const providerType = decodeURIComponent(deleteUnhealthyMatch[1]);
+        return await providerApi.handleDeleteUnhealthyProviders(req, res, currentConfig, providerPoolManager, providerType);
+    }
+
+    // Refresh UUIDs for all unhealthy providers of a specific type
+    // NOTE: This must be before the generic /{providerType}/{uuid} route to avoid matching 'refresh-unhealthy-uuids' as UUID
+    const refreshUnhealthyUuidsMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/refresh-unhealthy-uuids$/);
+    if (method === 'POST' && refreshUnhealthyUuidsMatch) {
+        const providerType = decodeURIComponent(refreshUnhealthyUuidsMatch[1]);
+        return await providerApi.handleRefreshUnhealthyUuids(req, res, currentConfig, providerPoolManager, providerType);
+    }
+
+    // Disable/Enable specific provider configuration
+    const disableEnableProviderMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/(disable|enable)$/);
+    if (disableEnableProviderMatch) {
+        const providerType = decodeURIComponent(disableEnableProviderMatch[1]);
+        const providerUuid = disableEnableProviderMatch[2];
+        const action = disableEnableProviderMatch[3];
+        return await providerApi.handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action);
+    }
+
+    // Refresh UUID for specific provider configuration
+    const refreshUuidMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/refresh-uuid$/);
+    if (method === 'POST' && refreshUuidMatch) {
+        const providerType = decodeURIComponent(refreshUuidMatch[1]);
+        const providerUuid = refreshUuidMatch[2];
+        return await providerApi.handleRefreshProviderUuid(req, res, currentConfig, providerPoolManager, providerType, providerUuid);
+    }
+
     // Update specific provider configuration
+    // NOTE: This generic route must be after all specific routes like /reset-health, /health-check, /delete-unhealthy
     const updateProviderMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)$/);
     if (method === 'PUT' && updateProviderMatch) {
         const providerType = decodeURIComponent(updateProviderMatch[1]);
@@ -150,29 +200,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const providerType = decodeURIComponent(updateProviderMatch[1]);
         const providerUuid = updateProviderMatch[2];
         return await providerApi.handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid);
-    }
-
-    // Disable/Enable specific provider configuration
-    const disableEnableProviderMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/(disable|enable)$/);
-    if (disableEnableProviderMatch) {
-        const providerType = decodeURIComponent(disableEnableProviderMatch[1]);
-        const providerUuid = disableEnableProviderMatch[2];
-        const action = disableEnableProviderMatch[3];
-        return await providerApi.handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action);
-    }
-
-    // Reset all providers health status for a specific provider type
-    const resetHealthMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/reset-health$/);
-    if (method === 'POST' && resetHealthMatch) {
-        const providerType = decodeURIComponent(resetHealthMatch[1]);
-        return await providerApi.handleResetProviderHealth(req, res, currentConfig, providerPoolManager, providerType);
-    }
-
-    // Perform health check for all providers of a specific type
-    const healthCheckMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/health-check$/);
-    if (method === 'POST' && healthCheckMatch) {
-        const providerType = decodeURIComponent(healthCheckMatch[1]);
-        return await providerApi.handleHealthCheck(req, res, currentConfig, providerPoolManager, providerType);
     }
 
     // Generate OAuth authorization URL for providers
@@ -214,6 +241,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Download all configs as zip
     if (method === 'GET' && pathParam === '/api/upload-configs/download-all') {
         return await uploadConfigApi.handleDownloadAllConfigs(req, res);
+    }
+
+    // Delete all unbound config files
+    if (method === 'DELETE' && pathParam === '/api/upload-configs/delete-unbound') {
+        return await uploadConfigApi.handleDeleteUnboundConfigs(req, res, currentConfig, providerPoolManager);
     }
 
     // Quick link config to corresponding provider based on directory
