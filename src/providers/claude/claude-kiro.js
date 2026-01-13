@@ -9,7 +9,8 @@ import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
 
 const KIRO_THINKING = {
     MAX_BUDGET_TOKENS: 24576,
@@ -1212,15 +1213,26 @@ async initializeAuth(forceRefresh = false) {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            if (status === 403 && !isRetry) {
-                console.log('[Kiro] Received 403. Attempting token refresh and retrying...');
+            // Handle 401 (Unauthorized) - try to refresh token first
+            if (status === 401 && !isRetry) {
+                console.log('[Kiro] Received 401. Attempting token refresh...');
                 try {
                     await this.initializeAuth(true); // Force refresh token
+                    console.log('[Kiro] Token refresh successful after 401, retrying request...');
                     return this.callApi(method, model, body, true, retryCount);
                 } catch (refreshError) {
-                    console.error('[Kiro] Token refresh failed during 403 retry:', refreshError.message);
+                    console.error('[Kiro] Token refresh failed during 401 retry:', refreshError.message);
+                    // Mark credential as unhealthy immediately and attach marker to error
+                    this._markCredentialUnhealthy('401 Unauthorized - Token refresh failed', refreshError);
                     throw refreshError;
                 }
+            }
+    
+            // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
+            if (status === 403) {
+                console.log('[Kiro] Received 403. Marking credential as unhealthy...');
+                this._markCredentialUnhealthy('403 Forbidden', error);
+                throw error;
             }
             
             // Handle 429 (Too Many Requests) with exponential backoff
@@ -1250,6 +1262,31 @@ async initializeAuth(forceRefresh = false) {
 
             console.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
+        }
+    }
+
+    /**
+     * Helper method to mark the current credential as unhealthy
+     * @param {string} reason - The reason for marking unhealthy
+     * @param {Error} [error] - Optional error object to attach the marker to
+     * @returns {boolean} - Whether the credential was successfully marked as unhealthy
+     * @private
+     */
+    _markCredentialUnhealthy(reason, error = null) {
+        const poolManager = getProviderPoolManager();
+        if (poolManager && this.uuid) {
+            console.log(`[Kiro] Marking credential ${this.uuid} as unhealthy. Reason: ${reason}`);
+            poolManager.markProviderUnhealthyImmediately(MODEL_PROVIDER.KIRO_API, {
+                uuid: this.uuid
+            }, reason);
+            // Attach marker to error object to prevent duplicate marking in upper layers
+            if (error) {
+                error.credentialMarkedUnhealthy = true;
+            }
+            return true;
+        } else {
+            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            return false;
         }
     }
 
@@ -1537,11 +1574,27 @@ async initializeAuth(forceRefresh = false) {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            if (status === 403 && !isRetry) {
-                console.log('[Kiro] Received 403 in stream. Attempting token refresh and retrying...');
-                await this.initializeAuth(true);
-                yield* this.streamApiReal(method, model, body, true, retryCount);
-                return;
+            // Handle 401 (Unauthorized) - try to refresh token first
+            if (status === 401 && !isRetry) {
+                console.log('[Kiro] Received 401 in stream. Attempting token refresh...');
+                try {
+                    await this.initializeAuth(true); // Force refresh token
+                    console.log('[Kiro] Token refresh successful after 401, retrying stream...');
+                    yield* this.streamApiReal(method, model, body, true, retryCount);
+                    return;
+                } catch (refreshError) {
+                    console.error('[Kiro] Token refresh failed during 401 retry:', refreshError.message);
+                    // Mark credential as unhealthy immediately and attach marker to error
+                    this._markCredentialUnhealthy('401 Unauthorized - Token refresh failed', refreshError);
+                    throw refreshError;
+                }
+            }
+            
+            // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
+            if (status === 403) {
+                console.log('[Kiro] Received 403 in stream. Marking credential as unhealthy...');
+                this._markCredentialUnhealthy('403 Forbidden', error);
+                throw error;
             }
             
             if (status === 429 && retryCount < maxRetries) {
@@ -2355,24 +2408,42 @@ async initializeAuth(forceRefresh = false) {
             console.log('[Kiro] Usage limits fetched successfully');
             return response.data;
         } catch (error) {
-            // 如果是 403 错误，尝试刷新 token 后重试
-            if (error.response?.status === 403) {
-                console.log('[Kiro] Received 403 on getUsageLimits. Attempting token refresh and retrying...');
-                try {
-                    await this.initializeAuth(true);
-                    // 更新 Authorization header
-                    headers['Authorization'] = `Bearer ${this.accessToken}`;
-                    headers['amz-sdk-invocation-id'] = uuidv4();
-                    const retryResponse = await this.axiosInstance.get(fullUrl, { headers });
-                    console.log('[Kiro] Usage limits fetched successfully after token refresh');
-                    return retryResponse.data;
-                } catch (refreshError) {
-                    console.error('[Kiro] Token refresh failed during getUsageLimits retry:', refreshError.message);
-                    throw refreshError;
+            const status = error.response?.status;
+            
+            // 从响应体中提取错误信息
+            let errorMessage = error.message;
+            if (error.response?.data) {
+                // 尝试从响应体中获取错误描述
+                const responseData = error.response.data;
+                if (typeof responseData === 'string') {
+                    errorMessage = responseData;
+                } else if (responseData.message) {
+                    errorMessage = responseData.message;
+                } else if (responseData.error) {
+                    errorMessage = typeof responseData.error === 'string' ? responseData.error : responseData.error.message || JSON.stringify(responseData.error);
                 }
             }
-            console.error('[Kiro] Failed to fetch usage limits:', error.message, error);
-            throw error;
+            
+            // 构建包含状态码和错误描述的错误信息
+            const formattedError = status
+                ? new Error(`API call failed: ${status} - ${errorMessage}`)
+                : new Error(`API call failed: ${errorMessage}`);
+            
+            // 对于用量查询，401/403 错误直接标记凭证为不健康，不重试
+            if (status === 401) {
+                console.log('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
+                this._markCredentialUnhealthy('401 Unauthorized on usage query', formattedError);
+                throw formattedError;
+            }
+            
+            if (status === 403) {
+                console.log('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
+                this._markCredentialUnhealthy('403 Forbidden on usage query', formattedError);
+                throw formattedError;
+            }
+            
+            console.error('[Kiro] Failed to fetch usage limits:', formattedError.message, error);
+            throw formattedError;
         }
     }
 }
