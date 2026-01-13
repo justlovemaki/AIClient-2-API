@@ -217,13 +217,22 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
     }
 }
 
-export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName) {
+export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName, retryContext = null) {
     let fullResponseText = '';
     let fullResponseJson = '';
     let fullOldResponseJson = '';
     let responseClosed = false;
+    
+    // 重试上下文：包含 CONFIG 和重试计数
+    const maxRetries = retryContext?.maxRetries ?? 2;
+    const currentRetry = retryContext?.currentRetry ?? 0;
+    const CONFIG = retryContext?.CONFIG;
+    const isRetry = currentRetry > 0;
 
-    await handleUnifiedResponse(res, '', true);
+    // 只在首次请求时发送响应头，重试时跳过（响应头已发送）
+    if (!isRetry) {
+        await handleUnifiedResponse(res, '', true);
+    }
 
     // fs.writeFile('request'+Date.now()+'.json', JSON.stringify(requestBody));
     // The service returns a stream in its native format (toProvider).
@@ -283,12 +292,80 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
     }  catch (error) {
         console.error('\n[Server] Error during stream processing:', error.stack);
-        if (providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
+        
+        // 如果已经发送了内容，不进行重试（避免响应数据损坏）
+        if (fullResponseText.length > 0) {
+            console.log(`[Stream Retry] Cannot retry: ${fullResponseText.length} bytes already sent to client`);
+            // 直接发送错误并结束
+            const errorPayload = createStreamErrorResponse(error, fromProvider);
+            res.write(errorPayload);
+            res.end();
+            responseClosed = true;
+            return;
+        }
+        
+        // 获取状态码（用于日志记录，不再用于判断是否重试）
+        const status = error.response?.status;
+        
+        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
+        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
+        
+        // 如果底层未标记，则在此处标记
+        if (!credentialMarkedUnhealthy && providerPoolManager && pooluuid) {
+            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
                 uuid: pooluuid
             });
+            credentialMarkedUnhealthy = true;
+        } else if (credentialMarkedUnhealthy) {
+            console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+        }
+        
+        // 凭证已被标记为不健康后，尝试切换到新凭证重试
+        // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
+        if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
+            console.log(`[Stream Retry] Credential marked unhealthy. Attempting retry ${currentRetry + 1}/${maxRetries} with different credential...`);
+            
+            try {
+                // 动态导入以避免循环依赖
+                const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+                const result = await getApiServiceWithFallback(CONFIG, model);
+                
+                if (result && result.service && result.uuid !== pooluuid) {
+                    console.log(`[Stream Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
+                    
+                    // 使用新服务重试
+                    const newRetryContext = {
+                        ...retryContext,
+                        CONFIG,
+                        currentRetry: currentRetry + 1,
+                        maxRetries
+                    };
+                    
+                    // 递归调用，使用新的服务
+                    return await handleStreamRequest(
+                        res,
+                        result.service,
+                        result.actualModel || model,
+                        requestBody,
+                        fromProvider,
+                        result.actualProviderType || toProvider,
+                        PROMPT_LOG_MODE,
+                        PROMPT_LOG_FILENAME,
+                        providerPoolManager,
+                        result.uuid,
+                        result.serviceConfig?.customName || customName,
+                        newRetryContext
+                    );
+                } else if (result && result.uuid === pooluuid) {
+                    console.log(`[Stream Retry] No different healthy credential available. Same credential selected.`);
+                } else {
+                    console.log(`[Stream Retry] No healthy credential available for retry.`);
+                }
+            } catch (retryError) {
+                console.error(`[Stream Retry] Failed to get alternative service:`, retryError.message);
+            }
         }
 
         // 使用新方法创建符合 fromProvider 格式的流式错误响应
@@ -307,7 +384,12 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 }
 
 
-export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName) {
+export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName, retryContext = null) {
+    // 重试上下文：包含 CONFIG 和重试计数
+    const maxRetries = retryContext?.maxRetries ?? 2;
+    const currentRetry = retryContext?.currentRetry ?? 0;
+    const CONFIG = retryContext?.CONFIG;
+    
     try{
         // The service returns the response in its native format (toProvider).
         const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
@@ -338,12 +420,69 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         }
     } catch (error) {
         console.error('\n[Server] Error during unary processing:', error.stack);
-        if (providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
+        
+        // 获取状态码（用于日志记录，不再用于判断是否重试）
+        const status = error.response?.status;
+        
+        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
+        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
+        
+        // 如果底层未标记，则在此处标记
+        if (!credentialMarkedUnhealthy && providerPoolManager && pooluuid) {
+            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
                 uuid: pooluuid
             });
+            credentialMarkedUnhealthy = true;
+        } else if (credentialMarkedUnhealthy) {
+            console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+        }
+        
+        // 凭证已被标记为不健康后，尝试切换到新凭证重试
+        // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
+        if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
+            console.log(`[Unary Retry] Credential marked unhealthy. Attempting retry ${currentRetry + 1}/${maxRetries} with different credential...`);
+            
+            try {
+                // 动态导入以避免循环依赖
+                const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+                const result = await getApiServiceWithFallback(CONFIG, model);
+                
+                if (result && result.service && result.uuid !== pooluuid) {
+                    console.log(`[Unary Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
+                    
+                    // 使用新服务重试
+                    const newRetryContext = {
+                        ...retryContext,
+                        CONFIG,
+                        currentRetry: currentRetry + 1,
+                        maxRetries
+                    };
+                    
+                    // 递归调用，使用新的服务
+                    return await handleUnaryRequest(
+                        res,
+                        result.service,
+                        result.actualModel || model,
+                        requestBody,
+                        fromProvider,
+                        result.actualProviderType || toProvider,
+                        PROMPT_LOG_MODE,
+                        PROMPT_LOG_FILENAME,
+                        providerPoolManager,
+                        result.uuid,
+                        result.serviceConfig?.customName || customName,
+                        newRetryContext
+                    );
+                } else if (result && result.uuid === pooluuid) {
+                    console.log(`[Unary Retry] No different healthy credential available. Same credential selected.`);
+                } else {
+                    console.log(`[Unary Retry] No healthy credential available for retry.`);
+                }
+            } catch (retryError) {
+                console.error(`[Unary Retry] Failed to get alternative service:`, retryError.message);
+            }
         }
 
         // 使用新方法创建符合 fromProvider 格式的错误响应
@@ -487,10 +626,13 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     
     // 5. Call the appropriate stream or unary handler, passing the provider info.
+    // 创建重试上下文，包含 CONFIG 以便在认证错误时切换凭证重试
+    const retryContext = providerPoolManager ? { CONFIG, currentRetry: 0, maxRetries: 2 } : null;
+    
     if (isStream) {
-        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName);
+        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);
     } else {
-        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName);
+        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);
     }
 
     // 执行插件钩子：内容生成后
