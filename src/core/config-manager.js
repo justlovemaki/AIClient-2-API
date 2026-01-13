@@ -75,6 +75,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             PROMPT_LOG_MODE: "none",
             REQUEST_MAX_RETRIES: 3,
             REQUEST_BASE_DELAY: 1000,
+            CREDENTIAL_SWITCH_MAX_RETRIES: 5, // 坏凭证切换最大重试次数（用于认证错误后切换凭证）
             CRON_NEAR_MINUTES: 15,
             CRON_REFRESH_TOKEN: false,
             PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
