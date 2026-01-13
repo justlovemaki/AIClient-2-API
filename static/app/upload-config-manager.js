@@ -811,6 +811,12 @@ function detectProviderFromPath(filePath) {
             providerType: 'gemini-antigravity',
             displayName: 'Gemini Antigravity',
             shortName: 'antigravity'
+        },
+        {
+            patterns: ['configs/orchids/', '/orchids/'],
+            providerType: 'claude-orchids-oauth',
+            displayName: 'Orchids OAuth',
+            shortName: 'orchids-oauth'
         }
     ];
 

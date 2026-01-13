@@ -28,6 +28,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
     addToUsedPaths(usedPaths, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH);
     addToUsedPaths(usedPaths, currentConfig.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH);
     addToUsedPaths(usedPaths, currentConfig.IFLOW_TOKEN_FILE_PATH);
+    addToUsedPaths(usedPaths, currentConfig.ORCHIDS_CREDS_FILE_PATH);
 
     // 使用最新的提供商池数据
     let providerPools = currentConfig.providerPools;
@@ -44,6 +45,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
                 addToUsedPaths(usedPaths, provider.QWEN_OAUTH_CREDS_FILE_PATH);
                 addToUsedPaths(usedPaths, provider.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH);
                 addToUsedPaths(usedPaths, provider.IFLOW_TOKEN_FILE_PATH);
+                addToUsedPaths(usedPaths, provider.ORCHIDS_CREDS_FILE_PATH);
             }
         }
     }
@@ -214,6 +216,17 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
         });
     }
 
+    if (currentConfig.ORCHIDS_CREDS_FILE_PATH &&
+        (pathsEqual(relativePath, currentConfig.ORCHIDS_CREDS_FILE_PATH) ||
+         pathsEqual(relativePath, currentConfig.ORCHIDS_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+        usageInfo.usageType = 'main_config';
+        usageInfo.usageDetails.push({
+            type: 'Main Config',
+            location: 'Orchids OAuth credentials file path',
+            configKey: 'ORCHIDS_CREDS_FILE_PATH'
+        });
+    }
+
     // 检查提供商池中的使用情况
     if (currentConfig.providerPools) {
         // 使用 flatMap 将双重循环优化为单层循环 O(n)
@@ -282,6 +295,18 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerType: providerType,
                     providerIndex: index,
                     configKey: 'IFLOW_TOKEN_FILE_PATH'
+                });
+            }
+
+            if (provider.ORCHIDS_CREDS_FILE_PATH &&
+                (pathsEqual(relativePath, provider.ORCHIDS_CREDS_FILE_PATH) ||
+                 pathsEqual(relativePath, provider.ORCHIDS_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
+                providerUsages.push({
+                    type: 'Provider Pool',
+                    location: `Orchids OAuth credentials (node ${index + 1})`,
+                    providerType: providerType,
+                    providerIndex: index,
+                    configKey: 'ORCHIDS_CREDS_FILE_PATH'
                 });
             }
             
