@@ -12,7 +12,7 @@ let isLoadingConfigs = false; // 防止重复加载配置
  * @param {string} searchTerm - 搜索关键词
  * @param {string} statusFilter - 状态过滤
  */
-function searchConfigs(searchTerm = '', statusFilter = '') {
+function searchConfigs(searchTerm = '', statusFilter = '', providerFilter = '') {
     if (!allConfigs.length) {
         console.log('没有配置数据可搜索');
         return;
@@ -29,7 +29,20 @@ function searchConfigs(searchTerm = '', statusFilter = '') {
         const configStatus = config.isUsed ? 'used' : 'unused';
         const matchesStatus = !statusFilter || configStatus === statusFilter;
 
-        return matchesSearch && matchesStatus;
+        // 提供商类型过滤
+        let matchesProvider = true;
+        if (providerFilter) {
+            const providerInfo = detectProviderFromPath(config.path);
+            if (providerFilter === 'other') {
+                // "其他/未识别" 选项：匹配没有识别到提供商的配置
+                matchesProvider = providerInfo === null;
+            } else {
+                // 匹配特定提供商类型
+                matchesProvider = providerInfo !== null && providerInfo.providerType === providerFilter;
+            }
+        }
+
+        return matchesSearch && matchesStatus && matchesProvider;
     });
 
     renderConfigList();
@@ -705,6 +718,7 @@ function initUploadConfigManager() {
     const searchInput = document.getElementById('configSearch');
     const searchBtn = document.getElementById('searchConfigBtn');
     const statusFilter = document.getElementById('configStatusFilter');
+    const providerFilter = document.getElementById('configProviderFilter');
     const refreshBtn = document.getElementById('refreshConfigList');
     const downloadAllBtn = document.getElementById('downloadAllConfigs');
 
@@ -712,7 +726,8 @@ function initUploadConfigManager() {
         searchInput.addEventListener('input', debounce(() => {
             const searchTerm = searchInput.value.trim();
             const currentStatusFilter = statusFilter?.value || '';
-            searchConfigs(searchTerm, currentStatusFilter);
+            const currentProviderFilter = providerFilter?.value || '';
+            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
         }, 300));
     }
 
@@ -720,7 +735,8 @@ function initUploadConfigManager() {
         searchBtn.addEventListener('click', () => {
             const searchTerm = searchInput?.value.trim() || '';
             const currentStatusFilter = statusFilter?.value || '';
-            searchConfigs(searchTerm, currentStatusFilter);
+            const currentProviderFilter = providerFilter?.value || '';
+            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
         });
     }
 
@@ -728,7 +744,17 @@ function initUploadConfigManager() {
         statusFilter.addEventListener('change', () => {
             const searchTerm = searchInput?.value.trim() || '';
             const currentStatusFilter = statusFilter.value;
-            searchConfigs(searchTerm, currentStatusFilter);
+            const currentProviderFilter = providerFilter?.value || '';
+            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
+        });
+    }
+
+    if (providerFilter) {
+        providerFilter.addEventListener('change', () => {
+            const searchTerm = searchInput?.value.trim() || '';
+            const currentStatusFilter = statusFilter?.value || '';
+            const currentProviderFilter = providerFilter.value;
+            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
         });
     }
 
@@ -744,6 +770,12 @@ function initUploadConfigManager() {
     const batchLinkBtn = document.getElementById('batchLinkKiroBtn') || document.getElementById('batchLinkProviderBtn');
     if (batchLinkBtn) {
         batchLinkBtn.addEventListener('click', batchLinkProviderConfigs);
+    }
+
+    // 删除未绑定配置按钮
+    const deleteUnboundBtn = document.getElementById('deleteUnboundBtn');
+    if (deleteUnboundBtn) {
+        deleteUnboundBtn.addEventListener('click', deleteUnboundConfigs);
     }
 
     // 初始加载配置列表
@@ -929,6 +961,67 @@ async function batchLinkProviderConfigs() {
 }
 
 /**
+ * 删除所有未绑定的配置文件
+ * 只删除 configs/xxx/ 子目录下的未绑定配置文件
+ */
+async function deleteUnboundConfigs() {
+    // 统计未绑定的配置数量，并且必须在 configs/xxx/ 子目录下
+    const unboundConfigs = allConfigs.filter(config => {
+        if (config.isUsed) return false;
+        
+        // 检查路径是否在 configs/xxx/ 子目录下
+        const normalizedPath = config.path.replace(/\\/g, '/');
+        const pathParts = normalizedPath.split('/');
+        
+        // 路径至少需要3部分：configs/子目录/文件名
+        // 例如：configs/kiro/xxx.json 或 configs/gemini/xxx.json
+        if (pathParts.length >= 3 && pathParts[0] === 'configs') {
+            return true;
+        }
+        
+        return false;
+    });
+    
+    if (unboundConfigs.length === 0) {
+        showToast(t('common.info'), t('upload.deleteUnbound.none'), 'info');
+        return;
+    }
+    
+    // 显示确认对话框
+    const confirmMsg = t('upload.deleteUnbound.confirm', { count: unboundConfigs.length });
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    try {
+        showToast(t('common.info'), t('upload.deleteUnbound.processing'), 'info');
+        
+        const result = await window.apiClient.delete('/upload-configs/delete-unbound');
+        
+        if (result.deletedCount > 0) {
+            showToast(t('common.success'), t('upload.deleteUnbound.success', { count: result.deletedCount }), 'success');
+            
+            // 刷新配置列表
+            await loadConfigList();
+        } else {
+            showToast(t('common.info'), t('upload.deleteUnbound.none'), 'info');
+        }
+        
+        // 如果有失败的文件，显示警告
+        if (result.failedCount > 0) {
+            console.warn('部分文件删除失败:', result.failedFiles);
+            showToast(t('common.warning'), t('upload.deleteUnbound.partial', {
+                success: result.deletedCount,
+                fail: result.failedCount
+            }), 'warning');
+        }
+    } catch (error) {
+        console.error('删除未绑定配置失败:', error);
+        showToast(t('common.error'), t('upload.deleteUnbound.failed') + ': ' + error.message, 'error');
+    }
+}
+
+/**
  * 防抖函数
  * @param {Function} func - 要防抖的函数
  * @param {number} wait - 等待时间（毫秒）
@@ -1002,5 +1095,6 @@ export {
     deleteConfig,
     closeConfigModal,
     copyConfigContent,
-    reloadConfig
+    reloadConfig,
+    deleteUnboundConfigs
 };
