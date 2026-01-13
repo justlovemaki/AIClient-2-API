@@ -430,6 +430,35 @@ export class ProviderPoolManager {
     }
 
     /**
+     * Marks a provider as unhealthy immediately (without accumulating error count).
+     * Used for definitive authentication errors like 401/403.
+     * @param {string} providerType - The type of the provider.
+     * @param {object} providerConfig - The configuration of the provider to mark.
+     * @param {string} [errorMessage] - Optional error message to store.
+     */
+    markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage = null) {
+        if (!providerConfig?.uuid) {
+            this._log('error', 'Invalid providerConfig in markProviderUnhealthyImmediately');
+            return;
+        }
+
+        const provider = this._findProvider(providerType, providerConfig.uuid);
+        if (provider) {
+            provider.config.isHealthy = false;
+            provider.config.errorCount = this.maxErrorCount; // Set to max to indicate definitive failure
+            provider.config.lastErrorTime = new Date().toISOString();
+            provider.config.lastUsed = new Date().toISOString();
+
+            if (errorMessage) {
+                provider.config.lastErrorMessage = errorMessage;
+            }
+
+            this._log('warn', `Immediately marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Authentication error'}`);
+            this._debouncedSave(providerType);
+        }
+    }
+
+    /**
      * Marks a provider as healthy.
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
