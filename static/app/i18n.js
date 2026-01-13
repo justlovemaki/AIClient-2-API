@@ -181,6 +181,32 @@ const translations = {
         'oauth.iflow.step2': '使用您的 iFlow 账号登录并授权',
         'oauth.iflow.step3': '授权完成后，系统会自动获取 API Key',
         'oauth.iflow.step4': '凭据文件可在上传配置管理中查看和管理',
+        
+        // Orchids OAuth
+        'oauth.orchids.title': 'Orchids 凭据导入',
+        'oauth.orchids.formatToken': 'JWT Token 格式',
+        'oauth.orchids.tokenLabel': 'JWT Token 字符串',
+        'oauth.orchids.tokenPlaceholder': 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF94eHgiLCJyb3RhdGluZ190b2tlbiI6Inh4eCJ9.xxx',
+        'oauth.orchids.tokenInstructions': '粘贴 JWT Token 字符串（支持纯 JWT 格式，rotating_token 会从 JWT payload 中自动提取）',
+        'oauth.orchids.getSteps': '获取步骤：',
+        'oauth.orchids.tokenStep1': '访问 www.orchids.app 并登录',
+        'oauth.orchids.tokenStep2': '按 F12 打开开发者工具 → Application 标签',
+        'oauth.orchids.tokenStep3': '在左侧找到 Cookies → www.orchids.app',
+        'oauth.orchids.tokenStep4': '找到 __client cookie 的值',
+        'oauth.orchids.tokenStep5': '复制完整的 JWT 值（以 eyJ 开头的字符串）',
+        'oauth.orchids.tokenFormat': '格式：eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF94eHgiLCJyb3RhdGluZ190b2tlbiI6Inh4eCJ9.xxx',
+        'oauth.orchids.confirmImport': '确认导入',
+        'oauth.orchids.importing': '导入中...',
+        'oauth.orchids.success': 'Orchids 凭据导入成功',
+        'oauth.orchids.parseSuccess': 'Token 解析成功',
+        'oauth.orchids.detectedToken': '检测到有效的 JWT Token',
+        'oauth.orchids.errorEmpty': '请输入凭据',
+        'oauth.orchids.errorTokenInvalid': 'Token 格式错误，请输入有效的 JWT Token',
+        'oauth.orchids.errorJwtParse': 'JWT 解析失败',
+        'oauth.orchids.errorMissingRotating': 'JWT payload 中缺少 rotating_token 字段',
+        'oauth.orchids.importFailed': '导入失败',
+        'oauth.orchids.clientId': 'Client ID',
+        'oauth.orchids.rotatingToken': 'Rotating Token',
 
         // Config
         'config.title': '配置管理',
@@ -348,6 +374,7 @@ const translations = {
         'providers.stat.usageCount': '使用次数',
         'providers.stat.errorCount': '错误次数',
         'providers.auth.generate': '生成授权',
+        'providers.auth.importToken': '导入 Token',
 
         // Modal Provider Manager
         'modal.provider.manage': '管理 {type} 提供商配置',
@@ -676,6 +703,32 @@ const translations = {
         'oauth.iflow.step2': 'Log in with your iFlow account and authorize',
         'oauth.iflow.step3': 'After authorization, the system will automatically fetch the API Key',
         'oauth.iflow.step4': 'Credentials files can be viewed and managed in Upload Config',
+        
+        // Orchids OAuth
+        'oauth.orchids.title': 'Orchids Credential Import',
+        'oauth.orchids.formatToken': 'JWT Token Format',
+        'oauth.orchids.tokenLabel': 'JWT Token String',
+        'oauth.orchids.tokenPlaceholder': 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF94eHgiLCJyb3RhdGluZ190b2tlbiI6Inh4eCJ9.xxx',
+        'oauth.orchids.tokenInstructions': 'Paste JWT Token string (rotating_token will be automatically extracted from JWT payload)',
+        'oauth.orchids.getSteps': 'How to get:',
+        'oauth.orchids.tokenStep1': 'Visit www.orchids.app and log in',
+        'oauth.orchids.tokenStep2': 'Press F12 to open Developer Tools → Application tab',
+        'oauth.orchids.tokenStep3': 'Find Cookies → www.orchids.app on the left',
+        'oauth.orchids.tokenStep4': 'Find the __client cookie value',
+        'oauth.orchids.tokenStep5': 'Copy the full JWT value (string starting with eyJ)',
+        'oauth.orchids.tokenFormat': 'Format: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF94eHgiLCJyb3RhdGluZ190b2tlbiI6Inh4eCJ9.xxx',
+        'oauth.orchids.confirmImport': 'Confirm Import',
+        'oauth.orchids.importing': 'Importing...',
+        'oauth.orchids.success': 'Orchids credentials imported successfully',
+        'oauth.orchids.parseSuccess': 'Token parsed successfully',
+        'oauth.orchids.detectedToken': 'Valid JWT Token detected',
+        'oauth.orchids.errorEmpty': 'Please enter credentials',
+        'oauth.orchids.errorTokenInvalid': 'Token format error, please enter a valid JWT Token',
+        'oauth.orchids.errorJwtParse': 'JWT parse failed',
+        'oauth.orchids.errorMissingRotating': 'Missing rotating_token field in JWT payload',
+        'oauth.orchids.importFailed': 'Import failed',
+        'oauth.orchids.clientId': 'Client ID',
+        'oauth.orchids.rotatingToken': 'Rotating Token',
 
         // Config
         'config.title': 'Configuration Management',
@@ -843,6 +896,7 @@ const translations = {
         'providers.stat.usageCount': 'Usage Count',
         'providers.stat.errorCount': 'Error Count',
         'providers.auth.generate': 'Gen Auth',
+        'providers.auth.importToken': 'Import Token',
 
         // Modal Provider Manager
         'modal.provider.manage': 'Manage {type} Provider Config',
