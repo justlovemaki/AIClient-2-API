@@ -680,7 +680,7 @@ function showKiroAuthMethodSelector(providerType) {
     modal.style.display = 'flex';
     
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 550px;">
             <div class="modal-header">
                 <h3><i class="fas fa-key"></i> <span data-i18n="oauth.kiro.selectMethod">${t('oauth.kiro.selectMethod')}</span></h3>
                 <button class="modal-close">&times;</button>
@@ -1727,6 +1727,29 @@ function showAuthModal(authUrl, authInfo) {
                             }
                         </div>
                         <p style="margin: 8px 0 0 0; font-size: 0.85rem; color: #92400e;" data-i18n="oauth.modal.portNote">${t('oauth.modal.portNote')}</p>
+                        ${(authInfo.provider === 'claude-kiro-oauth' && authInfo.authMethod === 'builder-id') ? `
+                        <div class="builder-id-url-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #fcd34d;">
+                            <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #92400e;">
+                                <i class="fas fa-link"></i>
+                                <span data-i18n="oauth.kiro.builderIDStartURL">${t('oauth.kiro.builderIDStartURL') || 'Builder ID Start URL'}</span>
+                                <span style="font-weight: normal; color: #b45309;">(${t('common.optional') || '可选'})</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <input type="text" class="builder-id-start-url-input"
+                                    value="${authInfo.builderIDStartURL || 'https://view.awsapps.com/start'}"
+                                    placeholder="https://view.awsapps.com/start"
+                                    style="flex: 1; padding: 6px 10px; border: 1px solid #fcd34d; border-radius: 4px; font-size: 13px; color: #92400e; background: white;"
+                                />
+                                <button class="regenerate-builder-id-btn" title="${t('common.generate')}" style="background: none; border: 1px solid #d97706; border-radius: 4px; cursor: pointer; color: #d97706; padding: 4px 8px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <p style="margin: 6px 0 0 0; font-size: 0.75rem; color: #b45309;">
+                                <i class="fas fa-info-circle"></i>
+                                <span data-i18n="oauth.kiro.builderIDStartURLHint">${t('oauth.kiro.builderIDStartURLHint') || '如果您使用 AWS IAM Identity Center，请输入您的 Start URL'}</span>
+                            </p>
+                        </div>
+                        ` : ''}
                     </div>
                     ${instructionsHtml}
                     <div class="auth-url-section">
@@ -1777,6 +1800,26 @@ function showAuthModal(authUrl, authInfo) {
                 
                 await executeGenerateAuthUrl(authInfo.provider, options);
             }
+        };
+    }
+
+    // Builder ID Start URL 重新生成按钮事件
+    const regenerateBuilderIdBtn = modal.querySelector('.regenerate-builder-id-btn');
+    if (regenerateBuilderIdBtn) {
+        regenerateBuilderIdBtn.onclick = async () => {
+            const builderIdStartUrl = modal.querySelector('.builder-id-start-url-input').value.trim();
+            modal.remove();
+            // 构造重新请求的参数
+            const options = {
+                ...authInfo,
+                builderIDStartURL: builderIdStartUrl || 'https://view.awsapps.com/start'
+            };
+            // 移除不需要传递回后端的字段
+            delete options.provider;
+            delete options.redirectUri;
+            delete options.callbackPort;
+            
+            await executeGenerateAuthUrl(authInfo.provider, options);
         };
     }
 
