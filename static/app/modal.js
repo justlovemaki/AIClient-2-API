@@ -65,8 +65,14 @@ function showProviderManagerModal(data) {
                         <button class="btn btn-warning" onclick="window.resetAllProvidersHealth('${providerType}')" data-i18n="modal.provider.resetHealth" title="将所有节点的健康状态重置为健康">
                             <i class="fas fa-heartbeat"></i> 重置为健康
                         </button>
-                        <button class="btn btn-info" onclick="window.performHealthCheck('${providerType}')" data-i18n="modal.provider.healthCheck" title="对所有节点执行健康检测">
-                            <i class="fas fa-stethoscope"></i> 健康检测
+                        <button class="btn btn-info" onclick="window.performHealthCheck('${providerType}')" data-i18n="modal.provider.healthCheck" title="对不健康节点执行健康检测">
+                            <i class="fas fa-stethoscope"></i> 检测不健康
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.refreshUnhealthyUuids('${providerType}')" data-i18n="modal.provider.refreshUnhealthyUuids" title="刷新不健康节点的UUID">
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="modal.provider.refreshUnhealthyUuidsBtn">刷新UUID</span>
+                        </button>
+                        <button class="btn btn-danger" onclick="window.deleteUnhealthyProviders('${providerType}')" data-i18n="modal.provider.deleteUnhealthy" title="删除不健康节点">
+                            <i class="fas fa-trash-alt"></i> <span data-i18n="modal.provider.deleteUnhealthyBtn">删除不健康</span>
                         </button>
                     </div>
                 </div>
@@ -417,6 +423,9 @@ function renderProviderList(providers) {
                         </button>
                         <button class="btn-small btn-delete" onclick="window.deleteProvider('${provider.uuid}', event)">
                             <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">删除</span>
+                        </button>
+                        <button class="btn-small btn-refresh-uuid" onclick="window.refreshProviderUuid('${provider.uuid}', event)" title="${t('modal.provider.refreshUuid')}">
+                            <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
                 </div>
@@ -784,19 +793,10 @@ function editProvider(uuid, event) {
         // 添加编辑状态类
         providerDetail.classList.add('editing');
         
-        // 替换编辑按钮为保存和取消按钮，但保留禁用/启用按钮
+        // 替换编辑按钮为保存和取消按钮，不显示禁用/启用按钮
         const actionsGroup = providerDetail.querySelector('.provider-actions-group');
-        const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
-        const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
-        const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
-        const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
-        const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
-        const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
         
         actionsGroup.innerHTML = `
-            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此提供商">
-                <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
-            </button>
             <button class="btn-small btn-save" onclick="window.saveProvider('${uuid}', event)">
                 <i class="fas fa-save"></i> <span data-i18n="modal.provider.save">保存</span>
             </button>
@@ -852,11 +852,11 @@ function cancelEdit(uuid, event) {
         select.value = originalValue || '';
     });
     
-    // 恢复原来的编辑和删除按钮，但保留禁用/启用按钮
+    // 恢复原来的按钮布局
     const actionsGroup = providerDetail.querySelector('.provider-actions-group');
     const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
     const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
-    const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
+    const toggleButtonText = isCurrentlyDisabled ? t('modal.provider.enabled') : t('modal.provider.disabled');
     const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
     const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
     
@@ -865,10 +865,13 @@ function cancelEdit(uuid, event) {
             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
         </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
-            <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">编辑</span>
+            <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">${t('modal.provider.edit')}</span>
         </button>
         <button class="btn-small btn-delete" onclick="window.deleteProvider('${uuid}', event)">
-            <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">删除</span>
+            <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">${t('modal.provider.delete')}</span>
+        </button>
+        <button class="btn-small btn-refresh-uuid" onclick="window.refreshProviderUuid('${uuid}', event)" title="${t('modal.provider.refreshUuid')}">
+            <i class="fas fa-sync-alt"></i>
         </button>
     `;
 }
@@ -1380,6 +1383,134 @@ async function performHealthCheck(providerType) {
 }
 
 /**
+ * 刷新提供商UUID
+ * @param {string} uuid - 提供商UUID
+ * @param {Event} event - 事件对象
+ */
+async function refreshProviderUuid(uuid, event) {
+    event.stopPropagation();
+    
+    if (!confirm(t('modal.provider.refreshUuidConfirm', { oldUuid: uuid }))) {
+        return;
+    }
+    
+    const providerDetail = event.target.closest('.provider-item-detail');
+    const providerType = providerDetail.closest('.provider-modal').getAttribute('data-provider-type');
+    
+    try {
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/${uuid}/refresh-uuid`,
+            {}
+        );
+        
+        if (response.success) {
+            showToast(t('common.success'), t('modal.provider.refreshUuid.success', { oldUuid: response.oldUuid, newUuid: response.newUuid }), 'success');
+            
+            // 重新加载配置
+            await window.apiClient.post('/reload-config');
+            
+            // 刷新提供商配置显示
+            await refreshProviderConfig(providerType);
+        } else {
+            showToast(t('common.error'), t('modal.provider.refreshUuid.failed'), 'error');
+        }
+    } catch (error) {
+        console.error('刷新uuid失败:', error);
+        showToast(t('common.error'), t('modal.provider.refreshUuid.failed') + ': ' + error.message, 'error');
+    }
+}
+
+/**
+ * 删除所有不健康的提供商节点
+ * @param {string} providerType - 提供商类型
+ */
+async function deleteUnhealthyProviders(providerType) {
+    // 先获取不健康节点数量
+    const unhealthyCount = currentProviders.filter(p => !p.isHealthy).length;
+    
+    if (unhealthyCount === 0) {
+        showToast(t('common.info'), t('modal.provider.deleteUnhealthy.noUnhealthy'), 'info');
+        return;
+    }
+    
+    if (!confirm(t('modal.provider.deleteUnhealthyConfirm', { type: providerType, count: unhealthyCount }))) {
+        return;
+    }
+    
+    try {
+        showToast(t('common.info'), t('modal.provider.deleteUnhealthy.deleting'), 'info');
+        
+        const response = await window.apiClient.delete(
+            `/providers/${encodeURIComponent(providerType)}/delete-unhealthy`
+        );
+        
+        if (response.success) {
+            showToast(
+                t('common.success'),
+                t('modal.provider.deleteUnhealthy.success', { count: response.deletedCount }),
+                'success'
+            );
+            
+            // 重新加载配置
+            await window.apiClient.post('/reload-config');
+            
+            // 刷新提供商配置显示
+            await refreshProviderConfig(providerType);
+        } else {
+            showToast(t('common.error'), t('modal.provider.deleteUnhealthy.failed'), 'error');
+        }
+    } catch (error) {
+        console.error('删除不健康节点失败:', error);
+        showToast(t('common.error'), t('modal.provider.deleteUnhealthy.failed') + ': ' + error.message, 'error');
+    }
+}
+
+/**
+ * 批量刷新不健康节点的UUID
+ * @param {string} providerType - 提供商类型
+ */
+async function refreshUnhealthyUuids(providerType) {
+    // 先获取不健康节点数量
+    const unhealthyCount = currentProviders.filter(p => !p.isHealthy).length;
+    
+    if (unhealthyCount === 0) {
+        showToast(t('common.info'), t('modal.provider.refreshUnhealthyUuids.noUnhealthy'), 'info');
+        return;
+    }
+    
+    if (!confirm(t('modal.provider.refreshUnhealthyUuidsConfirm', { type: providerType, count: unhealthyCount }))) {
+        return;
+    }
+    
+    try {
+        showToast(t('common.info'), t('modal.provider.refreshUnhealthyUuids.refreshing'), 'info');
+        
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/refresh-unhealthy-uuids`
+        );
+        
+        if (response.success) {
+            showToast(
+                t('common.success'),
+                t('modal.provider.refreshUnhealthyUuids.success', { count: response.refreshedCount }),
+                'success'
+            );
+            
+            // 重新加载配置
+            await window.apiClient.post('/reload-config');
+            
+            // 刷新提供商配置显示
+            await refreshProviderConfig(providerType);
+        } else {
+            showToast(t('common.error'), t('modal.provider.refreshUnhealthyUuids.failed'), 'error');
+        }
+    } catch (error) {
+        console.error('刷新不健康节点UUID失败:', error);
+        showToast(t('common.error'), t('modal.provider.refreshUnhealthyUuids.failed') + ': ' + error.message, 'error');
+    }
+}
+
+/**
  * 渲染不支持的模型选择器（不调用API，直接使用传入的模型列表）
  * @param {string} uuid - 提供商UUID
  * @param {Array} models - 模型列表
@@ -1430,9 +1561,12 @@ export {
     toggleProviderStatus,
     resetAllProvidersHealth,
     performHealthCheck,
+    deleteUnhealthyProviders,
+    refreshUnhealthyUuids,
     loadModelsForProviderType,
     renderNotSupportedModelsSelector,
-    goToProviderPage
+    goToProviderPage,
+    refreshProviderUuid
 };
 
 // 将函数挂载到window对象
@@ -1447,4 +1581,7 @@ window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;
 window.resetAllProvidersHealth = resetAllProvidersHealth;
 window.performHealthCheck = performHealthCheck;
+window.deleteUnhealthyProviders = deleteUnhealthyProviders;
+window.refreshUnhealthyUuids = refreshUnhealthyUuids;
 window.goToProviderPage = goToProviderPage;
+window.refreshProviderUuid = refreshProviderUuid;

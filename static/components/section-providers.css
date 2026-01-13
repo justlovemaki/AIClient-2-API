@@ -1004,6 +1004,34 @@
     box-shadow: 0 4px 12px var(--info-hover);
 }
 
+/* 删除不健康节点按钮样式 */
+.provider-summary-actions .btn-danger {
+    background: linear-gradient(135deg, var(--danger-alt) 0%, var(--danger-secondary) 100%);
+    color: var(--white);
+    border: none;
+    box-shadow: 0 2px 8px var(--danger-30);
+}
+
+.provider-summary-actions .btn-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--danger-40);
+    background: linear-gradient(135deg, var(--danger-color) 0%, var(--danger-alt) 100%);
+}
+
+/* 刷新不健康UUID按钮样式 */
+.provider-summary-actions .btn-secondary {
+    background: linear-gradient(135deg, var(--neutral-500) 0%, var(--neutral-600) 100%);
+    color: var(--white);
+    border: none;
+    box-shadow: 0 2px 8px var(--neutral-shadow-lg);
+}
+
+.provider-summary-actions .btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--neutral-shadow-lg);
+    background: linear-gradient(135deg, var(--neutral-600) 0%, var(--neutral-700) 100%);
+}
+
 /* 不支持的模型选择器样式 */
 .not-supported-models-section {
     grid-column: 1 / -1;

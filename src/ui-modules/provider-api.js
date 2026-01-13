@@ -468,6 +468,184 @@ export async function handleResetProviderHealth(req, res, currentConfig, provide
 }
 
 /**
+ * 删除特定提供商类型的所有不健康节点
+ */
+export async function handleDeleteUnhealthyProviders(req, res, currentConfig, providerPoolManager, providerType) {
+    try {
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+        let providerPools = {};
+        
+        // Load existing pools
+        if (existsSync(filePath)) {
+            try {
+                const fileContent = readFileSync(filePath, 'utf-8');
+                providerPools = JSON.parse(fileContent);
+            } catch (readError) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
+                return true;
+            }
+        }
+
+        // Find and remove unhealthy providers
+        const providers = providerPools[providerType] || [];
+        
+        if (providers.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
+            return true;
+        }
+
+        // Filter out unhealthy providers (keep only healthy ones)
+        const unhealthyProviders = providers.filter(p => !p.isHealthy);
+        const healthyProviders = providers.filter(p => p.isHealthy);
+        
+        if (unhealthyProviders.length === 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'No unhealthy providers to delete',
+                deletedCount: 0,
+                remainingCount: providers.length
+            }));
+            return true;
+        }
+
+        // Update the provider pool with only healthy providers
+        if (healthyProviders.length === 0) {
+            delete providerPools[providerType];
+        } else {
+            providerPools[providerType] = healthyProviders;
+        }
+
+        // Save to file
+        writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+        console.log(`[UI API] Deleted ${unhealthyProviders.length} unhealthy providers from ${providerType}`);
+
+        // Update provider pool manager if available
+        if (providerPoolManager) {
+            providerPoolManager.providerPools = providerPools;
+            providerPoolManager.initializeProviderStatus();
+        }
+
+        // 广播更新事件
+        broadcastEvent('config_update', {
+            action: 'delete_unhealthy',
+            filePath: filePath,
+            providerType,
+            deletedCount: unhealthyProviders.length,
+            deletedProviders: unhealthyProviders.map(p => ({ uuid: p.uuid, customName: p.customName })),
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            message: `Successfully deleted ${unhealthyProviders.length} unhealthy providers`,
+            deletedCount: unhealthyProviders.length,
+            remainingCount: healthyProviders.length,
+            deletedProviders: unhealthyProviders.map(p => ({ uuid: p.uuid, customName: p.customName }))
+        }));
+        return true;
+    } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
+        return true;
+    }
+}
+
+/**
+ * 批量刷新特定提供商类型的所有不健康节点的 UUID
+ */
+export async function handleRefreshUnhealthyUuids(req, res, currentConfig, providerPoolManager, providerType) {
+    try {
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+        let providerPools = {};
+        
+        // Load existing pools
+        if (existsSync(filePath)) {
+            try {
+                const fileContent = readFileSync(filePath, 'utf-8');
+                providerPools = JSON.parse(fileContent);
+            } catch (readError) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
+                return true;
+            }
+        }
+
+        // Find unhealthy providers
+        const providers = providerPools[providerType] || [];
+        
+        if (providers.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'No providers found for this type' } }));
+            return true;
+        }
+
+        // Filter unhealthy providers and refresh their UUIDs
+        const refreshedProviders = [];
+        for (const provider of providers) {
+            if (!provider.isHealthy) {
+                const oldUuid = provider.uuid;
+                const newUuid = generateUUID();
+                provider.uuid = newUuid;
+                refreshedProviders.push({
+                    oldUuid,
+                    newUuid,
+                    customName: provider.customName
+                });
+            }
+        }
+
+        if (refreshedProviders.length === 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'No unhealthy providers to refresh',
+                refreshedCount: 0,
+                totalCount: providers.length
+            }));
+            return true;
+        }
+
+        // Save to file
+        writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+        console.log(`[UI API] Refreshed UUIDs for ${refreshedProviders.length} unhealthy providers in ${providerType}`);
+
+        // Update provider pool manager if available
+        if (providerPoolManager) {
+            providerPoolManager.providerPools = providerPools;
+            providerPoolManager.initializeProviderStatus();
+        }
+
+        // 广播更新事件
+        broadcastEvent('config_update', {
+            action: 'refresh_unhealthy_uuids',
+            filePath: filePath,
+            providerType,
+            refreshedCount: refreshedProviders.length,
+            refreshedProviders,
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            message: `Successfully refreshed UUIDs for ${refreshedProviders.length} unhealthy providers`,
+            refreshedCount: refreshedProviders.length,
+            totalCount: providers.length,
+            refreshedProviders
+        }));
+        return true;
+    } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
+        return true;
+    }
+}
+
+/**
  * 对特定提供商类型的所有提供商执行健康检查
  */
 export async function handleHealthCheck(req, res, currentConfig, providerPoolManager, providerType) {
@@ -486,11 +664,27 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
             return true;
         }
 
-        console.log(`[UI API] Starting health check for ${providers.length} providers in ${providerType}`);
+        // 只检测不健康的节点
+        const unhealthyProviders = providers.filter(ps => !ps.config.isHealthy);
+        
+        if (unhealthyProviders.length === 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'No unhealthy providers to check',
+                successCount: 0,
+                failCount: 0,
+                totalCount: providers.length,
+                results: []
+            }));
+            return true;
+        }
+
+        console.log(`[UI API] Starting health check for ${unhealthyProviders.length} unhealthy providers in ${providerType} (total: ${providers.length})`);
 
         // 执行健康检测（强制检查，忽略 checkHealth 配置）
         const results = [];
-        for (const providerStatus of providers) {
+        for (const providerStatus of unhealthyProviders) {
             const providerConfig = providerStatus.config;
             
             // 跳过已禁用的节点
@@ -580,7 +774,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
         const successCount = results.filter(r => r.success === true).length;
         const failCount = results.filter(r => r.success === false).length;
 
-        console.log(`[UI API] Health check completed for ${providerType}: ${successCount} healthy, ${failCount} unhealthy`);
+        console.log(`[UI API] Health check completed for ${providerType}: ${successCount} recovered, ${failCount} still unhealthy (checked ${unhealthyProviders.length} unhealthy nodes)`);
 
         // 广播更新事件
         broadcastEvent('config_update', {
@@ -726,6 +920,79 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
                 message: 'Link failed: ' + error.message
             }
         }));
+        return true;
+    }
+}
+
+/**
+ * 刷新特定提供商的UUID
+ */
+export async function handleRefreshProviderUuid(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
+    try {
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+        let providerPools = {};
+        
+        // Load existing pools
+        if (existsSync(filePath)) {
+            try {
+                const fileContent = readFileSync(filePath, 'utf-8');
+                providerPools = JSON.parse(fileContent);
+            } catch (readError) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
+                return true;
+            }
+        }
+
+        // Find the provider
+        const providers = providerPools[providerType] || [];
+        const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
+        
+        if (providerIndex === -1) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+            return true;
+        }
+
+        // Generate new UUID
+        const oldUuid = providerUuid;
+        const newUuid = generateUUID();
+        
+        // Update provider UUID
+        providerPools[providerType][providerIndex].uuid = newUuid;
+
+        // Save to file
+        writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+        console.log(`[UI API] Refreshed UUID for provider in ${providerType}: ${oldUuid} -> ${newUuid}`);
+
+        // Update provider pool manager if available
+        if (providerPoolManager) {
+            providerPoolManager.providerPools = providerPools;
+            providerPoolManager.initializeProviderStatus();
+        }
+
+        // 广播更新事件
+        broadcastEvent('config_update', {
+            action: 'refresh_uuid',
+            filePath: filePath,
+            providerType,
+            oldUuid,
+            newUuid,
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            message: 'UUID refreshed successfully',
+            oldUuid,
+            newUuid,
+            provider: providerPools[providerType][providerIndex]
+        }));
+        return true;
+    } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
         return true;
     }
 }
