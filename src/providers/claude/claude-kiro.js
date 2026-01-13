@@ -747,7 +747,8 @@ async initializeAuth(forceRefresh = false) {
                 // 所有工具都被过滤掉了，不添加 tools 上下文
                 console.log('[Kiro] All tools were filtered out');
             } else {
-            const TARGET_SIZE = 20000;
+            const MAX_DESCRIPTION_LENGTH = 9216;
+            const TARGET_TOTAL_SIZE = 200000;
 
             const simplifySchema = (schema) => {
                 if (!schema || typeof schema !== 'object') return { type: 'object' };
@@ -765,12 +766,18 @@ async initializeAuth(forceRefresh = false) {
                 return result;
             };
 
-            const buildTools = (maxDescLen, useSimplifiedSchema) => {
-                return filteredTools.map(tool => {
+            const buildToolsWithPerToolTruncation = (useSimplifiedSchema) => {
+                let truncatedCount = 0;
+                const tools = filteredTools.map(tool => {
                     let desc = tool.description || "";
-                    if (maxDescLen !== null && desc.length > maxDescLen) {
-                        desc = desc.substring(0, maxDescLen) + "...";
+                    const originalLength = desc.length;
+                    
+                    if (desc.length > MAX_DESCRIPTION_LENGTH) {
+                        desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
+                        truncatedCount++;
+                        console.log(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
                     }
+                    
                     return {
                         toolSpecification: {
                             name: tool.name,
@@ -783,37 +790,25 @@ async initializeAuth(forceRefresh = false) {
                         }
                     };
                 });
+                
+                if (truncatedCount > 0) {
+                    console.log(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
+                }
+                
+                return tools;
             };
 
             // 先尝试原始大小
-            let kiroTools = buildTools(null, false);
+            let kiroTools = buildToolsWithPerToolTruncation(false);
             let size = JSON.stringify(kiroTools).length;
             const originalSize = size;
 
             // 超过限制则压缩
-            if (size > TARGET_SIZE) {
+            if (size > TARGET_TOTAL_SIZE) {
+                console.log(`[Kiro] Total tools size ${size} exceeds target ${TARGET_TOTAL_SIZE}, simplifying schemas...`);
                 // 简化 schema
-                kiroTools = buildTools(null, true);
+                kiroTools = buildToolsWithPerToolTruncation(true);
                 size = JSON.stringify(kiroTools).length;
-
-                // 缩短描述
-                if (size > TARGET_SIZE) {
-                    const ratio = TARGET_SIZE / size;
-                    const totalDescLen = tools.reduce((sum, t) => sum + (t.description || "").length, 0);
-                    const avgDescLen = totalDescLen / tools.length;
-                    let targetDescLen = Math.floor(avgDescLen * ratio * 0.8);
-                    targetDescLen = Math.max(50, Math.min(500, targetDescLen));
-
-                    kiroTools = buildTools(targetDescLen, true);
-                    size = JSON.stringify(kiroTools).length;
-
-                    while (size > TARGET_SIZE && targetDescLen > 50) {
-                        targetDescLen = Math.floor(targetDescLen * 0.7);
-                        targetDescLen = Math.max(50, targetDescLen);
-                        kiroTools = buildTools(targetDescLen, true);
-                        size = JSON.stringify(kiroTools).length;
-                    }
-                }
                 console.log(`[Kiro] Tools compressed: ${originalSize} -> ${size} bytes (${filteredTools.length} tools)`);
             }
 
