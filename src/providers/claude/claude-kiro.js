@@ -27,7 +27,7 @@ const KIRO_CONSTANTS = {
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
     USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
     DEFAULT_MODEL_NAME: 'claude-opus-4-5',
-    AXIOS_TIMEOUT: 300000, // 5 minutes timeout (increased from 2 minutes)
+    AXIOS_TIMEOUT: 120000, // 2 minutes timeout (increased from 2 minutes)
     USER_AGENT: 'KiroIDE',
     KIRO_VERSION: '0.7.5',
     CONTENT_TYPE_JSON: 'application/json',

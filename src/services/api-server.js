@@ -222,8 +222,8 @@ async function startServer() {
     await initializeConfig(process.argv.slice(2), 'configs/config.json');
     
     // 自动关联 configs 目录中的配置文件到对应的提供商
-    console.log('[Initialization] Checking for unlinked provider configs...');
-    await autoLinkProviderConfigs(CONFIG);
+    // console.log('[Initialization] Checking for unlinked provider configs...');
+    // await autoLinkProviderConfigs(CONFIG);
 
     // Initialize plugin system
     console.log('[Initialization] Discovering and initializing plugins...');
@@ -253,7 +253,15 @@ async function startServer() {
     // Create request handler
     const requestHandlerInstance = createRequestHandler(CONFIG, getProviderPoolManager());
 
-    serverInstance = http.createServer(requestHandlerInstance);
+    serverInstance = http.createServer({
+        // 设置服务器级别的超时
+        requestTimeout: 0, // 禁用请求超时（流式响应需要）
+        headersTimeout: 60000, // 头部超时 60 秒
+        keepAliveTimeout: 65000 // Keep-alive 超时
+    }, requestHandlerInstance);
+
+    // 设置服务器的最大连接数
+    serverInstance.maxConnections = 1000;
     serverInstance.listen(CONFIG.SERVER_PORT, CONFIG.HOST, async () => {
         console.log(`--- Unified API Server Configuration ---`);
         const configuredProviders = Array.isArray(CONFIG.DEFAULT_MODEL_PROVIDERS) && CONFIG.DEFAULT_MODEL_PROVIDERS.length > 0
