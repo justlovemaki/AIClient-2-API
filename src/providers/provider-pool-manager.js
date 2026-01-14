@@ -151,6 +151,10 @@ export class ProviderPoolManager {
      */
     _doSelectProvider(providerType, requestedModel, options) {
         const availableProviders = this.providerStatus[providerType] || [];
+        
+        // 检查并恢复已到恢复时间的提供商
+        this._checkAndRecoverScheduledProviders(providerType);
+        
         let availableAndHealthyProviders = availableProviders.filter(p =>
             p.config.isHealthy && !p.config.isDisabled
         );
@@ -500,6 +504,44 @@ export class ProviderPoolManager {
     }
 
     /**
+     * Marks a provider as unhealthy with a scheduled recovery time.
+     * Used for quota exhaustion errors (402) where the quota will reset at a specific time.
+     * @param {string} providerType - The type of the provider.
+     * @param {object} providerConfig - The configuration of the provider to mark.
+     * @param {string} [errorMessage] - Optional error message to store.
+     * @param {Date|string} [recoveryTime] - Optional recovery time when the provider should be marked healthy again.
+     */
+    markProviderUnhealthyWithRecoveryTime(providerType, providerConfig, errorMessage = null, recoveryTime = null) {
+        if (!providerConfig?.uuid) {
+            this._log('error', 'Invalid providerConfig in markProviderUnhealthyWithRecoveryTime');
+            return;
+        }
+
+        const provider = this._findProvider(providerType, providerConfig.uuid);
+        if (provider) {
+            provider.config.isHealthy = false;
+            provider.config.errorCount = this.maxErrorCount; // Set to max to indicate definitive failure
+            provider.config.lastErrorTime = new Date().toISOString();
+            provider.config.lastUsed = new Date().toISOString();
+
+            if (errorMessage) {
+                provider.config.lastErrorMessage = errorMessage;
+            }
+
+            // Set recovery time if provided
+            if (recoveryTime) {
+                const recoveryDate = recoveryTime instanceof Date ? recoveryTime : new Date(recoveryTime);
+                provider.config.scheduledRecoveryTime = recoveryDate.toISOString();
+                this._log('warn', `Marked provider as unhealthy with recovery time: ${providerConfig.uuid} for type ${providerType}. Recovery at: ${recoveryDate.toISOString()}. Reason: ${errorMessage || 'Quota exhausted'}`);
+            } else {
+                this._log('warn', `Marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Quota exhausted'}`);
+            }
+
+            this._debouncedSave(providerType);
+        }
+    }
+
+    /**
      * Marks a provider as healthy.
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
@@ -644,6 +686,41 @@ export class ProviderPoolManager {
     }
 
     /**
+     * 检查并恢复已到恢复时间的提供商
+     * @param {string} [providerType] - 可选，指定要检查的提供商类型。如果不提供，检查所有类型
+     * @private
+     */
+    _checkAndRecoverScheduledProviders(providerType = null) {
+        const now = new Date();
+        const typesToCheck = providerType ? [providerType] : Object.keys(this.providerStatus);
+        
+        for (const type of typesToCheck) {
+            const providers = this.providerStatus[type] || [];
+            for (const providerStatus of providers) {
+                const config = providerStatus.config;
+                
+                // 检查是否有 scheduledRecoveryTime 且已到恢复时间
+                if (config.scheduledRecoveryTime && !config.isHealthy) {
+                    const recoveryTime = new Date(config.scheduledRecoveryTime);
+                    if (now >= recoveryTime) {
+                        this._log('info', `Auto-recovering provider ${config.uuid} (${type}). Scheduled recovery time reached: ${recoveryTime.toISOString()}`);
+                        
+                        // 恢复健康状态
+                        config.isHealthy = true;
+                        config.errorCount = 0;
+                        config.lastErrorTime = null;
+                        config.lastErrorMessage = null;
+                        config.scheduledRecoveryTime = null; // 清除恢复时间
+                        
+                        // 保存更改
+                        this._debouncedSave(type);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Performs health checks on all providers in the pool.
      * This method would typically be called periodically (e.g., via cron job).
      */
@@ -651,9 +728,21 @@ export class ProviderPoolManager {
         this._log('info', 'Performing health checks on all providers...');
         const now = new Date();
         
+        // 首先检查并恢复已到恢复时间的提供商
+        this._checkAndRecoverScheduledProviders();
+        
         for (const providerType in this.providerStatus) {
             for (const providerStatus of this.providerStatus[providerType]) {
                 const providerConfig = providerStatus.config;
+
+                // 如果提供商有 scheduledRecoveryTime 且未到恢复时间，跳过健康检查
+                if (providerConfig.scheduledRecoveryTime && !providerConfig.isHealthy) {
+                    const recoveryTime = new Date(providerConfig.scheduledRecoveryTime);
+                    if (now < recoveryTime) {
+                        this._log('debug', `Skipping health check for ${providerConfig.uuid} (${providerType}). Waiting for scheduled recovery at ${recoveryTime.toISOString()}`);
+                        continue;
+                    }
+                }
 
                 // Only attempt to health check unhealthy providers after a certain interval
                 if (!providerStatus.config.isHealthy && providerStatus.config.lastErrorTime &&
