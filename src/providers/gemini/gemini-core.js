@@ -10,6 +10,7 @@ import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError } from '../../ut
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
+import { acquireFileLock } from '../../utils/file-lock.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -274,8 +275,8 @@ export class GeminiApiService {
                 console.log('[Gemini Auth] Forcing token refresh...');
                 const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                 this.authClient.setCredentials(newCredentials);
-                // Save refreshed credentials back to file
-                await fs.writeFile(credPath, JSON.stringify(newCredentials, null, 2));
+                // Save refreshed credentials back to file (with file locking)
+                await this._saveCredentialsToFile(credPath, newCredentials);
                 console.log('[Gemini Auth] Token refreshed and saved successfully.');
             }
         } catch (error) {
@@ -618,6 +619,23 @@ export class GeminiApiService {
         } catch (error) {
             console.error(`[Gemini] Error checking expiry date: ${error.message}`);
             return false;
+        }
+    }
+
+    /**
+     * 保存凭证到文件（使用文件锁防止并发写入）
+     * @param {string} filePath - 凭证文件路径
+     * @param {Object} credentials - 凭证数据
+     */
+    async _saveCredentialsToFile(filePath, credentials) {
+        const releaseLock = await acquireFileLock(filePath);
+        try {
+            await fs.writeFile(filePath, JSON.stringify(credentials, null, 2));
+            console.log(`[Gemini Auth] Credentials saved to ${filePath}`);
+        } catch (error) {
+            console.error(`[Gemini Auth] Failed to save credentials to ${filePath}: ${error.message}`);
+        } finally {
+            releaseLock();
         }
     }
 

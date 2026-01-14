@@ -24,6 +24,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError } from '../../utils/common.js';
+import { acquireFileLock } from '../../utils/file-lock.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -132,11 +133,13 @@ async function loadTokenFromFile(filePath) {
  * @param {IFlowTokenStorage} tokenStorage - Token 存储对象
  */
 async function saveTokenToFile(filePath, tokenStorage) {
+    const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(process.cwd(), filePath);
+    
+    // 获取文件锁，防止并发写入
+    const releaseLock = await acquireFileLock(absolutePath);
     try {
-        const absolutePath = path.isAbsolute(filePath)
-            ? filePath
-            : path.join(process.cwd(), filePath);
-        
         // 确保目录存在
         const dir = path.dirname(absolutePath);
         await fs.mkdir(dir, { recursive: true });
@@ -157,6 +160,9 @@ async function saveTokenToFile(filePath, tokenStorage) {
         console.log(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
     } catch (error) {
         throw new Error(`[iFlow] Failed to save token to file: ${error.message}`);
+    } finally {
+        // 确保锁被释放
+        releaseLock();
     }
 }
 
