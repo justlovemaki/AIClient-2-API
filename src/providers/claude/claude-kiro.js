@@ -62,6 +62,22 @@ const MODEL_MAPPING = Object.fromEntries(
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
 /**
+ * 自定义凭证错误类
+ * 用于标识需要切换凭证的错误
+ */
+class CredentialError extends Error {
+    constructor(message, options = {}) {
+        super(message);
+        this.name = 'CredentialError';
+        this.shouldSwitchCredential = options.shouldSwitchCredential ?? false;
+        this.skipErrorCount = options.skipErrorCount ?? false;
+        this.credentialMarkedUnhealthy = options.credentialMarkedUnhealthy ?? false;
+        this.statusCode = options.statusCode;
+        this.originalError = options.originalError;
+    }
+}
+
+/**
  * Kiro API Service - Node.js implementation based on the Python ki2api
  * Provides OpenAI-compatible API for Claude Sonnet 4 via Kiro/CodeWhisperer
  */
@@ -1338,27 +1354,39 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
     
+            // Handle 402 (Payment Required / Quota Exceeded) - verify usage and mark as unhealthy with recovery time
+            if (status === 402) {
+                await this._handle402Error(error, 'callApi');
+            }
+
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403. Marking credential as unhealthy...');
                 this._markCredentialUnhealthy('403 Forbidden', error);
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
                 throw error;
             }
             
-            // Handle 429 (Too Many Requests) with exponential backoff
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            // Handle 429 (Too Many Requests) - wait baseDelay then switch credential
+            if (status === 429) {
+                console.log(`[Kiro] Received 429 (Too Many Requests). Waiting ${baseDelay}ms before switching credential...`);
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
-            // Handle other retryable errors (5xx server errors)
-            if (status >= 500 && status < 600 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(method, model, body, isRetry, retryCount + 1);
+            // Handle 5xx server errors - wait baseDelay then switch credential
+            if (status >= 500 && status < 600) {
+                console.log(`[Kiro] Received ${status} server error. Waiting ${baseDelay}ms before switching credential...`);
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
@@ -1417,6 +1445,79 @@ async initializeAuth(forceRefresh = false) {
             console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
             return false;
         }
+    }
+
+    /**
+     * Helper method to mark the current credential as unhealthy with a scheduled recovery time
+     * Used for quota exhaustion (402) where quota resets at a specific time (e.g., 1st of next month)
+     * @param {string} reason - The reason for marking unhealthy
+     * @param {Error} [error] - Optional error object to attach the marker to
+     * @param {Date} [recoveryTime] - The time when the credential should be marked healthy again
+     * @returns {boolean} - Whether the credential was successfully marked as unhealthy
+     * @private
+     */
+    _markCredentialUnhealthyWithRecovery(reason, error = null, recoveryTime = null) {
+        const poolManager = getProviderPoolManager();
+        if (poolManager && this.uuid) {
+            console.log(`[Kiro] Marking credential ${this.uuid} as unhealthy with recovery time. Reason: ${reason}, Recovery: ${recoveryTime?.toISOString()}`);
+            poolManager.markProviderUnhealthyWithRecoveryTime(MODEL_PROVIDER.KIRO_API, {
+                uuid: this.uuid
+            }, reason, recoveryTime);
+            // Attach marker to error object to prevent duplicate marking in upper layers
+            if (error) {
+                error.credentialMarkedUnhealthy = true;
+            }
+            return true;
+        } else {
+            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            return false;
+        }
+    }
+
+    /**
+     * 计算下月1日 00:00:00 UTC 时间
+     * @returns {Date} 下月1日的 Date 对象
+     * @private
+     */
+    _getNextMonthFirstDay() {
+        const now = new Date();
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+    }
+
+    /**
+     * 处理 402 错误（配额耗尽）
+     * 验证用量限制并标记凭证为不健康，设置恢复时间为下月1日
+     * @param {Error} error - 原始错误对象
+     * @param {string} context - 错误发生的上下文（如 'callApi', 'stream'）
+     * @throws {Error} 抛出带有切换凭证标记的错误
+     * @private
+     */
+    async _handle402Error(error, context = 'unknown') {
+        console.log(`[Kiro] Received 402 (Quota Exceeded) in ${context}. Verifying usage limits...`);
+        try {
+            // Verify usage limits to confirm quota exhaustion
+            const usageLimits = await this.getUsageLimits();
+            const isQuotaExhausted = usageLimits?.usedCount >= usageLimits?.limitCount;
+            
+            if (isQuotaExhausted) {
+                console.log(`[Kiro] Quota confirmed exhausted: ${usageLimits?.usedCount}/${usageLimits?.limitCount}`);
+                // Calculate recovery time: 1st day of next month at 00:00:00 UTC
+                const nextMonth = this._getNextMonthFirstDay();
+                this._markCredentialUnhealthyWithRecovery('402 Payment Required - Quota Exhausted', error, nextMonth);
+            } else {
+                console.log(`[Kiro] Quota not exhausted (${usageLimits?.usedCount}/${usageLimits?.limitCount}), but received 402. Marking unhealthy anyway.`);
+                this._markCredentialUnhealthy('402 Payment Required - Unexpected', error);
+            }
+        } catch (usageError) {
+            console.warn('[Kiro] Failed to verify usage limits:', usageError.message);
+            // If we can't verify, still mark as unhealthy with recovery time
+            const nextMonth = this._getNextMonthFirstDay();
+            this._markCredentialUnhealthyWithRecovery('402 Payment Required - Quota Exceeded (unverified)', error, nextMonth);
+        }
+        // Mark error for credential switch without recording error count
+        error.shouldSwitchCredential = true;
+        error.skipErrorCount = true;
+        throw error;
     }
 
     _processApiResponse(response) {
@@ -1733,28 +1834,39 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
             
+            // Handle 402 (Payment Required / Quota Exceeded) - verify usage and mark as unhealthy with recovery time
+            if (status === 402) {
+                await this._handle402Error(error, 'stream');
+            }
+
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403 in stream. Marking credential as unhealthy...');
                 this._markCredentialUnhealthy('403 Forbidden', error);
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
                 throw error;
             }
             
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
-                return;
+            // Handle 429 (Too Many Requests) - wait baseDelay then switch credential
+            if (status === 429) {
+                console.log(`[Kiro] Received 429 (Too Many Requests) in stream. Waiting ${baseDelay}ms before switching credential...`);
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
-            // Handle 5xx server errors with exponential backoff
-            if (status >= 500 && status < 600 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Kiro] Received ${status} server error in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
-                return;
+            // Handle 5xx server errors - wait baseDelay then switch credential
+            if (status >= 500 && status < 600) {
+                console.log(`[Kiro] Received ${status} server error in stream. Waiting ${baseDelay}ms before switching credential...`);
+                await new Promise(resolve => setTimeout(resolve, baseDelay));
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
