@@ -24,7 +24,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError } from '../../utils/common.js';
-import { acquireFileLock } from '../../utils/file-lock.js';
+import { acquireFileLock, withDeduplication } from '../../utils/file-lock.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -570,7 +570,23 @@ export class IFlowApiService {
         console.log('[iFlow] Token is expiring soon, attempting refresh...');
         
         try {
-            await this._refreshOAuthTokens();
+            // 使用去重锁：多个并发刷新请求只执行一次，共享结果
+            const dedupeKey = `iflow-token-refresh:${this.tokenFilePath}`;
+            await withDeduplication(dedupeKey, async () => {
+                await this._refreshOAuthTokens();
+            });
+            
+            // 如果是等待其他请求完成的刷新，需要重新加载凭证
+            if (this.isExpiryDateNear()) {
+                const refreshedStorage = await loadTokenFromFile(this.tokenFilePath);
+                if (refreshedStorage && refreshedStorage.apiKey) {
+                    this.tokenStorage = refreshedStorage;
+                    this.apiKey = refreshedStorage.apiKey;
+                    this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
+                    console.log('[iFlow] Credentials reloaded after concurrent refresh');
+                }
+            }
+            
             return true;
         } catch (error) {
             console.error('[iFlow] Token refresh failed:', error.message);
