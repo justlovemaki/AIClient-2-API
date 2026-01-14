@@ -61,6 +61,10 @@ const MODEL_MAPPING = Object.fromEntries(
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
+// Token 刷新单例锁 - 按凭证文件路径索引，防止多个并发请求同时刷新同一个 token
+// 这解决了文件锁导致的并发请求串行化问题
+const tokenRefreshPromises = new Map();
+
 /**
  * Kiro API Service - Node.js implementation based on the Python ki2api
  * Provides OpenAI-compatible API for Claude Sonnet 4 via Kiro/CodeWhisperer
@@ -410,16 +414,45 @@ async initializeAuth(forceRefresh = false) {
         return;
     }
 
+    // 获取凭证文件路径，用于单例锁的 key
+    const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+    
+    // 单例刷新逻辑：如果已有刷新在进行中，等待它完成而不是重复刷新
+    if (forceRefresh && tokenRefreshPromises.has(tokenFilePath)) {
+        console.log('[Kiro Auth] Token refresh already in progress for this credential, waiting...');
+        try {
+            await tokenRefreshPromises.get(tokenFilePath);
+            // 刷新完成后，重新加载凭证（因为其他请求可能已经更新了 token）
+            await this._reloadCredentialsAfterRefresh(tokenFilePath);
+            console.log('[Kiro Auth] Reused token from concurrent refresh');
+            return;
+        } catch (error) {
+            // 如果等待的刷新失败了，我们需要自己尝试刷新
+            console.warn('[Kiro Auth] Concurrent refresh failed, will attempt own refresh:', error.message);
+        }
+    }
+
     // Helper to load credentials from a file
     const loadCredentialsFromFile = async (filePath) => {
         try {
             const fileContent = await fs.readFile(filePath, 'utf8');
-            return JSON.parse(fileContent);
+            try {
+                return JSON.parse(fileContent);
+            } catch (parseError) {
+                console.warn('[Kiro Auth] JSON parse failed, attempting repair...');
+                try {
+                    const repaired = repairJson(fileContent);
+                    const result = JSON.parse(repaired);
+                    console.info('[Kiro Auth] JSON repair successful');
+                    return result;
+                } catch (repairError) {
+                    console.error('[Kiro Auth] JSON repair failed:', repairError.message);
+                    return null;
+                }
+            }
         } catch (error) {
             if (error.code === 'ENOENT') {
                 console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
-            } else if (error instanceof SyntaxError) {
-                console.warn(`[Kiro Auth] Failed to parse JSON from ${filePath}: ${error.message}`);
             } else {
                 console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
             }
@@ -435,7 +468,19 @@ async initializeAuth(forceRefresh = false) {
             let existingData = {};
             try {
                 const fileContent = await fs.readFile(filePath, 'utf8');
-                existingData = JSON.parse(fileContent);
+                try {
+                    existingData = JSON.parse(fileContent);
+                } catch (parseError) {
+                    console.warn('[Kiro Auth] JSON parse failed, attempting repair...');
+                    try {
+                        const repaired = repairJson(fileContent);
+                        existingData = JSON.parse(repaired);
+                        console.info('[Kiro Auth] JSON repair successful');
+                    } catch (repairError) {
+                        console.error('[Kiro Auth] JSON repair failed:', repairError.message);
+                        existingData = {};
+                    }
+                }
             } catch (readError) {
                 if (readError.code === 'ENOENT') {
                     console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
@@ -529,6 +574,30 @@ async initializeAuth(forceRefresh = false) {
         if (!this.refreshToken) {
             throw new Error('No refresh token available to refresh access token.');
         }
+        
+        // 创建刷新 Promise 并存入单例锁 Map
+        const refreshPromise = this._doTokenRefresh(saveCredentialsToFile, tokenFilePath);
+        tokenRefreshPromises.set(tokenFilePath, refreshPromise);
+        
+        try {
+            await refreshPromise;
+        } finally {
+            // 刷新完成后清理单例锁
+            tokenRefreshPromises.delete(tokenFilePath);
+        }
+    }
+
+    if (!this.accessToken) {
+        throw new Error('No access token available after initialization and refresh attempts.');
+    }
+}
+
+    /**
+     * 执行实际的 token 刷新操作（内部方法）
+     * @param {Function} saveCredentialsToFile - 保存凭证的函数
+     * @param {string} tokenFilePath - 凭证文件路径
+     */
+    async _doTokenRefresh(saveCredentialsToFile, tokenFilePath) {
         try {
             const requestBody = {
                 refreshToken: this.refreshToken,
@@ -546,7 +615,7 @@ async initializeAuth(forceRefresh = false) {
             if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
                 response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
                 console.log('[Kiro Auth] Token refresh social response: ok');
-            }else{
+            } else {
                 response = await this.axiosInstance.post(refreshUrl, requestBody);
                 console.log('[Kiro Auth] Token refresh idc response: ok');
             }
@@ -560,14 +629,12 @@ async initializeAuth(forceRefresh = false) {
                 this.expiresAt = expiresAt;
                 console.info('[Kiro Auth] Access token refreshed successfully');
 
-                // Update the token file - use specified path if configured, otherwise use default
-                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
                 const updatedTokenData = {
                     accessToken: this.accessToken,
                     refreshToken: this.refreshToken,
                     expiresAt: expiresAt,
                 };
-                if(this.profileArn){
+                if (this.profileArn) {
                     updatedTokenData.profileArn = this.profileArn;
                 }
                 await saveCredentialsToFile(tokenFilePath, updatedTokenData);
@@ -580,10 +647,39 @@ async initializeAuth(forceRefresh = false) {
         }
     }
 
-    if (!this.accessToken) {
-        throw new Error('No access token available after initialization and refresh attempts.');
+    /**
+     * 在并发刷新完成后重新加载凭证（内部方法）
+     * @param {string} tokenFilePath - 凭证文件路径
+     */
+    async _reloadCredentialsAfterRefresh(tokenFilePath) {
+        try {
+            const fileContent = await fs.readFile(tokenFilePath, 'utf8');
+            let credentials;
+            try {
+                credentials = JSON.parse(fileContent);
+            } catch (parseError) {
+                console.warn('[Kiro Auth] JSON parse failed, attempting repair...');
+                try {
+                    const repaired = repairJson(fileContent);
+                    credentials = JSON.parse(repaired);
+                    console.info('[Kiro Auth] JSON repair successful');
+                } catch (repairError) {
+                    console.error('[Kiro Auth] JSON repair failed:', repairError.message);
+                    throw new Error(`Failed to parse credentials file after repair attempt: ${repairError.message}`);
+                }
+            }
+            this.accessToken = credentials.accessToken;
+            this.refreshToken = credentials.refreshToken;
+            this.expiresAt = credentials.expiresAt;
+            if (credentials.profileArn) {
+                this.profileArn = credentials.profileArn;
+            }
+            console.debug('[Kiro Auth] Credentials reloaded after concurrent refresh');
+        } catch (error) {
+            console.warn(`[Kiro Auth] Failed to reload credentials after refresh: ${error.message}`);
+            throw error;
+        }
     }
-}
 
     /**
      * Extract text content from OpenAI message format
