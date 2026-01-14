@@ -1338,13 +1338,20 @@ async initializeAuth(forceRefresh = false) {
                 }
             }
     
+            // Handle 402 (Payment Required) - quota exhausted, mark as unhealthy immediately
+            if (status === 402) {
+                console.log('[Kiro] Received 402 (Payment Required - Quota exhausted). Marking credential as unhealthy...');
+                this._markCredentialUnhealthy('402 Payment Required - Quota exhausted', error);
+                throw error;
+            }
+
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403. Marking credential as unhealthy...');
                 this._markCredentialUnhealthy('403 Forbidden', error);
                 throw error;
             }
-            
+
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
@@ -1732,14 +1739,21 @@ async initializeAuth(forceRefresh = false) {
                     throw refreshError;
                 }
             }
-            
+
+            // Handle 402 (Payment Required) - quota exhausted, mark as unhealthy immediately
+            if (status === 402) {
+                console.log('[Kiro] Received 402 (Payment Required - Quota exhausted) in stream. Marking credential as unhealthy...');
+                this._markCredentialUnhealthy('402 Payment Required - Quota exhausted', error);
+                throw error;
+            }
+
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403 in stream. Marking credential as unhealthy...');
                 this._markCredentialUnhealthy('403 Forbidden', error);
                 throw error;
             }
-            
+
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 console.log(`[Kiro] Received 429 in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
@@ -2572,13 +2586,19 @@ async initializeAuth(forceRefresh = false) {
                 ? new Error(`API call failed: ${status} - ${errorMessage}`)
                 : new Error(`API call failed: ${errorMessage}`);
             
-            // 对于用量查询，401/403 错误直接标记凭证为不健康，不重试
+            // 对于用量查询，401/402/403 错误直接标记凭证为不健康，不重试
             if (status === 401) {
                 console.log('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
                 this._markCredentialUnhealthy('401 Unauthorized on usage query', formattedError);
                 throw formattedError;
             }
-            
+
+            if (status === 402) {
+                console.log('[Kiro] Received 402 on getUsageLimits (Quota exhausted). Marking credential as unhealthy (no retry)...');
+                this._markCredentialUnhealthy('402 Payment Required - Quota exhausted on usage query', formattedError);
+                throw formattedError;
+            }
+
             if (status === 403) {
                 console.log('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
                 this._markCredentialUnhealthy('403 Forbidden on usage query', formattedError);
