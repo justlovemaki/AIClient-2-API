@@ -585,6 +585,9 @@ We are grateful for the support from our sponsors:
 - [**醉春风**](https://github.com/handsometong "28.8")
 - [**crazy**](https://github.com/404 "88")
 - [**清宵落了灯花**](https://github.com/Lanternmorning "16")
+- [**郭铁**](https://github.com/guotie "20")
+- [**落叶聚名**](https://github.com/mb5u88-debug "88")
+- [**匿名**](https://github.com/404 "8.88")
 
 ### 🌟 Star History
 
