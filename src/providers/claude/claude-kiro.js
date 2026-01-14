@@ -11,7 +11,7 @@ import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
-import { acquireFileLock } from '../../utils/file-lock.js';
+import { acquireFileLock, withDeduplication } from '../../utils/file-lock.js';
 
 const KIRO_THINKING = {
     MAX_BUDGET_TOKENS: 24576,
@@ -60,10 +60,6 @@ const MODEL_MAPPING = Object.fromEntries(
 );
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
-
-// Token 刷新单例锁 - 按凭证文件路径索引，防止多个并发请求同时刷新同一个 token
-// 这解决了文件锁导致的并发请求串行化问题
-const tokenRefreshPromises = new Map();
 
 /**
  * Kiro API Service - Node.js implementation based on the Python ki2api
@@ -414,23 +410,8 @@ async initializeAuth(forceRefresh = false) {
         return;
     }
 
-    // 获取凭证文件路径，用于单例锁的 key
+    // 获取凭证文件路径，用于去重锁的 key
     const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-    
-    // 单例刷新逻辑：如果已有刷新在进行中，等待它完成而不是重复刷新
-    if (forceRefresh && tokenRefreshPromises.has(tokenFilePath)) {
-        console.log('[Kiro Auth] Token refresh already in progress for this credential, waiting...');
-        try {
-            await tokenRefreshPromises.get(tokenFilePath);
-            // 刷新完成后，重新加载凭证（因为其他请求可能已经更新了 token）
-            await this._reloadCredentialsAfterRefresh(tokenFilePath);
-            console.log('[Kiro Auth] Reused token from concurrent refresh');
-            return;
-        } catch (error) {
-            // 如果等待的刷新失败了，我们需要自己尝试刷新
-            console.warn('[Kiro Auth] Concurrent refresh failed, will attempt own refresh:', error.message);
-        }
-    }
 
     // Helper to load credentials from a file
     const loadCredentialsFromFile = async (filePath) => {
@@ -575,15 +556,19 @@ async initializeAuth(forceRefresh = false) {
             throw new Error('No refresh token available to refresh access token.');
         }
         
-        // 创建刷新 Promise 并存入单例锁 Map
-        const refreshPromise = this._doTokenRefresh(saveCredentialsToFile, tokenFilePath);
-        tokenRefreshPromises.set(tokenFilePath, refreshPromise);
+        // 使用去重锁：多个并发刷新请求只执行一次，共享结果
+        const dedupeKey = `kiro-token-refresh:${tokenFilePath}`;
+        await withDeduplication(dedupeKey, async () => {
+            await this._doTokenRefresh(saveCredentialsToFile, tokenFilePath);
+        });
         
-        try {
-            await refreshPromise;
-        } finally {
-            // 刷新完成后清理单例锁
-            tokenRefreshPromises.delete(tokenFilePath);
+        // 如果是等待其他请求完成的刷新，需要重新加载凭证
+        // 因为 _doTokenRefresh 只更新了执行刷新的实例的内存状态
+        // 注意：withDeduplication 会让所有等待者共享同一个 Promise
+        // 但只有第一个调用者的实例会执行 _doTokenRefresh 并更新自己的内存状态
+        // 其他等待者需要从文件重新加载
+        if (!this.accessToken || this.isExpiryDateNear()) {
+            await this._reloadCredentialsAfterRefresh(tokenFilePath);
         }
     }
 
