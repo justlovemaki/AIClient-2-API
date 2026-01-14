@@ -10,7 +10,7 @@ import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError } from '../../ut
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
-import { acquireFileLock } from '../../utils/file-lock.js';
+import { acquireFileLock, withDeduplication } from '../../utils/file-lock.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -273,11 +273,24 @@ export class GeminiApiService {
             
             if (forceRefresh) {
                 console.log('[Gemini Auth] Forcing token refresh...');
-                const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
-                this.authClient.setCredentials(newCredentials);
-                // Save refreshed credentials back to file (with file locking)
-                await this._saveCredentialsToFile(credPath, newCredentials);
-                console.log('[Gemini Auth] Token refreshed and saved successfully.');
+                
+                // 使用去重锁：多个并发刷新请求只执行一次，共享结果
+                const dedupeKey = `gemini-token-refresh:${credPath}`;
+                await withDeduplication(dedupeKey, async () => {
+                    const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
+                    this.authClient.setCredentials(newCredentials);
+                    // Save refreshed credentials back to file (with file locking)
+                    await this._saveCredentialsToFile(credPath, newCredentials);
+                    console.log('[Gemini Auth] Token refreshed and saved successfully.');
+                });
+                
+                // 如果是等待其他请求完成的刷新，需要重新加载凭证
+                if (this.isExpiryDateNear()) {
+                    const refreshedData = await fs.readFile(credPath, "utf8");
+                    const refreshedCredentials = JSON.parse(refreshedData);
+                    this.authClient.setCredentials(refreshedCredentials);
+                    console.log('[Gemini Auth] Credentials reloaded after concurrent refresh');
+                }
             }
         } catch (error) {
             console.error('[Gemini Auth] Error initializing authentication:', error.code);

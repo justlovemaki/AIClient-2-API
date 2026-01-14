@@ -533,8 +533,8 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
         // If apiService is null or provider is different, get the appropriate service from pool
         if (!apiService || detectedProvider !== currentConfig.MODEL_PROVIDER) {
             if (providerPoolManager) {
-                // Select provider from pool
-                const providerConfig = providerPoolManager.selectProvider(detectedProvider, modelName, { skipUsageCount: true });
+                // Select provider from pool (now async)
+                const providerConfig = await providerPoolManager.selectProvider(detectedProvider, modelName, { skipUsageCount: true });
                 if (providerConfig) {
                     actualConfig = {
                         ...currentConfig,
@@ -640,8 +640,8 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
         // If apiService is null or provider is different, get the appropriate service from pool
         if (!apiService || detectedProvider !== currentConfig.MODEL_PROVIDER) {
             if (providerPoolManager) {
-                // Select provider from pool
-                const providerConfig = providerPoolManager.selectProvider(detectedProvider, modelName, { skipUsageCount: true });
+                // Select provider from pool (now async)
+                const providerConfig = await providerPoolManager.selectProvider(detectedProvider, modelName, { skipUsageCount: true });
                 if (providerConfig) {
                     actualConfig = {
                         ...currentConfig,
