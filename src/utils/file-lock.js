@@ -16,6 +16,10 @@ import * as path from 'path';
 // 每个文件对应一个 Promise，新的锁请求会链接到当前 Promise 之后
 const fileLockQueues = new Map();
 
+// 存储去重锁的进行中 Promise
+// 用于合并相同 key 的并发请求，只执行一次操作
+const dedupePromises = new Map();
+
 /**
  * 获取文件锁，确保同一时间只有一个操作可以访问特定文件
  *
@@ -111,9 +115,106 @@ export function getLockedFileCount() {
     return fileLockQueues.size;
 }
 
+/**
+ * 去重执行 - 合并相同 key 的并发请求，只执行一次操作
+ *
+ * 与 withFileLock 的区别：
+ * - withFileLock（队列锁）：10个并发请求 → 排队执行10次
+ * - withDeduplication（去重锁）：10个并发请求 → 只执行1次，共享结果
+ *
+ * 使用场景：
+ * - Token 刷新：多个请求同时发现 token 过期，只需刷新一次
+ * - 缓存填充：多个请求同时 cache miss，只需加载一次
+ * - 任何"结果可共享"的昂贵操作
+ *
+ * @param {string} key - 去重的唯一标识符
+ * @param {Function} operation - 要执行的异步操作
+ * @returns {Promise<any>} 操作的返回值（所有等待者共享同一结果）
+ *
+ * @example
+ * // 多个并发调用只会执行一次 refreshToken
+ * const newToken = await withDeduplication('token-refresh', async () => {
+ *     const response = await fetch('/refresh');
+ *     return response.json();
+ * });
+ */
+export async function withDeduplication(key, operation) {
+    // 如果已有相同 key 的操作在进行中，直接等待它的结果
+    if (dedupePromises.has(key)) {
+        return dedupePromises.get(key);
+    }
+    
+    // 创建新的操作 Promise
+    const operationPromise = (async () => {
+        try {
+            return await operation();
+        } finally {
+            // 操作完成后清理
+            dedupePromises.delete(key);
+        }
+    })();
+    
+    // 存入 Map，让后续请求可以共享
+    dedupePromises.set(key, operationPromise);
+    
+    return operationPromise;
+}
+
+/**
+ * 组合去重锁和文件锁 - 先去重再加文件锁
+ *
+ * 典型场景：Token 刷新
+ * 1. 去重层：10个并发刷新请求 → 合并为1次刷新操作
+ * 2. 文件锁层：保护那1次刷新操作的文件写入不与其他操作冲突
+ *
+ * @param {string} dedupeKey - 去重的唯一标识符
+ * @param {string} filePath - 需要保护的文件路径
+ * @param {Function} operation - 要执行的异步操作
+ * @returns {Promise<any>} 操作的返回值
+ *
+ * @example
+ * // Token 刷新场景
+ * const newToken = await withDeduplicationAndFileLock(
+ *     'token-refresh-' + credentialId,
+ *     '/path/to/token.json',
+ *     async () => {
+ *         const response = await fetch('/refresh');
+ *         const data = await response.json();
+ *         await fs.writeFile('/path/to/token.json', JSON.stringify(data));
+ *         return data;
+ *     }
+ * );
+ */
+export async function withDeduplicationAndFileLock(dedupeKey, filePath, operation) {
+    return withDeduplication(dedupeKey, async () => {
+        return withFileLock(filePath, operation);
+    });
+}
+
+/**
+ * 检查是否有去重操作正在进行
+ * @param {string} key - 去重的唯一标识符
+ * @returns {boolean} 是否有操作在进行中
+ */
+export function isDedupeInProgress(key) {
+    return dedupePromises.has(key);
+}
+
+/**
+ * 获取当前进行中的去重操作数量（用于调试）
+ * @returns {number} 进行中的去重操作数量
+ */
+export function getDedupeCount() {
+    return dedupePromises.size;
+}
+
 export default {
     acquireFileLock,
     withFileLock,
     isFileLocked,
-    getLockedFileCount
+    getLockedFileCount,
+    withDeduplication,
+    withDeduplicationAndFileLock,
+    isDedupeInProgress,
+    getDedupeCount
 };
