@@ -1192,7 +1192,21 @@ async initializeAuth(forceRefresh = false) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000; // 1 second base delay
 
-        const requestData = this.buildCodewhispererRequest(body.messages, model, body.tools, body.system, body.thinking);
+        // 处理不同格式的请求体（messages 或 contents）
+        let messages = body.messages;
+        if (!messages && body.contents) {
+            // 将 Gemini 格式的 contents 转换为 messages 格式
+            messages = body.contents.map(content => ({
+                role: content.role || 'user',
+                content: content.parts?.map(part => part.text).join('') || ''
+            }));
+        }
+        
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error('No messages found in request body');
+        }
+
+        const requestData = this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
 
         try {
             const token = this.accessToken; // Use the already initialized token
@@ -1213,16 +1227,25 @@ async initializeAuth(forceRefresh = false) {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            // Handle 401 (Unauthorized) - try to refresh token first
+            // Handle 401 (Unauthorized) - refresh UUID first, then try to refresh token
             if (status === 401 && !isRetry) {
-                console.log('[Kiro] Received 401. Attempting token refresh...');
+                console.log('[Kiro] Received 401. Refreshing UUID and attempting token refresh...');
+                
+                // 1. 先刷新 UUID
+                const newUuid = this._refreshUuid();
+                if (newUuid) {
+                    console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    this.uuid = newUuid;
+                }
+                
+                // 2. 尝试刷新 token
                 try {
                     await this.initializeAuth(true); // Force refresh token
-                    console.log('[Kiro] Token refresh successful after 401, retrying request...');
+                    console.log('[Kiro] Token refresh successful after 401, retrying request with new UUID...');
                     return this.callApi(method, model, body, true, retryCount);
                 } catch (refreshError) {
                     console.error('[Kiro] Token refresh failed during 401 retry:', refreshError.message);
-                    // Mark credential as unhealthy immediately and attach marker to error
+                    // 3. 刷新失败，标记凭证不健康，让上层切换到其他凭证
                     this._markCredentialUnhealthy('401 Unauthorized - Token refresh failed', refreshError);
                     throw refreshError;
                 }
@@ -1262,6 +1285,25 @@ async initializeAuth(forceRefresh = false) {
 
             console.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
+        }
+    }
+
+    /**
+     * Helper method to refresh the current credential's UUID
+     * Used when encountering 401 errors to get a fresh identity
+     * @returns {string|null} - The new UUID, or null if refresh failed
+     * @private
+     */
+    _refreshUuid() {
+        const poolManager = getProviderPoolManager();
+        if (poolManager && this.uuid) {
+            const newUuid = poolManager.refreshProviderUuid(MODEL_PROVIDER.KIRO_API, {
+                uuid: this.uuid
+            });
+            return newUuid;
+        } else {
+            console.warn(`[Kiro] Cannot refresh UUID: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            return null;
         }
     }
 
@@ -1512,7 +1554,21 @@ async initializeAuth(forceRefresh = false) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
 
-        const requestData = this.buildCodewhispererRequest(body.messages, model, body.tools, body.system, body.thinking);
+        // 处理不同格式的请求体（messages 或 contents）
+        let messages = body.messages;
+        if (!messages && body.contents) {
+            // 将 Gemini 格式的 contents 转换为 messages 格式
+            messages = body.contents.map(content => ({
+                role: content.role || 'user',
+                content: content.parts?.map(part => part.text).join('') || ''
+            }));
+        }
+        
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error('No messages found in request body');
+        }
+
+        const requestData = this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
 
         const token = this.accessToken;
         const headers = {
