@@ -6,6 +6,7 @@
 import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { convertData } from '../convert/convert.js';
 import { ConverterFactory } from '../converters/ConverterFactory.js';
+import { getProviderModels } from '../providers/provider-models.js';
 
 // Ollama版本号
 /**
@@ -20,6 +21,9 @@ export const MODEL_PREFIX_MAP = {
     [MODEL_PROVIDER.OPENAI_CUSTOM]: '[OpenAI]',
     [MODEL_PROVIDER.QWEN_API]: '[Qwen CLI]',
     [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
+    [MODEL_PROVIDER.ANTIGRAVITY]: '[Antigravity]',
+    [MODEL_PROVIDER.ORCHIDS_API]: '[Orchids]',
+    [MODEL_PROVIDER.IFLOW_API]: '[iFlow]',
 }
 
 /**
@@ -212,52 +216,53 @@ export function getProviderForModel(modelName, defaultProvider) {
     }
 
     // First, check if model name has a prefix that directly indicates the provider
-    const providerFromPrefix = getProviderFromPrefix(modelName);
-    if (providerFromPrefix) {
-        return providerFromPrefix;
-    }
+    // const providerFromPrefix = getProviderFromPrefix(modelName);
+    // if (providerFromPrefix) {
+    //     return providerFromPrefix;
+    // }
     
     // Remove prefix for further analysis
     const cleanModelName = removeModelPrefix(modelName);
-    const lowerModel = cleanModelName.toLowerCase();
-
-    // Gemini models
-    if (lowerModel.includes('gemini')) {
-        return MODEL_PROVIDER.GEMINI_CLI;
+    console.log(`[Provider Selection] Clean model name: ${cleanModelName}`);
+    
+    // Try to find the provider by checking if the model is in the provider's model list
+    // This handles cases where different providers have the same model name
+    const providerType = findProviderByModelName(cleanModelName);
+    console.log(`[Provider Selection] Provider determined from model list: ${providerType}`);
+    if (providerType) {
+        return providerType;
     }
-
-    // Claude models (excluding Warp's claude models)
-    if (lowerModel.includes('claude')) {
-        // Check if it's a Kiro model
-        if (lowerModel.includes('amazonq')) {
-            return MODEL_PROVIDER.KIRO_API;
-        }
-        return MODEL_PROVIDER.CLAUDE_CUSTOM;
-    }
-
-    // Qwen models
-    if (lowerModel.includes('qwen')) {
-        return MODEL_PROVIDER.QWEN_API;
-    }
-
-    // OpenAI models (excluding Warp's gpt models)
-    if (lowerModel.includes('gpt') || lowerModel.includes('o1') || lowerModel.includes('o3')) {
-        return MODEL_PROVIDER.OPENAI_CUSTOM;
-    }
-
+    
+    console.log(`[Provider Selection] Model name not found in provider models. Using default provider: ${defaultProvider}`);
     // Default to the provided default provider
     return defaultProvider;
 }
 
 /**
- * Check if a model belongs to a specific provider
- * @param {string} modelName - The model name
- * @param {string} providerType - The provider type to check
- * @returns {boolean} True if the model belongs to the provider
+ * Find provider type by checking if the model name is in the provider's model list
+ * @param {string} modelName - The model name to look up
+ * @returns {string|null} The provider type or null if not found
  */
-export function isModelFromProvider(modelName, providerType) {
-    const detectedProvider = getProviderForModel(modelName, null);
-    return detectedProvider === providerType;
+function findProviderByModelName(modelName) {
+    // Map of provider types to check
+    const providerTypes = [
+        MODEL_PROVIDER.GEMINI_CLI,
+        MODEL_PROVIDER.ANTIGRAVITY,
+        MODEL_PROVIDER.KIRO_API,
+        MODEL_PROVIDER.ORCHIDS_API,
+        MODEL_PROVIDER.QWEN_API,
+        MODEL_PROVIDER.IFLOW_API
+    ];
+    
+    // Check each provider's model list
+    for (const providerType of providerTypes) {
+        const models = getProviderModels(providerType);
+        if (models.includes(modelName)) {
+            return providerType;
+        }
+    }
+    
+    return null;
 }
 
 /**
@@ -278,7 +283,7 @@ export function normalizeOllamaPath(path, requestUrl) {
     }
     
     // Map other common aliases
-    if (normalizedPath === '/api/models') {
+    if (normalizedPath === '/v1/models') {
         normalizedPath = '/api/tags';
         if (requestUrl) {
             requestUrl.pathname = normalizedPath;
