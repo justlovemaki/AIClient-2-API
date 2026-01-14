@@ -224,7 +224,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     let responseClosed = false;
     
     // 重试上下文：包含 CONFIG 和重试计数
-    const maxRetries = retryContext?.maxRetries ?? 2;
+    // maxRetries: 凭证切换最大次数（跨凭证），默认 5 次
+    const maxRetries = retryContext?.maxRetries ?? 5;
     const currentRetry = retryContext?.currentRetry ?? 0;
     const CONFIG = retryContext?.CONFIG;
     const isRetry = currentRetry > 0;
@@ -307,11 +308,16 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         // 获取状态码（用于日志记录，不再用于判断是否重试）
         const status = error.response?.status;
         
+        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
+        const skipErrorCount = error.skipErrorCount === true;
+        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
+        const shouldSwitchCredential = error.shouldSwitchCredential === true;
+        
         // 检查凭证是否已在底层被标记为不健康（避免重复标记）
         let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
         
-        // 如果底层未标记，则在此处标记
-        if (!credentialMarkedUnhealthy && providerPoolManager && pooluuid) {
+        // 如果底层未标记，且不跳过错误计数，则在此处标记
+        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
@@ -320,6 +326,13 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             credentialMarkedUnhealthy = true;
         } else if (credentialMarkedUnhealthy) {
             console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+        } else if (skipErrorCount) {
+            console.log(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
+        }
+        
+        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
+        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
+            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
         }
         
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
@@ -386,7 +399,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName, retryContext = null) {
     // 重试上下文：包含 CONFIG 和重试计数
-    const maxRetries = retryContext?.maxRetries ?? 2;
+    // maxRetries: 凭证切换最大次数（跨凭证），默认 5 次
+    const maxRetries = retryContext?.maxRetries ?? 5;
     const currentRetry = retryContext?.currentRetry ?? 0;
     const CONFIG = retryContext?.CONFIG;
     
@@ -424,11 +438,16 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         // 获取状态码（用于日志记录，不再用于判断是否重试）
         const status = error.response?.status;
         
+        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
+        const skipErrorCount = error.skipErrorCount === true;
+        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
+        const shouldSwitchCredential = error.shouldSwitchCredential === true;
+        
         // 检查凭证是否已在底层被标记为不健康（避免重复标记）
         let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
         
-        // 如果底层未标记，则在此处标记
-        if (!credentialMarkedUnhealthy && providerPoolManager && pooluuid) {
+        // 如果底层未标记，且不跳过错误计数，则在此处标记
+        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
@@ -437,6 +456,13 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             credentialMarkedUnhealthy = true;
         } else if (credentialMarkedUnhealthy) {
             console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+        } else if (skipErrorCount) {
+            console.log(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
+        }
+        
+        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
+        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
+            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
         }
         
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
