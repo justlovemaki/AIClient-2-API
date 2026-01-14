@@ -11,6 +11,7 @@ import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
+import { acquireFileLock } from '../../utils/file-lock.js';
 
 const KIRO_THINKING = {
     MAX_BUDGET_TOKENS: 24576,
@@ -426,8 +427,10 @@ async initializeAuth(forceRefresh = false) {
         }
     };
 
-    // Helper to save credentials to a file
+    // Helper to save credentials to a file (with file locking to prevent concurrent write corruption)
     const saveCredentialsToFile = async (filePath, newData) => {
+        // 获取文件锁，防止并发写入
+        const releaseLock = await acquireFileLock(filePath);
         try {
             let existingData = {};
             try {
@@ -445,6 +448,9 @@ async initializeAuth(forceRefresh = false) {
             console.info(`[Kiro Auth] Updated token file: ${filePath}`);
         } catch (error) {
             console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
+        } finally {
+            // 确保锁被释放
+            releaseLock();
         }
     };
 
