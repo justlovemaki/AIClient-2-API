@@ -2,6 +2,7 @@ import * as fs from 'fs'; // Import fs module
 import { getServiceAdapter } from './adapter.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { getProviderModels } from './provider-models.js';
+import { CredentialCacheManager } from '../utils/credential-cache-manager.js';
 import axios from 'axios';
 
 /**
@@ -194,15 +195,15 @@ export class ProviderPoolManager {
             // 如果时间相同，使用使用次数辅助判断
             return (a.config.usageCount || 0) - (b.config.usageCount || 0);
         })[0];
-        
-        // 更新使用信息（除非明确跳过）
-        // 注意：这里的更新是同步的，在锁保护下执行，确保下一个请求能看到最新的 lastUsed
+
+        // 始终更新 lastUsed（确保 LRU 策略生效，避免并发请求选到同一个 provider）
+        // usageCount 只在请求成功后才增加（由 skipUsageCount 控制）
+        selected.config.lastUsed = new Date().toISOString();
         if (!options.skipUsageCount) {
-            selected.config.lastUsed = new Date().toISOString();
             selected.config.usageCount++;
-            // 使用防抖保存（文件 I/O 是异步的，但内存已经更新）
-            this._debouncedSave(providerType);
         }
+        // 使用防抖保存（文件 I/O 是异步的，但内存已经更新）
+        this._debouncedSave(providerType);
 
         this._log('debug', `Selected provider for ${providerType} (LRU): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}${options.skipUsageCount ? ' (skip usage count)' : ''}`);
         
@@ -853,7 +854,7 @@ export class ProviderPoolManager {
         // 确定健康检查使用的模型名称
         const modelName = providerConfig.checkModelName ||
                         ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
-        
+
         // 如果未启用健康检查且不是强制检查，返回 null
         if (!providerConfig.checkHealth && !forceCheck) {
             return null;
@@ -864,13 +865,48 @@ export class ProviderPoolManager {
             return { success: false, modelName: null, errorMessage: 'Unknown provider type for health check' };
         }
 
-        // 使用内部服务适配器方式进行健康检查
+        // ========== 快速预检：从内存缓存检查 OAuth 凭证状态 ==========
+        // 对于 OAuth 类型的 provider，先检查 token 是否过期，避免阻塞
+        const oauthProviderTypes = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'openai-iflow-oauth', 'claude-orchids-oauth'];
+        if (oauthProviderTypes.includes(providerType) && providerConfig.uuid) {
+            const credentialCache = CredentialCacheManager.getInstance();
+            const cachedEntry = credentialCache.getCredentials(providerType, providerConfig.uuid);
+
+            if (cachedEntry && cachedEntry.credentials) {
+                const { expiresAt, accessToken } = cachedEntry.credentials;
+
+                // 检查 token 是否存在
+                if (!accessToken) {
+                    this._log('warn', `Health check fast-fail for ${providerConfig.uuid}: No access token in cache`);
+                    return { success: false, modelName, errorMessage: 'No access token available' };
+                }
+
+                // 检查 token 是否已过期（30秒缓冲）
+                if (expiresAt) {
+                    const expirationTime = new Date(expiresAt).getTime();
+                    const now = Date.now();
+                    const bufferMs = 30 * 1000;
+
+                    if (expirationTime <= now + bufferMs) {
+                        this._log('warn', `Health check fast-fail for ${providerConfig.uuid}: Token expired`);
+                        return { success: false, modelName, errorMessage: 'Token expired' };
+                    }
+                }
+
+                this._log('debug', `Health check pre-check passed for ${providerConfig.uuid}: Token valid in cache`);
+            }
+            // 注意：如果缓存中没有凭证，不要直接返回失败
+            // 让后续的实际健康检查去尝试初始化和加载凭证
+            // 这样可以支持刚重置健康状态或新添加的 provider
+        }
+
+        // ========== 实际 API 健康检查（带超时保护）==========
         const proxyKeys = ['GEMINI', 'OPENAI', 'CLAUDE', 'QWEN', 'KIRO'];
         const tempConfig = {
             ...providerConfig,
             MODEL_PROVIDER: providerType
         };
-        
+
         proxyKeys.forEach(key => {
             const proxyKey = `USE_SYSTEM_PROXY_${key}`;
             if (this.globalConfig[proxyKey] !== undefined) {
@@ -879,19 +915,32 @@ export class ProviderPoolManager {
         });
 
         const serviceAdapter = getServiceAdapter(tempConfig);
-        
+
         // 获取所有可能的请求格式
         const healthCheckRequests = this._buildHealthCheckRequests(providerType, modelName);
-        
+
+        // 健康检查超时时间（15秒，避免长时间阻塞）
+        const healthCheckTimeout = 15000;
+
         // 重试机制：尝试不同的请求格式
         const maxRetries = healthCheckRequests.length;
         let lastError = null;
-        
+
         for (let i = 0; i < maxRetries; i++) {
             const healthCheckRequest = healthCheckRequests[i];
             try {
                 this._log('debug', `Health check attempt ${i + 1}/${maxRetries} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
-                await serviceAdapter.generateContent(modelName, healthCheckRequest);
+
+                // 带超时的健康检查
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Health check timeout')), healthCheckTimeout)
+                );
+
+                await Promise.race([
+                    serviceAdapter.generateContent(modelName, healthCheckRequest),
+                    timeoutPromise
+                ]);
+
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {
                 lastError = error;
@@ -899,7 +948,7 @@ export class ProviderPoolManager {
                 // 继续尝试下一个格式
             }
         }
-        
+
         // 所有尝试都失败
         this._log('error', `Health check failed for ${providerType} after ${maxRetries} attempts: ${lastError?.message}`);
         return { success: false, modelName, errorMessage: lastError?.message || 'All health check attempts failed' };
