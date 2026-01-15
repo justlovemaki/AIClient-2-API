@@ -11,7 +11,7 @@ import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
-import { acquireFileLock, withDeduplication } from '../../utils/file-lock.js';
+import { CredentialCacheManager } from '../../utils/credential-cache-manager.js';
 
 const KIRO_THINKING = {
     MAX_BUDGET_TOKENS: 24576,
@@ -29,7 +29,8 @@ const KIRO_CONSTANTS = {
     AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
     USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
     DEFAULT_MODEL_NAME: 'claude-opus-4-5',
-    AXIOS_TIMEOUT: 120000, // 2 minutes timeout (increased from 2 minutes)
+    AXIOS_TIMEOUT: 120000, // 2 minutes timeout for normal requests
+    TOKEN_REFRESH_TIMEOUT: 15000, // 15 seconds timeout for token refresh (shorter to avoid blocking)
     USER_AGENT: 'KiroIDE',
     KIRO_VERSION: '0.7.5',
     CONTENT_TYPE_JSON: 'application/json',
@@ -429,7 +430,11 @@ async initializeAuth(forceRefresh = false) {
     // 获取凭证文件路径，用于去重锁的 key
     const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
 
-    // Helper to load credentials from a file
+    // 获取凭证缓存管理器
+    const credentialCache = CredentialCacheManager.getInstance();
+    const providerType = 'claude-kiro-oauth';
+
+    // Helper to load credentials from a file (fallback when cache miss)
     const loadCredentialsFromFile = async (filePath) => {
         try {
             const fileContent = await fs.readFile(filePath, 'utf8');
@@ -457,11 +462,21 @@ async initializeAuth(forceRefresh = false) {
         }
     };
 
-    // Helper to save credentials to a file (with file locking to prevent concurrent write corruption)
+    // Helper to save credentials - 使用内存缓存替代直接文件写入
     const saveCredentialsToFile = async (filePath, newData) => {
-        // 获取文件锁，防止并发写入
-        const releaseLock = await acquireFileLock(filePath);
-        try {
+        // 优先更新内存缓存
+        if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+            const entry = credentialCache.getCredentials(providerType, this.uuid);
+            if (entry) {
+                const mergedData = { ...entry.credentials, ...newData };
+                credentialCache.updateCredentials(providerType, this.uuid, mergedData, filePath);
+                console.info(`[Kiro Auth] Updated credentials in memory cache: ${this.uuid}`);
+                return;
+            }
+        }
+
+        // 如果没有缓存条目，使用内存锁方式写入
+        await credentialCache.withMemoryLock(`kiro-save:${filePath}`, async () => {
             let existingData = {};
             try {
                 const fileContent = await fs.readFile(filePath, 'utf8');
@@ -488,12 +503,7 @@ async initializeAuth(forceRefresh = false) {
             const mergedData = { ...existingData, ...newData };
             await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
             console.info(`[Kiro Auth] Updated token file: ${filePath}`);
-        } catch (error) {
-            console.error(`[Kiro Auth] Failed to write token to file ${filePath}: ${error.message}`);
-        } finally {
-            // 确保锁被释放
-            releaseLock();
-        }
+        });
     };
 
     try {
@@ -503,46 +513,49 @@ async initializeAuth(forceRefresh = false) {
         if (this.base64Creds) {
             Object.assign(mergedCredentials, this.base64Creds);
             console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
-            // Clear base64Creds after use to prevent re-processing
             this.base64Creds = null;
         }
 
-        // Priority 2 & 3 合并: 从指定文件路径或目录加载凭证
-        // 读取指定的 credPath 文件以及目录下的其他 JSON 文件(排除当前文件)
-        const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
-        const dirPath = path.dirname(targetFilePath);
-        const targetFileName = path.basename(targetFilePath);
-        
-        console.debug(`[Kiro Auth] Attempting to load credentials from directory: ${dirPath}`);
-        
-        try {
-            // 首先尝试读取目标文件
-            const targetCredentials = await loadCredentialsFromFile(targetFilePath);
-            if (targetCredentials) {
-                Object.assign(mergedCredentials, targetCredentials);
-                console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
+        // Priority 2: 尝试从内存缓存加载凭证
+        if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+            const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
+            if (cachedEntry && cachedEntry.credentials) {
+                Object.assign(mergedCredentials, cachedEntry.credentials);
+                console.info(`[Kiro Auth] Successfully loaded credentials from memory cache: ${this.uuid}`);
             }
-            
-            // 然后读取目录下的其他 JSON 文件(排除目标文件本身)
-            const files = await fs.readdir(dirPath);
-            for (const file of files) {
-                if (file.endsWith('.json') && file !== targetFileName) {
-                    const filePath = path.join(dirPath, file);
-                    const credentials = await loadCredentialsFromFile(filePath);
-                    if (credentials) {
-                        // 保留已有的 expiresAt,避免被覆盖
-                        credentials.expiresAt = mergedCredentials.expiresAt;
-                        Object.assign(mergedCredentials, credentials);
-                        console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
+        } else {
+            // Priority 3: 从文件加载（缓存未命中时的回退）
+            const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+            const dirPath = path.dirname(targetFilePath);
+            const targetFileName = path.basename(targetFilePath);
+
+            console.debug(`[Kiro Auth] Cache miss, loading credentials from directory: ${dirPath}`);
+
+            try {
+                const targetCredentials = await loadCredentialsFromFile(targetFilePath);
+                if (targetCredentials) {
+                    Object.assign(mergedCredentials, targetCredentials);
+                    console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
+                }
+
+                const files = await fs.readdir(dirPath);
+                for (const file of files) {
+                    if (file.endsWith('.json') && file !== targetFileName) {
+                        const filePath = path.join(dirPath, file);
+                        const credentials = await loadCredentialsFromFile(filePath);
+                        if (credentials) {
+                            credentials.expiresAt = mergedCredentials.expiresAt;
+                            Object.assign(mergedCredentials, credentials);
+                            console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
+                        }
                     }
                 }
+            } catch (error) {
+                console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
             }
-        } catch (error) {
-            console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
         }
 
-        // console.log('[Kiro Auth] Merged credentials:', mergedCredentials);
-        // Apply loaded credentials, prioritizing existing values if they are not null/undefined
+        // Apply loaded credentials
         this.accessToken = this.accessToken || mergedCredentials.accessToken;
         this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
         this.clientId = this.clientId || mergedCredentials.clientId;
@@ -552,10 +565,9 @@ async initializeAuth(forceRefresh = false) {
         this.profileArn = this.profileArn || mergedCredentials.profileArn;
         this.region = this.region || mergedCredentials.region;
 
-        // Ensure region is set before using it in URLs
         if (!this.region) {
             console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
-            this.region = 'us-east-1'; // Set default region
+            this.region = 'us-east-1';
         }
 
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
@@ -571,21 +583,16 @@ async initializeAuth(forceRefresh = false) {
         if (!this.refreshToken) {
             throw new Error('No refresh token available to refresh access token.');
         }
-        
-        // 使用去重锁：多个并发刷新请求只执行一次，共享结果
+
+        // 使用内存锁替代文件锁进行去重
         const dedupeKey = `kiro-token-refresh:${tokenFilePath}`;
-        await withDeduplication(dedupeKey, async () => {
+        await credentialCache.withDeduplication(dedupeKey, async () => {
             await this._doTokenRefresh(saveCredentialsToFile, tokenFilePath);
         });
-        
-        // 如果是等待其他请求完成的刷新，需要重新加载凭证
-        // 因为 _doTokenRefresh 只更新了执行刷新的实例的内存状态
-        // 注意：withDeduplication 会让所有等待者共享同一个 Promise
-        // 但只有第一个调用者的实例会执行 _doTokenRefresh 并更新自己的内存状态
-        // 其他等待者需要从文件重新加载
-        if (!this.accessToken || this.isExpiryDateNear()) {
-            await this._reloadCredentialsAfterRefresh(tokenFilePath);
-        }
+
+        // 刷新完成后（无论是自己执行还是等待其他请求），都从缓存重新加载凭证
+        // 确保所有并发请求都能获取到最新的 token
+        await this._reloadCredentialsAfterRefresh(tokenFilePath);
     }
 
     if (!this.accessToken) {
@@ -613,11 +620,13 @@ async initializeAuth(forceRefresh = false) {
             }
 
             let response = null;
+            // 使用更短的超时时间进行 token 刷新，避免阻塞其他请求
+            const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
             if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody);
+                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody, refreshConfig);
                 console.log('[Kiro Auth] Token refresh social response: ok');
             } else {
-                response = await this.axiosInstance.post(refreshUrl, requestBody);
+                response = await this.axiosInstance.post(refreshUrl, requestBody, refreshConfig);
                 console.log('[Kiro Auth] Token refresh idc response: ok');
             }
 
@@ -653,6 +662,25 @@ async initializeAuth(forceRefresh = false) {
      * @param {string} tokenFilePath - 凭证文件路径
      */
     async _reloadCredentialsAfterRefresh(tokenFilePath) {
+        // 优先从内存缓存加载
+        const credentialCache = CredentialCacheManager.getInstance();
+        const providerType = 'claude-kiro-oauth';
+
+        if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+            const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
+            if (cachedEntry && cachedEntry.credentials) {
+                this.accessToken = cachedEntry.credentials.accessToken;
+                this.refreshToken = cachedEntry.credentials.refreshToken;
+                this.expiresAt = cachedEntry.credentials.expiresAt;
+                if (cachedEntry.credentials.profileArn) {
+                    this.profileArn = cachedEntry.credentials.profileArn;
+                }
+                console.debug('[Kiro Auth] Credentials reloaded from memory cache after concurrent refresh');
+                return;
+            }
+        }
+
+        // 回退到文件加载
         try {
             const fileContent = await fs.readFile(tokenFilePath, 'utf8');
             let credentials;
@@ -675,7 +703,7 @@ async initializeAuth(forceRefresh = false) {
             if (credentials.profileArn) {
                 this.profileArn = credentials.profileArn;
             }
-            console.debug('[Kiro Auth] Credentials reloaded after concurrent refresh');
+            console.debug('[Kiro Auth] Credentials reloaded from file after concurrent refresh');
         } catch (error) {
             console.warn(`[Kiro Auth] Failed to reload credentials after refresh: ${error.message}`);
             throw error;
@@ -1564,11 +1592,16 @@ async initializeAuth(forceRefresh = false) {
 
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
-        
-        // 检查 token 是否即将过期,如果是则先刷新
-        if (this.isExpiryDateNear()) {
-            console.log('[Kiro] Token is near expiry, refreshing before generateContent request...');
+
+        // Token 刷新策略：
+        // 1. 已过期 → 必须等待刷新
+        // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
+        if (this.isTokenExpired()) {
+            console.log('[Kiro] Token is expired, must refresh before generateContent request...');
             await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, triggering background refresh...');
+            this.triggerBackgroundRefresh();
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
@@ -1902,11 +1935,16 @@ async initializeAuth(forceRefresh = false) {
     // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
-        
-        // 检查 token 是否即将过期,如果是则先刷新
-        if (this.isExpiryDateNear()) {
-            console.log('[Kiro] Token is near expiry, refreshing before generateContentStream request...');
+
+        // Token 刷新策略：
+        // 1. 已过期 → 必须等待刷新
+        // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
+        if (this.isTokenExpired()) {
+            console.log('[Kiro] Token is expired, must refresh before generateContentStream request...');
             await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, triggering background refresh...');
+            this.triggerBackgroundRefresh();
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
@@ -2528,7 +2566,25 @@ async initializeAuth(forceRefresh = false) {
     }
 
     /**
-     * Checks if the given expiresAt timestamp is within 10 minutes from now.
+     * Checks if the token is completely expired (cannot be used at all).
+     * @returns {boolean} - True if token is expired, false otherwise.
+     */
+    isTokenExpired() {
+        try {
+            if (!this.expiresAt) return true;
+            const expirationTime = new Date(this.expiresAt);
+            const currentTime = new Date();
+            // 给 30 秒缓冲，避免请求过程中过期
+            const bufferMs = 30 * 1000;
+            return expirationTime.getTime() <= (currentTime.getTime() + bufferMs);
+        } catch (error) {
+            console.error(`[Kiro] Error checking token expiry: ${error.message}`);
+            return true; // Treat as expired if parsing fails
+        }
+    }
+
+    /**
+     * Checks if the given expiresAt timestamp is within 10 minutes from now (needs refresh soon).
      * @returns {boolean} - True if expiresAt is less than 10 minutes from now, false otherwise.
      */
     isExpiryDateNear() {
@@ -2543,6 +2599,29 @@ async initializeAuth(forceRefresh = false) {
             console.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
             return false; // Treat as expired if parsing fails
         }
+    }
+
+    /**
+     * 后台异步刷新 token（不阻塞当前请求）
+     */
+    triggerBackgroundRefresh() {
+        const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AH_TOKEN_FILE);
+        const dedupeKey = `kiro-token-refresh:${tokenFilePath}`;
+        const credentialCache = CredentialCacheManager.getInstance();
+
+        // 使用 withDeduplication 确保只有一个刷新任务在执行
+        credentialCache.withDeduplication(dedupeKey, async () => {
+            console.log('[Kiro] Background token refresh started...');
+            try {
+                await this.initializeAuth(true);
+                console.log('[Kiro] Background token refresh completed successfully');
+            } catch (error) {
+                console.error('[Kiro] Background token refresh failed:', error.message);
+                // 后台刷新失败不抛出错误，下次请求会重试
+            }
+        }).catch(() => {
+            // 忽略后台刷新错误，不影响当前请求
+        });
     }
 
     /**
@@ -2618,11 +2697,16 @@ async initializeAuth(forceRefresh = false) {
      */
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
-        
-        // 检查 token 是否即将过期，如果是则先刷新
-        if (this.isExpiryDateNear()) {
-            console.log('[Kiro] Token is near expiry, refreshing before getUsageLimits request...');
+
+        // Token 刷新策略：
+        // 1. 已过期 → 必须等待刷新
+        // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
+        if (this.isTokenExpired()) {
+            console.log('[Kiro] Token is expired, must refresh before getUsageLimits request...');
             await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, triggering background refresh...');
+            this.triggerBackgroundRefresh();
         }
         
         // 内部固定的资源类型

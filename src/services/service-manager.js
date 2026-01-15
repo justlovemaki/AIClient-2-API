@@ -1,5 +1,6 @@
 import { getServiceAdapter, serviceInstances } from '../providers/adapter.js';
 import { ProviderPoolManager } from '../providers/provider-pool-manager.js';
+import { CredentialCacheManager } from '../utils/credential-cache-manager.js';
 import deepmerge from 'deepmerge';
 import * as fs from 'fs';
 import { promises as pfs } from 'fs';
@@ -166,7 +167,7 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
  * @returns {Promise<Object>} The initialized services
  */
 export async function initApiService(config) {
-    
+
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, {
             globalConfig: config,
@@ -175,6 +176,62 @@ export async function initApiService(config) {
         });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
         // 健康检查将在服务器完全启动后执行
+
+        // 初始化凭证缓存管理器
+        const credentialCache = CredentialCacheManager.getInstance();
+
+        // 获取单实例锁,防止多实例并发运行
+        try {
+            await credentialCache.acquireInstanceLock();
+        } catch (lockError) {
+            console.error('[Initialization] Failed to acquire instance lock:', lockError.message);
+            console.error('[Initialization] Please ensure no other instance is running.');
+            process.exit(1);
+        }
+
+        await credentialCache.preloadAllCredentials(config.providerPools);
+        credentialCache.startPeriodicSync(config.CREDENTIAL_SYNC_INTERVAL || 5000);
+
+        // 注册进程退出钩子
+        const shutdownHandler = async () => {
+            await credentialCache.shutdown();
+        };
+        process.on('beforeExit', shutdownHandler);
+        process.on('SIGINT', async () => {
+            await shutdownHandler();
+            process.exit(0);
+        });
+        process.on('SIGTERM', async () => {
+            await shutdownHandler();
+            process.exit(0);
+        });
+
+        // 处理未捕获的异常,进行紧急同步
+        process.on('uncaughtException', async (error) => {
+            console.error('[FATAL] Uncaught exception:', error);
+            console.log('[CredentialCache] Attempting emergency sync before crash...');
+            try {
+                await credentialCache.syncToFile();
+                console.log('[CredentialCache] Emergency sync completed');
+            } catch (syncError) {
+                console.error('[CredentialCache] Emergency sync failed:', syncError.message);
+            }
+            await credentialCache.shutdown();
+            process.exit(1);
+        });
+
+        process.on('unhandledRejection', async (reason, promise) => {
+            console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
+            console.log('[CredentialCache] Attempting emergency sync...');
+            try {
+                await credentialCache.syncToFile();
+                console.log('[CredentialCache] Emergency sync completed');
+            } catch (syncError) {
+                console.error('[CredentialCache] Emergency sync failed:', syncError.message);
+            }
+        });
+
+        console.log('[Initialization] CredentialCacheManager initialized.');
     } else {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');
     }

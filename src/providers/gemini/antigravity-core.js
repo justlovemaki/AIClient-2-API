@@ -14,7 +14,7 @@ import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
 import { cleanJsonSchemaProperties } from '../../converters/utils.js';
-import { acquireFileLock, withDeduplication } from '../../utils/file-lock.js';
+import { CredentialCacheManager } from '../../utils/credential-cache-manager.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -707,13 +707,13 @@ export class AntigravityApiService {
     constructor(config) {
         // 检查是否需要使用代理
         const proxyConfig = getGoogleAuthProxyConfig(config, 'gemini-antigravity');
-        
+
         // 配置 OAuth2Client 使用自定义的 HTTP agent
         const oauth2Options = {
             clientId: OAUTH_CLIENT_ID,
             clientSecret: OAUTH_CLIENT_SECRET,
         };
-        
+
         if (proxyConfig) {
             oauth2Options.transporterOptions = proxyConfig;
             console.log('[Antigravity] Using proxy for OAuth2Client');
@@ -722,7 +722,7 @@ export class AntigravityApiService {
                 agent: httpsAgent,
             };
         }
-        
+
         this.authClient = new OAuth2Client(oauth2Options);
         this.availableModels = [];
         this.isInitialized = false;
@@ -732,10 +732,11 @@ export class AntigravityApiService {
         this.oauthCredsFilePath = config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH;
         this.userAgent = DEFAULT_USER_AGENT; // 支持通用 USER_AGENT 配置
         this.projectId = config.PROJECT_ID;
+        this.uuid = config.uuid; // 保存 uuid 用于缓存管理
 
         // 多环境降级顺序 - 按照 Go 代码的顺序
         this.baseURLs = this.getBaseURLFallbackOrder(config);
-        
+
         // 保存代理配置供后续使用
         this.proxyConfig = getProxyConfigForProvider(config, 'gemini-antigravity');
     }
@@ -777,6 +778,9 @@ export class AntigravityApiService {
     }
 
     async initializeAuth(forceRefresh = false) {
+        const credentialCache = CredentialCacheManager.getInstance();
+        const providerType = 'gemini-antigravity';
+
         // 检查是否需要刷新 Token
         const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
 
@@ -789,31 +793,59 @@ export class AntigravityApiService {
 
         const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
         try {
-            const data = await fs.readFile(credPath, "utf8");
-            const credentials = JSON.parse(data);
+            // 优先从内存缓存加载
+            let credentials = null;
+            if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+                const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
+                if (cachedEntry && cachedEntry.credentials) {
+                    credentials = cachedEntry.credentials;
+                    console.log('[Antigravity Auth] Loaded credentials from memory cache');
+                }
+            }
+
+            // Fallback: 从文件加载
+            if (!credentials) {
+                const data = await fs.readFile(credPath, "utf8");
+                credentials = JSON.parse(data);
+                console.log('[Antigravity Auth] Loaded credentials from file');
+            }
+
             this.authClient.setCredentials(credentials);
             console.log('[Antigravity Auth] Authentication configured successfully from file.');
 
             if (needsRefresh) {
                 // 使用去重锁：多个并发刷新请求只执行一次，共享结果
                 const dedupeKey = `antigravity-token-refresh:${credPath}`;
-                await withDeduplication(dedupeKey, async () => {
+                await credentialCache.withDeduplication(dedupeKey, async () => {
                     console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
                     const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                     this.authClient.setCredentials(newCredentials);
-                    // 保存刷新后的凭证到文件（使用文件锁）
-                    await this._saveCredentialsToFile(credPath, newCredentials);
+                    // 保存刷新后的凭证（优先保存到内存缓存）
+                    if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+                        credentialCache.updateCredentials(providerType, this.uuid, newCredentials, credPath);
+                        console.log(`[Antigravity Auth] Token refreshed and saved to memory cache: ${this.uuid}`);
+                    } else {
+                        await this._saveCredentialsToFile(credPath, newCredentials);
+                    }
                     console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
                 });
-                
+
                 // 如果是等待其他请求完成的刷新，需要重新加载凭证
                 // 因为 withDeduplication 只让第一个调用者执行刷新并更新自己的内存状态
-                // 其他等待者需要从文件重新加载
+                // 其他等待者需要从缓存重新加载
                 if (this.isTokenExpiringSoon()) {
-                    const refreshedData = await fs.readFile(credPath, "utf8");
-                    const refreshedCredentials = JSON.parse(refreshedData);
-                    this.authClient.setCredentials(refreshedCredentials);
-                    console.log('[Antigravity Auth] Credentials reloaded after concurrent refresh');
+                    if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+                        const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
+                        if (cachedEntry && cachedEntry.credentials) {
+                            this.authClient.setCredentials(cachedEntry.credentials);
+                            console.log('[Antigravity Auth] Credentials reloaded from memory cache after concurrent refresh');
+                        }
+                    } else {
+                        const refreshedData = await fs.readFile(credPath, "utf8");
+                        const refreshedCredentials = JSON.parse(refreshedData);
+                        this.authClient.setCredentials(refreshedCredentials);
+                        console.log('[Antigravity Auth] Credentials reloaded from file after concurrent refresh');
+                    }
                 }
             }
         } catch (error) {
@@ -890,20 +922,30 @@ export class AntigravityApiService {
     }
 
     /**
-     * 保存凭证到文件（使用文件锁防止并发写入）
+     * 保存凭证到文件（优先使用内存缓存）
      * @param {string} filePath - 凭证文件路径
      * @param {Object} credentials - 凭证数据
      */
     async _saveCredentialsToFile(filePath, credentials) {
-        const releaseLock = await acquireFileLock(filePath);
-        try {
-            await fs.writeFile(filePath, JSON.stringify(credentials, null, 2));
-            console.log(`[Antigravity Auth] Credentials saved to ${filePath}`);
-        } catch (error) {
-            console.error(`[Antigravity Auth] Failed to save credentials to ${filePath}: ${error.message}`);
-        } finally {
-            releaseLock();
+        const credentialCache = CredentialCacheManager.getInstance();
+        const providerType = 'gemini-antigravity';
+
+        // 优先保存到内存缓存
+        if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
+            credentialCache.updateCredentials(providerType, this.uuid, credentials, filePath);
+            console.log(`[Antigravity Auth] Credentials saved to memory cache: ${this.uuid}`);
+            return;
         }
+
+        // Fallback: 使用内存锁的文件写入
+        await credentialCache.withMemoryLock(`antigravity-save:${filePath}`, async () => {
+            try {
+                await fs.writeFile(filePath, JSON.stringify(credentials, null, 2));
+                console.log(`[Antigravity Auth] Credentials saved to ${filePath}`);
+            } catch (error) {
+                console.error(`[Antigravity Auth] Failed to save credentials to ${filePath}: ${error.message}`);
+            }
+        });
     }
 
     async discoverProjectAndModels() {
