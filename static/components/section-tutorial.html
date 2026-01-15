@@ -1,0 +1,443 @@
+<link rel="stylesheet" href="components/section-tutorial.css">
+<!-- Tutorial Section -->
+<section id="tutorial" class="section" aria-labelledby="tutorial-title">
+    <h2 id="tutorial-title" data-i18n="tutorial.title">配置教程</h2>
+    
+    <!-- 配置文件说明 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-file-code"></i> <span data-i18n="tutorial.config.title">配置文件说明</span></h3>
+        <div class="tutorial-content">
+            <p data-i18n="tutorial.config.desc">所有配置文件都存放在 <code>configs/</code> 目录下。主要配置文件包括：</p>
+            
+            <div class="config-file-list">
+                <div class="config-file-item">
+                    <div class="file-header">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="file-name">config.json</span>
+                        <span class="file-badge required" data-i18n="tutorial.config.badge.required">必需</span>
+                    </div>
+                    <p class="file-desc" data-i18n="tutorial.config.file.config">主配置文件，包含 API Key、端口、模型提供商等核心设置</p>
+                </div>
+                <div class="config-file-item">
+                    <div class="file-header">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="file-name">provider_pools.json</span>
+                        <span class="file-badge required" data-i18n="tutorial.config.badge.required">必需</span>
+                    </div>
+                    <p class="file-desc" data-i18n="tutorial.config.file.pools">提供商池配置，用于多账号轮询和故障转移</p>
+                </div>
+                <div class="config-file-item">
+                    <div class="file-header">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="file-name">plugins.json</span>
+                        <span class="file-badge optional" data-i18n="tutorial.config.badge.optional">可选</span>
+                    </div>
+                    <p class="file-desc" data-i18n="tutorial.config.file.plugins">插件配置，用于启用或禁用系统插件</p>
+                </div>
+                <div class="config-file-item">
+                    <div class="file-header">
+                        <i class="fas fa-lock"></i>
+                        <span class="file-name">pwd</span>
+                        <span class="file-badge optional" data-i18n="tutorial.config.badge.optional">可选</span>
+                    </div>
+                    <p class="file-desc" data-i18n="tutorial.config.file.pwd">后台登录密码文件，默认密码为 admin123</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主配置详解 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-cogs"></i> <span data-i18n="tutorial.main.title">主配置详解 (config.json)</span></h3>
+        <div class="tutorial-content">
+            <div class="config-section">
+                <h4 data-i18n="tutorial.main.basic.title">基础配置</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.default">默认值</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>REQUIRED_API_KEY</code></td>
+                                <td>string</td>
+                                <td>-</td>
+                                <td data-i18n="tutorial.main.basic.apikey">访问本服务所需的 API Key</td>
+                            </tr>
+                            <tr>
+                                <td><code>SERVER_PORT</code></td>
+                                <td>number</td>
+                                <td>3000</td>
+                                <td data-i18n="tutorial.main.basic.port">服务监听端口</td>
+                            </tr>
+                            <tr>
+                                <td><code>HOST</code></td>
+                                <td>string</td>
+                                <td>0.0.0.0</td>
+                                <td data-i18n="tutorial.main.basic.host">服务监听地址</td>
+                            </tr>
+                            <tr>
+                                <td><code>MODEL_PROVIDER</code></td>
+                                <td>string</td>
+                                <td>-</td>
+                                <td data-i18n="tutorial.main.basic.provider">默认模型提供商</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h4 data-i18n="tutorial.main.prompt.title">系统提示配置</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.default">默认值</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>SYSTEM_PROMPT_FILE_PATH</code></td>
+                                <td>string</td>
+                                <td>-</td>
+                                <td data-i18n="tutorial.main.prompt.file">系统提示文件路径</td>
+                            </tr>
+                            <tr>
+                                <td><code>SYSTEM_PROMPT_MODE</code></td>
+                                <td>string</td>
+                                <td>overwrite</td>
+                                <td data-i18n="tutorial.main.prompt.mode">系统提示模式：overwrite(覆盖) 或 append(追加)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h4 data-i18n="tutorial.main.retry.title">重试配置</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.default">默认值</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>REQUEST_MAX_RETRIES</code></td>
+                                <td>number</td>
+                                <td>3</td>
+                                <td data-i18n="tutorial.main.retry.max">最大重试次数</td>
+                            </tr>
+                            <tr>
+                                <td><code>REQUEST_BASE_DELAY</code></td>
+                                <td>number</td>
+                                <td>1000</td>
+                                <td data-i18n="tutorial.main.retry.delay">重试基础延迟（毫秒）</td>
+                            </tr>
+                            <tr>
+                                <td><code>MAX_ERROR_COUNT</code></td>
+                                <td>number</td>
+                                <td>3</td>
+                                <td data-i18n="tutorial.main.retry.error">提供商最大错误次数，超过后标记为不健康</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-example">
+                <h4 data-i18n="tutorial.main.example.title">配置示例</h4>
+                <pre><code>{
+    "REQUIRED_API_KEY": "your-api-key",
+    "SERVER_PORT": 3000,
+    "HOST": "0.0.0.0",
+    "MODEL_PROVIDER": "gemini-cli-oauth",
+    "SYSTEM_PROMPT_FILE_PATH": "configs/input_system_prompt.txt",
+    "SYSTEM_PROMPT_MODE": "overwrite",
+    "REQUEST_MAX_RETRIES": 3,
+    "REQUEST_BASE_DELAY": 1000,
+    "MAX_ERROR_COUNT": 3,
+    "PROVIDER_POOLS_FILE_PATH": "configs/provider_pools.json"
+}</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提供商池配置 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-layer-group"></i> <span data-i18n="tutorial.pool.title">提供商池配置 (provider_pools.json)</span></h3>
+        <div class="tutorial-content">
+            <p data-i18n="tutorial.pool.desc">提供商池用于配置多个账号，实现负载均衡和故障转移。每个提供商类型可以配置多个账号节点。</p>
+            
+            <div class="config-section">
+                <h4 data-i18n="tutorial.pool.node.title">节点配置参数</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>uuid</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.pool.node.uuid">节点唯一标识，自动生成</td>
+                            </tr>
+                            <tr>
+                                <td><code>name</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.pool.node.name">节点自定义名称</td>
+                            </tr>
+                            <tr>
+                                <td><code>oauthCredsFilePath</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.pool.node.oauth">OAuth 凭据文件路径</td>
+                            </tr>
+                            <tr>
+                                <td><code>checkHealth</code></td>
+                                <td>boolean</td>
+                                <td data-i18n="tutorial.pool.node.health">是否启用健康检查</td>
+                            </tr>
+                            <tr>
+                                <td><code>checkModel</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.pool.node.model">健康检查使用的模型</td>
+                            </tr>
+                            <tr>
+                                <td><code>notSupportedModels</code></td>
+                                <td>array</td>
+                                <td data-i18n="tutorial.pool.node.unsupported">该节点不支持的模型列表</td>
+                            </tr>
+                            <tr>
+                                <td><code>disabled</code></td>
+                                <td>boolean</td>
+                                <td data-i18n="tutorial.pool.node.disabled">是否禁用该节点</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-example">
+                <h4 data-i18n="tutorial.pool.example.title">配置示例</h4>
+                <pre><code>{
+    "gemini-cli-oauth": [
+        {
+            "uuid": "gemini-account-1",
+            "name": "Gemini 账号 1",
+            "oauthCredsFilePath": "configs/gemini/oauth_creds_1.json",
+            "checkHealth": true,
+            "checkModel": "gemini-2.0-flash-exp"
+        },
+        {
+            "uuid": "gemini-account-2",
+            "name": "Gemini 账号 2",
+            "oauthCredsFilePath": "configs/gemini/oauth_creds_2.json",
+            "checkHealth": true,
+            "notSupportedModels": ["gemini-3.0-pro"]
+        }
+    ],
+    "claude-kiro-oauth": [
+        {
+            "uuid": "kiro-account-1",
+            "name": "Kiro 账号 1",
+            "oauthCredsFilePath": "configs/kiro/kiro-auth-token.json",
+            "checkHealth": true,
+            "checkModel": "claude-sonnet-4-5"
+        }
+    ]
+}</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fallback 配置 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-random"></i> <span data-i18n="tutorial.fallback.title">Fallback 降级配置</span></h3>
+        <div class="tutorial-content">
+            <p data-i18n="tutorial.fallback.desc">当某一提供商类型的所有账号都不可用时，可以自动切换到配置的备用提供商。</p>
+            
+            <div class="config-section">
+                <h4 data-i18n="tutorial.fallback.chain.title">跨类型 Fallback 链</h4>
+                <p data-i18n="tutorial.fallback.chain.desc">在 config.json 中配置 providerFallbackChain，指定每个提供商类型的备用类型：</p>
+                <pre><code>{
+    "providerFallbackChain": {
+        "gemini-cli-oauth": ["gemini-antigravity"],
+        "gemini-antigravity": ["gemini-cli-oauth"],
+        "claude-kiro-oauth": ["claude-custom"],
+        "claude-custom": ["claude-kiro-oauth"]
+    }
+}</code></pre>
+            </div>
+
+            <div class="config-section">
+                <h4 data-i18n="tutorial.fallback.model.title">跨协议模型映射</h4>
+                <p data-i18n="tutorial.fallback.model.desc">当主提供商不可用时，可以将特定模型映射到其他协议的提供商：</p>
+                <pre><code>{
+    "modelFallbackMapping": {
+        "gemini-claude-opus-4-5-thinking": {
+            "targetProviderType": "claude-kiro-oauth",
+            "targetModel": "claude-opus-4-5"
+        },
+        "claude-opus-4-5": {
+            "targetProviderType": "gemini-antigravity",
+            "targetModel": "gemini-claude-opus-4-5-thinking"
+        }
+    }
+}</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 代理配置 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-globe"></i> <span data-i18n="tutorial.proxy.title">代理配置</span></h3>
+        <div class="tutorial-content">
+            <p data-i18n="tutorial.proxy.desc">支持为特定提供商配置代理，用于网络受限环境。</p>
+            
+            <div class="config-section">
+                <h4 data-i18n="tutorial.proxy.config.title">代理配置参数</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>PROXY_URL</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.proxy.url">代理地址，支持 HTTP、HTTPS、SOCKS5</td>
+                            </tr>
+                            <tr>
+                                <td><code>PROXY_ENABLED_PROVIDERS</code></td>
+                                <td>array</td>
+                                <td data-i18n="tutorial.proxy.providers">启用代理的提供商列表</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-example">
+                <h4 data-i18n="tutorial.proxy.example.title">配置示例</h4>
+                <pre><code>{
+    "PROXY_URL": "http://127.0.0.1:7890",
+    "PROXY_ENABLED_PROVIDERS": [
+        "gemini-cli-oauth",
+        "gemini-antigravity"
+    ]
+}</code></pre>
+            </div>
+
+            <div class="tutorial-note">
+                <i class="fas fa-info-circle"></i>
+                <span data-i18n="tutorial.proxy.note">支持的代理类型：HTTP (http://)、HTTPS (https://)、SOCKS5 (socks5://)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- OAuth 授权配置 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-key"></i> <span data-i18n="tutorial.oauth.title">OAuth 授权配置</span></h3>
+        <div class="tutorial-content">
+            <p data-i18n="tutorial.oauth.desc">各提供商的 OAuth 凭据文件默认存储位置：</p>
+            
+            <div class="oauth-path-list">
+                <div class="oauth-path-item">
+                    <div class="path-header">
+                        <i class="fas fa-gem"></i>
+                        <span class="path-provider">Gemini</span>
+                    </div>
+                    <code class="path-value">~/.gemini/oauth_creds.json</code>
+                </div>
+                <div class="oauth-path-item">
+                    <div class="path-header">
+                        <i class="fas fa-rocket"></i>
+                        <span class="path-provider">Antigravity</span>
+                    </div>
+                    <code class="path-value">~/.antigravity/oauth_creds.json</code>
+                </div>
+                <div class="oauth-path-item">
+                    <div class="path-header">
+                        <i class="fas fa-robot"></i>
+                        <span class="path-provider">Kiro</span>
+                    </div>
+                    <code class="path-value">~/.aws/sso/cache/kiro-auth-token.json</code>
+                </div>
+                <div class="oauth-path-item">
+                    <div class="path-header">
+                        <i class="fas fa-code"></i>
+                        <span class="path-provider">Qwen</span>
+                    </div>
+                    <code class="path-value">~/.qwen/oauth_creds.json</code>
+                </div>
+            </div>
+
+            <div class="tutorial-note">
+                <i class="fas fa-lightbulb"></i>
+                <span data-i18n="tutorial.oauth.note">推荐通过 Web UI 控制台的"提供商池管理"页面点击"生成授权"按钮进行可视化授权，系统会自动保存凭据文件。</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志配置 -->
+    <div class="tutorial-panel">
+        <h3><i class="fas fa-file-alt"></i> <span data-i18n="tutorial.log.title">日志配置</span></h3>
+        <div class="tutorial-content">
+            <div class="config-section">
+                <h4 data-i18n="tutorial.log.prompt.title">提示日志配置</h4>
+                <div class="config-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="tutorial.main.table.param">参数</th>
+                                <th data-i18n="tutorial.main.table.type">类型</th>
+                                <th data-i18n="tutorial.main.table.desc">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>PROMPT_LOG_MODE</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.log.mode">日志模式：none(关闭)、console(控制台)、file(文件)</td>
+                            </tr>
+                            <tr>
+                                <td><code>PROMPT_LOG_BASE_NAME</code></td>
+                                <td>string</td>
+                                <td data-i18n="tutorial.log.basename">日志文件基础名称</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-example">
+                <h4 data-i18n="tutorial.log.example.title">配置示例</h4>
+                <pre><code>{
+    "PROMPT_LOG_MODE": "file",
+    "PROMPT_LOG_BASE_NAME": "prompt_log"
+}</code></pre>
+            </div>
+        </div>
+    </div>
+</section>

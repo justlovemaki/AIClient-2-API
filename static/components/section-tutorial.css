@@ -1,0 +1,476 @@
+/* Tutorial Section Styles */
+
+/* 操作流程图样式 */
+.process-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem 0;
+}
+
+.flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    width: 180px;
+    min-height: 200px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.flow-step:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary-color);
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(var(--primary-rgb, 59, 130, 246), 0.3);
+}
+
+.step-content {
+    text-align: center;
+    flex: 1;
+}
+
+.step-content h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin: 0 0 0.5rem 0;
+}
+
+.step-content p {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.75rem 0;
+    line-height: 1.4;
+}
+
+.step-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+
+.step-content ul li {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    padding: 0.25rem 0;
+    padding-left: 1rem;
+    position: relative;
+}
+
+.step-content ul li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.step-content ul li code {
+    font-size: 0.7rem;
+    background: var(--code-bg);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+}
+
+.flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    font-weight: bold;
+    padding: 0 0.25rem;
+    margin-top: 80px;
+}
+
+/* 响应式流程图 */
+@media (max-width: 1200px) {
+    .process-flow {
+        gap: 0.75rem;
+    }
+    
+    .flow-step {
+        width: 160px;
+        min-height: 180px;
+        padding: 1rem;
+    }
+    
+    .flow-arrow {
+        font-size: 1.25rem;
+        margin-top: 70px;
+    }
+}
+
+@media (max-width: 992px) {
+    .process-flow {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .flow-step {
+        width: 100%;
+        max-width: 400px;
+        min-height: auto;
+        flex-direction: row;
+        gap: 1rem;
+    }
+    
+    .step-number {
+        margin-bottom: 0;
+        flex-shrink: 0;
+    }
+    
+    .step-content {
+        text-align: left;
+    }
+    
+    .flow-arrow {
+        transform: rotate(90deg);
+        margin-top: 0;
+        padding: 0.5rem 0;
+    }
+}
+
+/* Tutorial Panel */
+.tutorial-panel {
+    background: var(--bg-primary);
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.tutorial-panel h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tutorial-panel h3 i {
+    color: var(--primary-color);
+}
+
+.tutorial-content {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.tutorial-content > p {
+    margin-bottom: 1rem;
+}
+
+.tutorial-content code {
+    background: var(--bg-tertiary);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--primary-color);
+}
+
+/* Config File List */
+.config-file-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.config-file-item {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+.config-file-item:hover {
+    border-color: var(--primary-30);
+    box-shadow: var(--shadow-sm);
+}
+
+.file-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.file-header i {
+    color: var(--primary-color);
+}
+
+.file-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: monospace;
+}
+
+.file-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    margin-left: auto;
+}
+
+.file-badge.required {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.file-badge.optional {
+    background: var(--info-bg);
+    color: var(--info-text);
+}
+
+.file-desc {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Config Section */
+.config-section {
+    margin-bottom: 1.5rem;
+}
+
+.config-section:last-child {
+    margin-bottom: 0;
+}
+
+.config-section h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Config Table */
+.config-table {
+    overflow-x: auto;
+}
+
+.config-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.config-table th,
+.config-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.config-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.config-table td {
+    color: var(--text-secondary);
+}
+
+.config-table td code {
+    background: var(--bg-tertiary);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    color: var(--primary-color);
+    white-space: nowrap;
+}
+
+.config-table tr:hover td {
+    background: var(--bg-secondary);
+}
+
+/* Config Example */
+.config-example {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-top: 1rem;
+    border: 1px solid var(--border-color);
+}
+
+.config-example h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem 0;
+}
+
+.config-example pre {
+    background: var(--bg-tertiary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin: 0;
+}
+
+.config-example pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: pre;
+}
+
+.config-section pre {
+    background: var(--bg-tertiary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin: 0.75rem 0 0 0;
+}
+
+.config-section pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: pre;
+}
+
+/* Tutorial Note */
+.tutorial-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background: var(--info-bg);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-top: 1rem;
+    border: 1px solid var(--info-border);
+}
+
+.tutorial-note i {
+    color: var(--info-text);
+    font-size: 1rem;
+    margin-top: 0.1rem;
+}
+
+.tutorial-note span {
+    color: var(--info-text);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* OAuth Path List */
+.oauth-path-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.oauth-path-item {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.path-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.path-header i {
+    font-size: 1.25rem;
+}
+
+.path-header i.fa-gem { color: #4285f4; }
+.path-header i.fa-rocket { color: #ea4335; }
+.path-header i.fa-robot { color: #9b59b6; }
+.path-header i.fa-code { color: #ff6a00; }
+
+.path-provider {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.path-value {
+    display: block;
+    background: var(--bg-tertiary);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    font-family: monospace;
+    word-break: break-all;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .config-file-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .oauth-path-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .tutorial-panel {
+        padding: 1rem;
+    }
+    
+    .config-table th,
+    .config-table td {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* Dark Theme */
+[data-theme="dark"] .tutorial-panel {
+    background: var(--bg-primary);
+}
+
+[data-theme="dark"] .config-file-item,
+[data-theme="dark"] .config-example,
+[data-theme="dark"] .oauth-path-item {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .config-table th {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .config-example pre,
+[data-theme="dark"] .config-section pre {
+    background: var(--bg-tertiary);
+}

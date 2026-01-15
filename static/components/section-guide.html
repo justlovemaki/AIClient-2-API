@@ -1,0 +1,242 @@
+<link rel="stylesheet" href="components/section-guide.css">
+<!-- Guide Section -->
+<section id="guide" class="section" aria-labelledby="guide-title">
+    <h2 id="guide-title" data-i18n="guide.title">使用指南</h2>
+    
+    <!-- 项目简介 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-info-circle"></i> <span data-i18n="guide.intro.title">项目简介</span></h3>
+        <div class="guide-content">
+            <p data-i18n="guide.intro.desc">AIClient2API 是一个突破客户端限制的 API 代理服务，将 Gemini、Antigravity、Qwen Code、Kiro 等原本仅限客户端内使用的免费大模型，转换为可供任何应用调用的标准 OpenAI 兼容接口。</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-plug"></i></div>
+                    <h4 data-i18n="guide.intro.feature1.title">统一接入</h4>
+                    <p data-i18n="guide.intro.feature1.desc">通过标准 OpenAI 兼容协议，一次配置即可接入多种大模型</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-rocket"></i></div>
+                    <h4 data-i18n="guide.intro.feature2.title">突破限制</h4>
+                    <p data-i18n="guide.intro.feature2.desc">利用 OAuth 授权机制，有效突破免费 API 速率和配额限制</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-exchange-alt"></i></div>
+                    <h4 data-i18n="guide.intro.feature3.title">协议转换</h4>
+                    <p data-i18n="guide.intro.feature3.desc">支持 OpenAI、Claude、Gemini 三大协议间的智能转换</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-server"></i></div>
+                    <h4 data-i18n="guide.intro.feature4.title">账号池管理</h4>
+                    <p data-i18n="guide.intro.feature4.desc">支持多账号轮询、自动故障转移和配置降级</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作流程图 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-project-diagram"></i> <span data-i18n="guide.flow.title">操作流程图</span></h3>
+        <div class="guide-content">
+            <div class="process-flow">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4 data-i18n="guide.flow.step1.title">配置管理</h4>
+                        <p data-i18n="guide.flow.step1.desc">在「配置管理」页面设置基本参数</p>
+                        <ul>
+                            <li>设置 API Key</li>
+                            <li>选择启动时初始化的模型提供商</li>
+                            <li>配置高级选项</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="flow-arrow">→</div>
+                
+                <div class="flow-step flow-step-branch">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4 data-i18n="guide.flow.step2.title">生成授权</h4>
+                        <p data-i18n="guide.flow.step2.desc">在「提供商池管理」页面生成 OAuth 授权</p>
+                        <div class="branch-options">
+                            <div class="branch-option">
+                                <div class="branch-label">方式一：OAuth 授权</div>
+                                <ul>
+                                    <li>点击「生成授权」按钮</li>
+                                    <li>在弹窗中完成 OAuth 登录</li>
+                                    <li>凭据自动保存</li>
+                                </ul>
+                            </div>
+                            <div class="branch-divider">或</div>
+                            <div class="branch-option">
+                                <div class="branch-label">方式二：手动上传</div>
+                                <ul>
+                                    <li>新增提供商节点</li>
+                                    <li>上传已有的授权文件</li>
+                                    <li>手动关联凭据路径</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flow-arrow">→</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4 data-i18n="guide.flow.step3.title">管理凭据</h4>
+                        <p data-i18n="guide.flow.step3.desc">在「凭据文件管理」页面查看和管理凭据</p>
+                        <ul>
+                            <li>查看已生成的凭据文件</li>
+                            <li>自动关联到提供商池</li>
+                            <li>删除无效凭据</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="flow-arrow">→</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4 data-i18n="guide.flow.step4.title">开始使用</h4>
+                        <p data-i18n="guide.flow.step4.desc">在「仪表盘」查看路由示例并开始调用 API</p>
+                        <ul>
+                            <li>查看路由调用示例</li>
+                            <li>复制 API 端点地址</li>
+                            <li>在客户端中配置使用</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 客户端配置指南 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-desktop"></i> <span data-i18n="guide.client.title">客户端配置指南</span></h3>
+        <div class="guide-content">
+            <p data-i18n="guide.client.desc">以下是常见 AI 客户端的配置方法，将 API 端点设置为本服务地址即可使用：</p>
+            
+            <div class="client-config-list">
+                <div class="client-config-item">
+                    <h4><i class="fas fa-cherry"></i> Cherry Studio</h4>
+                    <div class="config-steps">
+                        <ol>
+                            <li data-i18n="guide.client.cherry.step1">打开设置 → 模型服务商</li>
+                            <li data-i18n="guide.client.cherry.step2">添加自定义服务商</li>
+                            <li data-i18n="guide.client.cherry.step3">设置 API 地址为: <code>http://localhost:3000/{provider}/v1</code></li>
+                            <li data-i18n="guide.client.cherry.step4">填入 API Key（配置文件中的 REQUIRED_API_KEY）</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="client-config-item">
+                    <h4><i class="fas fa-terminal"></i> Cline / Continue</h4>
+                    <div class="config-steps">
+                        <ol>
+                            <li data-i18n="guide.client.cline.step1">打开 VS Code 设置</li>
+                            <li data-i18n="guide.client.cline.step2">搜索 Cline 或 Continue 配置</li>
+                            <li data-i18n="guide.client.cline.step3">设置 API Base URL 为: <code>http://localhost:3000/{provider}/v1</code></li>
+                            <li data-i18n="guide.client.cline.step4">填入 API Key 和模型名称</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="client-config-item">
+                    <h4><i class="fas fa-code"></i> 通用 cURL 调用</h4>
+                    <div class="config-steps">
+                        <pre><code>curl http://localhost:3000/{provider}/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "模型名称",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guide-note">
+                <i class="fas fa-lightbulb"></i>
+                <span data-i18n="guide.client.note">提示：将 {provider} 替换为实际的提供商路径，如 gemini-cli-oauth、claude-kiro-oauth 等。可在仪表盘的路由示例中查看完整路径。</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ollama 协议使用 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-llama"></i> <span data-i18n="guide.ollama.title">Ollama 协议使用</span></h3>
+        <div class="guide-content">
+            <p data-i18n="guide.ollama.desc">本项目支持 Ollama 协议，可以通过统一接口访问所有支持的模型。</p>
+            
+            <div class="api-example">
+                <h4 data-i18n="guide.ollama.listModels">列出所有可用模型</h4>
+                <pre><code>curl http://localhost:3000/ollama/api/tags \
+  -H "Authorization: Bearer YOUR_API_KEY"</code></pre>
+            </div>
+            
+            <div class="api-example">
+                <h4 data-i18n="guide.ollama.chat">聊天接口</h4>
+                <pre><code>curl http://localhost:3000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "[Claude] claude-sonnet-4.5",
+    "messages": [{"role": "user", "content": "你好"}]
+  }'</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 可用模型列表 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-cube"></i> <span data-i18n="models.title">可用模型列表</span></h3>
+        <div class="guide-content">
+            <div class="models-description">
+                <div class="highlight-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span data-i18n="models.note">点击模型名称可直接复制到剪贴板</span>
+                </div>
+            </div>
+            
+            <!-- Models Container -->
+            <div class="models-container">
+                <div id="modelsList" class="models-list">
+                    <!-- Models will be loaded here -->
+                    <div class="models-loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span data-i18n="common.loading">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 常见问题 -->
+    <div class="guide-panel">
+        <h3><i class="fas fa-question-circle"></i> <span data-i18n="guide.faq.title">常见问题</span></h3>
+        <div class="guide-content">
+            <div class="faq-list">
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q1">Q: 请求返回 404 错误怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a1">A: 检查接口路径是否正确。某些客户端会自动在 Base URL 后追加路径，导致路径重复。请查看控制台中的实际请求 URL，移除多余的路径部分。</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q2">Q: 请求返回 429 错误怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a2">A: 429 表示请求频率过高。建议配置多个账号到提供商池，启用轮询机制；或配置 Fallback 链实现跨类型降级。</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q3">Q: OAuth 授权失败怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a3">A: 确保 OAuth 回调端口可访问（Gemini: 8085, Antigravity: 8086, Kiro: 19876-19880）。Docker 用户需确保已正确映射这些端口。</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q5">Q: 流式响应中断怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a5">A: 检查网络稳定性，增加客户端请求超时时间。如使用代理，确保代理支持长连接。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
