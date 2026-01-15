@@ -65,6 +65,13 @@
     gap: 1rem;
 }
 
+/* 模态框中的提供商列表 */
+.provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
 .provider-item {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -1073,20 +1080,21 @@
 
 .models-checkbox-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
 }
 
 .model-checkbox-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 6px 10px;
     background: var(--white);
     border: 1px solid var(--neutral-300);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
+    min-width: 0;
 }
 
 .model-checkbox-label:hover {
@@ -1095,9 +1103,12 @@
 }
 
 .model-checkbox-label .model-name {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--neutral-600);
     user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .model-checkbox-label input[type="checkbox"]:checked + .model-name {

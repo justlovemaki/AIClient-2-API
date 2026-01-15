@@ -295,14 +295,14 @@
     margin: 0;
 }
 
-/* Provider List */
-.provider-list {
+/* Guide Provider List - 使用 guide- 前缀避免与 section-providers.css 冲突 */
+.guide-provider-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1rem;
 }
 
-.provider-item {
+.guide-provider-item {
     background: var(--bg-secondary);
     padding: 1rem;
     border-radius: var(--radius-md);
@@ -310,12 +310,12 @@
     transition: var(--transition);
 }
 
-.provider-item:hover {
+.guide-provider-item:hover {
     border-color: var(--primary-30);
     box-shadow: var(--shadow-sm);
 }
 
-.provider-header {
+.guide-provider-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -323,52 +323,52 @@
     flex-wrap: wrap;
 }
 
-.provider-icon {
+.guide-provider-icon {
     font-size: 1.25rem;
 }
 
-.provider-icon.gemini { color: #4285f4; }
-.provider-icon.antigravity { color: #ea4335; }
-.provider-icon.kiro { color: #9b59b6; }
-.provider-icon.qwen { color: #ff6a00; }
-.provider-icon.claude { color: #d97706; }
-.provider-icon.openai { color: #10a37f; }
-.provider-icon.iflow { color: #3b82f6; }
-.provider-icon.orchids { color: #22c55e; }
+.guide-provider-icon.gemini { color: #4285f4; }
+.guide-provider-icon.antigravity { color: #ea4335; }
+.guide-provider-icon.kiro { color: #9b59b6; }
+.guide-provider-icon.qwen { color: #ff6a00; }
+.guide-provider-icon.claude { color: #d97706; }
+.guide-provider-icon.openai { color: #10a37f; }
+.guide-provider-icon.iflow { color: #3b82f6; }
+.guide-provider-icon.orchids { color: #22c55e; }
 
-.provider-name {
+.guide-provider-name {
     font-weight: 600;
     color: var(--text-primary);
 }
 
-.provider-badge {
+.guide-provider-badge {
     font-size: 0.7rem;
     padding: 0.15rem 0.5rem;
     border-radius: 9999px;
     font-weight: 500;
 }
 
-.provider-badge.oauth {
+.guide-provider-badge.oauth {
     background: var(--primary-10);
     color: var(--primary-color);
 }
 
-.provider-badge.experimental {
+.guide-provider-badge.experimental {
     background: var(--warning-bg);
     color: var(--warning-text);
 }
 
-.provider-badge.free {
+.guide-provider-badge.free {
     background: var(--success-bg);
     color: var(--success-text);
 }
 
-.provider-badge.official {
+.guide-provider-badge.official {
     background: var(--info-bg);
     color: var(--info-text);
 }
 
-.provider-desc {
+.guide-provider-desc {
     font-size: 0.875rem;
     color: var(--text-secondary);
     margin: 0;
@@ -564,7 +564,7 @@
         grid-template-columns: 1fr;
     }
     
-    .provider-list {
+    .guide-provider-list {
         grid-template-columns: 1fr;
     }
     
@@ -579,7 +579,7 @@
 }
 
 [data-theme="dark"] .feature-card,
-[data-theme="dark"] .provider-item,
+[data-theme="dark"] .guide-provider-item,
 [data-theme="dark"] .client-config-item,
 [data-theme="dark"] .api-example,
 [data-theme="dark"] .model-prefix-list,
