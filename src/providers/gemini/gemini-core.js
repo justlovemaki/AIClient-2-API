@@ -690,7 +690,7 @@ export class GeminiApiService {
             try {
                 const quotaURL = `${this.codeAssistEndpoint}/${this.apiVersion}:retrieveUserQuota`;
                 const requestBody = {
-                    project: `projects/${this.projectId}`
+                    project: `${this.projectId}`
                 };
                 const requestOptions = {
                     url: quotaURL,
