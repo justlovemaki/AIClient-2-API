@@ -29,7 +29,11 @@ export class ProviderPoolManager {
         // 使用 ?? 运算符确保 0 也能被正确设置，而不是被 || 替换为默认值
         this.maxErrorCount = options.maxErrorCount ?? 3; // Default to 3 errors before marking unhealthy
         this.healthCheckInterval = options.healthCheckInterval ?? 10 * 60 * 1000; // Default to 10 minutes
-        
+
+        // 账号池上限配置：每个 providerType 最多使用多少个健康凭证进行轮询
+        // 0 或 undefined 表示不限制，使用所有健康凭证
+        this.poolSizeLimit = options.globalConfig?.POOL_SIZE_LIMIT ?? 0;
+
         // 日志级别控制
         this.logLevel = options.logLevel || 'info'; // 'debug', 'info', 'warn', 'error'
         
@@ -185,9 +189,20 @@ export class ProviderPoolManager {
             return null;
         }
 
+        // 账号池上限：如果配置了 poolSizeLimit，只使用 Top N 个健康凭证
+        // 按 lastUsed 排序后取前 N 个，确保轮询范围受限
+        let candidateProviders = availableAndHealthyProviders;
+        if (this.poolSizeLimit > 0 && availableAndHealthyProviders.length > this.poolSizeLimit) {
+            // 先按 usageCount 升序排序，取使用次数最少的 Top N 个作为候选池
+            candidateProviders = [...availableAndHealthyProviders]
+                .sort((a, b) => (a.config.usageCount || 0) - (b.config.usageCount || 0))
+                .slice(0, this.poolSizeLimit);
+            this._log('debug', `Pool size limited to ${this.poolSizeLimit}, using top ${candidateProviders.length} providers for ${providerType}`);
+        }
+
         // 改进：使用"最久未被使用"策略（LRU）代替取模轮询
         // 这样即使可用列表长度动态变化，也能确保每个账号被平均轮到
-        const selected = availableAndHealthyProviders.sort((a, b) => {
+        const selected = candidateProviders.sort((a, b) => {
             const timeA = a.config.lastUsed ? new Date(a.config.lastUsed).getTime() : 0;
             const timeB = b.config.lastUsed ? new Date(b.config.lastUsed).getTime() : 0;
             // 优先选择从未用过的，或者最久没用的
