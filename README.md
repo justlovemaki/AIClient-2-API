@@ -589,6 +589,12 @@ We are grateful for the support from our sponsors:
 - [**落叶聚名**](https://github.com/mb5u88-debug "88")
 - [**匿名**](https://github.com/404 "8.88")
 
+### Scan to Sponsor
+
+Your sponsorship is the driving force for the project's continued development ❤️
+
+<img src="static/coffee.png" alt="Scan to Sponsor" width="200">
+
 ### 🌟 Star History
 
 
