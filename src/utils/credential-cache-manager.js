@@ -110,11 +110,7 @@ export class CredentialCacheManager {
                 try {
                     process.kill(pid, 0); // 0 信号仅检查进程存在性
                     // 如果进程存在，检查是否是当前进程
-                    if (pid === process.pid) {
-                        console.log(`[CredentialCache] Lock file belongs to current process (PID: ${pid}), continuing...`);
-                    } else {
-                        throw new Error(`[CredentialCache] Another instance is running (PID: ${pid}). Please stop it first.`);
-                    }
+                    throw new Error(`[CredentialCache] Another instance is running (PID: ${pid}). Please stop it first.`);
                 } catch (killError) {
                     if (killError.code === 'ESRCH') {
                         // 进程已死亡,可以继续
