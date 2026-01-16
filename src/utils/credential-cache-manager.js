@@ -158,6 +158,7 @@ export class CredentialCacheManager {
 
         let loadedCount = 0;
         let failedCount = 0;
+        let skippedCount = 0;
 
         for (const [providerType, providers] of Object.entries(providerPools)) {
             if (!Array.isArray(providers)) continue;
@@ -171,6 +172,7 @@ export class CredentialCacheManager {
             for (const providerConfig of providers) {
                 const uuid = providerConfig.uuid;
                 const credPath = providerConfig[credPathKey];
+                const customName = providerConfig.customName || uuid;
 
                 if (!uuid || !credPath) {
                     continue;
@@ -179,6 +181,14 @@ export class CredentialCacheManager {
                 try {
                     const credentials = await this._loadCredentialsFromFile(credPath);
                     if (credentials) {
+                        // 预检查：验证凭证是否有效（至少有 token）
+                        const hasValidToken = this._validateCredentials(providerType, credentials);
+                        if (!hasValidToken) {
+                            skippedCount++;
+                            console.warn(`[CredentialCache] Skipping ${providerType}:${customName} - no valid token found in credentials`);
+                            continue;
+                        }
+
                         const cacheKey = this._getCacheKey(providerType, uuid);
                         this.credentialCache.set(cacheKey, {
                             providerType,
@@ -191,16 +201,63 @@ export class CredentialCacheManager {
                             retryCount: 0
                         });
                         loadedCount++;
+                    } else {
+                        skippedCount++;
+                        console.warn(`[CredentialCache] Skipping ${providerType}:${customName} - credentials file empty or unreadable`);
                     }
                 } catch (error) {
                     failedCount++;
-                    console.warn(`[CredentialCache] Failed to load credentials for ${providerType}:${uuid}: ${error.message}`);
+                    console.warn(`[CredentialCache] Failed to load credentials for ${providerType}:${customName}: ${error.message}`);
                 }
             }
         }
 
         this.isInitialized = true;
-        console.log(`[CredentialCache] Preloaded ${loadedCount} credentials (${failedCount} failed)`);
+        console.log(`[CredentialCache] Preloaded ${loadedCount} credentials (${failedCount} failed, ${skippedCount} skipped)`);
+    }
+
+    /**
+     * 验证凭证是否有效
+     * @param {string} providerType - 提供商类型
+     * @param {Object} credentials - 凭证对象
+     * @returns {boolean}
+     */
+    _validateCredentials(providerType, credentials) {
+        if (!credentials || typeof credentials !== 'object') {
+            return false;
+        }
+
+        // 根据提供商类型检查必要的 token 字段
+        switch (providerType) {
+            case 'claude-kiro-oauth':
+                // Kiro 需要 refreshToken 或 accessToken
+                return !!(credentials.refreshToken || credentials.accessToken);
+
+            case 'gemini-cli-oauth':
+            case 'gemini-antigravity':
+                // Gemini 需要 refresh_token 或 access_token
+                return !!(credentials.refresh_token || credentials.access_token);
+
+            case 'openai-qwen-oauth':
+                // Qwen 需要 refresh_token 或 access_token
+                return !!(credentials.refresh_token || credentials.access_token);
+
+            case 'openai-iflow':
+                // iFlow 需要 refresh_token 或 access_token
+                return !!(credentials.refresh_token || credentials.access_token);
+
+            case 'claude-orchids-oauth':
+                // Orchids 需要 sessionKey 或 accessToken
+                return !!(credentials.sessionKey || credentials.accessToken);
+
+            default:
+                // 默认：只要有任何 token 相关字段就认为有效
+                return !!(
+                    credentials.refreshToken || credentials.accessToken ||
+                    credentials.refresh_token || credentials.access_token ||
+                    credentials.sessionKey || credentials.apiKey
+                );
+        }
     }
 
     /**
@@ -251,13 +308,68 @@ export class CredentialCacheManager {
                 : path.join(process.cwd(), filePath);
 
             const content = await fs.readFile(absolutePath, 'utf8');
-            return JSON.parse(content);
+            try {
+                return JSON.parse(content);
+            } catch (parseError) {
+                console.warn(`[CredentialCache] JSON parse failed for ${filePath}, attempting field extraction...`);
+                // 尝试从损坏的 JSON 中提取关键字段
+                const extracted = this._extractCredentialsFromCorruptedJson(content);
+                if (extracted) {
+                    console.info(`[CredentialCache] Field extraction successful for ${filePath}`);
+                    return extracted;
+                }
+                console.error(`[CredentialCache] All recovery methods failed for ${filePath}: ${parseError.message}`);
+                return null;
+            }
         } catch (error) {
             if (error.code === 'ENOENT') {
                 return null;
             }
             throw error;
         }
+    }
+
+    /**
+     * 从损坏的 JSON 中提取关键凭证字段
+     * @param {string} content - 文件内容
+     * @returns {Object|null}
+     */
+    _extractCredentialsFromCorruptedJson(content) {
+        const extracted = {};
+
+        // 定义需要提取的关键字段及其正则模式
+        const fieldPatterns = {
+            refreshToken: /"refreshToken"\s*:\s*"([^"]+)"/,
+            accessToken: /"accessToken"\s*:\s*"([^"]+)"/,
+            clientId: /"clientId"\s*:\s*"([^"]+)"/,
+            clientSecret: /"clientSecret"\s*:\s*"([^"]+)"/,
+            profileArn: /"profileArn"\s*:\s*"([^"]+)"/,
+            region: /"region"\s*:\s*"([^"]+)"/,
+            authMethod: /"authMethod"\s*:\s*"([^"]+)"/,
+            expiresAt: /"expiresAt"\s*:\s*"([^"]+)"/,
+            startUrl: /"startUrl"\s*:\s*"([^"]+)"/,
+            // Gemini/Qwen 相关字段
+            refresh_token: /"refresh_token"\s*:\s*"([^"]+)"/,
+            access_token: /"access_token"\s*:\s*"([^"]+)"/,
+            client_id: /"client_id"\s*:\s*"([^"]+)"/,
+            client_secret: /"client_secret"\s*:\s*"([^"]+)"/,
+        };
+
+        for (const [field, pattern] of Object.entries(fieldPatterns)) {
+            const match = content.match(pattern);
+            if (match && match[1]) {
+                extracted[field] = match[1];
+            }
+        }
+
+        // 至少需要某种 token 才算有效
+        if (extracted.refreshToken || extracted.accessToken ||
+            extracted.refresh_token || extracted.access_token) {
+            console.info(`[CredentialCache] Extracted ${Object.keys(extracted).length} fields: ${Object.keys(extracted).join(', ')}`);
+            return extracted;
+        }
+
+        return null;
     }
 
     /**
