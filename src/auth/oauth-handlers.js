@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import open from 'open';
+import axios from 'axios';
 import { broadcastEvent } from '../services/ui-manager.js';
 import { autoLinkProviderConfigs } from '../services/service-manager.js';
 import { CONFIG } from '../core/config-manager.js';
@@ -138,22 +139,64 @@ const activeKiroPollingTasks = new Map();
 
 /**
  * 创建带代理支持的 fetch 请求
+ * 使用 axios 替代原生 fetch，以正确支持代理配置
  * @param {string} url - 请求 URL
- * @param {Object} options - fetch 选项
+ * @param {Object} options - fetch 选项（兼容 fetch API 格式）
  * @param {string} providerType - 提供商类型，用于获取代理配置
- * @returns {Promise<Response>}
+ * @returns {Promise<Object>} 返回类似 fetch Response 的对象
  */
 async function fetchWithProxy(url, options = {}, providerType) {
     const proxyConfig = getProxyConfigForProvider(CONFIG, providerType);
 
-    if (proxyConfig) {
-        // 根据 URL 协议选择合适的 agent
-        const urlObj = new URL(url);
-        const agent = urlObj.protocol === 'https:' ? proxyConfig.httpsAgent : proxyConfig.httpAgent;
-        options.dispatcher = agent;
+    // 构建 axios 配置
+    const axiosConfig = {
+        url,
+        method: options.method || 'GET',
+        headers: options.headers || {},
+        timeout: 30000, // 30 秒超时
+    };
+
+    // 处理请求体
+    if (options.body) {
+        axiosConfig.data = options.body;
     }
 
-    return fetch(url, options);
+    // 配置代理
+    if (proxyConfig) {
+        axiosConfig.httpAgent = proxyConfig.httpAgent;
+        axiosConfig.httpsAgent = proxyConfig.httpsAgent;
+        axiosConfig.proxy = false; // 禁用 axios 内置代理，使用我们的 agent
+        console.log(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
+    }
+
+    try {
+        const response = await axios(axiosConfig);
+        
+        // 返回类似 fetch Response 的对象
+        return {
+            ok: response.status >= 200 && response.status < 300,
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+            json: async () => response.data,
+            text: async () => typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
+        };
+    } catch (error) {
+        // 处理 axios 错误，转换为类似 fetch 的响应格式
+        if (error.response) {
+            // 服务器返回了错误状态码
+            return {
+                ok: false,
+                status: error.response.status,
+                statusText: error.response.statusText,
+                headers: error.response.headers,
+                json: async () => error.response.data,
+                text: async () => typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data),
+            };
+        }
+        // 网络错误或其他错误
+        throw error;
+    }
 }
 
 /**
