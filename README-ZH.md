@@ -586,6 +586,12 @@ kill -9 <PID>
 - [**落叶聚名**](https://github.com/mb5u88-debug "88")
 - [**匿名**](https://github.com/404 "8.88")
 
+### 扫码赞助
+
+您的赞助是项目持续发展的动力 ❤️
+
+<img src="static/sponsor.png" alt="扫码赞助" width="200">
+
 ### 🌟 Star History
 
 
