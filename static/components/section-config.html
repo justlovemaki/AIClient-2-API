@@ -195,6 +195,12 @@
                     <input type="number" id="maxErrorCount" class="form-control" value="3" min="1" max="10" data-i18n-placeholder="config.advanced.maxErrorCountPlaceholder" placeholder="默认: 3">
                     <small class="form-text" data-i18n="config.advanced.maxErrorCountNote">提供商连续错误达到此次数后将被标记为不健康，默认为 3 次</small>
                 </div>
+
+                <div class="form-group pool-section">
+                    <label for="poolSizeLimit" data-i18n="config.advanced.poolSizeLimit">账号池轮询上限</label>
+                    <input type="number" id="poolSizeLimit" class="form-control" value="0" min="0" max="100" data-i18n-placeholder="config.advanced.poolSizeLimitPlaceholder" placeholder="默认: 0 (不限制)">
+                    <small class="form-text" data-i18n="config.advanced.poolSizeLimitNote">每个提供商类型参与轮询的最大健康凭证数量，0 表示不限制，使用所有健康凭证</small>
+                </div>
                 
                 <div class="form-group pool-section">
                     <label for="providerFallbackChain" data-i18n="config.advanced.fallbackChain">跨类型 Fallback 链配置</label>

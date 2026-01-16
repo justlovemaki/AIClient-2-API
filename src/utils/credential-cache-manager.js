@@ -100,6 +100,12 @@ export class CredentialCacheManager {
                 const existingPid = await fs.readFile(pidPath, 'utf8');
                 const pid = parseInt(existingPid.trim(), 10);
 
+                // 如果是当前进程的 PID，说明是配置重载，直接返回（已持有锁）
+                if (pid === process.pid) {
+                    console.log(`[CredentialCache] Instance lock already held by current process (PID: ${pid})`);
+                    return;
+                }
+
                 // 检查进程是否还在运行
                 try {
                     process.kill(pid, 0); // 0 信号仅检查进程存在性
