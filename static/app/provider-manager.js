@@ -2198,6 +2198,7 @@ export {
     openProviderManager,
     showAuthModal,
     executeGenerateAuthUrl,
+    handleGenerateAuthUrl,
     checkUpdate,
     performUpdate
 };
