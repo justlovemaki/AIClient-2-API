@@ -1362,9 +1362,9 @@ async function performHealthCheck(providerType) {
             // 统计跳过的数量（checkHealth 未启用的）
             const skippedCount = results ? results.filter(r => r.success === null).length : 0;
             
-            let message = `${t('modal.provider.healthCheck')}完成: ${successCount} 健康`;
-            if (failCount > 0) message += `, ${failCount} 异常`;
-            if (skippedCount > 0) message += `, ${skippedCount} 跳过(未启用)`;
+            let message = `${t('modal.provider.healthCheck.complete', { success: successCount })}`;
+            if (failCount > 0) message += t('modal.provider.healthCheck.abnormal', { fail: failCount });
+            if (skippedCount > 0) message += t('modal.provider.healthCheck.skipped', { skipped: skippedCount });
             
             showToast(t('common.info'), message, failCount > 0 ? 'warning' : 'success');
             
