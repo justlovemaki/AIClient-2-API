@@ -2366,6 +2366,59 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
             createdAt: Date.now()
         });
 
+        // 监听回调服务器的 auth-success 事件，自动完成 OAuth 流程
+        server.once('auth-success', async (result) => {
+            try {
+                console.log('[Codex Auth] Received auth callback, completing OAuth flow...');
+                
+                const session = global.codexOAuthSessions.get(sessionId);
+                if (!session) {
+                    console.error('[Codex Auth] Session not found');
+                    return;
+                }
+
+                // 完成 OAuth 流程
+                const credentials = await auth.completeOAuthFlow(result.code, result.state, session.state, session.pkce);
+
+                // 清理会话
+                global.codexOAuthSessions.delete(sessionId);
+
+                // 广播认证成功事件
+                broadcastEvent('oauth_success', {
+                    provider: 'openai-codex-oauth',
+                    credPath: credentials.credPath,
+                    relativePath: credentials.relativePath,
+                    timestamp: new Date().toISOString(),
+                    email: credentials.email,
+                    accountId: credentials.account_id
+                });
+
+                // 自动关联新生成的凭据到 Pools
+                await autoLinkProviderConfigs(CONFIG);
+
+                console.log('[Codex Auth] OAuth flow completed successfully');
+            } catch (error) {
+                console.error('[Codex Auth] Failed to complete OAuth flow:', error.message);
+                
+                // 广播认证失败事件
+                broadcastEvent('oauth_error', {
+                    provider: 'openai-codex-oauth',
+                    error: error.message
+                });
+            }
+        });
+
+        // 监听 auth-error 事件
+        server.once('auth-error', (error) => {
+            console.error('[Codex Auth] Auth error:', error.message);
+            global.codexOAuthSessions.delete(sessionId);
+            
+            broadcastEvent('oauth_error', {
+                provider: 'openai-codex-oauth',
+                error: error.message
+            });
+        });
+
         // 10 分钟后自动清理会话
         setTimeout(() => {
             if (global.codexOAuthSessions.has(sessionId)) {
@@ -2386,6 +2439,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 method: 'oauth2-pkce',
                 sessionId: sessionId,
                 redirectUri: 'http://localhost:1455/auth/callback',
+                port: 1455,
                 instructions: [
                     '1. 点击下方按钮在浏览器中打开授权链接',
                     '2. 使用您的 OpenAI 账户登录',
