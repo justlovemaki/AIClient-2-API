@@ -1039,6 +1039,34 @@ function showAddProviderForm(providerType) {
         return;
     }
     
+    // Codex OAuth 只支持授权添加，不支持手动添加
+    if (providerType === 'openai-codex-oauth') {
+        const form = document.createElement('div');
+        form.className = 'add-provider-form';
+        form.innerHTML = `
+            <h4 data-i18n="modal.provider.addTitle"><i class="fas fa-plus"></i> 添加新提供商配置</h4>
+            <div class="oauth-only-notice" style="padding: 20px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; margin: 15px 0;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <i class="fas fa-info-circle" style="color: #d97706; font-size: 24px;"></i>
+                    <strong style="color: #92400e;">Codex 仅支持 OAuth 授权添加</strong>
+                </div>
+                <p style="color: #b45309; margin: 0 0 15px 0;">
+                    OpenAI Codex 需要通过 OAuth 授权获取访问令牌，无法手动填写凭据。请点击下方按钮进行授权。
+                </p>
+                <button class="btn btn-primary" onclick="window.handleGenerateAuthUrl && window.handleGenerateAuthUrl('openai-codex-oauth'); this.closest('.add-provider-form').remove();">
+                    <i class="fas fa-key"></i> 开始 OAuth 授权
+                </button>
+                <button class="btn btn-secondary" style="margin-left: 10px;" onclick="this.closest('.add-provider-form').remove()">
+                    <i class="fas fa-times"></i> <span data-i18n="modal.provider.cancel">取消</span>
+                </button>
+            </div>
+        `;
+        
+        const providerList = modal.querySelector('.provider-list');
+        providerList.parentNode.insertBefore(form, providerList);
+        return;
+    }
+    
     const form = document.createElement('div');
     form.className = 'add-provider-form';
     form.innerHTML = `
