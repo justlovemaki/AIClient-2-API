@@ -215,7 +215,8 @@ function renderProviders(providers) {
         'claude-orchids-oauth',
         'openai-qwen-oauth',
         'openaiResponses-custom',
-        'openai-iflow'
+        'openai-iflow',
+        'openai-codex-oauth'
     ];
     
     // 获取所有提供商类型并按指定顺序排序
@@ -424,12 +425,12 @@ async function openProviderManager(providerType) {
  */
 function generateAuthButton(providerType) {
     // 只为支持OAuth的提供商显示授权按钮
-    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'claude-kiro-oauth', 'claude-orchids-oauth', 'openai-iflow'];
-    
+    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'claude-kiro-oauth', 'claude-orchids-oauth', 'openai-iflow', 'openai-codex-oauth'];
+
     if (!oauthProviders.includes(providerType)) {
         return '';
     }
-    
+
     // Orchids 提供商使用不同的按钮文本
     if (providerType === 'claude-orchids-oauth') {
         return `
@@ -439,7 +440,17 @@ function generateAuthButton(providerType) {
             </button>
         `;
     }
-    
+
+    // Codex 提供商使用特殊图标
+    if (providerType === 'openai-codex-oauth') {
+        return `
+            <button class="generate-auth-btn" title="生成 Codex OAuth 授权链接">
+                <i class="fas fa-code" style="color: #10b981;"></i>
+                <span data-i18n="providers.auth.generate">${t('providers.auth.generate')}</span>
+            </button>
+        `;
+    }
+
     return `
         <button class="generate-auth-btn" title="生成OAuth授权链接">
             <i class="fas fa-key"></i>

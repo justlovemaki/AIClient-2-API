@@ -13,6 +13,8 @@ usage-cache.json
 *-auth-token.json
 api-potluck-keys.json
 api-potluck-data.json
+# Codex credentials
+configs/codex/
 # Orchids credentials
 configs/orchids/*_orchids_creds/
 configs/orchids/*.json

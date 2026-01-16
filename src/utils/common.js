@@ -55,6 +55,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
     OLLAMA: 'ollama',
+    CODEX: 'codex',
 }
 
 export const MODEL_PROVIDER = {
@@ -68,6 +69,7 @@ export const MODEL_PROVIDER = {
     ORCHIDS_API: 'claude-orchids-oauth',
     QWEN_API: 'openai-qwen-oauth',
     IFLOW_API: 'openai-iflow',
+    CODEX_API: 'openai-codex-oauth',
 }
 
 /**
@@ -77,6 +79,11 @@ export const MODEL_PROVIDER = {
  * @returns {string} The protocol prefix (e.g., 'gemini', 'openai', 'claude').
  */
 export function getProtocolPrefix(provider) {
+    // Special case for Codex - it needs its own protocol
+    if (provider === 'openai-codex-oauth') {
+        return 'codex';
+    }
+
     const hyphenIndex = provider.indexOf('-');
     if (hyphenIndex !== -1) {
         return provider.substring(0, hyphenIndex);
