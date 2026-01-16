@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { refreshTokensWithRetry } from '../../auth/codex-oauth.js';
+import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 
 /**
  * Codex API 服务类
@@ -225,7 +225,7 @@ export class CodexApiService {
      */
     async refreshAccessToken() {
         try {
-            const newTokens = await refreshTokensWithRetry(this.refreshToken, this.config);
+            const newTokens = await refreshCodexTokensWithRetry(this.refreshToken, this.config);
 
             this.accessToken = newTokens.access_token;
             this.refreshToken = newTokens.refresh_token;
