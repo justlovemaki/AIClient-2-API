@@ -7,6 +7,7 @@ import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiServic
 import { OrchidsApiService } from './claude/claude-orchids.js'; // 导入OrchidsApiService
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
 import { IFlowApiService } from './openai/iflow-core.js'; // 导入IFlowApiService
+import { CodexApiService } from './openai/codex-core.js'; // 导入CodexApiService
 import { MODEL_PROVIDER } from '../utils/common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -444,6 +445,42 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
 
 }
 
+// Codex API 服务适配器
+export class CodexApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.codexApiService = new CodexApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        if (!this.codexApiService.isInitialized) {
+            console.warn("codexApiService not initialized, attempting to re-initialize...");
+            await this.codexApiService.initialize();
+        }
+        return this.codexApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        if (!this.codexApiService.isInitialized) {
+            console.warn("codexApiService not initialized, attempting to re-initialize...");
+            await this.codexApiService.initialize();
+        }
+        yield* this.codexApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        return this.codexApiService.listModels();
+    }
+
+    async refreshToken() {
+        if (this.codexApiService.isExpiryDateNear()) {
+            console.log(`[Codex] Expiry date is near, refreshing token...`);
+            await this.codexApiService.refreshAccessToken();
+        }
+        return Promise.resolve();
+    }
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -481,6 +518,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.ORCHIDS_API:
                 serviceInstances[providerKey] = new OrchidsApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.CODEX_API:
+                serviceInstances[providerKey] = new CodexApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

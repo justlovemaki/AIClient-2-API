@@ -76,6 +76,17 @@ export const PROVIDER_MAPPINGS = [
         displayName: 'Orchids OAuth',
         needsProjectId: false,
         urlKeys: ['ORCHIDS_BASE_URL']
+    },
+    {
+        // Codex OAuth 配置
+        dirName: 'codex',
+        patterns: ['configs/codex/', '/codex/'],
+        providerType: 'openai-codex-oauth',
+        credPathKey: 'CODEX_OAUTH_CREDS_FILE_PATH',
+        defaultCheckModel: 'gpt-5.2-codex',
+        displayName: 'OpenAI Codex OAuth',
+        needsProjectId: false,
+        urlKeys: ['CODEX_BASE_URL']
     }
 ];
 

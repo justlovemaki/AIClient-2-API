@@ -170,9 +170,10 @@ function getProviderDisplayName(providerType) {
         'openai-custom': 'OpenAI Custom',
         'openaiResponses-custom': 'OpenAI Responses Custom',
         'openai-qwen-oauth': 'Qwen (OAuth)',
-        'openai-iflow': 'iFlow'
+        'openai-iflow': 'iFlow',
+        'openai-codex-oauth': 'OpenAI Codex (OAuth)'
     };
-    
+
     return displayNames[providerType] || providerType;
 }
 
