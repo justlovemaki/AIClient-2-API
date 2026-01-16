@@ -866,24 +866,32 @@ export class ProviderPoolManager {
      * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}|null>} - Health check result object or null if check not implemented.
      */
     async _checkProviderHealth(providerType, providerConfig, forceCheck = false) {
-        // 确定健康检查使用的模型名称
-        const modelName = providerConfig.checkModelName ||
-                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
-
-        // 如果未启用健康检查且不是强制检查，返回 null
+        // 如果未启用健康检查且不是强制检查，返回 null（提前返回，避免不必要的计算）
         if (!providerConfig.checkHealth && !forceCheck) {
             return null;
         }
 
+        // 确定健康检查使用的模型名称
+        const modelName = providerConfig.checkModelName ||
+                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
+
         if (!modelName) {
-            this._log('warn', `Unknown provider type for health check: ${providerType}`);
-            return { success: false, modelName: null, errorMessage: 'Unknown provider type for health check' };
+            this._log('warn', `Unknown provider type for health check: ${providerType}. Please check DEFAULT_HEALTH_CHECK_MODELS.`);
+            return { 
+                success: false, 
+                modelName: null, 
+                errorMessage: `Unknown provider type '${providerType}'. No default health check model configured.` 
+            };
         }
 
         // ========== 快速预检：从内存缓存检查 OAuth 凭证状态 ==========
         // 对于 OAuth 类型的 provider，先检查 token 是否过期，避免阻塞
+        // 注意：只有在开启自动刷新 token (CRON_REFRESH_TOKEN) 时才执行快速预检
+        // 因为如果没有自动刷新机制，缓存中的 token 状态可能不准确
         const oauthProviderTypes = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'openai-iflow-oauth', 'claude-orchids-oauth'];
-        if (oauthProviderTypes.includes(providerType) && providerConfig.uuid) {
+        const cronRefreshTokenEnabled = this.globalConfig?.CRON_REFRESH_TOKEN === true;
+        
+        if (cronRefreshTokenEnabled && oauthProviderTypes.includes(providerType) && providerConfig.uuid) {
             const credentialCache = CredentialCacheManager.getInstance();
             const cachedEntry = credentialCache.getCredentials(providerType, providerConfig.uuid);
 
@@ -916,19 +924,10 @@ export class ProviderPoolManager {
         }
 
         // ========== 实际 API 健康检查（带超时保护）==========
-        const proxyKeys = ['GEMINI', 'OPENAI', 'CLAUDE', 'QWEN', 'KIRO'];
         const tempConfig = {
             ...providerConfig,
             MODEL_PROVIDER: providerType
         };
-
-        proxyKeys.forEach(key => {
-            const proxyKey = `USE_SYSTEM_PROXY_${key}`;
-            if (this.globalConfig[proxyKey] !== undefined) {
-                tempConfig[proxyKey] = this.globalConfig[proxyKey];
-            }
-        });
-
         const serviceAdapter = getServiceAdapter(tempConfig);
 
         // 获取所有可能的请求格式
@@ -936,31 +935,31 @@ export class ProviderPoolManager {
 
         // 健康检查超时时间（15秒，避免长时间阻塞）
         const healthCheckTimeout = 15000;
-
-        // 重试机制：尝试不同的请求格式
-        const maxRetries = healthCheckRequests.length;
         let lastError = null;
 
-        for (let i = 0; i < maxRetries; i++) {
+        // 重试机制：尝试不同的请求格式
+        for (let i = 0; i < healthCheckRequests.length; i++) {
             const healthCheckRequest = healthCheckRequests[i];
+            const abortController = new AbortController();
+            const timeoutId = setTimeout(() => abortController.abort(), healthCheckTimeout);
+
             try {
-                this._log('debug', `Health check attempt ${i + 1}/${maxRetries} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
+                this._log('debug', `Health check attempt ${i + 1}/${healthCheckRequests.length} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
 
-                // 带超时的健康检查
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Health check timeout')), healthCheckTimeout)
-                );
+                // 尝试将 signal 注入请求体，供支持的适配器使用
+                const requestWithSignal = {
+                    ...healthCheckRequest,
+                    signal: abortController.signal
+                };
 
-                await Promise.race([
-                    serviceAdapter.generateContent(modelName, healthCheckRequest),
-                    timeoutPromise
-                ]);
-
+                await serviceAdapter.generateContent(modelName, requestWithSignal);
+                
+                clearTimeout(timeoutId);
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {
+                clearTimeout(timeoutId);
                 lastError = error;
                 this._log('debug', `Health check attempt ${i + 1} failed for ${providerType}: ${error.message}`);
-                // 继续尝试下一个格式
             }
         }
 
