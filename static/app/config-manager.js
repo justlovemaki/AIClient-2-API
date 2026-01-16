@@ -99,6 +99,10 @@ async function loadConfiguration() {
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
         if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH;
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 3;
+
+        // 账号池轮询上限
+        const poolSizeLimitEl = document.getElementById('poolSizeLimit');
+        if (poolSizeLimitEl) poolSizeLimitEl.value = data.POOL_SIZE_LIMIT || 0;
         
         // 加载 Fallback 链配置
         if (providerFallbackChainEl) {
@@ -197,6 +201,7 @@ async function saveConfiguration() {
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
     config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
     config.MAX_ERROR_COUNT = parseInt(document.getElementById('maxErrorCount')?.value || 3);
+    config.POOL_SIZE_LIMIT = parseInt(document.getElementById('poolSizeLimit')?.value || 0);
     
     // 保存 Fallback 链配置
     const fallbackChainValue = document.getElementById('providerFallbackChain')?.value?.trim() || '';
