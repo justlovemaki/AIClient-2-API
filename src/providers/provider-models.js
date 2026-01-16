@@ -37,7 +37,6 @@ export const PROVIDER_MODELS = {
         'claude-sonnet-4-5',
         'claude-opus-4-5',
         'claude-haiku-4-5',
-        'gemini-3',
         'gemini-3-flash',
         'gpt-5.2'
     ],
