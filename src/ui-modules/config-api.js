@@ -138,6 +138,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                 PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                 MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
+                POOL_SIZE_LIMIT: currentConfig.POOL_SIZE_LIMIT,
                 providerFallbackChain: currentConfig.providerFallbackChain,
                 modelFallbackMapping: currentConfig.modelFallbackMapping,
                 PROXY_URL: currentConfig.PROXY_URL,
