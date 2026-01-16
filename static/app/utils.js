@@ -255,6 +255,12 @@ function getProviderTypeFields(providerType) {
         ],
         'openai-codex-oauth': [
             {
+                id: 'CODEX_OAUTH_CREDS_FILE_PATH',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+                type: 'text',
+                placeholder: isEn ? 'e.g.: configs/codex/oauth_creds.json' : '例如: configs/codex/oauth_creds.json'
+            },
+            {
                 id: 'CODEX_EMAIL',
                 label: isEn ? 'Email (Optional)' : '邮箱 (选填)',
                 type: 'email',
@@ -264,7 +270,7 @@ function getProviderTypeFields(providerType) {
                 id: 'CODEX_BASE_URL',
                 label: `Codex Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
-                placeholder: 'https://chatgpt.com/backend-api/codex'
+                placeholder: 'https://api.openai.com/v1/codex'
             }
         ]
     };
