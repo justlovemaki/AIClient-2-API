@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { BaseConverter } from '../BaseConverter.js';
+import { CodexConverter } from './CodexConverter.js';
 import {
     extractAndProcessSystemMessages as extractSystemMessages,
     extractTextFromMessageContent as extractText,
@@ -41,6 +42,8 @@ import {
 export class OpenAIConverter extends BaseConverter {
     constructor() {
         super('openai');
+        // 创建 CodexConverter 实例用于委托
+        this.codexConverter = new CodexConverter();
     }
 
     /**
@@ -54,6 +57,8 @@ export class OpenAIConverter extends BaseConverter {
                 return this.toGeminiRequest(data);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesRequest(data);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -1324,6 +1329,13 @@ export class OpenAIConverter extends BaseConverter {
         }
 
         return result;
+    }
+
+    /**
+     * OpenAI请求 -> Codex请求（委托给 CodexConverter）
+     */
+    toCodexRequest(openaiRequest) {
+        return this.codexConverter.toCodexRequest(openaiRequest);
     }
 
     /**

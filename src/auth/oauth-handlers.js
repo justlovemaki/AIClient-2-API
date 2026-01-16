@@ -31,6 +31,13 @@ const OAUTH_PROVIDERS = {
         credentialsFile: 'oauth_creds.json',
         scope: ['https://www.googleapis.com/auth/cloud-platform'],
         logPrefix: '[Antigravity Auth]'
+    },
+    'openai-codex-oauth': {
+        clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
+        port: 1455,
+        credentialsDir: 'configs/codex',
+        credentialsFile: '{timestamp}_codex-{email}.json',
+        logPrefix: '[Codex Auth]'
     }
 };
 
@@ -2282,5 +2289,150 @@ export async function handleOrchidsOAuth(currentConfig, options = {}) {
             note: '只需要 __client 的值即可，sessionId 等参数会自动获取'
         }
     };
+}
+
+/**
+ * 处理 Codex OAuth 认证
+ * @param {Object} currentConfig - 当前配置
+ * @param {Object} options - 选项
+ * @returns {Promise<Object>} 返回认证结果
+ */
+export async function handleCodexOAuth(currentConfig, options = {}) {
+    const { CodexAuth } = await import('./codex-oauth.js');
+    const auth = new CodexAuth(currentConfig);
+
+    try {
+        console.log('[Codex Auth] Generating OAuth URL...');
+
+        // 生成授权 URL 和启动回调服务器
+        const { authUrl, state, pkce, server } = await auth.generateAuthUrl();
+
+        console.log('[Codex Auth] OAuth URL generated successfully');
+
+        // 存储 OAuth 会话信息，供后续回调使用
+        if (!global.codexOAuthSessions) {
+            global.codexOAuthSessions = new Map();
+        }
+
+        const sessionId = state; // 使用 state 作为 session ID
+        global.codexOAuthSessions.set(sessionId, {
+            auth,
+            state,
+            pkce,
+            server,
+            createdAt: Date.now()
+        });
+
+        // 10 分钟后自动清理会话
+        setTimeout(() => {
+            if (global.codexOAuthSessions.has(sessionId)) {
+                const session = global.codexOAuthSessions.get(sessionId);
+                if (session.server) {
+                    session.server.close();
+                }
+                global.codexOAuthSessions.delete(sessionId);
+                console.log('[Codex Auth] Session expired and cleaned up');
+            }
+        }, 10 * 60 * 1000);
+
+        return {
+            success: true,
+            authUrl: authUrl,
+            authInfo: {
+                provider: 'openai-codex-oauth',
+                method: 'oauth2-pkce',
+                sessionId: sessionId,
+                redirectUri: 'http://localhost:1455/auth/callback',
+                instructions: [
+                    '1. 点击下方按钮在浏览器中打开授权链接',
+                    '2. 使用您的 OpenAI 账户登录',
+                    '3. 授权应用访问您的 Codex API',
+                    '4. 授权成功后会自动保存凭据',
+                    '5. 如果浏览器未自动跳转，请手动复制回调 URL'
+                ]
+            }
+        };
+    } catch (error) {
+        console.error('[Codex Auth] Failed to generate OAuth URL:', error.message);
+
+        return {
+            success: false,
+            error: error.message,
+            authInfo: {
+                provider: 'openai-codex-oauth',
+                method: 'oauth2-pkce',
+                instructions: [
+                    '1. 确保端口 1455 未被占用',
+                    '2. 确保可以访问 auth.openai.com',
+                    '3. 确保浏览器可以正常打开',
+                    '4. 如果问题持续，请检查网络连接'
+                ]
+            }
+        };
+    }
+}
+
+/**
+ * 处理 Codex OAuth 回调
+ * @param {string} code - 授权码
+ * @param {string} state - 状态参数
+ * @returns {Promise<Object>} 返回认证结果
+ */
+export async function handleCodexOAuthCallback(code, state) {
+    try {
+        if (!global.codexOAuthSessions || !global.codexOAuthSessions.has(state)) {
+            throw new Error('Invalid or expired OAuth session');
+        }
+
+        const session = global.codexOAuthSessions.get(state);
+        const { auth, state: expectedState, pkce } = session;
+
+        console.log('[Codex Auth] Processing OAuth callback...');
+
+        // 完成 OAuth 流程
+        const result = await auth.completeOAuthFlow(code, state, expectedState, pkce);
+
+        // 清理会话
+        global.codexOAuthSessions.delete(state);
+
+        // 广播认证成功事件（与 gemini 格式一致）
+        broadcastEvent('oauth_success', {
+            provider: 'openai-codex-oauth',
+            credPath: result.credPath,
+            relativePath: result.relativePath,
+            timestamp: new Date().toISOString(),
+            email: result.email,
+            accountId: result.account_id
+        });
+
+        // 自动关联新生成的凭据到 Pools
+        await autoLinkProviderConfigs(CONFIG);
+
+        console.log('[Codex Auth] OAuth callback processed successfully');
+
+        return {
+            success: true,
+            message: 'Codex authentication successful',
+            credentials: result,
+            email: result.email,
+            accountId: result.account_id,
+            credPath: result.credPath,
+            relativePath: result.relativePath
+        };
+    } catch (error) {
+        console.error('[Codex Auth] OAuth callback failed:', error.message);
+
+        // 广播认证失败事件
+        broadcastEvent({
+            type: 'oauth-error',
+            provider: 'openai-codex-oauth',
+            error: error.message
+        });
+
+        return {
+            success: false,
+            error: error.message
+        };
+    }
 }
 
