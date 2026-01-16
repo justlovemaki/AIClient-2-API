@@ -2358,6 +2358,13 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
         }
 
         const sessionId = state; // 使用 state 作为 session ID
+        
+        // 轮询计数器
+        let pollCount = 0;
+        const maxPollCount = 60; // 最多轮询 60 次（60秒）
+        let pollTimer = null;
+        let isCompleted = false;
+        
         global.codexOAuthSessions.set(sessionId, {
             auth,
             state,
@@ -2366,8 +2373,35 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
             createdAt: Date.now()
         });
 
+        // 启动轮询日志
+        pollTimer = setInterval(() => {
+            pollCount++;
+            if (pollCount <= maxPollCount && !isCompleted) {
+                console.log(`[Codex Auth] Waiting for callback... (${pollCount}/${maxPollCount}s)`);
+            }
+            
+            if (pollCount >= maxPollCount && !isCompleted) {
+                clearInterval(pollTimer);
+                console.log('[Codex Auth] Polling timeout (60s), releasing session for next authorization');
+                
+                // 清理会话和服务器
+                if (global.codexOAuthSessions.has(sessionId)) {
+                    const session = global.codexOAuthSessions.get(sessionId);
+                    if (session.server) {
+                        session.server.close();
+                    }
+                    global.codexOAuthSessions.delete(sessionId);
+                }
+            }
+        }, 1000);
+
         // 监听回调服务器的 auth-success 事件，自动完成 OAuth 流程
         server.once('auth-success', async (result) => {
+            isCompleted = true;
+            if (pollTimer) {
+                clearInterval(pollTimer);
+            }
+            
             try {
                 console.log('[Codex Auth] Received auth callback, completing OAuth flow...');
                 
@@ -2410,6 +2444,11 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
 
         // 监听 auth-error 事件
         server.once('auth-error', (error) => {
+            isCompleted = true;
+            if (pollTimer) {
+                clearInterval(pollTimer);
+            }
+            
             console.error('[Codex Auth] Auth error:', error.message);
             global.codexOAuthSessions.delete(sessionId);
             
@@ -2418,18 +2457,6 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 error: error.message
             });
         });
-
-        // 10 分钟后自动清理会话
-        setTimeout(() => {
-            if (global.codexOAuthSessions.has(sessionId)) {
-                const session = global.codexOAuthSessions.get(sessionId);
-                if (session.server) {
-                    session.server.close();
-                }
-                global.codexOAuthSessions.delete(sessionId);
-                console.log('[Codex Auth] Session expired and cleaned up');
-            }
-        }, 10 * 60 * 1000);
 
         return {
             success: true,

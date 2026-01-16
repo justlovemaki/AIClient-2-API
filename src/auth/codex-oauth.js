@@ -5,6 +5,7 @@ import axios from 'axios';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { getProxyConfigForProvider } from '../utils/proxy-utils.js';
 
 /**
  * Codex OAuth 配置
@@ -25,9 +26,17 @@ const CODEX_CONFIG = {
 export class CodexAuth {
     constructor(config) {
         this.config = config;
-        this.httpClient = axios.create({
-            timeout: 30000
-        });
+        
+        // 配置代理支持
+        const axiosConfig = { timeout: 30000 };
+        const proxyConfig = getProxyConfigForProvider(config, 'openai-codex-oauth');
+        if (proxyConfig) {
+            axiosConfig.httpAgent = proxyConfig.httpAgent;
+            axiosConfig.httpsAgent = proxyConfig.httpsAgent;
+            console.log('[Codex Auth] Proxy enabled for OAuth requests');
+        }
+        
+        this.httpClient = axios.create(axiosConfig);
         this.server = null; // 存储服务器实例
     }
 
