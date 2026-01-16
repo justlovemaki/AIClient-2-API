@@ -6,6 +6,7 @@ import {
     handleKiroOAuth,
     handleIFlowOAuth,
     handleOrchidsOAuth,
+    handleCodexOAuth,
     batchImportKiroRefreshTokensStream,
     importAwsCredentials,
     importOrchidsToken
@@ -56,6 +57,11 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
             const result = await handleOrchidsOAuth(currentConfig, options);
             authUrl = result.authUrl;
             authInfo = result.authInfo;
+        } else if (providerType === 'openai-codex-oauth') {
+            // Codex OAuth（OAuth2 + PKCE）
+            const result = await handleCodexOAuth(currentConfig, options);
+            authUrl = result.authUrl;
+            authInfo = result.authInfo;
         } else {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -93,7 +99,7 @@ export async function handleManualOAuthCallback(req, res) {
     try {
         const body = await getRequestBody(req);
         const { provider, callbackUrl, authMethod } = body;
-        
+
         if (!provider || !callbackUrl) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -102,15 +108,16 @@ export async function handleManualOAuthCallback(req, res) {
             }));
             return true;
         }
-        
+
         console.log(`[OAuth Manual Callback] Processing manual callback for ${provider}`);
         console.log(`[OAuth Manual Callback] Callback URL: ${callbackUrl}`);
-        
+
         // 解析回调URL
         const url = new URL(callbackUrl);
         const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
         const token = url.searchParams.get('token');
-        
+
         if (!code && !token) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -119,16 +126,26 @@ export async function handleManualOAuthCallback(req, res) {
             }));
             return true;
         }
-        
+
+        // 特殊处理 Codex OAuth 回调
+        if (provider === 'openai-codex-oauth' && code && state) {
+            const { handleCodexOAuthCallback } = await import('../auth/oauth-handlers.js');
+            const result = await handleCodexOAuthCallback(code, state);
+
+            res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+            return true;
+        }
+
         // 通过fetch请求本地OAuth回调服务器处理
         // 使用localhost而不是原始hostname，确保请求到达本地服务器
         const localUrl = new URL(callbackUrl);
         localUrl.hostname = 'localhost';
         localUrl.protocol = 'http:';
-        
+
         try {
             const response = await fetch(localUrl.href);
-            
+
             if (response.ok) {
                 console.log(`[OAuth Manual Callback] Successfully processed callback for ${provider}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -153,7 +170,7 @@ export async function handleManualOAuthCallback(req, res) {
                 error: `Failed to process callback: ${fetchError.message}`
             }));
         }
-        
+
         return true;
     } catch (error) {
         console.error('[OAuth Manual Callback] Error:', error);

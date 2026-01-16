@@ -252,9 +252,23 @@ function getProviderTypeFields(providerType) {
                 type: 'text',
                 placeholder: 'https://iflow.cn/api'
             }
+        ],
+        'openai-codex-oauth': [
+            {
+                id: 'CODEX_EMAIL',
+                label: isEn ? 'Email (Optional)' : '邮箱 (选填)',
+                type: 'email',
+                placeholder: isEn ? 'your-email@example.com' : '你的邮箱@example.com'
+            },
+            {
+                id: 'CODEX_BASE_URL',
+                label: `Codex Base URL <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: 'https://chatgpt.com/backend-api/codex'
+            }
         ]
     };
-    
+
     return fieldConfigs[providerType] || [];
 }
 
