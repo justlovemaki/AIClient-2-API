@@ -206,6 +206,44 @@ function repairJson(jsonStr) {
 }
 
 /**
+ * 从损坏的 JSON 中提取关键凭证字段
+ * 当标准 JSON 解析和 repairJson 都失败时使用
+ * @param {string} content - 文件内容
+ * @returns {Object|null} 提取的凭证对象或 null
+ */
+function extractCredentialsFromCorruptedJson(content) {
+    const extracted = {};
+
+    // 定义需要提取的关键字段及其正则模式
+    const fieldPatterns = {
+        refreshToken: /"refreshToken"\s*:\s*"([^"]+)"/,
+        accessToken: /"accessToken"\s*:\s*"([^"]+)"/,
+        clientId: /"clientId"\s*:\s*"([^"]+)"/,
+        clientSecret: /"clientSecret"\s*:\s*"([^"]+)"/,
+        profileArn: /"profileArn"\s*:\s*"([^"]+)"/,
+        region: /"region"\s*:\s*"([^"]+)"/,
+        authMethod: /"authMethod"\s*:\s*"([^"]+)"/,
+        expiresAt: /"expiresAt"\s*:\s*"([^"]+)"/,
+        startUrl: /"startUrl"\s*:\s*"([^"]+)"/,
+    };
+
+    for (const [field, pattern] of Object.entries(fieldPatterns)) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+            extracted[field] = match[1];
+        }
+    }
+
+    // 至少需要 refreshToken 或 accessToken 才算有效
+    if (extracted.refreshToken || extracted.accessToken) {
+        console.info(`[Kiro Auth] Extracted ${Object.keys(extracted).length} fields from corrupted JSON: ${Object.keys(extracted).join(', ')}`);
+        return extracted;
+    }
+
+    return null;
+}
+
+/**
  * 解析单个工具调用文本
  * @param {string} toolCallText - 工具调用文本
  * @returns {Object|null} 解析后的工具调用对象或 null
@@ -448,7 +486,14 @@ async initializeAuth(forceRefresh = false) {
                     console.info('[Kiro Auth] JSON repair successful');
                     return result;
                 } catch (repairError) {
-                    console.error('[Kiro Auth] JSON repair failed:', repairError.message);
+                    console.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
+                    // 尝试从损坏的 JSON 中提取关键字段
+                    const extracted = extractCredentialsFromCorruptedJson(fileContent);
+                    if (extracted) {
+                        console.info('[Kiro Auth] Field extraction successful, credentials recovered');
+                        return extracted;
+                    }
+                    console.error('[Kiro Auth] All recovery methods failed:', repairError.message);
                     return null;
                 }
             }
@@ -489,8 +534,15 @@ async initializeAuth(forceRefresh = false) {
                         existingData = JSON.parse(repaired);
                         console.info('[Kiro Auth] JSON repair successful');
                     } catch (repairError) {
-                        console.error('[Kiro Auth] JSON repair failed:', repairError.message);
-                        existingData = {};
+                        console.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
+                        const extracted = extractCredentialsFromCorruptedJson(fileContent);
+                        if (extracted) {
+                            existingData = extracted;
+                            console.info('[Kiro Auth] Field extraction successful');
+                        } else {
+                            console.error('[Kiro Auth] All recovery methods failed:', repairError.message);
+                            existingData = {};
+                        }
                     }
                 }
             } catch (readError) {
