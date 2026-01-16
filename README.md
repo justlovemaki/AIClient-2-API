@@ -594,6 +594,7 @@ We are grateful for the support from our sponsors:
 Your sponsorship is the driving force for the project's continued development ❤️
 
 <img src="static/coffee.png" alt="Scan to Sponsor" width="200">
+<img src="static/sponsor.png" alt="Scan to Sponsor" width="200">
 
 ### 🌟 Star History
 

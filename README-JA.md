@@ -594,6 +594,7 @@ AIClient-2-APIプロジェクトに貢献してくれたすべての開発者に
 あなたのスポンサーシップはプロジェクトの継続的な発展の原動力です ❤️
 
 <img src="static/coffee.png" alt="スキャンしてスポンサーになる" width="200">
+<img src="static/sponsor.png" alt="スキャンしてスポンサーになる" width="200">
 
 ### 🌟 Star History
 
