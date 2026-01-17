@@ -252,10 +252,22 @@ export class ProviderPoolManager {
      */
     async _refreshNodeToken(providerType, providerStatus, force = false) {
         const config = providerStatus.config;
-        this._log('info', `Starting token refresh for node ${providerStatus.uuid} (${providerType})`);
+        
+        // 检查刷新次数是否已达上限（最大3次）
+        const currentRefreshCount = config.refreshCount || 0;
+        if (currentRefreshCount >= 3 && !force) {
+            this._log('warn', `Node ${providerStatus.uuid} has reached maximum refresh count (3), skipping refresh`);
+            return;
+        }
+        
+        // 添加5秒内的随机等待时间，避免并发刷新时的冲突
+        const randomDelay = Math.floor(Math.random() * 5000);
+        this._log('info', `Starting token refresh for node ${providerStatus.uuid} (${providerType}) with ${randomDelay}ms delay`);
+        await new Promise(resolve => setTimeout(resolve, randomDelay));
 
         try {
-            config.refreshCount = (config.refreshCount || 0) + 1;
+            // 增加刷新计数
+            config.refreshCount = currentRefreshCount + 1;
 
             // 使用适配器进行刷新
             const tempConfig = {
