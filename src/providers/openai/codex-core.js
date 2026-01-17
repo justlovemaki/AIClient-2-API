@@ -4,10 +4,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
+import { MODEL_PROVIDER } from '../../utils/common.js';
 
 /**
  * Codex API 服务类
- * 处理与 Codex API 的通信
  */
 export class CodexApiService {
     constructor(config) {
@@ -18,6 +19,7 @@ export class CodexApiService {
         this.accountId = null;
         this.email = null;
         this.expiresAt = null;
+        this.uuid = config.uuid; // 保存 uuid 用于号池管理
         this.isInitialized = false;
 
         // 会话缓存管理
@@ -29,6 +31,20 @@ export class CodexApiService {
      * 初始化服务（加载凭据）
      */
     async initialize() {
+        if (this.isInitialized) return;
+        console.log('[Codex] Initializing Codex API Service...');
+        // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
+        // 仅执行基础的凭证加载
+        await this.loadCredentials();
+
+        this.isInitialized = true;
+        console.log(`[Codex] Initialization complete. Account: ${this.email || 'unknown'}`);
+    }
+
+    /**
+     * 加载凭证信息（不执行刷新）
+     */
+    async loadCredentials() {
         const email = this.config.CODEX_EMAIL || 'default';
 
         try {
@@ -60,10 +76,10 @@ export class CodexApiService {
                 creds = JSON.parse(await fs.readFile(credsPath, 'utf8'));
             }
 
-            this.accessToken = creds.access_token;
-            this.refreshToken = creds.refresh_token;
-            this.accountId = creds.account_id;
-            this.email = creds.email;
+                this.accessToken = creds.access_token;
+                this.refreshToken = creds.refresh_token;
+                this.accountId = creds.account_id;
+                this.email = creds.email;
             this.expiresAt = new Date(creds.expired); // 注意：字段名是 expired
 
             // 检查 token 是否需要刷新
@@ -75,8 +91,37 @@ export class CodexApiService {
             this.isInitialized = true;
             console.log(`[Codex] Initialized with account: ${this.email}`);
         } catch (error) {
-            console.error('[Codex] Initialization failed:', error.message);
-            throw error;
+            console.warn(`[Codex Auth] Failed to load credentials: ${error.message}`);
+        }
+    }
+
+    /**
+     * 初始化认证并执行必要刷新
+     */
+    async initializeAuth(forceRefresh = false) {
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
+        // 检查 token 是否需要刷新
+        const needsRefresh = forceRefresh;
+
+        if (this.accessToken && !needsRefresh) {
+            return;
+        }
+
+        // 只有在明确要求刷新，或者 AccessToken 缺失时，才执行刷新
+        if (needsRefresh || !this.accessToken) {
+            if (!this.refreshToken) {
+                throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
+            }
+            console.log('[Codex] Token expiring soon or refresh requested, refreshing...');
+            await this.refreshAccessToken();
+            
+            // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.CODEX_API, this.uuid);
+            }
         }
     }
 
@@ -101,17 +146,22 @@ export class CodexApiService {
             return this.parseNonStreamResponse(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
-                // Token 过期，尝试刷新
-                console.log('[Codex] 401 error, refreshing token...');
-                await this.refreshAccessToken();
-                // 重试请求
-                const retryBody = this.prepareRequestBody(model, requestBody, false);
-                const retryHeaders = this.buildHeaders(retryBody.prompt_cache_key);
-                const retryResponse = await axios.post(url, retryBody, {
-                    headers: retryHeaders,
-                    timeout: 120000
-                });
-                return this.parseNonStreamResponse(retryResponse.data);
+                console.log('[Codex] Received 401. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
             throw error;
         }
@@ -129,11 +179,6 @@ export class CodexApiService {
         const body = this.prepareRequestBody(model, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key);
 
-        // 调试日志
-        console.log('[Codex Debug] Request URL:', url);
-        console.log('[Codex Debug] Request Body:', JSON.stringify(body, null, 2));
-        console.log('[Codex Debug] Request Headers:', JSON.stringify(headers, null, 2));
-
         try {
             const response = await axios.post(url, body, {
                 headers,
@@ -143,33 +188,23 @@ export class CodexApiService {
 
             yield* this.parseSSEStream(response.data);
         } catch (error) {
-            // 打印详细错误信息
-            if (error.response) {
-                console.error('[Codex Error] Status:', error.response.status);
-                console.error('[Codex Error] Headers:', error.response.headers);
-                if (error.response.data) {
-                    const errorData = await new Promise((resolve) => {
-                        let data = '';
-                        error.response.data.on('data', chunk => data += chunk);
-                        error.response.data.on('end', () => resolve(data));
-                    });
-                    console.error('[Codex Error] Response:', errorData);
-                }
-            }
-
             if (error.response?.status === 401) {
-                // Token 过期，尝试刷新
-                console.log('[Codex] 401 error, refreshing token...');
-                await this.refreshAccessToken();
-                // 重试请求
-                const retryBody = this.prepareRequestBody(model, requestBody, true);
-                const retryHeaders = this.buildHeaders(retryBody.prompt_cache_key);
-                const retryResponse = await axios.post(url, retryBody, {
-                    headers: retryHeaders,
-                    responseType: 'stream',
-                    timeout: 120000
-                });
-                yield* this.parseSSEStream(retryResponse.data);
+                console.log('[Codex] Received 401 during stream. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in stream`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             } else {
                 throw error;
             }

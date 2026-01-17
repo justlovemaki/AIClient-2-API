@@ -14,6 +14,8 @@ import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
 import { cleanJsonSchemaProperties } from '../../converters/utils.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
+import { MODEL_PROVIDER } from '../../utils/common.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -761,7 +763,9 @@ export class AntigravityApiService {
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Antigravity] Initializing Antigravity API Service...');
-        await this.initializeAuth();
+        // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
+        // 仅执行基础的凭证加载
+        await this.loadCredentials();
 
         if (!this.projectId) {
             this.projectId = await this.discoverProjectAndModels();
@@ -775,6 +779,25 @@ export class AntigravityApiService {
         console.log(`[Antigravity] Initialization complete. Project ID: ${this.projectId}`);
     }
 
+    /**
+     * 加载凭证信息（不执行刷新）
+     */
+    async loadCredentials() {
+        const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
+        try {
+            const data = await fs.readFile(credPath, "utf8");
+            const credentials = JSON.parse(data);
+            this.authClient.setCredentials(credentials);
+            console.log('[Antigravity Auth] Credentials loaded successfully from file.');
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                console.debug(`[Antigravity Auth] Credentials file not found: ${credPath}`);
+            } else {
+                console.warn(`[Antigravity Auth] Failed to load credentials from file: ${error.message}`);
+            }
+        }
+    }
+
     async initializeAuth(forceRefresh = false) {
         // 检查是否需要刷新 Token
         const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
@@ -785,28 +808,40 @@ export class AntigravityApiService {
         }
 
         const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
-        try {
-            const data = await fs.readFile(credPath, "utf8");
-            const credentials = JSON.parse(data);
-            this.authClient.setCredentials(credentials);
-            console.log('[Antigravity Auth] Authentication configured successfully from file.');
+        
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
 
-            if (needsRefresh) {
-                console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
-                const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
-                this.authClient.setCredentials(newCredentials);
-                await this._saveCredentialsToFile(credPath, newCredentials);
-                console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
-            }
-        } catch (error) {
-            console.error('[Antigravity Auth] Error initializing authentication:', error.code);
-            if (error.code === 'ENOENT' || error.code === 400) {
-                console.log(`[Antigravity Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
-                const newTokens = await this.getNewToken(credPath);
-                this.authClient.setCredentials(newTokens);
-                console.log('[Antigravity Auth] New token obtained and loaded into memory.');
-            } else {
-                console.error('[Antigravity Auth] Failed to initialize authentication from file:', error);
+        // 只有在明确要求刷新，或者 AccessToken 确实缺失时，才执行刷新/认证
+        // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
+        if (needsRefresh || !this.authClient.credentials.access_token) {
+            try {
+                if (this.authClient.credentials.refresh_token) {
+                    console.log('[Antigravity Auth] Token expiring soon or force refresh requested. Refreshing token...');
+                    const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
+                    this.authClient.setCredentials(newCredentials);
+                    await this._saveCredentialsToFile(credPath, newCredentials);
+                    console.log(`[Antigravity Auth] Token refreshed and saved to ${credPath} successfully.`);
+
+                    // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
+                    }
+                } else {
+                    console.log(`[Antigravity Auth] No access token or refresh token. Starting new authentication flow...`);
+                    const newTokens = await this.getNewToken(credPath);
+                    this.authClient.setCredentials(newTokens);
+                    console.log('[Antigravity Auth] New token obtained and loaded into memory.');
+                    
+                    // 认证成功，重置状态
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
+                    }
+                }
+            } catch (error) {
+                console.error('[Antigravity Auth] Failed to initialize authentication:', error);
                 throw new Error(`Failed to load OAuth credentials.`);
             }
         }
@@ -1072,9 +1107,22 @@ export class AntigravityApiService {
             console.error(`[Antigravity API] Error calling ${method} on ${baseURL}:`, status, error.message);
 
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Antigravity API] Received 401/400. Refreshing auth and retrying...');
-                await this.initializeAuth(true);
-                return this.callApi(method, body, true, retryCount, baseURLIndex);
+                console.log('[Antigravity API] Received 401/400. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Antigravity] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             if (status === 429) {
@@ -1161,10 +1209,22 @@ export class AntigravityApiService {
             console.error(`[Antigravity API] Error during stream ${method} on ${baseURL}:`, status, error.message);
 
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Antigravity API] Received 401/400 during stream. Refreshing auth and retrying...');
-                await this.initializeAuth(true);
-                yield* this.streamApi(method, body, true, retryCount, baseURLIndex);
-                return;
+                console.log('[Antigravity API] Received 401/400 during stream. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Antigravity] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             if (status === 429) {
@@ -1341,11 +1401,12 @@ export class AntigravityApiService {
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
         
-        // 检查 token 是否即将过期，如果是则先刷新
-        if (this.isExpiryDateNear()) {
-            console.log('[Antigravity] Token is near expiry, refreshing before getUsageLimits request...');
-            await this.initializeAuth(true);
-        }
+        // 注意：V2 架构下不再在 getUsageLimits 中同步刷新 token
+        // 如果 token 过期，PoolManager 后台会自动处理
+        // if (this.isExpiryDateNear()) {
+        //     console.log('[Antigravity] Token is near expiry, refreshing before getUsageLimits request...');
+        //     await this.initializeAuth(true);
+        // }
 
         try {
             const modelsWithQuotas = await this.getModelsWithQuotas();

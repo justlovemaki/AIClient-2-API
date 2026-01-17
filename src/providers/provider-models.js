@@ -25,9 +25,9 @@ export const PROVIDER_MODELS = {
     ],
     'claude-custom': [],
     'claude-kiro-oauth': [
+        'claude-haiku-4-5',
         'claude-opus-4-5',
         'claude-opus-4-5-20251101',
-        'claude-haiku-4-5',
         'claude-sonnet-4-5',
         'claude-sonnet-4-5-20250929',
         'claude-sonnet-4-20250514',

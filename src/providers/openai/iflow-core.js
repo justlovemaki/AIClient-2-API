@@ -23,7 +23,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -493,18 +494,41 @@ export class IFlowApiService {
         if (this.isInitialized) return;
         
         console.log('[iFlow] Initializing iFlow API Service...');
-        await this.initializeAuth();
+        // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
+        // 仅执行基础的凭证加载
+        await this.loadCredentials();
         
         this.isInitialized = true;
         console.log('[iFlow] Initialization complete.');
     }
 
     /**
-     * 初始化认证
+     * 加载凭证信息（不执行刷新）
+     */
+    async loadCredentials() {
+        try {
+            // 从文件加载
+            this.tokenStorage = await loadTokenFromFile(this.tokenFilePath);
+            if (this.tokenStorage && this.tokenStorage.apiKey) {
+                this.apiKey = this.tokenStorage.apiKey;
+                // 更新 axios 实例的 Authorization header
+                this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
+                console.log('[iFlow Auth] Credentials loaded successfully from file');
+            }
+        } catch (error) {
+            console.warn(`[iFlow Auth] Failed to load credentials from file: ${error.message}`);
+        }
+    }
+
+    /**
+     * 初始化认证并执行必要刷新
      * @param {boolean} forceRefresh - 是否强制刷新 Token
      */
     async initializeAuth(forceRefresh = false) {
-        // 如果已有 API Key 且不强制刷新，直接返回
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
+        // 如果已有 API Key 且不强制刷新且未过期，直接返回
         if (this.apiKey && !forceRefresh) return;
 
         // 从 Token 文件加载 API Key
@@ -527,23 +551,20 @@ export class IFlowApiService {
                     console.log('[iFlow Auth] Forcing token refresh...');
                     await this._refreshOAuthTokens();
                     console.log('[iFlow Auth] Token refreshed and saved successfully.');
+
+                    // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.IFLOW_API, this.uuid);
+                    }
                 }
             } else {
-                throw new Error('[iFlow] Token file does not contain a valid API key.');
+                throw new Error('[iFlow] No refresh token available in credentials.');
             }
         } catch (error) {
-            console.error('[iFlow Auth] Error initializing authentication:', error.code || error.message);
-            if (error.code === 'ENOENT') {
-                console.log(`[iFlow Auth] Credentials file '${this.tokenFilePath}' not found.`);
-                throw new Error(`[iFlow Auth] Credentials file not found. Please run OAuth flow first.`);
-            } else {
-                console.error('[iFlow Auth] Failed to initialize authentication from file:', error.message);
-                throw new Error(`[iFlow Auth] Failed to load OAuth credentials.`);
-            }
+            console.error('[iFlow Auth] Failed to initialize authentication:', error.message);
+            throw new Error(`[iFlow Auth] Failed to load OAuth credentials.`);
         }
-
-        // 更新 axios 实例的 Authorization header
-        this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
     /**
@@ -562,10 +583,10 @@ export class IFlowApiService {
         }
 
         // 使用 isExpiryDateNear 检查过期时间
-        if (!this.isExpiryDateNear()) {
-            console.log('[iFlow] Token is valid, no refresh needed');
-            return false;
-        }
+        // if (!this.isExpiryDateNear()) {
+        //     console.log('[iFlow] Token is valid, no refresh needed');
+        //     return false;
+        // }
 
         console.log('[iFlow] Token is expiring soon, attempting refresh...');
 
@@ -769,14 +790,22 @@ export class IFlowApiService {
             
             // Handle 401/400 - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log(`[iFlow] Received ${status}. Refreshing auth and retrying...`);
-                try {
-                    await this.initializeAuth(true);
-                    return this.callApi(endpoint, body, model, true, retryCount);
-                } catch (authError) {
-                    console.error('[iFlow] Failed to refresh auth during retry:', authError.message);
-                    throw error; // throw original error if refresh fails
+                console.log(`[iFlow] Received ${status}. Triggering background refresh via PoolManager...`);
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
                 }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             if (status === 401 || status === 403) {
@@ -919,15 +948,22 @@ export class IFlowApiService {
             
             // Handle 401/400 during stream - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log(`[iFlow] Received ${status} during stream. Refreshing auth and retrying...`);
-                try {
-                    await this.initializeAuth(true);
-                    yield* this.streamApi(endpoint, body, model, true, retryCount);
-                    return;
-                } catch (authError) {
-                    console.error('[iFlow] Failed to refresh auth during stream retry:', authError.message);
-                    throw error;
+                console.log(`[iFlow] Received ${status} during stream. Triggering background refresh via PoolManager...`);
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized in stream`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
                 }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             if (status === 401 || status === 403) {
@@ -976,8 +1012,8 @@ export class IFlowApiService {
             await this.initialize();
         }
         
-        // 在 API 调用前检查是否需要刷新 Token
-        await this._checkAndRefreshTokenIfNeeded();
+        // 在 API 调用前不再同步检查是否需要刷新 Token (V2 架构)
+        // await this._checkAndRefreshTokenIfNeeded();
         
         return this.callApi('/chat/completions', requestBody, model);
     }
@@ -990,8 +1026,8 @@ export class IFlowApiService {
             await this.initialize();
         }
         
-        // 在 API 调用前检查是否需要刷新 Token
-        await this._checkAndRefreshTokenIfNeeded();
+        // 在 API 调用前不再同步检查是否需要刷新 Token (V2 架构)
+        // await this._checkAndRefreshTokenIfNeeded();
         
         yield* this.streamApi('/chat/completions', requestBody, model);
     }
