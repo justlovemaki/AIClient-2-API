@@ -2316,49 +2316,55 @@ async saveCredentialsToFile(filePath, newData) {
     estimateInputTokens(requestBody) {
         let totalTokens = 0;
         
-        // Count system prompt tokens
+        // Helper function to process content and count tokens
+        const processContent = (content) => {
+            if (!content) return '';
+
+            if (Array.isArray(content)) {
+                return content.map(part => {
+                    if (part.type === 'text' && part.text) {
+                        return part.text;
+                    } else if (part.type === 'thinking' && part.thinking) {
+                        return part.thinking;
+                    } else if (part.type === 'tool_result' && part.content) {
+                        return this.getContentText(part.content);
+                    } else if (part.type === 'tool_use' && part.input) {
+                        return JSON.stringify(part.input);
+                    }
+                    return '';
+                }).join(''); // 合并为一个字符串
+            }
+
+            return this.getContentText(content);
+        };
+
+        // 先将所有需要计数的文本合并为一个大的字符串
+        let allText = '';
+
+        // Count system prompt tokens if available
         if (requestBody.system) {
-            const systemText = this.getContentText(requestBody.system);
-            totalTokens += this.countTextTokens(systemText);
+            allText += this.getContentText(requestBody.system);
         }
-        
-        // Count thinking prefix tokens if thinking is enabled
+
+        // Count thinking prefix tokens if enabled
         if (requestBody.thinking?.type === 'enabled') {
             const budget = this._normalizeThinkingBudgetTokens(requestBody.thinking.budget_tokens);
-            const prefixText = `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
-            totalTokens += this.countTextTokens(prefixText);
+            allText += `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
         }
-        
+
         // Count all messages tokens
-        if (requestBody.messages && Array.isArray(requestBody.messages)) {
-            for (const message of requestBody.messages) {
-                if (message.content) {
-                    if (Array.isArray(message.content)) {
-                        for (const part of message.content) {
-                            if (part.type === 'text' && part.text) {
-                                totalTokens += this.countTextTokens(part.text);
-                            } else if (part.type === 'thinking' && part.thinking) {
-                                totalTokens += this.countTextTokens(part.thinking);
-                            } else if (part.type === 'tool_result') {
-                                const resultContent = this.getContentText(part.content);
-                                totalTokens += this.countTextTokens(resultContent);
-                            } else if (part.type === 'tool_use' && part.input) {
-                                totalTokens += this.countTextTokens(JSON.stringify(part.input));
-                            }
-                        }
-                    } else {
-                        const contentText = this.getContentText(message);
-                        totalTokens += this.countTextTokens(contentText);
-                    }
-                }
-            }
+        if (Array.isArray(requestBody.messages)) {
+            allText += requestBody.messages.map(message => processContent(message.content)).join('');
         }
-        
+
         // Count tools definitions tokens if present
-        if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            totalTokens += this.countTextTokens(JSON.stringify(requestBody.tools));
+        if (Array.isArray(requestBody.tools)) {
+            allText += JSON.stringify(requestBody.tools);
         }
-        
+
+        // 一次性计算所有文本的 token 数量
+        totalTokens = this.countTextTokens(allText);
+
         return totalTokens;
     }
 
