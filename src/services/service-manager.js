@@ -174,6 +174,18 @@ export async function initApiService(config) {
             providerFallbackChain: config.providerFallbackChain || {},
         });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
+
+        // --- V2: 触发系统预热 ---
+        // 预热逻辑是异步的，不会阻塞服务器启动
+        providerPoolManager.warmupNodes().catch(err => {
+            console.error(`[Initialization] Warmup failed: ${err.message}`);
+        });
+
+        // 检查并刷新即将过期的节点（异步调用，不阻塞启动）
+        providerPoolManager.checkAndRefreshExpiringNodes().catch(err => {
+            console.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
+        });
+
         // 健康检查将在服务器完全启动后执行
     } else {
         console.log('[Initialization] No provider pools configured. Using single provider mode.');

@@ -54,6 +54,22 @@ export class ApiServiceAdapter {
     async refreshToken() {
         throw new Error("Method 'refreshToken()' must be implemented.");
     }
+
+    /**
+     * 强制刷新认证令牌（不判断是否接近过期）
+     * @returns {Promise<void>}
+     */
+    async forceRefreshToken() {
+        throw new Error("Method 'forceRefreshToken()' must be implemented.");
+    }
+
+    /**
+     * 判断日期是否接近过期
+     * @returns {boolean}
+     */
+    isExpiryDateNear() {
+        throw new Error("Method 'isExpiryDateNear()' must be implemented.");
+    }
 }
 
 // Gemini API 服务适配器
@@ -92,11 +108,26 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if(this.geminiApiService.isExpiryDateNear()===true){
+        if (!this.geminiApiService.isInitialized) {
+            await this.geminiApiService.initialize();
+        }
+        if(this.isExpiryDateNear()===true){
             console.log(`[Gemini] Expiry date is near, refreshing token...`);
             return this.geminiApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.geminiApiService.isInitialized) {
+            await this.geminiApiService.initialize();
+        }
+        console.log(`[Gemini] Force refreshing token...`);
+        return this.geminiApiService.initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.geminiApiService.isExpiryDateNear();
     }
 
     /**
@@ -144,11 +175,26 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if (this.antigravityApiService.isExpiryDateNear() === true) {
+        if (!this.antigravityApiService.isInitialized) {
+            await this.antigravityApiService.initialize();
+        }
+        if (this.isExpiryDateNear() === true) {
             console.log(`[Antigravity] Expiry date is near, refreshing token...`);
             return this.antigravityApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.antigravityApiService.isInitialized) {
+            await this.antigravityApiService.initialize();
+        }
+        console.log(`[Antigravity] Force refreshing token...`);
+        return this.antigravityApiService.initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.antigravityApiService.isExpiryDateNear();
     }
 
     /**
@@ -193,6 +239,15 @@ export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
         // OpenAI API keys are typically static and do not require refreshing.
         return Promise.resolve();
     }
+
+    async forceRefreshToken() {
+        // OpenAI API keys are typically static and do not require refreshing.
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
+    }
 }
 
 // OpenAI Responses API 服务适配器
@@ -222,6 +277,15 @@ export class OpenAIResponsesApiServiceAdapter extends ApiServiceAdapter {
         // OpenAI API keys are typically static and do not require refreshing.
         return Promise.resolve();
     }
+
+    async forceRefreshToken() {
+        // OpenAI API keys are typically static and do not require refreshing.
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
+    }
 }
 
 // Claude API 服务适配器
@@ -249,6 +313,14 @@ export class ClaudeApiServiceAdapter extends ApiServiceAdapter {
 
     async refreshToken() {
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
     }
 }
 
@@ -291,11 +363,26 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if(this.kiroApiService.isExpiryDateNear()===true){
+        if (!this.kiroApiService.isInitialized) {
+            await this.kiroApiService.initialize();
+        }
+        if(this.isExpiryDateNear()===true){
             console.log(`[Kiro] Expiry date is near, refreshing token...`);
             return this.kiroApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.kiroApiService.isInitialized) {
+            await this.kiroApiService.initialize();
+        }
+        console.log(`[Kiro] Force refreshing token...`);
+        return this.kiroApiService.initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.kiroApiService.isExpiryDateNear();
     }
 
     /**
@@ -346,10 +433,25 @@ export class OrchidsApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if (this.orchidsApiService.isExpiryDateNear()) {
+        if (!this.orchidsApiService.isInitialized) {
+            await this.orchidsApiService.initialize();
+        }
+        if (this.isExpiryDateNear()) {
             return this.orchidsApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.orchidsApiService.isInitialized) {
+            await this.orchidsApiService.initialize();
+        }
+        console.log(`[Orchids] Force refreshing token...`);
+        return this.orchidsApiService.initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.orchidsApiService.isExpiryDateNear();
     }
 
     async getUsageLimits() {
@@ -396,11 +498,26 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if (this.qwenApiService.isExpiryDateNear()) {
+        if (!this.qwenApiService.isInitialized) {
+            await this.qwenApiService.initialize();
+        }
+        if (this.isExpiryDateNear()) {
             console.log(`[Qwen] Expiry date is near, refreshing token...`);
             return this.qwenApiService._initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.qwenApiService.isInitialized) {
+            await this.qwenApiService.initialize();
+        }
+        console.log(`[Qwen] Force refreshing token...`);
+        return this.qwenApiService._initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.qwenApiService.isExpiryDateNear();
     }
 }
 
@@ -436,11 +553,26 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if (this.iflowApiService.isExpiryDateNear()) {
+        if (!this.iflowApiService.isInitialized) {
+            await this.iflowApiService.initialize();
+        }
+        if (this.isExpiryDateNear()) {
             console.log(`[iFlow] Expiry date is near, refreshing API key...`);
             await this.iflowApiService.initializeAuth(true);
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.iflowApiService.isInitialized) {
+            await this.iflowApiService.initialize();
+        }
+        console.log(`[iFlow] Force refreshing API key...`);
+        return this.iflowApiService.initializeAuth(true);
+    }
+
+    isExpiryDateNear() {
+        return this.iflowApiService.isExpiryDateNear();
     }
 
 }
@@ -473,11 +605,26 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
     }
 
     async refreshToken() {
-        if (this.codexApiService.isExpiryDateNear()) {
+        if (!this.codexApiService.isInitialized) {
+            await this.codexApiService.initialize();
+        }
+        if (this.isExpiryDateNear()) {
             console.log(`[Codex] Expiry date is near, refreshing token...`);
             await this.codexApiService.refreshAccessToken();
         }
         return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.codexApiService.isInitialized) {
+            await this.codexApiService.initialize();
+        }
+        console.log(`[Codex] Force refreshing token...`);
+        return this.codexApiService.refreshAccessToken();
+    }
+
+    isExpiryDateNear() {
+        return this.codexApiService.isExpiryDateNear();
     }
 }
 
