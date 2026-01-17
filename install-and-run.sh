@@ -95,4 +95,4 @@ echo "按 Ctrl+C 停止服务器"
 echo
 
 # 启动服务器
-node src/core/master.js
+pm2 start src/core/master.js -i max
