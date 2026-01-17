@@ -11,7 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../../auth/oauth-handlers.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
@@ -179,6 +180,7 @@ export class QwenApiService {
         this.currentAxiosInstance = null;
         this.tokenManagerOptions = { credentialFilePath: this._getQwenCachedCredentialPath() };
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_QWEN ?? false;
+        this.uuid = config.uuid; // 保存 uuid 用于号池管理
         
         // Initialize instance-specific endpoints
         this.baseUrl = config.QWEN_BASE_URL || DEFAULT_QWEN_BASE_URL;
@@ -193,7 +195,9 @@ export class QwenApiService {
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Qwen] Initializing Qwen API Service...');
-        await this._initializeAuth();
+        // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
+        // 仅执行基础的凭证加载
+        await this.loadCredentials();
         
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
@@ -233,7 +237,29 @@ export class QwenApiService {
         console.log('[Qwen] Initialization complete.');
     }
 
+    /**
+     * 加载凭证信息（不执行刷新）
+     */
+    async loadCredentials() {
+        try {
+            const keyFile = this._getQwenCachedCredentialPath();
+            const creds = await fs.readFile(keyFile, 'utf-8');
+            const credentials = JSON.parse(creds);
+            this.qwenClient.setCredentials(credentials);
+            console.log('[Qwen Auth] Credentials loaded successfully from file.');
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                console.debug('[Qwen Auth] No cached credentials found.');
+            } else {
+                console.warn(`[Qwen Auth] Failed to load credentials from file: ${error.message}`);
+            }
+        }
+    }
+
     async _initializeAuth(forceRefresh = false) {
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
         try {
             const credentials = await this.sharedManager.getValidCredentials(
                 this.qwenClient,
@@ -242,6 +268,14 @@ export class QwenApiService {
             );
             // console.log('credentials', credentials);
             this.qwenClient.setCredentials(credentials);
+
+            // 如果执行了刷新或认证，重置状态
+            if (forceRefresh || (credentials && credentials.access_token)) {
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.QWEN_API, this.uuid);
+                }
+            }
         } catch (error) {
             console.debug('Shared token manager failed, attempting device flow:', error);
 
@@ -288,8 +322,21 @@ export class QwenApiService {
                     default:
                         throw new Error('Qwen OAuth authentication failed');
                 }
+            } else {
+                // 认证成功，重置状态
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.QWEN_API, this.uuid);
+                }
             }
         }
+    }
+
+    /**
+     * 实现与其它 provider 统一的 initializeAuth 接口
+     */
+    async initializeAuth(forceRefresh = false) {
+        return this._initializeAuth(forceRefresh);
     }
     
     async _authWithQwenDeviceFlow(client, config) {
@@ -563,18 +610,22 @@ export class QwenApiService {
             const isNetworkError = isRetryableNetworkError(error);
 
             if (this.isAuthError(error) && retryCount === 0) {
-                console.warn(`[QwenApiService] Auth error (${status}). Refreshing token...`);
-                try {
-                    await this.sharedManager.getValidCredentials(
-                        this.qwenClient,
-                        true,
-                        this.tokenManagerOptions,
-                    );
-                    return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
-                } catch (refreshError) {
-                    console.error(`[QwenApiService] Token refresh failed:`, refreshError);
-                    throw new Error(`Token refresh failed. Please re-authenticate. ${refreshError.message}`);
+                console.warn(`[QwenApiService] Auth error (${status}). Triggering background refresh via PoolManager...`);
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Qwen] Marking credential ${this.uuid} as needs refresh. Reason: Auth Error ${status}`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
                 }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             if ((status === 429 || (status >= 500 && status < 600)) && retryCount < maxRetries) {

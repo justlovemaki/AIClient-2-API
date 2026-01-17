@@ -10,6 +10,8 @@ import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError } from '../../ut
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
+import { getProviderPoolManager } from '../../services/service-manager.js';
+import { MODEL_PROVIDER } from '../../utils/common.js';
 
 // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
 const httpAgent = new http.Agent({
@@ -232,7 +234,10 @@ export class GeminiApiService {
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Gemini] Initializing Gemini API Service...');
-        await this.initializeAuth();
+        // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
+        // 仅执行基础的凭证加载
+        await this.loadCredentials();
+
         if (!this.projectId) {
             this.projectId = await this.discoverProjectAndModels();
         } else {
@@ -247,19 +252,19 @@ export class GeminiApiService {
         console.log(`[Gemini] Initialization complete. Project ID: ${this.projectId}`);
     }
 
-    async initializeAuth(forceRefresh = false) {
-        if (this.authClient.credentials.access_token && !forceRefresh) return;
-
+    /**
+     * 加载凭证信息（不执行刷新）
+     */
+    async loadCredentials() {
         if (this.oauthCredsBase64) {
             try {
                 const decoded = Buffer.from(this.oauthCredsBase64, 'base64').toString('utf8');
                 const credentials = JSON.parse(decoded);
                 this.authClient.setCredentials(credentials);
-                console.log('[Gemini Auth] Authentication configured successfully from base64 string.');
+                console.log('[Gemini Auth] Credentials loaded successfully from base64 string.');
                 return;
             } catch (error) {
                 console.error('[Gemini Auth] Failed to parse base64 OAuth credentials:', error);
-                throw new Error(`Failed to load OAuth credentials from base64 string.`);
             }
         }
 
@@ -268,25 +273,65 @@ export class GeminiApiService {
             const data = await fs.readFile(credPath, "utf8");
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
-            console.log('[Gemini Auth] Authentication configured successfully from file.');
-            
-            if (forceRefresh) {
-                console.log('[Gemini Auth] Forcing token refresh...');
-                const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
-                this.authClient.setCredentials(newCredentials);
-                // Save refreshed credentials back to file
-                await this._saveCredentialsToFile(credPath, newCredentials);
-                console.log('[Gemini Auth] Token refreshed and saved successfully.');
-            }
+            console.log('[Gemini Auth] Credentials loaded successfully from file.');
         } catch (error) {
-            console.error('[Gemini Auth] Error initializing authentication:', error.code);
-            if (error.code === 'ENOENT' || error.code === 400) {
-                console.log(`[Gemini Auth] Credentials file '${credPath}' not found. Starting new authentication flow...`);
-                const newTokens = await this.getNewToken(credPath);
-                this.authClient.setCredentials(newTokens);
-                console.log('[Gemini Auth] New token obtained and loaded into memory.');
+            if (error.code === 'ENOENT') {
+                console.debug(`[Gemini Auth] Credentials file not found: ${credPath}`);
             } else {
-                console.error('[Gemini Auth] Failed to initialize authentication from file:', error);
+                console.warn(`[Gemini Auth] Failed to load credentials from file: ${error.message}`);
+            }
+        }
+    }
+
+    async initializeAuth(forceRefresh = false) {
+        // 检查是否需要刷新 Token
+        const needsRefresh = forceRefresh || this.isExpiryDateNear();
+
+        if (this.authClient.credentials.access_token && !needsRefresh) {
+            // Token 有效且不需要刷新
+            return;
+        }
+
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
+        // 只有在明确要求刷新，或者 AccessToken 确实缺失时，才执行刷新/认证
+        // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
+        if (needsRefresh || !this.authClient.credentials.access_token) {
+            const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
+            try {
+                if (this.authClient.credentials.refresh_token) {
+                    console.log('[Gemini Auth] Token expiring soon or force refresh requested. Refreshing token...');
+                    const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
+                    this.authClient.setCredentials(newCredentials);
+                    
+                    // 如果不是从 base64 加载的，则保存到文件
+                    if (!this.oauthCredsBase64) {
+                        await this._saveCredentialsToFile(credPath, newCredentials);
+                        console.log('[Gemini Auth] Token refreshed and saved successfully.');
+                    } else {
+                        console.log('[Gemini Auth] Token refreshed successfully (Base64 source).');
+                    }
+
+                    // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GEMINI_CLI, this.uuid);
+                    }
+                } else {
+                    console.log(`[Gemini Auth] No access token or refresh token. Starting new authentication flow...`);
+                    const newTokens = await this.getNewToken(credPath);
+                    this.authClient.setCredentials(newTokens);
+                    console.log('[Gemini Auth] New token obtained and loaded into memory.');
+                    
+                    // 认证成功，重置状态
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GEMINI_CLI, this.uuid);
+                    }
+                }
+            } catch (error) {
+                console.error('[Gemini Auth] Failed to initialize authentication:', error);
                 throw new Error(`Failed to load OAuth credentials.`);
             }
         }
@@ -447,9 +492,22 @@ export class GeminiApiService {
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Gemini API] Received 401/400. Refreshing auth and retrying...');
-                await this.initializeAuth(true);
-                return this.callApi(method, body, true, retryCount);
+                console.log('[Gemini API] Received 401/400. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
@@ -513,10 +571,22 @@ export class GeminiApiService {
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Gemini API] Received 401/400 during stream. Refreshing auth and retrying...');
-                await this.initializeAuth(true);
-                yield* this.streamApi(method, body, true, retryCount);
-                return;
+                console.log('[Gemini API] Received 401/400 during stream. Triggering background refresh via PoolManager...');
+                
+                // 标记当前凭证为不健康（会自动进入刷新队列）
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    console.log(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+                throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
@@ -643,11 +713,12 @@ export class GeminiApiService {
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
         
-        // 检查 token 是否即将过期，如果是则先刷新
-        if (this.isExpiryDateNear()) {
-            console.log('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
-            await this.initializeAuth(true);
-        }
+        // 注意：V2 架构下不再在 getUsageLimits 中同步刷新 token
+        // 如果 token 过期，PoolManager 后台会自动处理
+        // if (this.isExpiryDateNear()) {
+        //     console.log('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
+        //     await this.initializeAuth(true);
+        // }
 
         try {
             const modelsWithQuotas = await this.getModelsWithQuotas();

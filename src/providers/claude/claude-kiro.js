@@ -45,9 +45,9 @@ const KIRO_MODELS = getProviderModels('claude-kiro-oauth');
 
 // 完整的模型映射表
 const FULL_MODEL_MAPPING = {
+    "claude-haiku-4-5":"claude-haiku-4.5",
     "claude-opus-4-5":"claude-opus-4.5",
     "claude-opus-4-5-20251101":"claude-opus-4.5",
-    "claude-haiku-4-5":"claude-haiku-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
@@ -1339,7 +1339,7 @@ async saveCredentialsToFile(filePath, newData) {
                 }
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
-                this._markCredentialUnhealthy('401 Unauthorized - Triggering auto-refresh');
+                this._markCredentialNeedRefresh('401 Unauthorized - Triggering auto-refresh');
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1354,7 +1354,7 @@ async saveCredentialsToFile(filePath, newData) {
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403. Marking credential as unhealthy...');
-                // this._markCredentialUnhealthy('403 Forbidden', error);
+                this._markCredentialUnhealthy('403 Forbidden', error);
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1421,7 +1421,7 @@ async saveCredentialsToFile(filePath, newData) {
      * @returns {boolean} - Whether the credential was successfully marked as unhealthy
      * @private
      */
-    _markCredentialUnhealthy(reason, error = null) {
+    _markCredentialNeedRefresh(reason, error = null) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
             console.log(`[Kiro] Marking credential ${this.uuid} as needs refresh. Reason: ${reason}`);
@@ -1429,6 +1429,31 @@ async saveCredentialsToFile(filePath, newData) {
             poolManager.markProviderNeedRefresh(MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             });
+            // Attach marker to error object to prevent duplicate marking in upper layers
+            if (error) {
+                error.credentialMarkedUnhealthy = true;
+            }
+            return true;
+        } else {
+            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            return false;
+        }
+    }
+    
+    /**
+     * Helper method to mark the current credential as unhealthy
+     * @param {string} reason - The reason for marking unhealthy
+     * @param {Error} [error] - Optional error object to attach the marker to
+     * @returns {boolean} - Whether the credential was successfully marked as unhealthy
+     * @private
+     */
+    _markCredentialUnhealthy(reason, error = null) {
+        const poolManager = getProviderPoolManager();
+        if (poolManager && this.uuid) {
+            console.log(`[Kiro] Marking credential ${this.uuid} as unhealthy. Reason: ${reason}`);
+            poolManager.markProviderUnhealthyImmediately(MODEL_PROVIDER.KIRO_API, {
+                uuid: this.uuid
+            }, reason);
             // Attach marker to error object to prevent duplicate marking in upper layers
             if (error) {
                 error.credentialMarkedUnhealthy = true;
@@ -1822,7 +1847,7 @@ async saveCredentialsToFile(filePath, newData) {
                     this.uuid = newUuid;
                 }
                 // 标记当前凭证为不健康（会自动进入刷新队列）
-                this._markCredentialUnhealthy('401 Unauthorized in stream - Triggering auto-refresh');
+                this._markCredentialNeedRefresh('401 Unauthorized in stream - Triggering auto-refresh');
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1837,7 +1862,7 @@ async saveCredentialsToFile(filePath, newData) {
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
                 console.log('[Kiro] Received 403 in stream. Marking credential as unhealthy...');
-                // this._markCredentialUnhealthy('403 Forbidden', error);
+                this._markCredentialUnhealthy('403 Forbidden', error);
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -2723,13 +2748,13 @@ async saveCredentialsToFile(filePath, newData) {
             // 对于用量查询，401/403 错误直接标记凭证为不健康，不重试
             if (status === 401) {
                 console.log('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
-                this._markCredentialUnhealthy('401 Unauthorized on usage query', formattedError);
+                this._markCredentialNeedRefresh('401 Unauthorized on usage query', formattedError);
                 throw formattedError;
             }
             
             if (status === 403) {
                 console.log('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
-                // this._markCredentialUnhealthy('403 Forbidden on usage query', formattedError);
+                this._markCredentialUnhealthy('403 Forbidden on usage query', formattedError);
                 throw formattedError;
             }
             
