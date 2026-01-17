@@ -5,7 +5,6 @@ import WebSocket from 'ws';
 import axios from 'axios';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { CredentialCacheManager } from '../../utils/credential-cache-manager.js';
 
 // ============================================================================
 // 常量定义
@@ -88,9 +87,6 @@ export class OrchidsApiService {
     }
 
     async initializeAuth(forceRefresh = false) {
-        const credentialCache = CredentialCacheManager.getInstance();
-        const providerType = 'claude-orchids-oauth';
-
         // 参考 simple_api.py 的实现：每次请求都重新获取 session
         // 因为 last_active_token 可能在使用后就失效
 
@@ -99,22 +95,10 @@ export class OrchidsApiService {
         }
 
         try {
-            // 优先从内存缓存加载
-            let credentials = null;
-            if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
-                const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
-                if (cachedEntry && cachedEntry.credentials) {
-                    credentials = cachedEntry.credentials;
-                    console.log('[Orchids Auth] Loaded credentials from memory cache');
-                }
-            }
-
-            // Fallback: 从文件加载
-            if (!credentials) {
-                const fileContent = await fs.readFile(this.credPath, 'utf8');
-                credentials = JSON.parse(fileContent);
-                console.log('[Orchids Auth] Loaded credentials from file');
-            }
+            // 从文件加载
+            const fileContent = await fs.readFile(this.credPath, 'utf8');
+            const credentials = JSON.parse(fileContent);
+            console.log('[Orchids Auth] Loaded credentials from file');
 
             this.clientJwt = credentials.clientJwt || credentials.client_jwt;
 
@@ -281,35 +265,15 @@ export class OrchidsApiService {
     }
 
     async _updateCredentialsFile() {
-        const credentialCache = CredentialCacheManager.getInstance();
-        const providerType = 'claude-orchids-oauth';
-
-        // 优先保存到内存缓存
-        if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
-            const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
-            if (cachedEntry && cachedEntry.credentials) {
-                const updatedCredentials = {
-                    ...cachedEntry.credentials,
-                    expiresAt: this.tokenExpiresAt?.toISOString()
-                };
-                credentialCache.updateCredentials(providerType, this.uuid, updatedCredentials, this.credPath);
-                console.debug('[Orchids Auth] Updated credentials in memory cache');
-                return;
-            }
+        try {
+            const fileContent = await fs.readFile(this.credPath, 'utf8');
+            const credentials = JSON.parse(fileContent);
+            credentials.expiresAt = this.tokenExpiresAt?.toISOString();
+            await fs.writeFile(this.credPath, JSON.stringify(credentials, null, 2), 'utf8');
+            console.debug('[Orchids Auth] Updated credentials file with new expiry');
+        } catch (error) {
+            console.warn(`[Orchids Auth] Failed to update credentials file: ${error.message}`);
         }
-
-        // Fallback: 使用内存锁的文件写入
-        await credentialCache.withMemoryLock(`orchids-update:${this.credPath}`, async () => {
-            try {
-                const fileContent = await fs.readFile(this.credPath, 'utf8');
-                const credentials = JSON.parse(fileContent);
-                credentials.expiresAt = this.tokenExpiresAt?.toISOString();
-                await fs.writeFile(this.credPath, JSON.stringify(credentials, null, 2), 'utf8');
-                console.debug('[Orchids Auth] Updated credentials file with new expiry');
-            } catch (error) {
-                console.warn(`[Orchids Auth] Failed to update credentials file: ${error.message}`);
-            }
-        });
     }
 
     _extractSystemPrompt(messages) {
@@ -1651,47 +1615,7 @@ ${userMessage}
         console.log('[Orchids Auth] Refreshing token before request...');
         this.lastTokenRefreshTime = now;
 
-        // 使用去重锁：多个并发刷新请求只执行一次，共享结果
-        const dedupeKey = `orchids-token-refresh:${this.credPath}`;
-        const credentialCache = CredentialCacheManager.getInstance();
-        await credentialCache.withDeduplication(dedupeKey, async () => {
-            await this.initializeAuth(true);
-        });
-        
-        // 如果是等待其他请求完成的刷新，需要重新加载凭证
-        // 因为 withDeduplication 会让所有等待者共享同一个 Promise
-        // 但只有第一个调用者的实例会执行 initializeAuth 并更新自己的内存状态
-        // 其他等待者需要从文件重新加载
-        if (this.isExpiryDateNear()) {
-            console.log('[Orchids Auth] Reloading credentials after concurrent refresh...');
-            try {
-                const fileContent = await fs.readFile(this.credPath, 'utf8');
-                const credentials = JSON.parse(fileContent);
-                
-                if (credentials.expiresAt) {
-                    this.tokenExpiresAt = new Date(credentials.expiresAt);
-                }
-                
-                // 重新从 Clerk 获取 session 信息
-                if (this.clientJwt || credentials.clientJwt || credentials.client_jwt) {
-                    const clientJwt = this.clientJwt || credentials.clientJwt || credentials.client_jwt;
-                    const sessionInfo = await this._getSessionFromClerk(clientJwt);
-                    if (sessionInfo) {
-                        this.clerkSessionId = sessionInfo.sessionId;
-                        this.userId = sessionInfo.userId;
-                        this.clerkToken = sessionInfo.wsToken;
-                        
-                        const jwtExpiry = this._parseJwtExpiry(this.clerkToken);
-                        if (jwtExpiry) {
-                            this.tokenExpiresAt = jwtExpiry;
-                        }
-                        console.log('[Orchids Auth] Credentials reloaded after concurrent refresh');
-                    }
-                }
-            } catch (error) {
-                console.warn(`[Orchids Auth] Failed to reload credentials after refresh: ${error.message}`);
-            }
-        }
+        await this.initializeAuth(true);
         
         console.log('[Orchids Auth] Token refreshed successfully');
     }

@@ -24,7 +24,6 @@ import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError } from '../../utils/common.js';
-import { CredentialCacheManager } from '../../utils/credential-cache-manager.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -137,51 +136,28 @@ async function saveTokenToFile(filePath, tokenStorage, uuid = null) {
         ? filePath
         : path.join(process.cwd(), filePath);
 
-    const credentialCache = CredentialCacheManager.getInstance();
-    const providerType = 'openai-iflow';
+    try {
+        // 确保目录存在
+        const dir = path.dirname(absolutePath);
+        await fs.mkdir(dir, { recursive: true });
 
-    // 优先保存到内存缓存
-    if (uuid && credentialCache.hasCredentials(providerType, uuid)) {
+        // 写入文件
         const json = tokenStorage.toJSON();
 
         // 验证关键字段是否存在
         if (!json.refresh_token || json.refresh_token.trim() === '') {
-            console.error('[iFlow] WARNING: Attempting to save token with empty refresh_token!');
+            console.error('[iFlow] WARNING: Attempting to save token file with empty refresh_token!');
         }
         if (!json.apiKey || json.apiKey.trim() === '') {
-            console.error('[iFlow] WARNING: Attempting to save token with empty apiKey!');
+            console.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
         }
 
-        credentialCache.updateCredentials(providerType, uuid, json, absolutePath);
-        console.log(`[iFlow] Token saved to memory cache: ${uuid} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
-        return;
+        await fs.writeFile(absolutePath, JSON.stringify(json, null, 2), 'utf-8');
+
+        console.log(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
+    } catch (error) {
+        throw new Error(`[iFlow] Failed to save token to file: ${error.message}`);
     }
-
-    // Fallback: 使用内存锁的文件写入
-    await credentialCache.withMemoryLock(`iflow-save:${absolutePath}`, async () => {
-        try {
-            // 确保目录存在
-            const dir = path.dirname(absolutePath);
-            await fs.mkdir(dir, { recursive: true });
-
-            // 写入文件
-            const json = tokenStorage.toJSON();
-
-            // 验证关键字段是否存在
-            if (!json.refresh_token || json.refresh_token.trim() === '') {
-                console.error('[iFlow] WARNING: Attempting to save token file with empty refresh_token!');
-            }
-            if (!json.apiKey || json.apiKey.trim() === '') {
-                console.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
-            }
-
-            await fs.writeFile(absolutePath, JSON.stringify(json, null, 2), 'utf-8');
-
-            console.log(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
-        } catch (error) {
-            throw new Error(`[iFlow] Failed to save token to file: ${error.message}`);
-        }
-    });
 }
 
 // ==================== Token 刷新逻辑 ====================
@@ -528,9 +504,6 @@ export class IFlowApiService {
      * @param {boolean} forceRefresh - 是否强制刷新 Token
      */
     async initializeAuth(forceRefresh = false) {
-        const credentialCache = CredentialCacheManager.getInstance();
-        const providerType = 'openai-iflow';
-
         // 如果已有 API Key 且不强制刷新，直接返回
         if (this.apiKey && !forceRefresh) return;
 
@@ -540,18 +513,7 @@ export class IFlowApiService {
         }
 
         try {
-            // 优先从内存缓存加载
-            let tokenData = null;
-            if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
-                const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
-                if (cachedEntry && cachedEntry.credentials) {
-                    tokenData = cachedEntry.credentials;
-                    this.tokenStorage = IFlowTokenStorage.fromJSON(tokenData);
-                    console.log('[iFlow Auth] Loaded credentials from memory cache');
-                }
-            }
-
-            // Fallback: 从文件加载
+            // 从文件加载
             if (!this.tokenStorage) {
                 this.tokenStorage = await loadTokenFromFile(this.tokenFilePath);
                 console.log('[iFlow Auth] Loaded credentials from file');
@@ -589,9 +551,6 @@ export class IFlowApiService {
      * @returns {Promise<boolean>} - 是否执行了刷新
      */
     async _checkAndRefreshTokenIfNeeded() {
-        const credentialCache = CredentialCacheManager.getInstance();
-        const providerType = 'openai-iflow';
-
         if (!this.tokenStorage) {
             return false;
         }
@@ -611,33 +570,7 @@ export class IFlowApiService {
         console.log('[iFlow] Token is expiring soon, attempting refresh...');
 
         try {
-            // 使用去重锁：多个并发刷新请求只执行一次,共享结果
-            const dedupeKey = `iflow-token-refresh:${this.tokenFilePath}`;
-            await credentialCache.withDeduplication(dedupeKey, async () => {
-                await this._refreshOAuthTokens();
-            });
-
-            // 如果是等待其他请求完成的刷新，需要重新加载凭证
-            if (this.isExpiryDateNear()) {
-                if (this.uuid && credentialCache.hasCredentials(providerType, this.uuid)) {
-                    const cachedEntry = credentialCache.getCredentials(providerType, this.uuid);
-                    if (cachedEntry && cachedEntry.credentials) {
-                        this.tokenStorage = IFlowTokenStorage.fromJSON(cachedEntry.credentials);
-                        this.apiKey = this.tokenStorage.apiKey;
-                        this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
-                        console.log('[iFlow] Credentials reloaded from memory cache after concurrent refresh');
-                    }
-                } else {
-                    const refreshedStorage = await loadTokenFromFile(this.tokenFilePath);
-                    if (refreshedStorage && refreshedStorage.apiKey) {
-                        this.tokenStorage = refreshedStorage;
-                        this.apiKey = refreshedStorage.apiKey;
-                        this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
-                        console.log('[iFlow] Credentials reloaded from file after concurrent refresh');
-                    }
-                }
-            }
-
+            await this._refreshOAuthTokens();
             return true;
         } catch (error) {
             console.error('[iFlow] Token refresh failed:', error.message);

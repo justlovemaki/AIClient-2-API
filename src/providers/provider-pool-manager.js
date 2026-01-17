@@ -2,7 +2,6 @@ import * as fs from 'fs'; // Import fs module
 import { getServiceAdapter } from './adapter.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { getProviderModels } from './provider-models.js';
-import { CredentialCacheManager } from '../utils/credential-cache-manager.js';
 import axios from 'axios';
 
 /**
@@ -882,45 +881,6 @@ export class ProviderPoolManager {
                 modelName: null, 
                 errorMessage: `Unknown provider type '${providerType}'. No default health check model configured.` 
             };
-        }
-
-        // ========== 快速预检：从内存缓存检查 OAuth 凭证状态 ==========
-        // 对于 OAuth 类型的 provider，先检查 token 是否过期，避免阻塞
-        // 注意：只有在开启自动刷新 token (CRON_REFRESH_TOKEN) 时才执行快速预检
-        // 因为如果没有自动刷新机制，缓存中的 token 状态可能不准确
-        const oauthProviderTypes = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'openai-iflow-oauth', 'claude-orchids-oauth'];
-        const cronRefreshTokenEnabled = this.globalConfig?.CRON_REFRESH_TOKEN === true;
-        
-        if (cronRefreshTokenEnabled && oauthProviderTypes.includes(providerType) && providerConfig.uuid) {
-            const credentialCache = CredentialCacheManager.getInstance();
-            const cachedEntry = credentialCache.getCredentials(providerType, providerConfig.uuid);
-
-            if (cachedEntry && cachedEntry.credentials) {
-                const { expiresAt, accessToken } = cachedEntry.credentials;
-
-                // 检查 token 是否存在
-                if (!accessToken) {
-                    this._log('warn', `Health check fast-fail for ${providerConfig.uuid}: No access token in cache`);
-                    return { success: false, modelName, errorMessage: 'No access token available' };
-                }
-
-                // 检查 token 是否已过期（30秒缓冲）
-                if (expiresAt) {
-                    const expirationTime = new Date(expiresAt).getTime();
-                    const now = Date.now();
-                    const bufferMs = 30 * 1000;
-
-                    if (expirationTime <= now + bufferMs) {
-                        this._log('warn', `Health check fast-fail for ${providerConfig.uuid}: Token expired`);
-                        return { success: false, modelName, errorMessage: 'Token expired' };
-                    }
-                }
-
-                this._log('debug', `Health check pre-check passed for ${providerConfig.uuid}: Token valid in cache`);
-            }
-            // 注意：如果缓存中没有凭证，不要直接返回失败
-            // 让后续的实际健康检查去尝试初始化和加载凭证
-            // 这样可以支持刚重置健康状态或新添加的 provider
         }
 
         // ========== 实际 API 健康检查（带超时保护）==========
