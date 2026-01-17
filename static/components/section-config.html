@@ -16,11 +16,11 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="host" data-i18n="config.host">监听地址</label>
-                    <input type="text" id="host" class="form-control" value="127.0.0.1">
+                    <input type="text" id="host" class="form-control" value="127.0.0.1" data-i18n-placeholder="config.hostPlaceholder" placeholder="例如: 127.0.0.1">
                 </div>
                 <div class="form-group">
                     <label for="port" data-i18n="config.port">端口</label>
-                    <input type="number" id="port" class="form-control" value="3000">
+                    <input type="number" id="port" class="form-control" value="3000" data-i18n-placeholder="config.portPlaceholder" placeholder="3000">
                 </div>
             </div>
             <div class="form-group pool-section">
@@ -179,6 +179,19 @@
                 </div>
                 
                 <div class="config-row">
+                    <div class="form-group pool-section">
+                        <label for="warmupTarget" data-i18n="config.advanced.warmupTarget">系统预热节点数</label>
+                        <input type="number" id="warmupTarget" class="form-control" min="0" max="100" value="0">
+                        <small class="form-text" data-i18n="config.advanced.warmupTargetNote">系统启动时自动刷新的节点数量，默认为 0</small>
+                    </div>
+                    <div class="form-group pool-section">
+                        <label for="refreshConcurrencyPerProvider" data-i18n="config.advanced.refreshConcurrencyPerProvider">提供商内刷新并发数</label>
+                        <input type="number" id="refreshConcurrencyPerProvider" class="form-control" min="1" max="10" value="1">
+                        <small class="form-text" data-i18n="config.advanced.refreshConcurrencyPerProviderNote">每个提供商内部最大并行刷新任务数，默认为 1</small>
+                    </div>
+                </div>
+
+                <div class="config-row">
                     <div class="form-group">
                         <label for="cronNearMinutes" data-i18n="config.advanced.cronInterval">OAuth令牌刷新间隔(分钟)</label>
                         <input type="number" id="cronNearMinutes" class="form-control" min="1" max="60" value="1">
@@ -202,12 +215,6 @@
                     <label for="maxErrorCount" data-i18n="config.advanced.maxErrorCount">提供商最大错误次数</label>
                     <input type="number" id="maxErrorCount" class="form-control" value="3" min="1" max="10" data-i18n-placeholder="config.advanced.maxErrorCountPlaceholder" placeholder="默认: 3">
                     <small class="form-text" data-i18n="config.advanced.maxErrorCountNote">提供商连续错误达到此次数后将被标记为不健康，默认为 3 次</small>
-                </div>
-
-                <div class="form-group pool-section">
-                    <label for="poolSizeLimit" data-i18n="config.advanced.poolSizeLimit">账号池轮询上限</label>
-                    <input type="number" id="poolSizeLimit" class="form-control" value="0" min="0" max="100" data-i18n-placeholder="config.advanced.poolSizeLimitPlaceholder" placeholder="默认: 0 (不限制)">
-                    <small class="form-text" data-i18n="config.advanced.poolSizeLimitNote">每个提供商类型参与轮询的最大健康凭证数量，0 表示不限制，使用所有健康凭证</small>
                 </div>
                 
                 <div class="form-group pool-section">

@@ -63,6 +63,7 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
  * @returns {Function} - The heartbeat and token refresh function
  */
 export function initializeAPIManagement(services) {
+    const providerPoolManager = getProviderPoolManager();
     return async function heartbeatAndRefreshToken() {
         console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`, Object.keys(services));
         // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
@@ -74,7 +75,14 @@ export function initializeAPIManagement(services) {
             try {
                 // For pooled providers, refreshToken should be handled by individual instances
                 // For single instances, this remains relevant
-                await serviceAdapter.refreshToken();
+                if (serviceAdapter.config?.uuid && providerPoolManager) {
+                    providerPoolManager._enqueueRefresh(serviceAdapter.config.MODEL_PROVIDER, { 
+                        config: serviceAdapter.config, 
+                        uuid: serviceAdapter.config.uuid 
+                    });
+                } else {
+                    await serviceAdapter.refreshToken();
+                }
                 // console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
             } catch (error) {
                 console.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);

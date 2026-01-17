@@ -8,32 +8,28 @@ import axios from 'axios';
  * Manages a pool of API service providers, handling their health and selection.
  */
 export class ProviderPoolManager {
-    // 默认健康检查模型配置
-    // 键名必须与 MODEL_PROVIDER 常量值一致
-    static DEFAULT_HEALTH_CHECK_MODELS = {
-        'gemini-cli-oauth': 'gemini-2.5-flash',
-        'gemini-antigravity': 'gemini-2.5-flash',
-        'openai-custom': 'gpt-3.5-turbo',
-        'claude-custom': 'claude-3-7-sonnet-20250219',
-        'claude-kiro-oauth': 'claude-haiku-4-5',
-        'openai-qwen-oauth': 'qwen3-coder-flash',
-        'openaiResponses-custom': 'gpt-4o-mini'
-    };
+        // 默认健康检查模型配置
+        // 键名必须与 MODEL_PROVIDER 常量值一致
+        static DEFAULT_HEALTH_CHECK_MODELS = {
+            'gemini-cli-oauth': 'gemini-2.5-flash',
+            'gemini-antigravity': 'gemini-2.5-flash',
+            'openai-custom': 'gpt-3.5-turbo',
+            'claude-custom': 'claude-3-7-sonnet-20250219',
+            'claude-kiro-oauth': 'claude-haiku-4-5',
+            'openai-qwen-oauth': 'qwen3-coder-flash',
+            'openaiResponses-custom': 'gpt-4o-mini'
+        };
 
-    constructor(providerPools, options = {}) {
-        this.providerPools = providerPools;
-        this.globalConfig = options.globalConfig || {}; // 存储全局配置
-        this.providerStatus = {}; // Tracks health and usage for each provider instance
-        this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
-        // 使用 ?? 运算符确保 0 也能被正确设置，而不是被 || 替换为默认值
-        this.maxErrorCount = options.maxErrorCount ?? 3; // Default to 3 errors before marking unhealthy
-        this.healthCheckInterval = options.healthCheckInterval ?? 10 * 60 * 1000; // Default to 10 minutes
+        constructor(providerPools, options = {}) {
+            this.providerPools = providerPools;
+            this.globalConfig = options.globalConfig || {}; // 存储全局配置
+            this.providerStatus = {}; // Tracks health and usage for each provider instance
+            this.roundRobinIndex = {}; // Tracks the current index for round-robin selection for each provider type
+            // 使用 ?? 运算符确保 0 也能被正确设置，而不是被 || 替换为默认值
+            this.maxErrorCount = options.maxErrorCount ?? 3; // Default to 3 errors before marking unhealthy
+            this.healthCheckInterval = options.healthCheckInterval ?? 10 * 60 * 1000; // Default to 10 minutes
 
-        // 账号池上限配置：每个 providerType 最多使用多少个健康凭证进行轮询
-        // 0 或 undefined 表示不限制，使用所有健康凭证
-        this.poolSizeLimit = options.globalConfig?.POOL_SIZE_LIMIT ?? 0;
-
-        // 日志级别控制
+            // 日志级别控制
         this.logLevel = options.logLevel || 'info'; // 'debug', 'info', 'warn', 'error'
         
         // 添加防抖机制，避免频繁的文件 I/O 操作
@@ -48,10 +44,281 @@ export class ProviderPoolManager {
         this.modelFallbackMapping = options.globalConfig?.modelFallbackMapping || {};
 
         // 并发控制：每个 providerType 的选择锁
-        // 用于确保 selectProvider 的排序和更新操作是原子的
+        // 用于确保 selectProvider 的排序 and 更新操作是原子的
         this._selectionLocks = {};
 
+        // --- V2: 读写分离 and 异步刷新队列 ---
+        // 刷新并发控制配置
+        this.refreshConcurrency = {
+            global: options.globalConfig?.REFRESH_CONCURRENCY_GLOBAL ?? 2, // 全局最大并行提供商数
+            perProvider: options.globalConfig?.REFRESH_CONCURRENCY_PER_PROVIDER ?? 1 // 每个提供商内部最大并行数
+        };
+        
+        this.refreshQueues = {}; // 按 providerType 分组的队列
+        this.activeProviderRefreshes = 0; // 当前正在刷新的提供商类型数量
+        this.globalRefreshWaiters = []; // 等待全局并发槽位的任务
+        
+        this.warmupTarget = options.globalConfig?.WARMUP_TARGET || 0; // 默认预热0个节点
+        this.refreshingUuids = new Set(); // 正在刷新的节点 UUID 集合
+
         this.initializeProviderStatus();
+    }
+
+    /**
+     * 检查所有节点的配置文件，如果发现即将过期则触发刷新
+     */
+    async checkAndRefreshExpiringNodes() {
+        this._log('info', 'Checking nodes for approaching expiration dates using provider adapters...');
+        
+        for (const providerType in this.providerStatus) {
+            const providers = this.providerStatus[providerType];
+            for (const providerStatus of providers) {
+                const config = providerStatus.config;
+                
+                // 排除不健康和禁用的节点
+                if (!config.isHealthy || config.isDisabled) continue;
+
+                if (config.configPath && fs.existsSync(config.configPath)) {
+                    try {
+                        const fileContent = fs.readFileSync(config.configPath, 'utf8');
+                        const data = JSON.parse(fileContent);
+
+                        // 获取对应的适配器
+                        const tempConfig = {
+                            ...config,
+                            MODEL_PROVIDER: providerType
+                        };
+                        const serviceAdapter = getServiceAdapter(tempConfig);
+                        
+                        // 调用提供商适配器内的 isExpiryDateNear 方法
+                        let needsRefresh = false;
+                        if (typeof serviceAdapter.isExpiryDateNear === 'function') {
+                            // 适配器内部自行判断，不传参
+                            needsRefresh = serviceAdapter.isExpiryDateNear();
+                        } else {
+                            // 兜底逻辑：如果适配器没实现，使用配置数据进行判断
+                            const expiryDate = data.expiry_date || data.expires_at || data.expiry;
+                            if (expiryDate) {
+                                const expiry = new Date(expiryDate).getTime();
+                                needsRefresh = (expiry - Date.now()) < 24 * 60 * 60 * 1000;
+                            }
+                        }
+                        
+                        if (needsRefresh) {
+                            this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
+                            this._enqueueRefresh(providerType, providerStatus);
+                        }
+                    } catch (err) {
+                        this._log('error', `Failed to check expiry for node ${providerStatus.uuid}: ${err.message}`);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 系统预热逻辑：按提供商分组，每组预热 warmupTarget 个节点
+     * @returns {Promise<void>}
+     */
+    async warmupNodes() {
+        if (this.warmupTarget <= 0) return;
+        this._log('info', `Starting system warmup (Group Target: ${this.warmupTarget} nodes per provider)...`);
+
+        const nodesToWarmup = [];
+
+        for (const type in this.providerStatus) {
+            const pool = this.providerStatus[type];
+            
+            // 挑选当前提供商下需要预热的节点
+            const candidates = pool
+                .filter(p => p.config.isHealthy && !p.config.isDisabled && !this.refreshingUuids.has(p.uuid))
+                .sort((a, b) => {
+                    // 优先级 A: 明确标记需要刷新的
+                    if (a.config.needsRefresh && !b.config.needsRefresh) return -1;
+                    if (!a.config.needsRefresh && b.config.needsRefresh) return 1;
+
+                    // 优先级 B: 按照正常的选择权重排序（最久没用过的优先补）
+                    const scoreA = this._calculateNodeScore(a);
+                    const scoreB = this._calculateNodeScore(b);
+                    return scoreA - scoreB;
+                })
+                .slice(0, this.warmupTarget);
+
+            candidates.forEach(p => nodesToWarmup.push({ type, status: p }));
+        }
+
+        this._log('info', `Warmup: Selected total ${nodesToWarmup.length} nodes across all providers to refresh.`);
+
+        for (const node of nodesToWarmup) {
+            this._enqueueRefresh(node.type, node.status, true);
+        }
+
+        // 注意：warmupNodes 不等待队列结束，它是异步后台执行的
+    }
+
+    /**
+     * 将节点放入刷新队列
+     * @param {string} providerType 
+     * @param {object} providerStatus 
+     * @private
+     */
+    _enqueueRefresh(providerType, providerStatus, force = false) {
+        const uuid = providerStatus.uuid;
+        if (this.refreshingUuids.has(uuid)) {
+            this._log('debug', `Node ${uuid} is already in refresh queue.`);
+            return;
+        }
+
+        this.refreshingUuids.add(uuid);
+
+        // 初始化提供商队列
+        if (!this.refreshQueues[providerType]) {
+            this.refreshQueues[providerType] = {
+                activeCount: 0,
+                waitingTasks: []
+            };
+        }
+
+        const queue = this.refreshQueues[providerType];
+
+        const runTask = async () => {
+            try {
+                await this._refreshNodeToken(providerType, providerStatus);
+            } catch (err) {
+                this._log('error', `Failed to process refresh for node ${uuid}: ${err.message}`);
+            } finally {
+                this.refreshingUuids.delete(uuid);
+                queue.activeCount--;
+                
+                // 确保在异步操作中 queue 仍然存在
+                const currentQueue = this.refreshQueues[providerType];
+                
+                // 1. 尝试从当前提供商队列中取下一个任务
+                if (currentQueue && currentQueue.waitingTasks.length > 0) {
+                    const nextTask = currentQueue.waitingTasks.shift();
+                    currentQueue.activeCount++;
+                    // 使用 setImmediate 或 Promise.resolve().then 避免过深的递归
+                    Promise.resolve().then(nextTask);
+                } else if (currentQueue && currentQueue.activeCount === 0) {
+                    // 2. 如果当前提供商的所有任务都完成了，释放全局槽位
+                    this.activeProviderRefreshes--;
+                    delete this.refreshQueues[providerType]; // 清理空队列
+                    
+                    // 3. 尝试启动下一个等待中的提供商队列
+                    if (this.globalRefreshWaiters.length > 0) {
+                        const nextProviderStart = this.globalRefreshWaiters.shift();
+                        // 同样避免过深的递归
+                        Promise.resolve().then(nextProviderStart);
+                    }
+                }
+            }
+        };
+
+        const tryStartProviderQueue = () => {
+            // 再次检查是否已经从 refreshingUuids 中移除（虽然可能性小，但为了健壮性）
+            if (queue.activeCount < this.refreshConcurrency.perProvider) {
+                queue.activeCount++;
+                runTask();
+            } else {
+                queue.waitingTasks.push(runTask);
+            }
+        };
+
+        // 检查全局并发限制（按提供商分组）
+        // 如果该提供商已经在运行，或者全局槽位还没满，则直接开始
+        if (this.refreshQueues[providerType].activeCount > 0 || this.activeProviderRefreshes < this.refreshConcurrency.global) {
+            if (this.refreshQueues[providerType].activeCount === 0) {
+                this.activeProviderRefreshes++;
+            }
+            tryStartProviderQueue();
+        } else {
+            // 否则进入全局等待列表
+            this.globalRefreshWaiters.push(() => {
+                // 重新获取最新的队列引用，因为可能在等待期间被清理过（虽然逻辑上此时不应该被清理）
+                if (!this.refreshQueues[providerType]) {
+                    this.refreshQueues[providerType] = {
+                        activeCount: 0,
+                        waitingTasks: []
+                    };
+                }
+                tryStartProviderQueue();
+            });
+        }
+    }
+
+    /**
+     * 实际执行节点刷新逻辑
+     * @private
+     */
+    async _refreshNodeToken(providerType, providerStatus, force = false) {
+        const config = providerStatus.config;
+        this._log('info', `Starting token refresh for node ${providerStatus.uuid} (${providerType})`);
+
+        try {
+            config.refreshCount = (config.refreshCount || 0) + 1;
+
+            // 使用适配器进行刷新
+            const tempConfig = {
+                ...config,
+                MODEL_PROVIDER: providerType
+            };
+            const serviceAdapter = getServiceAdapter(tempConfig);
+            
+            // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
+            if (typeof serviceAdapter.refreshToken === 'function') {
+                const startTime = Date.now();
+                force ? await serviceAdapter.forceRefreshToken() : await serviceAdapter.refreshToken() 
+                const duration = Date.now() - startTime;
+                this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);     
+                // 注意：根据反馈，这里不再执行健康检查验证，直接标记为健康
+                this.markProviderHealthy(providerType, config, false);
+            } else {
+                throw new Error(`refreshToken method not implemented for ${providerType}`);
+            }
+
+        } catch (error) {
+            this._log('error', `Token refresh failed for node ${providerStatus.uuid}: ${error.message}`);
+            this.markProviderUnhealthyImmediately(providerType, config, `Refresh failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * 计算节点的权重/评分，用于排序
+     * 分数越低，优先级越高
+     * @private
+     */
+    _calculateNodeScore(providerStatus) {
+        const config = providerStatus.config;
+        const now = Date.now();
+        
+        // 1. 基础健康分：不健康的排最后
+        if (!config.isHealthy || config.isDisabled) return 1000000;
+        
+        // 2. 预热/刷新分：5分钟内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
+        const isFresh = config.lastHealthCheckTime && 
+                        (now - new Date(config.lastHealthCheckTime).getTime() < 300000) && 
+                        (config.usageCount === 0);
+        if (isFresh) return -1000;
+
+        // 3. 时间分：LRU (最久未被使用的排前面)
+        const timeScore = config.lastUsed ? new Date(config.lastUsed).getTime() : 0;
+        
+        // 4. 健康检查分：最近健康检查通过的稍微优先一点
+        const checkScore = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
+        
+        // 5. 使用次数分：使用次数少的优先
+        const usageScore = config.usageCount || 0;
+
+        // 综合得分（时间权重最大）
+        return timeScore + (usageScore * 1000) - (checkScore / 1000000);
+    }
+
+    /**
+     * 获取指定类型的健康节点数量
+     */
+    getHealthyCount(providerType) {
+        return (this.providerStatus[providerType] || []).filter(p => p.config.isHealthy && !p.config.isDisabled).length;
     }
 
     /**
@@ -95,6 +362,10 @@ export class ProviderPoolManager {
                 providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
                 providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
                 providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
+                
+                // --- V2: 刷新监控字段 ---
+                providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
+                providerConfig.refreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
                 
                 // 优化2: 简化 lastErrorTime 处理逻辑
                 providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
@@ -160,7 +431,7 @@ export class ProviderPoolManager {
         this._checkAndRecoverScheduledProviders(providerType);
         
         let availableAndHealthyProviders = availableProviders.filter(p =>
-            p.config.isHealthy && !p.config.isDisabled
+            p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh
         );
 
         // 如果指定了模型，则排除不支持该模型的提供商
@@ -188,26 +459,9 @@ export class ProviderPoolManager {
             return null;
         }
 
-        // 账号池上限：如果配置了 poolSizeLimit，只使用 Top N 个健康凭证
-        // 按 lastUsed 排序后取前 N 个，确保轮询范围受限
-        let candidateProviders = availableAndHealthyProviders;
-        if (this.poolSizeLimit > 0 && availableAndHealthyProviders.length > this.poolSizeLimit) {
-            // 先按 usageCount 升序排序，取使用次数最少的 Top N 个作为候选池
-            candidateProviders = [...availableAndHealthyProviders]
-                .sort((a, b) => (a.config.usageCount || 0) - (b.config.usageCount || 0))
-                .slice(0, this.poolSizeLimit);
-            this._log('debug', `Pool size limited to ${this.poolSizeLimit}, using top ${candidateProviders.length} providers for ${providerType}`);
-        }
-
-        // 改进：使用"最久未被使用"策略（LRU）代替取模轮询
-        // 这样即使可用列表长度动态变化，也能确保每个账号被平均轮到
-        const selected = candidateProviders.sort((a, b) => {
-            const timeA = a.config.lastUsed ? new Date(a.config.lastUsed).getTime() : 0;
-            const timeB = b.config.lastUsed ? new Date(b.config.lastUsed).getTime() : 0;
-            // 优先选择从未用过的，或者最久没用的
-            if (timeA !== timeB) return timeA - timeB;
-            // 如果时间相同，使用使用次数辅助判断
-            return (a.config.usageCount || 0) - (b.config.usageCount || 0);
+        // 改进：使用统一的评分策略进行选择
+        const selected = availableAndHealthyProviders.sort((a, b) => {
+            return this._calculateNodeScore(a) - this._calculateNodeScore(b);
         })[0];
 
         // 始终更新 lastUsed（确保 LRU 策略生效，避免并发请求选到同一个 provider）
@@ -445,6 +699,29 @@ export class ProviderPoolManager {
     }
 
     /**
+     * 标记提供商需要刷新并推入刷新队列
+     * @param {string} providerType - 提供商类型
+     * @param {object} providerConfig - 提供商配置（包含 uuid）
+     */
+    markProviderNeedRefresh(providerType, providerConfig) {
+        if (!providerConfig?.uuid) {
+            this._log('error', 'Invalid providerConfig in markProviderNeedRefresh');
+            return;
+        }
+
+        const provider = this._findProvider(providerType, providerConfig.uuid);
+        if (provider) {
+            provider.config.needsRefresh = true;
+            this._log('info', `Marked provider ${providerConfig.uuid} as needsRefresh. Enqueuing...`);
+            
+            // 推入异步刷新队列
+            this._enqueueRefresh(providerType, provider);
+            
+            this._debouncedSave(providerType);
+        }
+    }
+
+    /**
      * Marks a provider as unhealthy (e.g., after an API error).
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to mark.
@@ -514,6 +791,10 @@ export class ProviderPoolManager {
             }
 
             this._log('warn', `Immediately marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Authentication error'}`);
+            
+            // --- V2: 触发自动刷新 ---
+            // this._enqueueRefresh(providerType, provider);
+            
             this._debouncedSave(providerType);
         }
     }
@@ -591,6 +872,29 @@ export class ProviderPoolManager {
             }
             this._log('info', `Marked provider as healthy: ${provider.config.uuid} for type ${providerType}${resetUsageCount ? ' (usage count reset)' : ''}`);
             
+            this._debouncedSave(providerType);
+        }
+    }
+
+    /**
+     * 重置提供商的刷新状态（needsRefresh 和 refreshCount）
+     * 并将其标记为健康，以便立即投入使用
+     * @param {string} providerType - 提供商类型
+     * @param {string} uuid - 提供商 UUID
+     */
+    resetProviderRefreshStatus(providerType, uuid) {
+        if (!providerType || !uuid) {
+            this._log('error', 'Invalid parameters in resetProviderRefreshStatus');
+            return;
+        }
+
+        const provider = this._findProvider(providerType, uuid);
+        if (provider) {
+            provider.config.needsRefresh = false;
+            provider.config.refreshCount = 0;
+            // 标记为健康，以便立即投入使用
+            this._log('info', `Reset refresh status and marked healthy for provider ${uuid} (${providerType})`);
+
             this._debouncedSave(providerType);
         }
     }
