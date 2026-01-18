@@ -45,12 +45,42 @@
 ### 3.2 凭据上传路由 ([`static/app/file-upload.js`](static/app/file-upload.js))
 *   修改 `getProviderKey`，建立提供商标识与 `configs/` 子目录名的映射（例如：`new-provider-api` -> `new-provider`）。
 
-### 3.3 配置管理界面 ([`static/components/section-config.html`](static/components/section-config.html))
+### 3.3 凭据文件管理筛选器
+需要在以下三个位置添加新提供商的筛选支持：
+
+#### 3.3.1 HTML 筛选器选项 ([`static/components/section-upload-config.html`](static/components/section-upload-config.html))
+在 `id="configProviderFilter"` 的 `<select>` 元素中添加新的 `<option>`：
+```html
+<option value="new-provider-type" data-i18n="upload.providerFilter.newProvider">New Provider OAuth</option>
+```
+
+#### 3.3.2 JavaScript 提供商映射 ([`static/app/upload-config-manager.js`](static/app/upload-config-manager.js))
+在 `detectProviderFromPath()` 函数的 `providerMappings` 数组中添加映射关系：
+```javascript
+{
+    patterns: ['configs/new-provider/', '/new-provider/'],
+    providerType: 'new-provider-type',
+    displayName: 'New Provider OAuth',
+    shortName: 'new-provider-oauth'
+}
+```
+
+#### 3.3.3 多语言文案 ([`static/app/i18n.js`](static/app/i18n.js))
+在中文和英文的翻译对象中添加筛选器文案：
+```javascript
+// 中文版本 (zh-CN)
+'upload.providerFilter.newProvider': 'New Provider OAuth',
+
+// 英文版本 (en-US)
+'upload.providerFilter.newProvider': 'New Provider OAuth',
+```
+
+### 3.4 配置管理界面 ([`static/components/section-config.html`](static/components/section-config.html))
 *   **必须添加**：在 `id="modelProvider"`（初始化提供商选择）容器中添加对应的 `provider-tag` 按钮。
 *   **可选添加**：在 `id="proxyProviders"`（代理开关）中同步添加。
 
-### 3.4 指南与教程 ([`static/components/section-guide.html`](static/components/section-guide.html))
-*   在“项目简介”和“客户端配置指南”中添加新提供商的调用示例（如 `{provider}/v1/chat/completions`）。
+### 3.5 指南与教程 ([`static/components/section-guide.html`](static/components/section-guide.html))
+*   在"项目简介"和"客户端配置指南"中添加新提供商的调用示例（如 `{provider}/v1/chat/completions`）。
 
 ---
 

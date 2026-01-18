@@ -1353,8 +1353,16 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
-                console.log('[Kiro] Received 403. Marking credential as unhealthy...');
-                this._markCredentialUnhealthy('403 Forbidden', error);
+                console.log('[Kiro] Received 403. Marking credential as need refresh...');
+                
+                // 1. 先刷新 UUID
+                const newUuid = this._refreshUuid();
+                if (newUuid) {
+                    console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    this.uuid = newUuid;
+                }
+                
+                this._markCredentialNeedRefresh('403 Forbidden', error);
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1861,8 +1869,16 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403) {
-                console.log('[Kiro] Received 403 in stream. Marking credential as unhealthy...');
-                this._markCredentialUnhealthy('403 Forbidden', error);
+                console.log('[Kiro] Received 403 in stream. Marking credential as need refresh...');
+                
+                // 1. 先刷新 UUID
+                const newUuid = this._refreshUuid();
+                if (newUuid) {
+                    console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    this.uuid = newUuid;
+                }
+
+                this._markCredentialNeedRefresh('403 Forbidden', error);
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -2754,7 +2770,7 @@ async saveCredentialsToFile(filePath, newData) {
             
             if (status === 403) {
                 console.log('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
-                this._markCredentialUnhealthy('403 Forbidden on usage query', formattedError);
+                this._markCredentialNeedRefresh('403 Forbidden on usage query', formattedError);
                 throw formattedError;
             }
             

@@ -445,7 +445,7 @@ function generateAuthButton(providerType) {
     if (providerType === 'openai-codex-oauth') {
         return `
             <button class="generate-auth-btn" title="生成 Codex OAuth 授权链接">
-                <i class="fas fa-code" style="color: #10b981;"></i>
+                <i class="fas fa-key"></i>
                 <span data-i18n="providers.auth.generate">${t('providers.auth.generate')}</span>
             </button>
         `;
