@@ -425,25 +425,29 @@ export class ProviderPoolManager {
         const now = Date.now();
         
         // 1. 基础健康分：不健康的排最后
-        if (!config.isHealthy || config.isDisabled) return 1000000;
+        if (!config.isHealthy || config.isDisabled) return 1e16; 
         
         // 2. 预热/刷新分：2分钟内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
         const isFresh = config.lastHealthCheckTime && 
                         (now - new Date(config.lastHealthCheckTime).getTime() < 120000) && 
                         (config.usageCount === 0);
-        if (isFresh) return -1000;
+        if (isFresh) return -1e16;
 
-        // 3. 时间分：LRU (最久未被使用的排前面)
-        const timeScore = config.lastUsed ? new Date(config.lastUsed).getTime() : 0;
+        // 3. 权重计算逻辑：
+        // 核心痛点：使用过一次的节点 lastUsed 变成巨大的毫秒时间戳，导致它永远比 lastUsed 为 null (0) 的节点分数高得多。
         
-        // 4. 健康检查分：最近健康检查通过的稍微优先一点
+        // 改进思路：
+        // a) 统一量级：如果没用过，我们也给它一个相对于“现在”比较旧的时间戳，而不是 0。
+        // b) 或者：使用偏移量而非绝对时间戳。
+        
+        const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 3600000); // 没用过的视为 1 小时前用过
+        const usageCount = config.usageCount || 0;
         const checkScore = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
-        
-        // 5. 使用次数分：使用次数少的优先
-        const usageScore = config.usageCount || 0;
 
-        // 综合得分（时间权重最大）
-        return timeScore + (usageScore * 1000) - (checkScore / 1000000);
+        // 分数计算（越小越优先）：
+        // 使用时间戳（升序 -> 越旧越优先） + 使用次数惩罚
+        // usageCount * 60000 表示每多用一次，相当于在时间排队上往后挪 1 分钟
+        return lastUsedTime + (usageCount * 60000) - (checkScore / 1e9);
     }
 
     /**
