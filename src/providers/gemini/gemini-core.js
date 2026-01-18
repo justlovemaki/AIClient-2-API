@@ -285,7 +285,7 @@ export class GeminiApiService {
 
     async initializeAuth(forceRefresh = false) {
         // 检查是否需要刷新 Token
-        const needsRefresh = forceRefresh || this.isExpiryDateNear();
+        const needsRefresh = forceRefresh
 
         if (this.authClient.credentials.access_token && !needsRefresh) {
             // Token 有效且不需要刷新
