@@ -8,6 +8,7 @@ import { OrchidsApiService } from './claude/claude-orchids.js'; // 导入Orchids
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
 import { IFlowApiService } from './openai/iflow-core.js'; // 导入IFlowApiService
 import { CodexApiService } from './openai/codex-core.js'; // 导入CodexApiService
+import { LettaApiService } from './openai/letta-core.js'; // 导入LettaApiService
 import { MODEL_PROVIDER } from '../utils/common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -628,6 +629,70 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// Letta API 服务适配器
+export class LettaApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.lettaApiService = new LettaApiService(config);
+    }
+
+    async initialize() {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+    }
+
+    async generateContent(model, requestBody) {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+        return this.lettaApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+        yield* this.lettaApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+        return this.lettaApiService.listModels();
+    }
+
+    async refreshToken() {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+        if (this.isExpiryDateNear()) {
+            await this.lettaApiService.refreshAuthToken();
+        }
+        return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        if (!this.lettaApiService.isInitialized) {
+            await this.lettaApiService.initialize();
+        }
+        return this.lettaApiService.refreshAuthToken();
+    }
+
+    isExpiryDateNear() {
+        return this.lettaApiService.isExpiryDateNear();
+    }
+
+    /**
+     * 获取用量限制信息
+     * Letta 暂不支持用量查询
+     */
+    async getUsageLimits() {
+        throw new Error('Letta does not support usage query.');
+    }
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -668,6 +733,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.CODEX_API:
                 serviceInstances[providerKey] = new CodexApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.LETTA_API:
+                serviceInstances[providerKey] = new LettaApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

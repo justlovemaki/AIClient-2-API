@@ -520,7 +520,7 @@ function renderProviderConfig(provider) {
         const field1Label = getFieldLabel(field1Key);
         const field1Value = provider[field1Key];
         const field1IsPassword = field1Key.toLowerCase().includes('key') || field1Key.toLowerCase().includes('password');
-        const field1IsOAuthFilePath = field1Key.includes('OAUTH_CREDS_FILE_PATH');
+        const field1IsOAuthFilePath = field1Key.includes('OAUTH_CREDS_FILE_PATH') || field1Key.includes('LETTA_TOKEN_FILE_PATH');
         const field1DisplayValue = field1IsPassword && field1Value ? '••••••••' : (field1Value || '');
         const field1Def = fieldConfigs.find(f => f.id === field1Key) || fieldConfigs.find(f => f.id.toUpperCase() === field1Key.toUpperCase()) || {};
         
@@ -582,7 +582,7 @@ function renderProviderConfig(provider) {
             const field2Label = getFieldLabel(field2Key);
             const field2Value = provider[field2Key];
             const field2IsPassword = field2Key.toLowerCase().includes('key') || field2Key.toLowerCase().includes('password');
-            const field2IsOAuthFilePath = field2Key.includes('OAUTH_CREDS_FILE_PATH');
+            const field2IsOAuthFilePath = field2Key.includes('OAUTH_CREDS_FILE_PATH') || field2Key.includes('LETTA_TOKEN_FILE_PATH');
             const field2DisplayValue = field2IsPassword && field2Value ? '••••••••' : (field2Value || '');
             const field2Def = fieldConfigs.find(f => f.id === field2Key) || fieldConfigs.find(f => f.id.toUpperCase() === field2Key.toUpperCase()) || {};
             
@@ -1138,7 +1138,7 @@ function addDynamicConfigFields(form, providerType) {
             // 检查是否为密码类型字段
             const isPassword1 = field1.type === 'password';
             // 检查是否为OAuth凭据文件路径字段（兼容两种命名方式）
-            const isOAuthFilePath1 = field1.id.includes('OAUTH_CREDS_FILE_PATH') || field1.id.includes('OauthCredsFilePath');
+            const isOAuthFilePath1 = field1.id.includes('OAUTH_CREDS_FILE_PATH') || field1.id.includes('OauthCredsFilePath') || field1.id.includes('LETTA_TOKEN_FILE_PATH');
             
             if (isPassword1) {
                 fields += `
@@ -1181,7 +1181,7 @@ function addDynamicConfigFields(form, providerType) {
                 // 检查是否为密码类型字段
                 const isPassword2 = field2.type === 'password';
                 // 检查是否为OAuth凭据文件路径字段（兼容两种命名方式）
-                const isOAuthFilePath2 = field2.id.includes('OAUTH_CREDS_FILE_PATH') || field2.id.includes('OauthCredsFilePath');
+                const isOAuthFilePath2 = field2.id.includes('OAUTH_CREDS_FILE_PATH') || field2.id.includes('OauthCredsFilePath') || field2.id.includes('LETTA_TOKEN_FILE_PATH');
                 
                 if (isPassword2) {
                     fields += `

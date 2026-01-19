@@ -7,6 +7,7 @@ import {
     handleIFlowOAuth,
     handleOrchidsOAuth,
     handleCodexOAuth,
+    handleLettaOAuth,
     batchImportKiroRefreshTokensStream,
     importAwsCredentials,
     importOrchidsToken
@@ -60,6 +61,11 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
         } else if (providerType === 'openai-codex-oauth') {
             // Codex OAuth（OAuth2 + PKCE）
             const result = await handleCodexOAuth(currentConfig, options);
+            authUrl = result.authUrl;
+            authInfo = result.authInfo;
+        } else if (providerType === 'openai-letta') {
+            // Letta OAuth
+            const result = await handleLettaOAuth(currentConfig, options);
             authUrl = result.authUrl;
             authInfo = result.authInfo;
         } else {

@@ -70,6 +70,7 @@ export const MODEL_PROVIDER = {
     QWEN_API: 'openai-qwen-oauth',
     IFLOW_API: 'openai-iflow',
     CODEX_API: 'openai-codex-oauth',
+    LETTA_API: 'openai-letta',
 }
 
 /**

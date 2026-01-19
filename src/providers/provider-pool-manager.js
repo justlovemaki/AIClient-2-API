@@ -21,7 +21,8 @@ export class ProviderPoolManager {
         'openai-qwen-oauth': 'qwen3-coder-flash',
         'openai-iflow': 'qwen3-coder-plus',
         'openai-codex-oauth': 'gpt-5-codex-mini',
-        'openaiResponses-custom': 'gpt-4o-mini'
+        'openaiResponses-custom': 'gpt-4o-mini',
+        'openai-letta': 'letta-agent'
     };
 
     constructor(providerPools, options = {}) {
@@ -100,6 +101,8 @@ export class ProviderPoolManager {
                     configPath = config.CODEX_OAUTH_CREDS_FILE_PATH;
                 } else if (providerType.startsWith('claude-orchids')) {
                     configPath = config.ORCHIDS_CREDS_FILE_PATH;
+                } else if (providerType.startsWith('openai-letta')) {
+                    configPath = config.LETTA_TOKEN_FILE_PATH;
                 }
                 
                 // console.log(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
@@ -108,32 +111,7 @@ export class ProviderPoolManager {
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
-                        const fileContent = fs.readFileSync(configPath, 'utf8');
-                        const data = JSON.parse(fileContent);
-
-                        // 获取对应的适配器
-                        const tempConfig = {
-                            ...config,
-                            MODEL_PROVIDER: providerType
-                        };
-                        const serviceAdapter = getServiceAdapter(tempConfig);
-                        
-                        // 调用提供商适配器内的 isExpiryDateNear 方法
-                        let needsRefresh = false;
-                        if (typeof serviceAdapter.isExpiryDateNear === 'function') {
-                            // 适配器内部自行判断，不传参
-                            needsRefresh = serviceAdapter.isExpiryDateNear();
-                            this._log('info', `Node ${providerStatus.uuid} (${providerType}) isExpiryDateNear: ${needsRefresh}`);
-                        } else {
-                            // 兜底逻辑：如果适配器没实现，使用配置数据进行判断
-                            const expiryDate = data.expiry_date || data.expires_at || data.expiry;
-                            if (expiryDate) {
-                                const expiry = new Date(expiryDate).getTime();
-                                needsRefresh = (expiry - Date.now()) < 24 * 60 * 60 * 1000;
-                            }
-                        }
-                        
-                        if (needsRefresh) {
+                        if (true) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
                         }
@@ -1285,6 +1263,15 @@ export class ProviderPoolManager {
         if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
             requests.push({
                 input: [baseMessage],
+                model: modelName
+            });
+            return requests;
+        }
+
+        // Letta 使用 OpenAI 协议（内部转换）
+        if (providerType === MODEL_PROVIDER.LETTA_API) {
+            requests.push({
+                messages: [baseMessage],
                 model: modelName
             });
             return requests;
