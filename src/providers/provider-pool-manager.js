@@ -108,32 +108,7 @@ export class ProviderPoolManager {
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
-                        const fileContent = fs.readFileSync(configPath, 'utf8');
-                        const data = JSON.parse(fileContent);
-
-                        // 获取对应的适配器
-                        const tempConfig = {
-                            ...config,
-                            MODEL_PROVIDER: providerType
-                        };
-                        const serviceAdapter = getServiceAdapter(tempConfig);
-                        
-                        // 调用提供商适配器内的 isExpiryDateNear 方法
-                        let needsRefresh = false;
-                        if (typeof serviceAdapter.isExpiryDateNear === 'function') {
-                            // 适配器内部自行判断，不传参
-                            needsRefresh = serviceAdapter.isExpiryDateNear();
-                            this._log('info', `Node ${providerStatus.uuid} (${providerType}) isExpiryDateNear: ${needsRefresh}`);
-                        } else {
-                            // 兜底逻辑：如果适配器没实现，使用配置数据进行判断
-                            const expiryDate = data.expiry_date || data.expires_at || data.expiry;
-                            if (expiryDate) {
-                                const expiry = new Date(expiryDate).getTime();
-                                needsRefresh = (expiry - Date.now()) < 24 * 60 * 60 * 1000;
-                            }
-                        }
-                        
-                        if (needsRefresh) {
+                        if (true) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
                         }
@@ -141,7 +116,7 @@ export class ProviderPoolManager {
                         this._log('error', `Failed to check expiry for node ${providerStatus.uuid}: ${err.message}`);
                     }
                 } else {
-           this._log('debug', `Node ${providerStatus.uuid} (${providerType}) has no valid config file path or file does not exist.`);
+                    this._log('debug', `Node ${providerStatus.uuid} (${providerType}) has no valid config file path or file does not exist.`);
                 }
             }
         }
@@ -200,6 +175,14 @@ export class ProviderPoolManager {
         // 如果已经在刷新中，直接返回
         if (this.refreshingUuids.has(uuid)) {
             this._log('debug', `Node ${uuid} is already in refresh queue.`);
+            return;
+        }
+
+        // 判断提供商池内的总可用节点数，小于5个时，不等待缓冲，直接加入刷新队列
+        const healthyCount = this.getHealthyCount(providerType);
+        if (healthyCount < 5) {
+            this._log('info', `Provider ${providerType} has only ${healthyCount} healthy nodes. Bypassing buffer and enqueuing refresh for ${uuid} immediately.`);
+            this._enqueueRefreshImmediate(providerType, providerStatus, force);
             return;
         }
 
@@ -383,9 +366,9 @@ export class ProviderPoolManager {
         }
         
         // 添加5秒内的随机等待时间，避免并发刷新时的冲突
-        const randomDelay = Math.floor(Math.random() * 5000);
-        this._log('info', `Starting token refresh for node ${providerStatus.uuid} (${providerType}) with ${randomDelay}ms delay`);
-        await new Promise(resolve => setTimeout(resolve, randomDelay));
+        // const randomDelay = Math.floor(Math.random() * 5000);
+        // this._log('info', `Starting token refresh for node ${providerStatus.uuid} (${providerType}) with ${randomDelay}ms delay`);
+        // await new Promise(resolve => setTimeout(resolve, randomDelay));
 
         try {
             // 增加刷新计数

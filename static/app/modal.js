@@ -674,7 +674,7 @@ function getFieldOrder(provider) {
     const excludedFields = [
         'isHealthy', 'lastUsed', 'usageCount', 'errorCount', 'lastErrorTime',
         'uuid', 'isDisabled', 'lastHealthCheckTime', 'lastHealthCheckModel', 'lastErrorMessage',
-        'notSupportedModels'
+        'notSupportedModels', 'refreshCount', 'needsRefresh'
     ];
     
     // 从 getProviderTypeFields 获取字段顺序映射
