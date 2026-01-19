@@ -31,7 +31,7 @@ const KIRO_CONSTANTS = {
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout for normal requests
     TOKEN_REFRESH_TIMEOUT: 15000, // 15 seconds timeout for token refresh (shorter to avoid blocking)
     USER_AGENT: 'KiroIDE',
-    KIRO_VERSION: '0.7.5',
+    KIRO_VERSION: '0.8.140',
     CONTENT_TYPE_JSON: 'application/json',
     ACCEPT_JSON: 'application/json',
     AUTH_METHOD_SOCIAL: 'social',
@@ -403,7 +403,7 @@ export class KiroApiService {
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
             keepAlive: true,
-            maxSockets: 100,        // 每个主机最多 10 个连接
+            maxSockets: 100,        // 每个主机最多 100 个连接
             maxFreeSockets: 5,     // 最多保留 5 个空闲连接
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
@@ -2735,7 +2735,7 @@ async saveCredentialsToFile(filePath, newData) {
         }
         const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
 
-        // 构建请求头
+        // 动态生成 headers
         const machineId = generateMachineIdFromConfig({
             uuid: this.uuid,
             profileArn: this.profileArn,
