@@ -83,6 +83,7 @@ function getFieldLabel(key) {
         'QWEN_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'IFLOW_OAUTH_CREDS_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+        'LETTA_TOKEN_FILE_PATH': isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
         'GEMINI_BASE_URL': 'Gemini Base URL',
         'KIRO_BASE_URL': 'Base URL',
         'KIRO_REFRESH_URL': 'Refresh URL',
@@ -91,7 +92,9 @@ function getFieldLabel(key) {
         'QWEN_OAUTH_BASE_URL': 'OAuth Base URL',
         'ANTIGRAVITY_BASE_URL_DAILY': 'Daily Base URL',
         'ANTIGRAVITY_BASE_URL_AUTOPUSH': 'Autopush Base URL',
-        'IFLOW_BASE_URL': 'iFlow Base URL'
+        'IFLOW_BASE_URL': 'iFlow Base URL',
+        'LETTA_BASE_URL': 'Letta Base URL',
+        'LETTA_AGENT_ID': 'Agent ID'
     };
     
     return labelMap[key] || key;
@@ -271,6 +274,26 @@ function getProviderTypeFields(providerType) {
                 label: `Codex Base URL <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'https://api.openai.com/v1/codex'
+            }
+        ],
+        'openai-letta': [
+            {
+                id: 'LETTA_TOKEN_FILE_PATH',
+                label: isEn ? 'OAuth Credentials File Path' : 'OAuth凭据文件路径',
+                type: 'text',
+                placeholder: isEn ? 'e.g.: configs/letta/token.json' : '例如: configs/letta/token.json'
+            },
+            {
+                id: 'LETTA_BASE_URL',
+                label: `Letta Base URL <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: 'https://api.letta.com'
+            },
+            {
+                id: 'LETTA_AGENT_ID',
+                label: `Agent ID <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: '例如: agent-...'
             }
         ]
     };

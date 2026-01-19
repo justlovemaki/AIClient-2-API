@@ -216,7 +216,8 @@ function renderProviders(providers) {
         'openai-qwen-oauth',
         'openaiResponses-custom',
         'openai-iflow',
-        'openai-codex-oauth'
+        'openai-codex-oauth',
+        'openai-letta'
     ];
     
     // 获取所有提供商类型并按指定顺序排序
@@ -1638,7 +1639,8 @@ function getAuthFilePath(provider) {
         'gemini-antigravity': '~/.antigravity/oauth_creds.json',
         'openai-qwen-oauth': '~/.qwen/oauth_creds.json',
         'claude-kiro-oauth': '~/.aws/sso/cache/kiro-auth-token.json',
-        'openai-iflow': '~/.iflow/oauth_creds.json'
+        'openai-iflow': '~/.iflow/oauth_creds.json',
+        'openai-letta': 'configs/letta/token.json'
     };
     return authFilePaths[provider] || (getCurrentLanguage() === 'en-US' ? 'Unknown Path' : '未知路径');
 }
