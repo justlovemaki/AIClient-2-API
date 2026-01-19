@@ -190,8 +190,7 @@ function getProviderDisplayName(provider, providerType) {
         'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
         'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
         'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
-        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH',
-        'openai-letta': 'LETTA_TOKEN_FILE_PATH'
+        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
     }[providerType];
 
     if (credPathKey && provider[credPathKey]) {

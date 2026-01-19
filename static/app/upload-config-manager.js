@@ -861,12 +861,6 @@ function detectProviderFromPath(filePath) {
             providerType: 'openai-iflow-oauth',
             displayName: 'OpenAI iFlow OAuth',
             shortName: 'iflow-oauth'
-        },
-        {
-            patterns: ['configs/letta/', '/letta/'],
-            providerType: 'openai-letta',
-            displayName: 'Letta API',
-            shortName: 'letta'
         }
     ];
 

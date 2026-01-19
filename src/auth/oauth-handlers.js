@@ -23,7 +23,5 @@ export {
     refreshIFlowTokens,
     // Orchids OAuth
     importOrchidsToken,
-    handleOrchidsOAuth,
-    handleLettaOAuth,
-    refreshLettaToken
+    handleOrchidsOAuth
 } from './index.js';
