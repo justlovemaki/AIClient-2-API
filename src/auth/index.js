@@ -36,9 +36,3 @@ export {
     importOrchidsToken,
     handleOrchidsOAuth
 } from './orchids-oauth.js';
-
-// Letta OAuth
-export {
-    handleLettaOAuth,
-    refreshLettaToken
-} from './letta-oauth.js';

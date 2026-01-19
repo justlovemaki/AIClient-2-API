@@ -87,17 +87,6 @@ export const PROVIDER_MAPPINGS = [
         displayName: 'OpenAI Codex OAuth',
         needsProjectId: false,
         urlKeys: ['CODEX_BASE_URL']
-    },
-    {
-        // Letta 配置
-        dirName: 'letta',
-        patterns: ['configs/letta/', '/letta/'],
-        providerType: 'openai-letta',
-        credPathKey: 'LETTA_TOKEN_FILE_PATH',
-        defaultCheckModel: 'letta-agent',
-        displayName: 'Letta API',
-        needsProjectId: false,
-        urlKeys: ['LETTA_BASE_URL', 'LETTA_AGENT_ID']
     }
 ];
 

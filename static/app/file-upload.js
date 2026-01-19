@@ -58,8 +58,7 @@ class FileUploadHandler {
             'gemini-antigravity': 'antigravity',
             'claude-kiro-oauth': 'kiro',
             'openai-qwen-oauth': 'qwen',
-            'openai-iflow': 'iflow',
-            'openai-letta': 'letta'
+            'openai-iflow': 'iflow'
         };
         return providerMap[provider] || 'gemini';
     }

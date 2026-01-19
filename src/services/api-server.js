@@ -242,7 +242,7 @@ async function startServer() {
     }
 
     // Initialize API services
-    const services = await initApiService(CONFIG, true);
+    const services = await initApiService(CONFIG);
     
     // Initialize UI management features
     initializeUIManagement(CONFIG);

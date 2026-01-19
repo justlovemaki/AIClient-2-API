@@ -826,7 +826,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
-                    message: 'Unable to identify provider type for config file, please ensure file is in configs/kiro/, configs/gemini/, configs/qwen/, configs/antigravity/, configs/iflow/ or configs/letta/ directory'
+                    message: 'Unable to identify provider type for config file, please ensure file is in configs/kiro/, configs/gemini/, configs/qwen/ or configs/antigravity/ directory'
                 }
             }));
             return true;

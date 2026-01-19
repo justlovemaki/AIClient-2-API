@@ -165,7 +165,7 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
  * @param {Object} config - The server configuration
  * @returns {Promise<Object>} The initialized services
  */
-export async function initApiService(config, isReady = false) {
+export async function initApiService(config) {
 
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, {
@@ -175,18 +175,16 @@ export async function initApiService(config, isReady = false) {
         });
         console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
 
-        if(isReady){
-            // --- V2: 触发系统预热 ---
-            // 预热逻辑是异步的，不会阻塞服务器启动
-            providerPoolManager.warmupNodes().catch(err => {
-                console.error(`[Initialization] Warmup failed: ${err.message}`);
-            });
+        // --- V2: 触发系统预热 ---
+        // 预热逻辑是异步的，不会阻塞服务器启动
+        providerPoolManager.warmupNodes().catch(err => {
+            console.error(`[Initialization] Warmup failed: ${err.message}`);
+        });
 
-            // 检查并刷新即将过期的节点（异步调用，不阻塞启动）
-            providerPoolManager.checkAndRefreshExpiringNodes().catch(err => {
-                console.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
-            });
-        }
+        // 检查并刷新即将过期的节点（异步调用，不阻塞启动）
+        providerPoolManager.checkAndRefreshExpiringNodes().catch(err => {
+            console.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
+        });
 
         // 健康检查将在服务器完全启动后执行
     } else {
@@ -395,8 +393,7 @@ export async function getProviderStatus(config, options = {}) {
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
         'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
         'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
-        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH',
-        'openai-letta': 'LETTA_TOKEN_FILE_PATH'
+        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
     };
     let providerPoolsSlim = [];
     let unhealthyProvideIdentifyList = [];
