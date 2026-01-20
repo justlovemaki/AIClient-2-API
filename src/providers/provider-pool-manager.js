@@ -973,6 +973,7 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.isHealthy = true;
             provider.config.errorCount = 0;
+            provider.config.refreshCount = 0;
             provider.config.lastErrorTime = null;
             provider.config.lastErrorMessage = null;
             
@@ -1334,7 +1335,7 @@ export class ProviderPoolManager {
                 // 尝试将 signal 注入请求体，供支持的适配器使用
                 const requestWithSignal = {
                     ...healthCheckRequest,
-                    signal: abortController.signal
+                    // signal: abortController.signal
                 };
 
                 await serviceAdapter.generateContent(modelName, requestWithSignal);

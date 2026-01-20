@@ -612,6 +612,28 @@
                 <li data-i18n="dashboard.routing.tip3"><strong>跨协议调用:</strong> 支持OpenAI协议调用Claude模型，或Claude协议调用OpenAI模型</li>
             </ul>
         </div>
+
+        <!-- 可用模型列表 -->
+        <div class="models-section">
+            <h4 class="models-section-title"><i class="fas fa-cube"></i> <span data-i18n="models.title">可用模型列表</span></h4>
+            <div class="models-description">
+                <div class="highlight-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span data-i18n="models.note">点击模型名称可直接复制到剪贴板</span>
+                </div>
+            </div>
+            
+            <!-- Models Container -->
+            <div class="models-container">
+                <div id="modelsList" class="models-list">
+                    <!-- Models will be loaded here -->
+                    <div class="models-loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span data-i18n="common.loading">加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
 </section>
