@@ -184,6 +184,10 @@ function getProviderDisplayName(provider, providerType) {
         return provider.customName;
     }
 
+    if (provider.uuid) {
+        return provider.uuid;
+    }
+
     // 尝试从凭据文件路径提取名称
     const credPathKey = {
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
@@ -200,7 +204,7 @@ function getProviderDisplayName(provider, providerType) {
         return `${dirName}/${fileName}`;
     }
 
-    return provider.uuid || 'Unnamed';
+    return 'Unnamed';
 }
 
 /**

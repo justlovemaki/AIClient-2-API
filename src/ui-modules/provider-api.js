@@ -428,6 +428,7 @@ export async function handleResetProviderHealth(req, res, currentConfig, provide
             if (!provider.isHealthy) {
                 provider.isHealthy = true;
                 provider.errorCount = 0;
+                provider.refreshCount = 0;
                 provider.lastErrorTime = null;
                 resetCount++;
             }
