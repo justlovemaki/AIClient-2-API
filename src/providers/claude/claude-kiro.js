@@ -1853,6 +1853,19 @@ async saveCredentialsToFile(filePath, newData) {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
+            if (status >= 400 && status < 600) {
+                try {
+                    stream = error.response.data
+                    let buffer = '';
+                    for await (const chunk of stream) {
+                        buffer += chunk.toString();
+                    }
+                    console.error(`[Kiro] Received ${status} in stream, data: `, buffer);
+                } catch (e) {
+                    console.error(`[Kiro] Received ${status} in stream, data: `, error.response.data.toString());
+                }
+            }
+            
             // Handle 401 (Unauthorized) - try to refresh token first
             if (status === 401 && !isRetry) {
                 console.log('[Kiro] Received 401 in stream. Triggering background refresh via PoolManager...');
