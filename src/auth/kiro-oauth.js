@@ -16,7 +16,7 @@ const KIRO_OAUTH_CONFIG = {
     authServiceEndpoint: 'https://prod.us-east-1.auth.desktop.kiro.dev',
     
     // AWS SSO OIDC 端点 (用于 Builder ID)
-    ssoOIDCEndpoint: 'https://oidc.us-east-1.amazonaws.com',
+    ssoOIDCEndpoint: 'https://oidc.{{region}}.amazonaws.com',
     
     // AWS Builder ID 起始 URL
     builderIDStartURL: 'https://view.awsapps.com/start',
@@ -34,8 +34,8 @@ const KIRO_OAUTH_CONFIG = {
         'codewhisperer:completions',
         'codewhisperer:analysis',
         'codewhisperer:conversations',
-        'codewhisperer:transformations',
-        'codewhisperer:taskassist'
+        // 'codewhisperer:transformations',
+        // 'codewhisperer:taskassist'
     ],
     
     // 凭据存储（符合现有规范）
@@ -252,7 +252,10 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
     console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Using Builder ID Start URL: ${builderIDStartURL}`);
 
     // 1. 注册 OIDC 客户端
-    const regResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/client/register`, {
+    const region = options.region || 'us-east-1';
+    const ssoOIDCEndpoint = KIRO_OAUTH_CONFIG.ssoOIDCEndpoint.replace('{{region}}', region);
+    
+    const regResponse = await fetchWithProxy(`${ssoOIDCEndpoint}/client/register`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -262,7 +265,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             clientName: 'Kiro IDE',
             clientType: 'public',
             scopes: KIRO_OAUTH_CONFIG.scopes,
-            grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token']
+            // grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token']
         })
     }, 'claude-kiro-oauth');
     
@@ -273,11 +276,10 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
     const regData = await regResponse.json();
     
     // 2. 启动设备授权
-    const authResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/device_authorization`, {
+    const authResponse = await fetchWithProxy(`${ssoOIDCEndpoint}/device_authorization`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'KiroIDE'
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
             clientId: regData.clientId,
@@ -304,7 +306,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
         5, 
         300, 
         taskId,
-        options
+        { ...options, region }
     ).catch(error => {
         console.error(`${KIRO_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
         broadcastEvent('oauth_error', {
@@ -356,7 +358,9 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
         attempts++;
         
         try {
-            const response = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.ssoOIDCEndpoint}/token`, {
+            const region = options.region || 'us-east-1';
+            const ssoOIDCEndpoint = KIRO_OAUTH_CONFIG.ssoOIDCEndpoint.replace('{{region}}', region);
+            const response = await fetchWithProxy(`${ssoOIDCEndpoint}/token`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -391,7 +395,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                     authMethod: 'builder-id',
                     clientId,
                     clientSecret,
-                    region: 'us-east-1'
+                    idcRegion: options.region || 'us-east-1'
                 };
                 
                 await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
@@ -634,7 +638,8 @@ const KIRO_REFRESH_CONSTANTS = {
     AUTH_METHOD_SOCIAL: 'social',
     DEFAULT_PROVIDER: 'Google',
     REQUEST_TIMEOUT: 30000,
-    DEFAULT_REGION: 'us-east-1'
+    DEFAULT_REGION: 'us-east-1',
+    IDC_REGION: 'us-east-1'  // 用于 REFRESH_IDC_URL 的区域配置
 };
 
 /**
@@ -1024,7 +1029,8 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             accessToken: credentials.accessToken,
             refreshToken: credentials.refreshToken,
             authMethod: credentials.authMethod || 'builder-id',
-            region: credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION
+            // region: credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION,
+            idcRegion: credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION
         };
         
         // 可选字段
@@ -1042,8 +1048,8 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         try {
             console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Attempting to refresh token with provided credentials...`);
             
-            const region = credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION;
-            const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', region);
+            const refreshRegion = credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION;
+            const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', refreshRegion);
             
             const refreshResponse = await fetchWithProxy(refreshUrl, {
                 method: 'POST',

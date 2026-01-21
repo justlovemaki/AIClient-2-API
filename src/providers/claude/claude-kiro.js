@@ -25,9 +25,7 @@ const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://q.{{region}}.amazonaws.com/generateAssistantResponse',
-    AMAZON_Q_URL: 'https://codewhisperer.{{region}}.amazonaws.com/SendMessageStreaming',
-    USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
-    DEFAULT_MODEL_NAME: 'claude-opus-4-5',
+    DEFAULT_MODEL_NAME: 'claude-sonnet-4-5',
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout for normal requests
     TOKEN_REFRESH_TIMEOUT: 15000, // 15 seconds timeout for token refresh (shorter to avoid blocking)
     USER_AGENT: 'KiroIDE',
@@ -49,9 +47,7 @@ const FULL_MODEL_MAPPING = {
     "claude-opus-4-5":"claude-opus-4.5",
     "claude-opus-4-5-20251101":"claude-opus-4.5",
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
-    "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
-    "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
-    "claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
+    "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0"
 };
 
 // 只保留 KIRO_MODELS 中存在的模型映射
@@ -362,7 +358,6 @@ export class KiroApiService {
         // this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL;
         // this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL;
         // this.baseUrl = KIRO_CONSTANTS.BASE_URL;
-        // this.amazonQUrl = KIRO_CONSTANTS.AMAZON_Q_URL;
 
         // Add kiro-oauth-creds-base64 and kiro-oauth-creds-file to config
         if (config.KIRO_OAUTH_CREDS_BASE64) {
@@ -536,16 +531,21 @@ async loadCredentials() {
         this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
         this.profileArn = this.profileArn || mergedCredentials.profileArn;
         this.region = this.region || mergedCredentials.region;
+        this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
 
         if (!this.region) {
             console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
             this.region = 'us-east-1';
         }
 
+        // idcRegion 用于 REFRESH_IDC_URL，如果未设置则使用 region
+        if (!this.idcRegion) {
+            this.idcRegion = this.region;
+        }
+
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
-        this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.region);
+        this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
         this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
-        this.amazonQUrl = (KIRO_CONSTANTS.AMAZON_Q_URL).replace("{{region}}", this.region);
     } catch (error) {
         console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
@@ -2724,7 +2724,8 @@ async saveCredentialsToFile(filePath, newData) {
         const resourceType = 'AGENTIC_REQUEST';
         
         // 构建请求 URL
-        const usageLimitsUrl = KIRO_CONSTANTS.USAGE_LIMITS_URL.replace('{{region}}', this.region);
+        let usageLimitsUrl = this.baseUrl;
+        usageLimitsUrl = usageLimitsUrl.replace('generateAssistantResponse', 'getUsageLimits');
         const params = new URLSearchParams({
             isEmailRequired: 'true',
             origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,

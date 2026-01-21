@@ -1723,7 +1723,12 @@ function showAuthModal(authUrl, authInfo) {
             <div class="modal-body">
                 <div class="auth-info">
                     <p><strong data-i18n="oauth.modal.provider">${t('oauth.modal.provider')}</strong> ${authInfo.provider}</p>
-                    <div class="port-info-section" style="margin: 12px 0; padding: 12px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px;">
+                    <div class="port-info-section" style="margin: 12px 0; padding: 12px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; position: relative;">
+                        ${(authInfo.provider === 'claude-kiro-oauth' && authInfo.authMethod === 'builder-id') ? `
+                        <button class="regenerate-builder-id-btn" title="${t('common.generate')}" style="position: absolute; top: 12px; right: 12px; background: none; border: 1px solid #d97706; border-radius: 4px; cursor: pointer; color: #d97706; padding: 4px 8px;">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        ` : ''}
                         <div style="margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <i class="fas fa-network-wired" style="color: #d97706;"></i>
                             <strong data-i18n="oauth.modal.requiredPort">${t('oauth.modal.requiredPort')}</strong>
@@ -1751,14 +1756,24 @@ function showAuthModal(authUrl, authInfo) {
                                     placeholder="https://view.awsapps.com/start"
                                     style="flex: 1; padding: 6px 10px; border: 1px solid #fcd34d; border-radius: 4px; font-size: 13px; color: #92400e; background: white;"
                                 />
-                                <button class="regenerate-builder-id-btn" title="${t('common.generate')}" style="background: none; border: 1px solid #d97706; border-radius: 4px; cursor: pointer; color: #d97706; padding: 4px 8px;">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
                             </div>
                             <p style="margin: 6px 0 0 0; font-size: 0.75rem; color: #b45309;">
                                 <i class="fas fa-info-circle"></i>
                                 <span data-i18n="oauth.kiro.builderIDStartURLHint">${t('oauth.kiro.builderIDStartURLHint') || '如果您使用 AWS IAM Identity Center，请输入您的 Start URL'}</span>
                             </p>
+                        </div>
+                        <div class="builder-id-region-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #fcd34d;">
+                            <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #92400e;">
+                                <i class="fas fa-globe"></i>
+                                <span>AWS Region</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <input type="text" class="builder-id-region-input"
+                                    value="${authInfo.region || 'us-east-1'}"
+                                    placeholder="us-east-1"
+                                    style="flex: 1; padding: 6px 10px; border: 1px solid #fcd34d; border-radius: 4px; font-size: 13px; color: #92400e; background: white;"
+                                />
+                            </div>
                         </div>
                         ` : ''}
                     </div>
@@ -1819,11 +1834,13 @@ function showAuthModal(authUrl, authInfo) {
     if (regenerateBuilderIdBtn) {
         regenerateBuilderIdBtn.onclick = async () => {
             const builderIdStartUrl = modal.querySelector('.builder-id-start-url-input').value.trim();
+            const region = modal.querySelector('.builder-id-region-input').value.trim();
             modal.remove();
             // 构造重新请求的参数
             const options = {
                 ...authInfo,
-                builderIDStartURL: builderIdStartUrl || 'https://view.awsapps.com/start'
+                builderIDStartURL: builderIdStartUrl || 'https://view.awsapps.com/start',
+                region: region || 'us-east-1'
             };
             // 移除不需要传递回后端的字段
             delete options.provider;
