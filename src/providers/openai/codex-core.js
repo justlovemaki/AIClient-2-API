@@ -5,7 +5,7 @@ import path from 'path';
 import os from 'os';
 import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
-import { MODEL_PROVIDER } from '../../utils/common.js';
+import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 
 /**
  * Codex API 服务类
@@ -133,6 +133,17 @@ export class CodexApiService {
             await this.initialize();
         }
 
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                    uuid: this.uuid
+                });
+            }
+        }
+
         const url = `${this.baseUrl}/responses`;
         const body = this.prepareRequestBody(model, requestBody, false);
         const headers = this.buildHeaders(body.prompt_cache_key);
@@ -173,6 +184,17 @@ export class CodexApiService {
     async *generateContentStream(model, requestBody) {
         if (!this.isInitialized) {
             await this.initialize();
+        }
+
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                    uuid: this.uuid
+                });
+            }
         }
 
         const url = `${this.baseUrl}/responses`;
@@ -283,10 +305,11 @@ export class CodexApiService {
      */
     isExpiryDateNear() {
         if (!this.expiresAt) return true;
-        const now = Date.now();
         const expiry = this.expiresAt.getTime();
-        const bufferMs = 5 * 60 * 1000; // 5 分钟缓冲
-        return expiry <= now + bufferMs;
+        const nearMinutes = 20;
+        const { message, isNearExpiry } = formatExpiryLog('Codex', expiry, nearMinutes);
+        console.log(message);
+        return isNearExpiry;
     }
 
     /**

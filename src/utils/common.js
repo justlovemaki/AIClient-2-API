@@ -117,6 +117,53 @@ export function formatExpiryTime(expiryTimestamp) {
 }
 
 /**
+ * 格式化日志输出，统一日志格式
+ * @param {string} tag - 日志标签，如 'Qwen', 'Kiro' 等
+ * @param {string} message - 日志消息
+ * @param {Object} [data] - 可选的数据对象，将被格式化输出
+ * @returns {string} 格式化后的日志字符串
+ */
+export function formatLog(tag, message, data = null) {
+    let logMessage = `[${tag}] ${message}`;
+    
+    if (data !== null && data !== undefined) {
+        if (typeof data === 'object') {
+            const dataStr = Object.entries(data)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ');
+            logMessage += ` | ${dataStr}`;
+        } else {
+            logMessage += ` | ${data}`;
+        }
+    }
+    
+    return logMessage;
+}
+
+/**
+ * 格式化凭证过期时间日志
+ * @param {string} tag - 日志标签，如 'Qwen', 'Kiro' 等
+ * @param {number} expiryDate - 过期时间戳
+ * @param {number} nearMinutes - 临近过期的分钟数
+ * @returns {{message: string, isNearExpiry: boolean}} 格式化后的日志字符串和是否临近过期
+ */
+export function formatExpiryLog(tag, expiryDate, nearMinutes) {
+    const currentTime = Date.now();
+    const nearMinutesInMillis = nearMinutes * 60 * 1000;
+    const thresholdTime = currentTime + nearMinutesInMillis;
+    const isNearExpiry = expiryDate <= thresholdTime;
+    
+    const message = formatLog(tag, 'Checking expiry date', {
+        'Expiry date': expiryDate,
+        'Current time': currentTime,
+        [`${nearMinutes} minutes from now`]: thresholdTime,
+        'Is near expiry': isNearExpiry
+    });
+    
+    return { message, isNearExpiry };
+}
+
+/**
  * Reads the entire request body from an HTTP request.
  * @param {http.IncomingMessage} req - The HTTP request object.
  * @returns {Promise<Object>} A promise that resolves with the parsed JSON request body.

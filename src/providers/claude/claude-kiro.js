@@ -9,7 +9,7 @@ import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
 import { countTokens } from '@anthropic-ai/tokenizer';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
 const KIRO_THINKING = {
@@ -1347,12 +1347,12 @@ async saveCredentialsToFile(filePath, newData) {
             }
     
             // Handle 402 (Payment Required / Quota Exceeded) - verify usage and mark as unhealthy with recovery time
-            if (status === 402) {
+            if (status === 402 && !isRetry) {
                 await this._handle402Error(error, 'callApi');
             }
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
-            if (status === 403) {
+            if (status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403. Marking credential as need refresh...');
                 
                 // 检查是否为 temporarily suspended 错误
@@ -1364,11 +1364,11 @@ async saveCredentialsToFile(filePath, newData) {
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
                 } else {
                     // 其他 403 错误：先刷新 UUID，然后标记需要刷新
-                    const newUuid = this._refreshUuid();
-                    if (newUuid) {
-                        console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
-                        this.uuid = newUuid;
-                    }
+                    // const newUuid = this._refreshUuid();
+                    // if (newUuid) {
+                    //     console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    //     this.uuid = newUuid;
+                    // }
                     this._markCredentialNeedRefresh('403 Forbidden', error);
                 }
                 
@@ -1595,16 +1595,11 @@ async saveCredentialsToFile(filePath, newData) {
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
 
-        // Token 刷新策略：
-        // 1. 已过期 → 必须等待刷新
-        // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
-        // if (this.isTokenExpired()) {
-        //     console.log('[Kiro] Token is expired, must refresh before generateContent request...');
-        //     await this.initializeAuth(true);
-        // } else if (this.isExpiryDateNear()) {
-        //     console.log('[Kiro] Token is near expiry, triggering background refresh...');
-        //     this.triggerBackgroundRefresh();
-        // }
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, marking credential as need refresh...');
+            this._markCredentialNeedRefresh('Token near expiry in generateContent');
+        }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
@@ -1872,12 +1867,12 @@ async saveCredentialsToFile(filePath, newData) {
             }
             
             // Handle 402 (Payment Required / Quota Exceeded) - verify usage and mark as unhealthy with recovery time
-            if (status === 402) {
+            if (status === 402 && !isRetry) {
                 await this._handle402Error(error, 'stream');
             }
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
-            if (status === 403) {
+            if (status === 403 && !isRetry) {
                 console.log('[Kiro] Received 403 in stream. Marking credential as need refresh...');
                 
                 // 检查是否为 temporarily suspended 错误
@@ -1889,11 +1884,11 @@ async saveCredentialsToFile(filePath, newData) {
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
                 } else {
                     // 其他 403 错误：先刷新 UUID，然后标记需要刷新
-                    const newUuid = this._refreshUuid();
-                    if (newUuid) {
-                        console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
-                        this.uuid = newUuid;
-                    }
+                    // const newUuid = this._refreshUuid();
+                    // if (newUuid) {
+                    //     console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    //     this.uuid = newUuid;
+                    // }
                     this._markCredentialNeedRefresh('403 Forbidden', error);
                 }
 
@@ -1956,17 +1951,12 @@ async saveCredentialsToFile(filePath, newData) {
     // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
-
-        // Token 刷新策略：
-        // 1. 已过期 → 必须等待刷新
-        // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
-        // if (this.isTokenExpired()) {
-        //     console.log('[Kiro] Token is expired, must refresh before generateContentStream request...');
-        //     await this.initializeAuth(true);
-        // } else if (this.isExpiryDateNear()) {
-        //     console.log('[Kiro] Token is near expiry, triggering background refresh...');
-        //     this.triggerBackgroundRefresh();
-        // }
+        
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            console.log('[Kiro] Token is near expiry, marking credential as need refresh...');
+            this._markCredentialNeedRefresh('Token near expiry in generateContentStream');
+        }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
         console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
@@ -2611,11 +2601,10 @@ async saveCredentialsToFile(filePath, newData) {
     isExpiryDateNear() {
         try {
             const expirationTime = new Date(this.expiresAt);
-            const currentTime = new Date();
-            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-            const thresholdTime = new Date(currentTime.getTime() + cronNearMinutesInMillis);
-            console.log(`[Kiro] Expiry date: ${expirationTime.getTime()}, Current time: ${currentTime.getTime()}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${thresholdTime.getTime()}`);
-            return expirationTime.getTime() <= thresholdTime.getTime();
+            const nearMinutes = 30;
+            const { message, isNearExpiry } = formatExpiryLog('Kiro', expirationTime.getTime(), nearMinutes);
+            console.log(message);
+            return isNearExpiry;
         } catch (error) {
             console.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
             return false; // Treat as expired if parsing fails

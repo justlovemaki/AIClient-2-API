@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../../auth/oauth-handlers.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
 // --- Constants ---
@@ -650,10 +650,32 @@ export class QwenApiService {
     }
 
     async generateContent(model, requestBody) {
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                    uuid: this.uuid
+                });
+            }
+        }
+        
         return this.callApiWithAuthAndRetry('/chat/completions', requestBody, false);
     }
 
     async *generateContentStream(model, requestBody) {
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                    uuid: this.uuid
+                });
+            }
+        }
+        
         const stream = await this.callApiWithAuthAndRetry('/chat/completions', requestBody, true);
         let buffer = '';
         for await (const chunk of stream) {
@@ -689,10 +711,10 @@ export class QwenApiService {
             if (!credentials || !credentials.expiry_date) {
                 return false;
             }
-            const currentTime = Date.now();
-            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-            console.log(`[Qwen] Expiry date: ${credentials.expiry_date}, Current time: ${currentTime}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${currentTime + cronNearMinutesInMillis}`);
-            return credentials.expiry_date <= (currentTime + cronNearMinutesInMillis);
+            const nearMinutes = 20;
+            const { message, isNearExpiry } = formatExpiryLog('Qwen', credentials.expiry_date, nearMinutes);
+            console.log(message);
+            return isNearExpiry;
         } catch (error) {
             console.error(`[Qwen] Error checking expiry date: ${error.message}`);
             return false;

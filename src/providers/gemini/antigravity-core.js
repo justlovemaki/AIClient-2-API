@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
-import { formatExpiryTime, isRetryableNetworkError } from '../../utils/common.js';
+import { formatExpiryTime, isRetryableNetworkError, formatExpiryLog } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
@@ -1304,6 +1304,17 @@ export class AntigravityApiService {
     async generateContent(model, requestBody) {
         console.log(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Antigravity] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                    uuid: this.uuid
+                });
+            }
+        }
+
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
             console.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
@@ -1360,6 +1371,17 @@ export class AntigravityApiService {
     async * generateContentStream(model, requestBody) {
         console.log(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Antigravity] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                    uuid: this.uuid
+                });
+            }
+        }
+
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
             console.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
@@ -1384,10 +1406,10 @@ export class AntigravityApiService {
 
     isExpiryDateNear() {
         try {
-            const currentTime = Date.now();
-            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-            console.log(`[Antigravity] Expiry date: ${this.authClient.credentials.expiry_date}, Current time: ${currentTime}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${currentTime + cronNearMinutesInMillis}`);
-            return this.authClient.credentials.expiry_date <= (currentTime + cronNearMinutesInMillis);
+            const nearMinutes = 20;
+            const { message, isNearExpiry } = formatExpiryLog('Antigravity', this.authClient.credentials.expiry_date, nearMinutes);
+            console.log(message);
+            return isNearExpiry;
         } catch (error) {
             console.error(`[Antigravity] Error checking expiry date: ${error.message}`);
             return false;

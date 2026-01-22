@@ -23,7 +23,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
 // iFlow API 端点
@@ -687,10 +687,8 @@ export class IFlowApiService {
                 return false;
             }
             
-            const currentTime = Date.now();
             // 授权文件时效48小时，判断是否过期或接近过期 （45小时）
             const cronNearMinutes = 60 * 45;
-            const cronNearMinutesInMillis = cronNearMinutes * 60 * 1000;
             
             // 解析过期时间
             let expireTime;
@@ -720,23 +718,10 @@ export class IFlowApiService {
                 return false;
             }
             
-            // 计算剩余时间
-            const timeRemaining = expireTime - currentTime;
+            const { message, isNearExpiry } = formatExpiryLog('iFlow', expireTime, cronNearMinutes);
+            console.log(message);
             
-            // 判断是否已过期或接近过期
-            // 已过期：timeRemaining <= 0
-            // 接近过期：timeRemaining > 0 && timeRemaining <= cronNearMinutesInMillis
-            const isExpired = timeRemaining <= 0;
-            const isNear = timeRemaining > 0 && timeRemaining <= cronNearMinutesInMillis;
-            const needsRefresh = isExpired || isNear;
-            
-            const expireDateStr = new Date(expireTime).toISOString();
-            const timeRemainingMinutes = Math.floor(timeRemaining / 60000);
-            const timeRemainingHours = (timeRemaining / 3600000).toFixed(2);
-            
-            console.log(`[iFlow] Token expiry check: Expiry=${expireDateStr}, Remaining=${timeRemainingHours}h (${timeRemainingMinutes}min), Threshold=${cronNearMinutes}min, Expired=${isExpired}, Near=${isNear}, NeedsRefresh=${needsRefresh}`);
-            
-            return needsRefresh;
+            return isNearExpiry;
         } catch (error) {
             console.error(`[iFlow] Error checking expiry date: ${error.message}`);
             return false;
@@ -1012,8 +997,16 @@ export class IFlowApiService {
             await this.initialize();
         }
         
-        // 在 API 调用前不再同步检查是否需要刷新 Token (V2 架构)
-        // await this._checkAndRefreshTokenIfNeeded();
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
+                    uuid: this.uuid
+                });
+            }
+        }
         
         return this.callApi('/chat/completions', requestBody, model);
     }
@@ -1026,8 +1019,16 @@ export class IFlowApiService {
             await this.initialize();
         }
         
-        // 在 API 调用前不再同步检查是否需要刷新 Token (V2 架构)
-        // await this._checkAndRefreshTokenIfNeeded();
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
+                    uuid: this.uuid
+                });
+            }
+        }
         
         yield* this.streamApi('/chat/completions', requestBody, model);
     }
