@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import open from 'open';
-import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError } from '../../utils/common.js';
+import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError, formatExpiryLog } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
@@ -638,6 +638,18 @@ export class GeminiApiService {
 
     async generateContent(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+        
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                    uuid: this.uuid
+                });
+            }
+        }
+        
         let selectedModel = model;
         if (!GEMINI_MODELS.includes(model)) {
             console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
@@ -651,6 +663,17 @@ export class GeminiApiService {
 
     async * generateContentStream(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+
+        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        if (this.isExpiryDateNear()) {
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                console.log(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                    uuid: this.uuid
+                });
+            }
+        }
 
         // 检查是否为防截断模型
         if (is_anti_truncation_model(model)) {
@@ -681,10 +704,10 @@ export class GeminiApiService {
      */
     isExpiryDateNear() {
         try {
-            const currentTime = Date.now();
-            const cronNearMinutesInMillis = (this.config.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-            console.log(`[Gemini] Expiry date: ${this.authClient.credentials.expiry_date}, Current time: ${currentTime}, ${this.config.CRON_NEAR_MINUTES || 10} minutes from now: ${currentTime + cronNearMinutesInMillis}`);
-            return this.authClient.credentials.expiry_date <= (currentTime + cronNearMinutesInMillis);
+            const nearMinutes = 20;
+            const { message, isNearExpiry } = formatExpiryLog('Gemini', this.authClient.credentials.expiry_date, nearMinutes);
+            console.log(message);
+            return isNearExpiry;
         } catch (error) {
             console.error(`[Gemini] Error checking expiry date: ${error.message}`);
             return false;

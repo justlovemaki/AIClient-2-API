@@ -834,7 +834,7 @@ export class ProviderPoolManager {
             this._log('info', `Marked provider ${providerConfig.uuid} as needsRefresh. Enqueuing...`);
             
             // 推入异步刷新队列
-            this._enqueueRefresh(providerType, provider);
+            this._enqueueRefresh(providerType, provider, true);
             
             this._debouncedSave(providerType);
         }
@@ -910,10 +910,7 @@ export class ProviderPoolManager {
             }
 
             this._log('warn', `Immediately marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Authentication error'}`);
-            
-            // --- V2: 触发自动刷新 ---
-            // this._enqueueRefresh(providerType, provider);
-            
+           
             this._debouncedSave(providerType);
         }
     }
