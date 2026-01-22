@@ -497,59 +497,6 @@
                 </div>
             </div>
 
-            <div class="routing-example-card" data-provider="claude-orchids-oauth-card">
-                <div class="routing-card-header">
-                    <i class="fas fa-seedling"></i>
-                    <h4 data-i18n="dashboard.routing.nodeName.orchids">Orchids OAuth</h4>
-                    <span class="provider-badge oauth" data-i18n="dashboard.routing.free">突破限制/免费使用</span>
-                </div>
-                <div class="routing-card-content">
-                    <!-- 协议标签切换 -->
-                    <div class="protocol-tabs">
-                        <button class="protocol-tab" data-protocol="openai" data-i18n="dashboard.routing.openai">OpenAI协议</button>
-                        <button class="protocol-tab active" data-protocol="claude" data-i18n="dashboard.routing.claude">Claude协议</button>
-                    </div>
-
-                    <!-- OpenAI协议示例 -->
-                    <div class="protocol-content" data-protocol="openai">
-                        <div class="endpoint-info">
-                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                            <code class="endpoint-path">/claude-orchids-oauth/v1/chat/completions</code>
-                        </div>
-                        <div class="usage-example">
-                            <label data-i18n="dashboard.routing.exampleOpenAI">使用示例 (OpenAI格式):</label>
-                            <pre><code>curl http://localhost:3000/claude-orchids-oauth/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "model": "claude-sonnet-4-5",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 8192
-  }'</code></pre>
-                        </div>
-                    </div>
-
-                    <!-- Claude协议示例 -->
-                    <div class="protocol-content active" data-protocol="claude">
-                        <div class="endpoint-info">
-                            <label data-i18n="dashboard.routing.endpoint">端点路径:</label>
-                            <code class="endpoint-path">/claude-orchids-oauth/v1/messages</code>
-                        </div>
-                        <div class="usage-example">
-                            <label data-i18n="dashboard.routing.exampleClaude">使用示例 (Claude格式):</label>
-                            <pre><code>curl http://localhost:3000/claude-orchids-oauth/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -d '{
-    "model": "claude-sonnet-4-5",
-    "max_tokens": 8192,
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'</code></pre>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="routing-example-card" data-provider="openai-codex-oauth-card">
                 <div class="routing-card-header">
                     <i class="fas fa-code"></i>

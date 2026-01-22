@@ -300,11 +300,6 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await oauthApi.handleImportAwsCredentials(req, res);
     }
 
-    // Import Orchids token
-    if (method === 'POST' && pathParam === '/api/orchids/import-token') {
-        return await oauthApi.handleImportOrchidsToken(req, res);
-    }
-
     // Get plugins list
     if (method === 'GET' && pathParam === '/api/plugins') {
         return await pluginApi.handleGetPlugins(req, res);

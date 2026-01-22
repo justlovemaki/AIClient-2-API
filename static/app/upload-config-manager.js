@@ -845,12 +845,6 @@ function detectProviderFromPath(filePath) {
             shortName: 'antigravity'
         },
         {
-            patterns: ['configs/orchids/', '/orchids/'],
-            providerType: 'claude-orchids-oauth',
-            displayName: 'Orchids OAuth',
-            shortName: 'orchids-oauth'
-        },
-        {
             patterns: ['configs/codex/', '/codex/'],
             providerType: 'openai-codex-oauth',
             displayName: 'OpenAI Codex OAuth',

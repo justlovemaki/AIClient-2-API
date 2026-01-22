@@ -66,7 +66,6 @@ export const MODEL_PROVIDER = {
     OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
-    ORCHIDS_API: 'claude-orchids-oauth',
     QWEN_API: 'openai-qwen-oauth',
     IFLOW_API: 'openai-iflow',
     CODEX_API: 'openai-codex-oauth',

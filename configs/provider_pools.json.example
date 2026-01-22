@@ -135,21 +135,6 @@
       "lastErrorTime": null
     }
   ],
-  "claude-orchids-oauth": [
-    {
-      "customName": "Orchids节点1",
-      "ORCHIDS_CREDS_FILE_PATH": "./configs/orchids/orchids_creds.json",
-      "uuid": "xxx-xxx-xxx",
-      "checkModelName": "claude-sonnet-4-5",
-      "checkHealth": false,
-      "isHealthy": true,
-      "isDisabled": false,
-      "lastUsed": null,
-      "usageCount": 0,
-      "errorCount": 0,
-      "lastErrorTime": null
-    }
-  ],
   "openai-qwen-oauth": [
     {
       "customName": "Qwen OAuth节点",
