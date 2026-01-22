@@ -34,6 +34,8 @@
 > <details>
 > <summary>Click to expand detailed version history</summary>
 >
+> - **2026.01.22** - Added Orchids protocol support, accessing Claude Sonnet 4.5, Claude Opus 4.5, Gemini 3 Flash, GPT-5.2 and more via Clerk OAuth authentication, with WebSocket streaming and tool calling support
+> - **2026.01.15** - Optimized provider pool manager: added async refresh queue mechanism, buffer queue deduplication, global concurrency control, node warmup and automatic expiry detection
 > - **2026.01.07** - Added iFlow protocol support, enabling access to Qwen, Kimi, DeepSeek, and GLM series models via OAuth authentication with automatic token refresh
 > - **2026.01.03** - Added theme switching functionality and optimized provider pool initialization, removed the fallback strategy of using provider default configuration
 > - **2025.12.30** - Added main process management and automatic update functionality
@@ -247,6 +249,20 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Best Practice**: Recommended to use with **Claude Code** for optimal experience
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
+#### Orchids OAuth Configuration
+1. **Login to Platform**: Visit [Orchids Platform](https://orchids.app) and log in to your account
+2. **Get Credentials**: Open browser developer tools (F12), navigate to Application > Cookies > https://orchids.app
+3. **Copy Token**: Find `__client` and copy its value (a long JWT string)
+4. **Import Credentials**: Use the "Import Token" function in Web UI to paste the value
+5. **Supported Models**: Claude Sonnet 4.5, Claude Opus 4.5, Gemini 3 Flash, GPT-5.2, etc.
+
+#### iFlow OAuth Configuration
+1. **First Authorization**: In Web UI's "Configuration" or "Provider Pools" page, click the "Generate Authorization" button for iFlow
+2. **Phone Login**: The system will open the iFlow authorization page, complete login verification using your phone number
+3. **Auto Save**: After successful authorization, the system will automatically obtain the API Key and save credentials
+4. **Supported Models**: Qwen3 series, Kimi K2, DeepSeek V3/R1, GLM-4.6/4.7, etc.
+5. **Auto Refresh**: The system will automatically refresh tokens when they are about to expire, no manual intervention required
+
 #### Account Pool Management Configuration
 1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./configs/provider_pools.json.example)
 2. **Configure Pool Parameters**: Set `PROVIDER_POOLS_FILE_PATH` in `configs/config.json` to point to the pool configuration file
@@ -268,6 +284,8 @@ Default storage locations for authorization credential files of each service:
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
+| **Orchids** | `configs/orchids/{timestamp}_orchids_creds.json` | Orchids Clerk JWT credentials (supports Claude 4.5, GPT-5.2) |
+| **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth credentials (supports Qwen, Kimi, DeepSeek, GLM) |
 
 > **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
 

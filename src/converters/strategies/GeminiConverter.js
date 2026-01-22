@@ -27,6 +27,136 @@ import {
 } from '../../providers/openai/openai-responses-core.mjs';
 
 /**
+ * [FIX] 参考 ag/response.rs 和 ag/streaming.rs 的 remap_function_call_args 函数
+ * 修复 Gemini 返回的工具参数名称问题
+ * Gemini 有时会使用不同的参数名称，需要映射到 Claude Code 期望的格式
+ */
+function remapFunctionCallArgs(toolName, args) {
+    if (!args || typeof args !== 'object') return args;
+    
+    const remappedArgs = { ...args };
+    const toolNameLower = toolName.toLowerCase();
+    
+    // [IMPORTANT] Claude Code CLI 的 EnterPlanMode 工具禁止携带任何参数
+    if (toolName === 'EnterPlanMode') {
+        return {};
+    }
+    
+    switch (toolNameLower) {
+        case 'grep':
+        case 'search':
+        case 'search_code_definitions':
+        case 'search_code_snippets':
+            // [FIX] Gemini hallucination: maps parameter description to "description" field
+            if (remappedArgs.description && !remappedArgs.pattern) {
+                remappedArgs.pattern = remappedArgs.description;
+                delete remappedArgs.description;
+            }
+            
+            // Gemini uses "query", Claude Code expects "pattern"
+            if (remappedArgs.query && !remappedArgs.pattern) {
+                remappedArgs.pattern = remappedArgs.query;
+                delete remappedArgs.query;
+            }
+            
+            // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
+            if (!remappedArgs.path) {
+                if (remappedArgs.paths) {
+                    if (Array.isArray(remappedArgs.paths)) {
+                        remappedArgs.path = remappedArgs.paths[0] || '.';
+                    } else if (typeof remappedArgs.paths === 'string') {
+                        remappedArgs.path = remappedArgs.paths;
+                    } else {
+                        remappedArgs.path = '.';
+                    }
+                    delete remappedArgs.paths;
+                } else {
+                    // Default to current directory if missing
+                    remappedArgs.path = '.';
+                }
+            }
+            // Note: We keep "-n" and "output_mode" if present as they are valid in Grep schema
+            break;
+            
+        case 'glob':
+            // [FIX] Gemini hallucination: maps parameter description to "description" field
+            if (remappedArgs.description && !remappedArgs.pattern) {
+                remappedArgs.pattern = remappedArgs.description;
+                delete remappedArgs.description;
+            }
+            
+            // Gemini uses "query", Claude Code expects "pattern"
+            if (remappedArgs.query && !remappedArgs.pattern) {
+                remappedArgs.pattern = remappedArgs.query;
+                delete remappedArgs.query;
+            }
+            
+            // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
+            // [NOTE] 与 grep 不同，glob 不添加默认 path（参考 Rust 代码）
+            if (!remappedArgs.path) {
+                if (remappedArgs.paths) {
+                    if (Array.isArray(remappedArgs.paths)) {
+                        remappedArgs.path = remappedArgs.paths[0] || '.';
+                    } else if (typeof remappedArgs.paths === 'string') {
+                        remappedArgs.path = remappedArgs.paths;
+                    } else {
+                        remappedArgs.path = '.';
+                    }
+                    delete remappedArgs.paths;
+                }
+                // [FIX] glob 不添加默认 path，与 Rust 代码保持一致
+            }
+            break;
+            
+        case 'read':
+            // Gemini might use "path" vs "file_path"
+            if (remappedArgs.path && !remappedArgs.file_path) {
+                remappedArgs.file_path = remappedArgs.path;
+                delete remappedArgs.path;
+            }
+            break;
+            
+        case 'ls':
+            // LS tool: ensure "path" parameter exists
+            if (!remappedArgs.path) {
+                remappedArgs.path = '.';
+            }
+            break;
+            
+        default:
+            // [NEW] [Issue #785] Generic Property Mapping for all tools
+            // If a tool has "paths" (array of 1) but no "path", convert it.
+            // [FIX] 与 Rust 代码保持一致：只在 paths.length === 1 时转换，不删除原始 paths
+            if (!remappedArgs.path && remappedArgs.paths) {
+                if (Array.isArray(remappedArgs.paths) && remappedArgs.paths.length === 1) {
+                    const pathValue = remappedArgs.paths[0];
+                    if (typeof pathValue === 'string') {
+                        remappedArgs.path = pathValue;
+                        // [FIX] Rust 代码中不删除 paths，这里也不删除
+                    }
+                }
+            }
+            break;
+    }
+    
+    return remappedArgs;
+}
+
+/**
+ * [FIX] 规范化工具名称
+ * Gemini 有时会返回 "search" 而不是 "Grep"
+ */
+function normalizeToolName(name) {
+    if (!name) return name;
+    
+    const nameLower = name.toLowerCase();
+    if (nameLower === 'search') {
+        return 'Grep';
+    }
+    return name;
+}
+
+/**
  * Gemini转换器类
  * 实现Gemini协议到其他协议的转换
  */
@@ -511,19 +641,94 @@ export class GeminiConverter extends BaseConverter {
             if (candidate) {
                 const parts = candidate.content?.parts;
                 
-                // 提取文本内容
+                // [FIX] 参考 ag/streaming.rs 处理 thinking 和 text 块
                 if (parts && Array.isArray(parts)) {
-                    const textParts = parts.filter(part => part && typeof part.text === 'string');
-                    if (textParts.length > 0) {
-                        const text = textParts.map(part => part.text).join('');
-                        return {
-                            type: "content_block_delta",
-                            index: 0,
-                            delta: {
-                                type: "text_delta",
-                                text: text
+                    const results = [];
+                    
+                    for (const part of parts) {
+                        if (!part) continue;
+                        
+                        if (typeof part.text === 'string') {
+                            if (part.thought === true) {
+                                // [FIX] 这是一个 thinking 块
+                                const thinkingResult = {
+                                    type: "content_block_delta",
+                                    index: 0,
+                                    delta: {
+                                        type: "thinking_delta",
+                                        thinking: part.text
+                                    }
+                                };
+                                results.push(thinkingResult);
+                                
+                                // 如果有签名，发送 signature_delta
+                                if (part.thoughtSignature) {
+                                    let signature = part.thoughtSignature;
+                                    try {
+                                        const decoded = Buffer.from(signature, 'base64').toString('utf-8');
+                                        if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
+                                            signature = decoded;
+                                        }
+                                    } catch (e) {
+                                        // 解码失败，保持原样
+                                    }
+                                    results.push({
+                                        type: "content_block_delta",
+                                        index: 0,
+                                        delta: {
+                                            type: "signature_delta",
+                                            signature: signature
+                                        }
+                                    });
+                                }
+                            } else {
+                                // 普通文本
+                                results.push({
+                                    type: "content_block_delta",
+                                    index: 0,
+                                    delta: {
+                                        type: "text_delta",
+                                        text: part.text
+                                    }
+                                });
                             }
-                        };
+                        }
+                        
+                        // [FIX] 处理 functionCall
+                        if (part.functionCall) {
+                            // [FIX] 规范化工具名称和参数映射
+                            const toolName = normalizeToolName(part.functionCall.name);
+                            const remappedArgs = remapFunctionCallArgs(toolName, part.functionCall.args || {});
+                            
+                            // 发送 tool_use 开始
+                            const toolId = part.functionCall.id || `${toolName}-${uuidv4().split('-')[0]}`;
+                            results.push({
+                                type: "content_block_start",
+                                index: 0,
+                                content_block: {
+                                    type: "tool_use",
+                                    id: toolId,
+                                    name: toolName,
+                                    input: {}
+                                }
+                            });
+                            // 发送参数
+                            results.push({
+                                type: "content_block_delta",
+                                index: 0,
+                                delta: {
+                                    type: "input_json_delta",
+                                    partial_json: JSON.stringify(remappedArgs)
+                                }
+                            });
+                        }
+                    }
+                    
+                    // 如果有多个结果，返回数组；否则返回单个或 null
+                    if (results.length > 1) {
+                        return results;
+                    } else if (results.length === 1) {
+                        return results[0];
                     }
                 }
                 
@@ -595,11 +800,38 @@ export class GeminiConverter extends BaseConverter {
         parts.forEach(part => {
             if (!part) return;
 
+            // [FIX] 参考 ag/response.rs 处理 thinking 块
+            // Gemini 使用 thought: true 和 thoughtSignature 表示思考内容
             if (part.text) {
-                content.push({
-                    type: 'text',
-                    text: part.text
-                });
+                if (part.thought === true) {
+                    // 这是一个 thinking 块
+                    const thinkingBlock = {
+                        type: 'thinking',
+                        thinking: part.text
+                    };
+                    // 处理签名 - 可能是 Base64 编码的
+                    if (part.thoughtSignature) {
+                        let signature = part.thoughtSignature;
+                        // 尝试 Base64 解码
+                        try {
+                            const decoded = Buffer.from(signature, 'base64').toString('utf-8');
+                            // 检查解码后是否是有效的 UTF-8 字符串
+                            if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
+                                signature = decoded;
+                            }
+                        } catch (e) {
+                            // 解码失败，保持原样
+                        }
+                        thinkingBlock.signature = signature;
+                    }
+                    content.push(thinkingBlock);
+                } else {
+                    // 普通文本
+                    content.push({
+                        type: 'text',
+                        text: part.text
+                    });
+                }
             }
 
             if (part.inlineData) {
@@ -614,19 +846,44 @@ export class GeminiConverter extends BaseConverter {
             }
 
             if (part.functionCall) {
-                content.push({
+                // [FIX] 规范化工具名称和参数映射
+                const toolName = normalizeToolName(part.functionCall.name);
+                const remappedArgs = remapFunctionCallArgs(toolName, part.functionCall.args || {});
+                
+                // [FIX] 使用 Gemini 提供的 id，如果没有则生成
+                const toolUseBlock = {
                     type: 'tool_use',
-                    id: uuidv4(),
-                    name: part.functionCall.name,
-                    input: part.functionCall.args || {}
-                });
+                    id: part.functionCall.id || `${toolName}-${uuidv4().split('-')[0]}`,
+                    name: toolName,
+                    input: remappedArgs
+                };
+                // [FIX] 如果有签名，添加到 tool_use 块
+                if (part.thoughtSignature) {
+                    let signature = part.thoughtSignature;
+                    try {
+                        const decoded = Buffer.from(signature, 'base64').toString('utf-8');
+                        if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
+                            signature = decoded;
+                        }
+                    } catch (e) {
+                        // 解码失败，保持原样
+                    }
+                    toolUseBlock.signature = signature;
+                }
+                content.push(toolUseBlock);
             }
 
             if (part.functionResponse) {
+                // [FIX] 正确处理 functionResponse
+                let responseContent = part.functionResponse.response;
+                // 如果 response 是对象且有 result 字段，提取它
+                if (responseContent && typeof responseContent === 'object' && responseContent.result !== undefined) {
+                    responseContent = responseContent.result;
+                }
                 content.push({
                     type: 'tool_result',
                     tool_use_id: part.functionResponse.name,
-                    content: part.functionResponse.response
+                    content: typeof responseContent === 'string' ? responseContent : JSON.stringify(responseContent)
                 });
             }
         });
@@ -641,6 +898,7 @@ export class GeminiConverter extends BaseConverter {
         if (!geminiResponse || !geminiResponse.candidates || geminiResponse.candidates.length === 0) return [];
 
         const content = [];
+        let hasToolUse = false;
 
         for (const candidate of geminiResponse.candidates) {
             if (candidate.finishReason && candidate.finishReason !== 'STOP') {
@@ -655,11 +913,35 @@ export class GeminiConverter extends BaseConverter {
 
             if (candidate.content && candidate.content.parts) {
                 for (const part of candidate.content.parts) {
+                    // [FIX] 参考 ag/response.rs 处理 thinking 块
                     if (part.text) {
-                        content.push({
-                            type: 'text',
-                            text: part.text
-                        });
+                        if (part.thought === true) {
+                            // 这是一个 thinking 块
+                            const thinkingBlock = {
+                                type: 'thinking',
+                                thinking: part.text
+                            };
+                            // 处理签名
+                            if (part.thoughtSignature) {
+                                let signature = part.thoughtSignature;
+                                try {
+                                    const decoded = Buffer.from(signature, 'base64').toString('utf-8');
+                                    if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
+                                        signature = decoded;
+                                    }
+                                } catch (e) {
+                                    // 解码失败，保持原样
+                                }
+                                thinkingBlock.signature = signature;
+                            }
+                            content.push(thinkingBlock);
+                        } else {
+                            // 普通文本
+                            content.push({
+                                type: 'text',
+                                text: part.text
+                            });
+                        }
                     } else if (part.inlineData) {
                         content.push({
                             type: 'image',
@@ -670,12 +952,32 @@ export class GeminiConverter extends BaseConverter {
                             }
                         });
                     } else if (part.functionCall) {
-                        content.push({
+                        hasToolUse = true;
+                        // [FIX] 规范化工具名称和参数映射
+                        const toolName = normalizeToolName(part.functionCall.name);
+                        const remappedArgs = remapFunctionCallArgs(toolName, part.functionCall.args || {});
+                        
+                        // [FIX] 使用 Gemini 提供的 id
+                        const toolUseBlock = {
                             type: 'tool_use',
-                            id: uuidv4(),
-                            name: part.functionCall.name,
-                            input: part.functionCall.args || {}
-                        });
+                            id: part.functionCall.id || `${toolName}-${uuidv4().split('-')[0]}`,
+                            name: toolName,
+                            input: remappedArgs
+                        };
+                        // 添加签名（如果存在）
+                        if (part.thoughtSignature) {
+                            let signature = part.thoughtSignature;
+                            try {
+                                const decoded = Buffer.from(signature, 'base64').toString('utf-8');
+                                if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
+                                    signature = decoded;
+                                }
+                            } catch (e) {
+                                // 解码失败，保持原样
+                            }
+                            toolUseBlock.signature = signature;
+                        }
+                        content.push(toolUseBlock);
                     }
                 }
             }

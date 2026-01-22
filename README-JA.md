@@ -34,6 +34,8 @@
 > <details>
 > <summary>クリックして詳細なバージョン履歴を展開</summary>
 >
+> - **2026.01.22** - Orchidsプロトコルサポートの追加、Clerk OAuth認証でClaude Sonnet 4.5、Claude Opus 4.5、Gemini 3 Flash、GPT-5.2などのモデルにアクセス可能、WebSocketストリーミングとツール呼び出しをサポート
+> - **2026.01.15** - プロバイダープールマネージャーの最適化：非同期リフレッシュキューメカニズム、バッファキュー重複排除、グローバル並行制御、ノードウォームアップと自動期限切れ検出を追加
 > - **2026.01.07** - iFlowプロトコルサポートの追加、OAuth認証方式でQwen、Kimi、DeepSeek、GLMシリーズモデルにアクセス可能、自動トークンリフレッシュ機能をサポート
 > - **2026.01.03** - テーマ切替機能を追加し、プロバイダープール初期化を最適化、プロバイダーのデフォルト設定を使用するフォールバック戦略を削除
 > - **2025.12.30** - メインプロセス管理と自動更新機能を追加
@@ -247,6 +249,20 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 3. **ベストプラクティス**：**Claude Code**との併用を推奨、最適な体験を得られる
 4. **重要なお知らせ**：Kiroサービス使用ポリシーが更新されました、最新の使用制限と条件については公式ウェブサイトをご確認ください。
 
+#### Orchids OAuth設定
+1. **プラットフォームにログイン**：[Orchidsプラットフォーム](https://orchids.app)にアクセスしてアカウントにログイン
+2. **認証情報を取得**：ブラウザの開発者ツール（F12）を開き、Application > Cookies > https://orchids.app に移動
+3. **トークンをコピー**：`__client` を見つけてその値（長いJWT文字列）をコピー
+4. **認証情報をインポート**：Web UIの「トークンをインポート」機能を使用して値を貼り付け
+5. **サポートモデル**：Claude Sonnet 4.5、Claude Opus 4.5、Gemini 3 Flash、GPT-5.2など
+
+#### iFlow OAuth設定
+1. **初回認証**：Web UIの「設定管理」または「プロバイダープール」ページで、iFlowの「認証生成」ボタンをクリック
+2. **電話番号ログイン**：システムがiFlow認証ページを開き、電話番号でログイン認証を完了
+3. **自動保存**：認証成功後、システムは自動的にAPI Keyを取得し認証情報を保存
+4. **サポートモデル**：Qwen3シリーズ、Kimi K2、DeepSeek V3/R1、GLM-4.6/4.7など
+5. **自動リフレッシュ**：システムはトークンの期限切れが近づくと自動的にリフレッシュ、手動介入不要
+
 #### アカウントプール管理設定
 1. **プール設定ファイルの作成**：[provider_pools.json.example](./configs/provider_pools.json.example) を参考に設定ファイルを作成します
 2. **プールパラメータの設定**：config.json で `PROVIDER_POOLS_FILE_PATH` を設定し、プール設定ファイルを指定します
@@ -268,6 +284,8 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro認証トークン |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth認証情報 |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 (Claude 4.5 Opus サポート) |
+| **Orchids** | `configs/orchids/{timestamp}_orchids_creds.json` | Orchids Clerk JWT認証情報 (Claude 4.5、GPT-5.2 サポート) |
+| **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth認証情報 (Qwen、Kimi、DeepSeek、GLM サポート) |
 
 > **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
 
