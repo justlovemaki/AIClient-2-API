@@ -815,6 +815,31 @@ export class ClaudeConverter extends BaseConverter {
                                     parts.push({ text: block.text });
                                 }
                                 break;
+                            
+                            // [FIX] 参考 ag/request.rs 添加 thinking 块处理
+                            case 'thinking':
+                                if (typeof block.thinking === 'string' && block.thinking.length > 0) {
+                                    const thinkingPart = {
+                                        text: block.thinking,
+                                        thought: true
+                                    };
+                                    // 如果有签名，添加 thoughtSignature
+                                    if (block.signature && block.signature.length >= 50) {
+                                        thinkingPart.thoughtSignature = block.signature;
+                                    }
+                                    parts.push(thinkingPart);
+                                }
+                                break;
+                            
+                            // [FIX] 处理 redacted_thinking 块
+                            case 'redacted_thinking':
+                                // 将 redacted_thinking 转换为普通文本
+                                if (block.data) {
+                                    parts.push({ 
+                                        text: `[Redacted Thinking: ${block.data}]` 
+                                    });
+                                }
+                                break;
                                 
                             case 'tool_use':
                                 // 转换为 Gemini functionCall 格式
@@ -852,20 +877,40 @@ export class ClaudeConverter extends BaseConverter {
                                 
                             case 'tool_result':
                                 // 转换为 Gemini functionResponse 格式
+                                // [FIX] 参考 ag/request.rs 的实现，正确处理 tool_use_id 到函数名的映射
                                 const toolCallId = block.tool_use_id;
                                 if (toolCallId) {
-                                    // 从 tool_use_id 中提取函数名
-                                    // 格式通常是 "funcName-uuid" 或直接是函数名
+                                    // 尝试从之前的 tool_use 块中查找对应的函数名
+                                    // 如果找不到，则从 tool_use_id 中提取
                                     let funcName = toolCallId;
-                                    const toolCallIdParts = toolCallId.split('-');
-                                    if (toolCallIdParts.length > 1) {
-                                        // 移除最后一个部分（UUID），保留函数名
-                                        funcName = toolCallIdParts.slice(0, -1).join('-');
+                                    
+                                    // 检查是否有缓存的 tool_id -> name 映射
+                                    // 格式通常是 "funcName-uuid" 或 "toolu_xxx"
+                                    if (toolCallId.startsWith('toolu_')) {
+                                        // Claude 格式的 tool_use_id，需要从上下文中查找函数名
+                                        // 这里我们保留原始 ID 作为 name（Gemini 会处理）
+                                        funcName = toolCallId;
+                                    } else {
+                                        const toolCallIdParts = toolCallId.split('-');
+                                        if (toolCallIdParts.length > 1) {
+                                            // 移除最后一个部分（UUID），保留函数名
+                                            funcName = toolCallIdParts.slice(0, -1).join('-');
+                                        }
                                     }
                                     
                                     // 获取响应数据
                                     let responseData = block.content;
-                                    if (typeof responseData !== 'string') {
+                                    
+                                    // [FIX] 参考 ag/request.rs 的 tool_result_compressor 逻辑
+                                    // 处理嵌套的 content 数组（如图片等）
+                                    if (Array.isArray(responseData)) {
+                                        // 提取文本内容
+                                        const textParts = responseData
+                                            .filter(item => item && item.type === 'text')
+                                            .map(item => item.text)
+                                            .join('\n');
+                                        responseData = textParts || JSON.stringify(responseData);
+                                    } else if (typeof responseData !== 'string') {
                                         responseData = JSON.stringify(responseData);
                                     }
                                     
@@ -1057,13 +1102,38 @@ export class ClaudeConverter extends BaseConverter {
                     }
                     break;
 
+                // [FIX] 参考 ag/response.rs 添加 thinking 块处理
+                case 'thinking':
+                    if (block.thinking) {
+                        const thinkingPart = {
+                            text: block.thinking,
+                            thought: true
+                        };
+                        // 如果有签名，添加 thoughtSignature
+                        if (block.signature && block.signature.length >= 50) {
+                            thinkingPart.thoughtSignature = block.signature;
+                        }
+                        parts.push(thinkingPart);
+                    }
+                    break;
+
                 case 'tool_use':
-                    parts.push({
+                    // [FIX] 添加 id 和 thoughtSignature 支持
+                    const functionCallPart = {
                         functionCall: {
                             name: block.name,
                             args: block.input || {}
                         }
-                    });
+                    };
+                    // 添加 id（如果存在）
+                    if (block.id) {
+                        functionCallPart.functionCall.id = block.id;
+                    }
+                    // 添加签名（如果存在）
+                    if (block.signature && block.signature.length >= 50) {
+                        functionCallPart.thoughtSignature = block.signature;
+                    }
+                    parts.push(functionCallPart);
                     break;
 
                 case 'image':
@@ -1125,6 +1195,32 @@ export class ClaudeConverter extends BaseConverter {
 
         // 处理Claude流式事件
         if (typeof claudeChunk === 'object' && !Array.isArray(claudeChunk)) {
+            // content_block_start 事件 - 处理 thinking 块开始
+            if (claudeChunk.type === 'content_block_start') {
+                const contentBlock = claudeChunk.content_block;
+                if (contentBlock && contentBlock.type === 'thinking') {
+                    // thinking 块开始，返回空（等待 delta）
+                    return null;
+                }
+                if (contentBlock && contentBlock.type === 'tool_use') {
+                    // tool_use 块开始
+                    return {
+                        candidates: [{
+                            content: {
+                                role: "model",
+                                parts: [{
+                                    functionCall: {
+                                        name: contentBlock.name,
+                                        args: {},
+                                        id: contentBlock.id
+                                    }
+                                }]
+                            }
+                        }]
+                    };
+                }
+            }
+            
             // content_block_delta 事件
             if (claudeChunk.type === 'content_block_delta') {
                 const delta = claudeChunk.delta;
@@ -1143,18 +1239,32 @@ export class ClaudeConverter extends BaseConverter {
                     };
                 }
                 
-                // 处理 thinking_delta - 映射为文本
+                // [FIX] 处理 thinking_delta - 转换为 Gemini 的 thought 格式
                 if (delta && delta.type === 'thinking_delta') {
                     return {
                         candidates: [{
                             content: {
                                 role: "model",
                                 parts: [{
-                                    text: delta.thinking || ""
+                                    text: delta.thinking || "",
+                                    thought: true
                                 }]
                             }
                         }]
                     };
+                }
+                
+                // [FIX] 处理 signature_delta
+                if (delta && delta.type === 'signature_delta') {
+                    // 签名通常与前一个 thinking 块关联
+                    // 在流式场景中，我们可以忽略或记录
+                    return null;
+                }
+                
+                // [FIX] 处理 input_json_delta (tool arguments)
+                if (delta && delta.type === 'input_json_delta') {
+                    // 工具参数增量，Gemini 不支持增量参数，忽略
+                    return null;
                 }
             }
             
@@ -1165,6 +1275,7 @@ export class ClaudeConverter extends BaseConverter {
                     candidates: [{
                         finishReason: stopReason === 'end_turn' ? 'STOP' :
                                     stopReason === 'max_tokens' ? 'MAX_TOKENS' :
+                                    stopReason === 'tool_use' ? 'STOP' :
                                     'OTHER'
                     }]
                 };
