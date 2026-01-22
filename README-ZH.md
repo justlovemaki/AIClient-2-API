@@ -34,7 +34,6 @@
 > <details>
 > <summary>点击展开查看详细版本历史</summary>
 >
-> - **2026.01.22** - 新增 Orchids 协议支持，通过 Clerk OAuth 认证访问 Claude Sonnet 4.5、Claude Opus 4.5、Gemini 3 Flash、GPT-5.2 等模型，支持 WebSocket 流式传输和工具调用
 > - **2026.01.15** - 优化提供商池管理器：新增异步刷新队列机制、缓冲队列去重、全局并发控制，支持节点预热和自动过期检测
 > - **2026.01.07** - 新增 iFlow 协议支持，通过 OAuth 认证方式访问 Qwen、Kimi、DeepSeek 和 GLM 系列模型，支持自动 token 刷新功能
 > - **2026.01.03** - 新增主题切换功能并优化提供商池初始化，移除使用提供商默认配置的降级策略
@@ -248,13 +247,6 @@ docker compose up -d
 3. **最佳实践**：推荐配合 **Claude Code** 使用，可获得最优体验
 4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
 
-#### Orchids OAuth 配置
-1. **登录平台**：访问 [Orchids 平台](https://orchids.app) 并登录账号
-2. **获取凭据**：打开浏览器开发者工具 (F12)，切换到 Application > Cookies > https://orchids.app
-3. **复制 Token**：找到 `__client` 并复制其值（一个长的 JWT 字符串）
-4. **导入凭据**：在 Web UI 中使用"导入 Token"功能粘贴该值
-5. **支持模型**：Claude Sonnet 4.5、Claude Opus 4.5、Gemini 3 Flash、GPT-5.2 等
-
 #### iFlow OAuth 配置
 1. **首次授权**：在 Web UI 的"配置管理"或"提供商池"页面，点击 iFlow 的"生成授权"按钮
 2. **手机登录**：系统将打开 iFlow 授权页面，使用手机号完成登录验证
@@ -283,7 +275,6 @@ docker compose up -d
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro 认证令牌 |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth 凭据 |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth 凭据 (支持 Claude 4.5 Opus) |
-| **Orchids** | `configs/orchids/{timestamp}_orchids_creds.json` | Orchids Clerk JWT 凭据 (支持 Claude 4.5、GPT-5.2) |
 | **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth 凭据 (支持 Qwen、Kimi、DeepSeek、GLM) |
 
 > **说明**：`~` 表示用户主目录（Windows: `C:\Users\用户名`，Linux/macOS: `/home/用户名` 或 `/Users/用户名`）

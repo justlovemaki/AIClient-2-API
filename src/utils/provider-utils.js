@@ -67,17 +67,6 @@ export const PROVIDER_MAPPINGS = [
         urlKeys: ['IFLOW_BASE_URL']
     },
     {
-        // Orchids OAuth 配置
-        dirName: 'orchids',
-        patterns: ['configs/orchids/', '/orchids/'],
-        providerType: 'claude-orchids-oauth',
-        credPathKey: 'ORCHIDS_CREDS_FILE_PATH',
-        defaultCheckModel: 'claude-sonnet-4-5',
-        displayName: 'Orchids OAuth',
-        needsProjectId: false,
-        urlKeys: ['ORCHIDS_BASE_URL']
-    },
-    {
         // Codex OAuth 配置
         dirName: 'codex',
         patterns: ['configs/codex/', '/codex/'],

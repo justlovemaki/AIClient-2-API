@@ -585,11 +585,14 @@ export class GeminiConverter extends BaseConverter {
         }
 
         const candidate = geminiResponse.candidates[0];
-        const content = this.processGeminiResponseToClaudeContent(geminiResponse);
+        const { content, hasToolUse } = this.processGeminiResponseToClaudeContent(geminiResponse);
         const finishReason = candidate.finishReason;
         let stopReason = "end_turn";
 
-        if (finishReason) {
+        // [FIX] 参考 ag/response.rs - 如果有工具调用，stop_reason 应该是 "tool_use"
+        if (hasToolUse) {
+            stopReason = 'tool_use';
+        } else if (finishReason) {
             switch (finishReason) {
                 case 'STOP':
                     stopReason = 'end_turn';
@@ -644,6 +647,7 @@ export class GeminiConverter extends BaseConverter {
                 // [FIX] 参考 ag/streaming.rs 处理 thinking 和 text 块
                 if (parts && Array.isArray(parts)) {
                     const results = [];
+                    let hasToolUse = false;
                     
                     for (const part of parts) {
                         if (!part) continue;
@@ -662,8 +666,10 @@ export class GeminiConverter extends BaseConverter {
                                 results.push(thinkingResult);
                                 
                                 // 如果有签名，发送 signature_delta
-                                if (part.thoughtSignature) {
-                                    let signature = part.thoughtSignature;
+                                // [FIX] 同时检查 thoughtSignature 和 thought_signature
+                                const rawSignature = part.thoughtSignature || part.thought_signature;
+                                if (rawSignature) {
+                                    let signature = rawSignature;
                                     try {
                                         const decoded = Buffer.from(signature, 'base64').toString('utf-8');
                                         if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
@@ -696,6 +702,7 @@ export class GeminiConverter extends BaseConverter {
                         
                         // [FIX] 处理 functionCall
                         if (part.functionCall) {
+                            hasToolUse = true;
                             // [FIX] 规范化工具名称和参数映射
                             const toolName = normalizeToolName(part.functionCall.name);
                             const remappedArgs = remapFunctionCallArgs(toolName, part.functionCall.args || {});
@@ -722,6 +729,25 @@ export class GeminiConverter extends BaseConverter {
                                 }
                             });
                         }
+                    }
+                    
+                    // [FIX] 如果有工具调用，添加 message_delta 事件设置 stop_reason 为 tool_use
+                    if (hasToolUse && candidate.finishReason) {
+                        const messageDelta = {
+                            type: "message_delta",
+                            delta: {
+                                stop_reason: 'tool_use'
+                            }
+                        };
+                        if (geminiChunk.usageMetadata) {
+                            messageDelta.usage = {
+                                input_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
+                                cache_creation_input_tokens: 0,
+                                cache_read_input_tokens: geminiChunk.usageMetadata.cachedContentTokenCount || 0,
+                                output_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0
+                            };
+                        }
+                        results.push(messageDelta);
                     }
                     
                     // 如果有多个结果，返回数组；否则返回单个或 null
@@ -802,6 +828,7 @@ export class GeminiConverter extends BaseConverter {
 
             // [FIX] 参考 ag/response.rs 处理 thinking 块
             // Gemini 使用 thought: true 和 thoughtSignature 表示思考内容
+            // [FIX] 同时支持 thoughtSignature 和 thought_signature（Gemini CLI 可能使用下划线格式）
             if (part.text) {
                 if (part.thought === true) {
                     // 这是一个 thinking 块
@@ -810,8 +837,10 @@ export class GeminiConverter extends BaseConverter {
                         thinking: part.text
                     };
                     // 处理签名 - 可能是 Base64 编码的
-                    if (part.thoughtSignature) {
-                        let signature = part.thoughtSignature;
+                    // [FIX] 同时检查 thoughtSignature 和 thought_signature
+                    const rawSignature = part.thoughtSignature || part.thought_signature;
+                    if (rawSignature) {
+                        let signature = rawSignature;
                         // 尝试 Base64 解码
                         try {
                             const decoded = Buffer.from(signature, 'base64').toString('utf-8');
@@ -858,8 +887,10 @@ export class GeminiConverter extends BaseConverter {
                     input: remappedArgs
                 };
                 // [FIX] 如果有签名，添加到 tool_use 块
-                if (part.thoughtSignature) {
-                    let signature = part.thoughtSignature;
+                // [FIX] 同时检查 thoughtSignature 和 thought_signature
+                const rawSignature = part.thoughtSignature || part.thought_signature;
+                if (rawSignature) {
+                    let signature = rawSignature;
                     try {
                         const decoded = Buffer.from(signature, 'base64').toString('utf-8');
                         if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
@@ -893,9 +924,12 @@ export class GeminiConverter extends BaseConverter {
 
     /**
      * 处理Gemini响应到Claude内容
+     * @returns {{ content: Array, hasToolUse: boolean }}
      */
     processGeminiResponseToClaudeContent(geminiResponse) {
-        if (!geminiResponse || !geminiResponse.candidates || geminiResponse.candidates.length === 0) return [];
+        if (!geminiResponse || !geminiResponse.candidates || geminiResponse.candidates.length === 0) {
+            return { content: [], hasToolUse: false };
+        }
 
         const content = [];
         let hasToolUse = false;
@@ -922,8 +956,10 @@ export class GeminiConverter extends BaseConverter {
                                 thinking: part.text
                             };
                             // 处理签名
-                            if (part.thoughtSignature) {
-                                let signature = part.thoughtSignature;
+                            // [FIX] 同时检查 thoughtSignature 和 thought_signature
+                            const rawSignature = part.thoughtSignature || part.thought_signature;
+                            if (rawSignature) {
+                                let signature = rawSignature;
                                 try {
                                     const decoded = Buffer.from(signature, 'base64').toString('utf-8');
                                     if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
@@ -965,8 +1001,10 @@ export class GeminiConverter extends BaseConverter {
                             input: remappedArgs
                         };
                         // 添加签名（如果存在）
-                        if (part.thoughtSignature) {
-                            let signature = part.thoughtSignature;
+                        // [FIX] 同时检查 thoughtSignature 和 thought_signature
+                        const rawSignature = part.thoughtSignature || part.thought_signature;
+                        if (rawSignature) {
+                            let signature = rawSignature;
                             try {
                                 const decoded = Buffer.from(signature, 'base64').toString('utf-8');
                                 if (decoded && decoded.length > 0 && !decoded.includes('\ufffd')) {
@@ -983,7 +1021,7 @@ export class GeminiConverter extends BaseConverter {
             }
         }
 
-        return content;
+        return { content, hasToolUse };
     }
 
     // =========================================================================

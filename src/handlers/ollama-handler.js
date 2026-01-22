@@ -22,7 +22,6 @@ export const MODEL_PREFIX_MAP = {
     [MODEL_PROVIDER.QWEN_API]: '[Qwen CLI]',
     [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
     [MODEL_PROVIDER.ANTIGRAVITY]: '[Antigravity]',
-    [MODEL_PROVIDER.ORCHIDS_API]: '[Orchids]',
     [MODEL_PROVIDER.IFLOW_API]: '[iFlow]',
 }
 
@@ -249,7 +248,6 @@ function findProviderByModelName(modelName) {
         MODEL_PROVIDER.GEMINI_CLI,
         MODEL_PROVIDER.ANTIGRAVITY,
         MODEL_PROVIDER.KIRO_API,
-        MODEL_PROVIDER.ORCHIDS_API,
         MODEL_PROVIDER.QWEN_API,
         MODEL_PROVIDER.IFLOW_API
     ];

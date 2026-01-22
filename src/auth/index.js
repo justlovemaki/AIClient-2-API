@@ -30,9 +30,3 @@ export {
     handleIFlowOAuth,
     refreshIFlowTokens
 } from './iflow-oauth.js';
-
-// Orchids OAuth
-export {
-    importOrchidsToken,
-    handleOrchidsOAuth
-} from './orchids-oauth.js';

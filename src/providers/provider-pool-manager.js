@@ -17,7 +17,6 @@ export class ProviderPoolManager {
         'openai-custom': 'gpt-3.5-turbo',
         'claude-custom': 'claude-3-7-sonnet-20250219',
         'claude-kiro-oauth': 'claude-haiku-4-5',
-        'claude-orchids-oauth': 'claude-haiku-4-5',
         'openai-qwen-oauth': 'qwen3-coder-flash',
         'openai-iflow': 'qwen3-coder-plus',
         'openai-codex-oauth': 'gpt-5-codex-mini',
@@ -98,8 +97,6 @@ export class ProviderPoolManager {
                     configPath = config.IFLOW_OAUTH_CREDS_FILE_PATH;
                 } else if (providerType.startsWith('openai-codex')) {
                     configPath = config.CODEX_OAUTH_CREDS_FILE_PATH;
-                } else if (providerType.startsWith('claude-orchids')) {
-                    configPath = config.ORCHIDS_CREDS_FILE_PATH;
                 }
                 
                 // console.log(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
