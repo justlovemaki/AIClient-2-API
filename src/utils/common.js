@@ -325,12 +325,17 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            });
-            credentialMarkedUnhealthy = true;
+            // 400 报错码通常是请求参数问题，不记录为提供商错误
+            if (status === 400) {
+                console.log(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
+            } else {
+                console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
+                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
+                providerPoolManager.markProviderUnhealthy(toProvider, {
+                    uuid: pooluuid
+                });
+                credentialMarkedUnhealthy = true;
+            }
         } else if (credentialMarkedUnhealthy) {
             console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
@@ -458,12 +463,17 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            });
-            credentialMarkedUnhealthy = true;
+            // 400 报错码通常是请求参数问题，不记录为提供商错误
+            if (status === 400) {
+                console.log(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
+            } else {
+                console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
+                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
+                providerPoolManager.markProviderUnhealthy(toProvider, {
+                    uuid: pooluuid
+                });
+                credentialMarkedUnhealthy = true;
+            }
         } else if (credentialMarkedUnhealthy) {
             console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
