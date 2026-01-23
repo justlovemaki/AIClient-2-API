@@ -56,6 +56,7 @@ export const MODEL_PROTOCOL_PREFIX = {
     CLAUDE: 'claude',
     OLLAMA: 'ollama',
     CODEX: 'codex',
+    FORWARD: 'forward',
 }
 
 export const MODEL_PROVIDER = {
@@ -69,6 +70,7 @@ export const MODEL_PROVIDER = {
     QWEN_API: 'openai-qwen-oauth',
     IFLOW_API: 'openai-iflow',
     CODEX_API: 'openai-codex-oauth',
+    FORWARD_API: 'forward-api',
 }
 
 /**
@@ -646,8 +648,9 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
  * @param {Object} CONFIG - The server configuration object.
  * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
  */
-export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, requestPath = null) {
     const originalRequestBody = await getRequestBody(req);
+
     if (!originalRequestBody) {
         throw new Error("Request body is missing for content generation.");
     }
@@ -710,6 +713,12 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
     } else {
         console.log(`[Request Convert] Request format matches backend provider. No conversion needed.`);
+    }
+    
+    // 为 forward provider 添加原始请求路径作为 endpoint
+    if (requestPath && toProvider === MODEL_PROVIDER.FORWARD_API) {
+        console.log(`[Forward API] Request path: ${requestPath}`);
+        processedRequestBody.endpoint = requestPath;
     }
 
     // 3. Apply system prompt from file if configured.

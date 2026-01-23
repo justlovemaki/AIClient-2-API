@@ -72,7 +72,8 @@ export const PROVIDER_MODELS = {
         'gpt-5.1-codex-max',
         'gpt-5.2',
         'gpt-5.2-codex'
-    ]
+    ],
+    'forward-api': []
 };
 
 /**

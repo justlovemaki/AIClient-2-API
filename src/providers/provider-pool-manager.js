@@ -14,13 +14,14 @@ export class ProviderPoolManager {
     static DEFAULT_HEALTH_CHECK_MODELS = {
         'gemini-cli-oauth': 'gemini-2.5-flash',
         'gemini-antigravity': 'gemini-2.5-flash',
-        'openai-custom': 'gpt-3.5-turbo',
+        'openai-custom': 'gpt-4o-mini',
         'claude-custom': 'claude-3-7-sonnet-20250219',
         'claude-kiro-oauth': 'claude-haiku-4-5',
         'openai-qwen-oauth': 'qwen3-coder-flash',
         'openai-iflow': 'qwen3-coder-plus',
         'openai-codex-oauth': 'gpt-5-codex-mini',
-        'openaiResponses-custom': 'gpt-4o-mini'
+        'openaiResponses-custom': 'gpt-4o-mini',
+        'forward-api': 'gpt-4o-mini',
     };
 
     constructor(providerPools, options = {}) {
