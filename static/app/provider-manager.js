@@ -205,18 +205,28 @@ function renderProviders(providers) {
     // 始终显示统计卡片
     if (statsGrid) statsGrid.style.display = 'grid';
     
-    // 定义所有支持的提供商显示顺序
-    const providerDisplayOrder = [
-        'gemini-cli-oauth',
-        'gemini-antigravity',
-        'openai-custom',
-        'claude-custom',
-        'claude-kiro-oauth',
-        'openai-qwen-oauth',
-        'openaiResponses-custom',
-        'openai-iflow',
-        'openai-codex-oauth'
+    // 定义所有支持的提供商配置（顺序、显示名称、是否显示）
+    const providerConfigs = [
+        { id: 'forward-api', name: 'NewAPI', visible: false },
+        { id: 'gemini-cli-oauth', name: 'Gemini CLI OAuth', visible: true },
+        { id: 'gemini-antigravity', name: 'Gemini Antigravity', visible: true },
+        { id: 'openai-custom', name: 'OpenAI Custom', visible: true },
+        { id: 'claude-custom', name: 'Claude Custom', visible: true },
+        { id: 'claude-kiro-oauth', name: 'Claude Kiro OAuth', visible: true },
+        { id: 'openai-qwen-oauth', name: 'OpenAI Qwen OAuth', visible: true },
+        { id: 'openaiResponses-custom', name: 'OpenAI Responses', visible: true },
+        { id: 'openai-iflow', name: 'OpenAI iFlow', visible: true },
+        { id: 'openai-codex-oauth', name: 'OpenAI Codex OAuth', visible: true },
     ];
+    
+    // 提取显示的 ID 顺序
+    const providerDisplayOrder = providerConfigs.filter(c => c.visible !== false).map(c => c.id);
+    
+    // 建立 ID 到配置的映射，方便获取显示名称
+    const configMap = providerConfigs.reduce((map, config) => {
+        map[config.id] = config;
+        return map;
+    }, {});
     
     // 获取所有提供商类型并按指定顺序排序
     // 优先显示预定义的所有提供商类型，即使某些提供商没有数据也要显示
@@ -224,12 +234,15 @@ function renderProviders(providers) {
     if (hasProviders) {
         // 合并预定义类型和实际存在的类型，确保显示所有预定义提供商
         const actualProviderTypes = Object.keys(providers);
+        // 只保留配置中标记为 visible 的，或者不在配置中的（默认显示）
         allProviderTypes = [...new Set([...providerDisplayOrder, ...actualProviderTypes])];
     } else {
         allProviderTypes = providerDisplayOrder;
     }
+
+    // 过滤掉明确设置为不显示的提供商
     const sortedProviderTypes = providerDisplayOrder.filter(type => allProviderTypes.includes(type))
-        .concat(allProviderTypes.filter(type => !providerDisplayOrder.includes(type)));
+        .concat(allProviderTypes.filter(type => !providerDisplayOrder.some(t => t === type) && !configMap[type]?.visible === false));
     
     // 计算总统计
     let totalAccounts = 0;
@@ -237,6 +250,11 @@ function renderProviders(providers) {
     
     // 按照排序后的提供商类型渲染
     sortedProviderTypes.forEach((providerType) => {
+        // 如果配置中明确设置为不显示，则跳过
+        if (configMap[providerType] && configMap[providerType].visible === false) {
+            return;
+        }
+
         const accounts = hasProviders ? providers[providerType] || [] : [];
         const providerDiv = document.createElement('div');
         providerDiv.className = 'provider-item';
@@ -275,10 +293,13 @@ function renderProviders(providers) {
         const statusIcon = isEmptyState ? 'fa-info-circle' : (healthyCount === totalCount ? 'fa-check-circle' : 'fa-exclamation-triangle');
         const statusText = isEmptyState ? t('providers.status.empty') : t('providers.status.healthy', { healthy: healthyCount, total: totalCount });
 
+        // 获取显示名称
+        const displayName = configMap[providerType]?.name || providerType;
+
         providerDiv.innerHTML = `
             <div class="provider-header">
                 <div class="provider-name">
-                    <span class="provider-type-text">${providerType}</span>
+                    <span class="provider-type-text">${displayName}</span>
                 </div>
                 <div class="provider-header-right">
                     ${generateAuthButton(providerType)}

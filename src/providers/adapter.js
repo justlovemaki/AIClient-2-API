@@ -7,6 +7,7 @@ import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiServic
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
 import { IFlowApiService } from './openai/iflow-core.js'; // 导入IFlowApiService
 import { CodexApiService } from './openai/codex-core.js'; // 导入CodexApiService
+import { ForwardApiService } from './forward/forward-core.js'; // 导入ForwardApiService
 import { MODEL_PROVIDER } from '../utils/common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -568,6 +569,38 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// Forward API 服务适配器
+export class ForwardApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.forwardApiService = new ForwardApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        return this.forwardApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        yield* this.forwardApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        return this.forwardApiService.listModels();
+    }
+
+    async refreshToken() {
+        return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
+    }
+}
+
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
@@ -605,6 +638,9 @@ export function getServiceAdapter(config) {
                 break;
             case MODEL_PROVIDER.CODEX_API:
                 serviceInstances[providerKey] = new CodexApiServiceAdapter(config);
+                break;
+            case MODEL_PROVIDER.FORWARD_API:
+                serviceInstances[providerKey] = new ForwardApiServiceAdapter(config);
                 break;
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);

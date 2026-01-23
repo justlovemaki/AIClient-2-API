@@ -3,6 +3,7 @@ import { GeminiStrategy } from '../providers/gemini/gemini-strategy.js';
 import { OpenAIStrategy } from '../providers/openai/openai-strategy.js';
 import { ClaudeStrategy } from '../providers/claude/claude-strategy.js';
 import { ResponsesAPIStrategy } from '../providers/openai/openai-responses-strategy.js';
+import { ForwardStrategy } from '../providers/forward/forward-strategy.js';
 
 /**
  * Strategy factory that returns the appropriate strategy instance based on the provider protocol.
@@ -21,6 +22,8 @@ class ProviderStrategyFactory {
             case MODEL_PROTOCOL_PREFIX.CODEX:
                 // Codex 使用 OpenAI 策略（因为它基于 OpenAI 格式）
                 return new OpenAIStrategy();
+            case MODEL_PROTOCOL_PREFIX.FORWARD:
+                return new ForwardStrategy();
             default:
                 throw new Error(`Unsupported provider protocol: ${providerProtocol}`);
         }

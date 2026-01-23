@@ -425,14 +425,16 @@ export async function handleResetProviderHealth(req, res, currentConfig, provide
 
         let resetCount = 0;
         providers.forEach(provider => {
+            // 统计 isHealthy 从 false 变为 true 的节点数量
             if (!provider.isHealthy) {
-                provider.isHealthy = true;
-                provider.errorCount = 0;
-                provider.refreshCount = 0;
-                provider.needsRefresh = false;
-                provider.lastErrorTime = null;
                 resetCount++;
             }
+            // 重置所有节点的状态
+            provider.isHealthy = true;
+            provider.errorCount = 0;
+            provider.refreshCount = 0;
+            provider.needsRefresh = false;
+            provider.lastErrorTime = null;
         });
 
         // Save to file

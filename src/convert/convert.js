@@ -44,6 +44,12 @@ export function convertData(data, type, fromProvider, toProvider, model) {
         const fromProtocol = getProtocolPrefix(fromProvider);
         const toProtocol = getProtocolPrefix(toProvider);
 
+        // 如果目标协议为 forward，直接返回原始数据，无需转换
+        if (toProtocol === MODEL_PROTOCOL_PREFIX.FORWARD || fromProtocol === MODEL_PROTOCOL_PREFIX.FORWARD) {
+            console.log(`[Convert] Target protocol is forward, skipping conversion`);
+            return data;
+        }
+
         // 从工厂获取转换器
         const converter = ConverterFactory.getConverter(fromProtocol);
 

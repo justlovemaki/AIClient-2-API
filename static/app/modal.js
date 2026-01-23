@@ -686,7 +686,8 @@ function getFieldOrder(provider) {
         'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH', 'KIRO_BASE_URL', 'KIRO_REFRESH_URL', 'KIRO_REFRESH_IDC_URL'],
         'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH', 'QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL'],
         'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH', 'ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH'],
-        'openai-iflow': ['IFLOW_OAUTH_CREDS_FILE_PATH', 'IFLOW_BASE_URL']
+        'openai-iflow': ['IFLOW_OAUTH_CREDS_FILE_PATH', 'IFLOW_BASE_URL'],
+        'forward-api': ['FORWARD_API_KEY', 'FORWARD_BASE_URL', 'FORWARD_HEADER_NAME', 'FORWARD_HEADER_VALUE_PREFIX']
     };
     
     // 尝试从全局或当前模态框上下文中推断提供商类型
@@ -706,6 +707,8 @@ function getFieldOrder(provider) {
             providerType = 'gemini-antigravity';
         } else if (provider.IFLOW_OAUTH_CREDS_FILE_PATH) {
             providerType = 'openai-iflow';
+        } else if (provider.FORWARD_API_KEY) {
+            providerType = 'forward-api';
         }
     }
 
