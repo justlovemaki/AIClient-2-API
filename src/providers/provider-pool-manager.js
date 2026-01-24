@@ -50,6 +50,7 @@ export class ProviderPoolManager {
         // 并发控制：每个 providerType 的选择锁
         // 用于确保 selectProvider 的排序 and 更新操作是原子的
         this._selectionLocks = {};
+        this._isSelecting = {}; // 同步标志位锁
 
         // --- V2: 读写分离 and 异步刷新队列 ---
         // 刷新并发控制配置
@@ -69,7 +70,10 @@ export class ProviderPoolManager {
         this.refreshBufferQueues = {}; // 按 providerType 分组的缓冲队列
         this.refreshBufferTimers = {}; // 按 providerType 分组的定时器
         this.bufferDelay = options.globalConfig?.REFRESH_BUFFER_DELAY ?? 5000; // 默认5秒缓冲延迟
-
+        
+        // 用于并发选点时的原子排序辅助（自增序列）
+        this._selectionSequence = 0;
+ 
         this.initializeProviderStatus();
     }
 
@@ -401,34 +405,38 @@ export class ProviderPoolManager {
      * 分数越低，优先级越高
      * @private
      */
-    _calculateNodeScore(providerStatus) {
+    _calculateNodeScore(providerStatus, now = Date.now()) {
         const config = providerStatus.config;
-        const now = Date.now();
         
         // 1. 基础健康分：不健康的排最后
-        if (!config.isHealthy || config.isDisabled) return 1e16; 
+        if (!config.isHealthy || config.isDisabled) return 1e18;
         
         // 2. 预热/刷新分：2分钟内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
-        const isFresh = config.lastHealthCheckTime && 
-                        (now - new Date(config.lastHealthCheckTime).getTime() < 120000) && 
+        const isFresh = config.lastHealthCheckTime &&
+                        (now - new Date(config.lastHealthCheckTime).getTime() < 120000) &&
                         (config.usageCount === 0);
-        if (isFresh) return -1e16;
-
+        if (isFresh) return -2e18; // 极其优先
+ 
         // 3. 权重计算逻辑：
-        // 核心痛点：使用过一次的节点 lastUsed 变成巨大的毫秒时间戳，导致它永远比 lastUsed 为 null (0) 的节点分数高得多。
+        // 改进点：使用 lastUsedTime + usageCount 惩罚 + selectionSequence 惩罚
+        // selectionSequence 用于在同一毫秒内彻底打破平局
         
-        // 改进思路：
-        // a) 统一量级：如果没用过，我们也给它一个相对于“现在”比较旧的时间戳，而不是 0。
-        // b) 或者：使用偏移量而非绝对时间戳。
-        
-        const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 3600000); // 没用过的视为 1 小时前用过
+        const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 86400000); // 没用过的视为 24 小时前用过（更旧）
         const usageCount = config.usageCount || 0;
-        const checkScore = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
-
-        // 分数计算（越小越优先）：
-        // 使用时间戳（升序 -> 越旧越优先） + 使用次数惩罚
-        // usageCount * 60000 表示每多用一次，相当于在时间排队上往后挪 1 分钟
-        return lastUsedTime + (usageCount * 60000) - (checkScore / 1e9);
+        const lastSelectionSeq = config._lastSelectionSeq || 0;
+        
+        // 核心目标：选分最小的。
+        // - lastUsedTime 越久，分越小。
+        // - usageCount 越多，分越大。
+        // - lastSelectionSeq 越大（最近选过），分越大。
+        
+        // usageCount * 10000: 每多用一次，权重增加 10 秒
+        // lastSelectionSeq * 1000: 即使毫秒时间相同，序列号也会让分数产生差异（增加 1 秒权重）
+        // 这样可以确保在毫秒级并发下，刚被选中的节点会立刻排到队列末尾
+        const baseScore = lastUsedTime + (usageCount * 10000);
+        const sequenceScore = lastSelectionSeq * 1000;
+        
+        return baseScore + sequenceScore;
     }
 
     /**
@@ -471,7 +479,10 @@ export class ProviderPoolManager {
         for (const providerType in this.providerPools) {
             this.providerStatus[providerType] = [];
             this.roundRobinIndex[providerType] = 0; // Initialize round-robin index for each type
-            this._selectionLocks[providerType] = Promise.resolve(); // 初始化选择锁
+            // 只有在锁不存在时才初始化，避免在运行中被重置导致并发问题
+            if (!this._selectionLocks[providerType]) {
+                this._selectionLocks[providerType] = Promise.resolve();
+            }
             this.providerPools[providerType].forEach((providerConfig) => {
                 // Ensure initial health and usage stats are present in the config
                 providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
@@ -509,32 +520,33 @@ export class ProviderPoolManager {
      * Currently uses a simple round-robin for healthy providers.
      * If requestedModel is provided, providers that don't support the model will be excluded.
      *
-     * 注意：此方法现在返回 Promise，使用链式锁确保并发安全。
+     * 注意：此方法现在返回 Promise，使用互斥锁确保并发安全。
      *
      * @param {string} providerType - The type of provider to select (e.g., 'gemini-cli', 'openai-custom').
      * @param {string} [requestedModel] - Optional. The model name to filter providers by.
      * @returns {Promise<object|null>} The selected provider's configuration, or null if no healthy provider is found.
      */
-    selectProvider(providerType, requestedModel = null, options = {}) {
+    async selectProvider(providerType, requestedModel = null, options = {}) {
         // 参数校验
         if (!providerType || typeof providerType !== 'string') {
             this._log('error', `Invalid providerType: ${providerType}`);
-            return Promise.resolve(null);
+            return null;
         }
-
-        // 使用链式锁确保同一 providerType 的选择操作串行执行
-        // 这样可以避免并发场景下多个请求选择到同一个 provider
-        const currentLock = this._selectionLocks[providerType] || Promise.resolve();
+ 
+        // 使用标志位 + 异步等待实现更强力的互斥锁
+        // 这种方式能更好地处理同一微任务循环内的并发
+        while (this._isSelecting[providerType]) {
+            await new Promise(resolve => setImmediate(resolve));
+        }
         
-        const selectionPromise = currentLock.then(() => {
+        this._isSelecting[providerType] = true;
+        
+        try {
+            // 在锁内部执行同步选择
             return this._doSelectProvider(providerType, requestedModel, options);
-        });
-        
-        // 更新锁，确保下一个请求等待当前请求完成
-        // 使用 catch 确保即使出错也不会阻塞后续请求
-        this._selectionLocks[providerType] = selectionPromise.catch(() => {});
-        
-        return selectionPromise;
+        } finally {
+            this._isSelecting[providerType] = false;
+        }
     }
 
     /**
@@ -546,6 +558,9 @@ export class ProviderPoolManager {
         
         // 检查并恢复已到恢复时间的提供商
         this._checkAndRecoverScheduledProviders(providerType);
+        
+        // 获取固定时间戳，确保排序过程中一致
+        const now = Date.now();
         
         let availableAndHealthyProviders = availableProviders.filter(p =>
             p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh
@@ -577,13 +592,26 @@ export class ProviderPoolManager {
         }
 
         // 改进：使用统一的评分策略进行选择
+        // 传入当前时间戳 now 确保一致性
         const selected = availableAndHealthyProviders.sort((a, b) => {
-            return this._calculateNodeScore(a) - this._calculateNodeScore(b);
+            const scoreA = this._calculateNodeScore(a, now);
+            const scoreB = this._calculateNodeScore(b, now);
+            if (scoreA !== scoreB) return scoreA - scoreB;
+            // 如果分值相同，使用 UUID 排序确保确定性
+            return a.uuid < b.uuid ? -1 : 1;
         })[0];
 
         // 始终更新 lastUsed（确保 LRU 策略生效，避免并发请求选到同一个 provider）
         // usageCount 只在请求成功后才增加（由 skipUsageCount 控制）
         selected.config.lastUsed = new Date().toISOString();
+        
+        // 更新自增序列号，确保即使毫秒级并发，也能在下一轮排序中被区分开
+        this._selectionSequence++;
+        selected.config._lastSelectionSeq = this._selectionSequence;
+        
+        // 强制打印选中日志，方便排查并发问题
+        this._log('info', `[Concurrency Control] Atomic selection: ${selected.config.uuid} (Seq: ${this._selectionSequence})`);
+
         if (!options.skipUsageCount) {
             selected.config.usageCount++;
         }
