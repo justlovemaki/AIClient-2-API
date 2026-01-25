@@ -20,8 +20,7 @@ class ProviderStrategyFactory {
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
                 return new ClaudeStrategy();
             case MODEL_PROTOCOL_PREFIX.CODEX:
-                // Codex 使用 OpenAI 策略（因为它基于 OpenAI 格式）
-                return new OpenAIStrategy();
+                return new ResponsesAPIStrategy();
             case MODEL_PROTOCOL_PREFIX.FORWARD:
                 return new ForwardStrategy();
             default:

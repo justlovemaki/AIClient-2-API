@@ -130,7 +130,7 @@ export class CodexConverter extends BaseConverter {
             if (msg.role === 'user' || msg.role === 'assistant') {
                 input.push({
                     type: 'message',
-                    role: msg.role,
+                    role: msg.role === 'assistant' ? 'developer' : msg.role,
                     content: this.convertMessageContent(msg.content, msg.role)
                 });
 

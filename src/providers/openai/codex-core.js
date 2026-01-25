@@ -117,12 +117,6 @@ export class CodexApiService {
             }
             logger.info('[Codex] Token expiring soon or refresh requested, refreshing...');
             await this.refreshAccessToken();
-            
-            // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
-            const poolManager = getProviderPoolManager();
-            if (poolManager && this.uuid) {
-                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.CODEX_API, this.uuid);
-            }
         }
     }
 
@@ -239,17 +233,18 @@ export class CodexApiService {
      */
     buildHeaders(cacheId) {
         return {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Openai-Beta': 'responses=experimental',
-            'Version': '0.21.0',
-            'User-Agent': 'codex_cli_rs/0.50.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464',
-            'Originator': 'codex_cli_rs',
-            'Chatgpt-Account-Id': this.accountId,
-            'Accept': 'text/event-stream',
-            'Connection': 'Keep-Alive',
-            'Conversation_id': cacheId,
-            'Session_id': cacheId
+            'version': '0.89.0',
+            'x-codex-beta-features': 'powershell_utf8',
+            'x-oai-web-search-eligible': 'true',
+            'session_id': cacheId,
+            'accept': 'text/event-stream',
+            'authorization': `Bearer ${this.accessToken}`,
+            'chatgpt-account-id': this.accountId,
+            'content-type': 'application/json',
+            'user-agent': 'codex_cli_rs/0.89.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
+            'originator': 'codex_cli_rs',
+            'host': 'chatgpt.com',
+            'Connection': 'close'
         };
     }
 
@@ -294,6 +289,11 @@ export class CodexApiService {
             // 保存更新的凭据
             await this.saveCredentials();
 
+            // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.CODEX_API, this.uuid);
+            }
             logger.info('[Codex] Token refreshed successfully');
         } catch (error) {
             logger.error('[Codex] Failed to refresh token:', error.message);
