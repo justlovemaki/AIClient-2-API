@@ -232,14 +232,14 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
 
     // Initialize logger
     logger.initialize({
-        enabled: CONFIG.LOG_ENABLED,
-        outputMode: CONFIG.LOG_OUTPUT_MODE,
-        logLevel: CONFIG.LOG_LEVEL,
-        logDir: CONFIG.LOG_DIR,
-        includeRequestId: CONFIG.LOG_INCLUDE_REQUEST_ID,
-        includeTimestamp: CONFIG.LOG_INCLUDE_TIMESTAMP,
-        maxFileSize: CONFIG.LOG_MAX_FILE_SIZE,
-        maxFiles: CONFIG.LOG_MAX_FILES
+        enabled: CONFIG.LOG_ENABLED ?? true,
+        outputMode: CONFIG.LOG_OUTPUT_MODE || "all",
+        logLevel: CONFIG.LOG_LEVEL || "info",
+        logDir: CONFIG.LOG_DIR || "logs",
+        includeRequestId: CONFIG.LOG_INCLUDE_REQUEST_ID ?? true,
+        includeTimestamp: CONFIG.LOG_INCLUDE_TIMESTAMP ?? true,
+        maxFileSize: CONFIG.LOG_MAX_FILE_SIZE || 10485760,
+        maxFiles: CONFIG.LOG_MAX_FILES || 10
     });
 
     // Cleanup old logs periodically

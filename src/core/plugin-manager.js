@@ -64,17 +64,36 @@ class PluginManager {
 
     /**
      * 加载插件配置文件
+     * 永远生成默认配置，如果本地文件存在则合并，但不覆盖 enabled 字段
      */
     async loadConfig() {
         try {
+            // 1. 永远生成默认配置
+            const defaultConfig = await this.generateDefaultConfig();
+            
+            // 2. 如果本地文件存在，读取并合并
             if (existsSync(PLUGINS_CONFIG_FILE)) {
                 const content = await fs.readFile(PLUGINS_CONFIG_FILE, 'utf8');
-                this.pluginsConfig = JSON.parse(content);
-            } else {
-                // 扫描 plugins 目录生成默认配置
-                this.pluginsConfig = await this.generateDefaultConfig();
-                await this.saveConfig();
+                const localConfig = JSON.parse(content);
+                
+                // 3. 合并配置：遍历默认配置中的所有插件
+                for (const [pluginName, defaultPluginConfig] of Object.entries(defaultConfig.plugins)) {
+                    const localPluginConfig = localConfig.plugins?.[pluginName];
+                    
+                    if (localPluginConfig) {
+                        // 本地配置存在，合并但保留本地的 enabled 字段
+                        defaultConfig.plugins[pluginName] = {
+                            ...defaultPluginConfig,
+                            ...localPluginConfig,
+                            enabled: localPluginConfig.enabled // 保留本地的 enabled 字段
+                        };
+                    }
+                    // 如果本地配置不存在该插件，使用默认配置
+                }
             }
+            
+            this.pluginsConfig = defaultConfig;
+            await this.saveConfig();
         } catch (error) {
             logger.error('[PluginManager] Failed to load config:', error.message);
             this.pluginsConfig = { plugins: {} };
