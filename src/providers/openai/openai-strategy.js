@@ -1,4 +1,5 @@
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
+import logger from '../../utils/logger.js';
 import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 
 /**
@@ -69,16 +70,17 @@ class OpenAIStrategy extends ProviderStrategy {
         } else {
             requestBody.messages.unshift({ role: 'system', content: newSystemText });
         }
-        console.log(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'openai'.`);
+        logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'openai'.`);
 
         return requestBody;
     }
 
     async manageSystemPrompt(requestBody) {
-        //console.log('[System Prompt] Managing system prompt for provider "openai".', requestBody);
+        //logger.info('[System Prompt] Managing system prompt for provider "openai".', requestBody);
         const incomingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.OPENAI);
         await this._updateSystemPromptFile(incomingSystemText, MODEL_PROTOCOL_PREFIX.OPENAI);
     }
 }
 
 export { OpenAIStrategy };
+

@@ -1,6 +1,7 @@
-import * as fs from 'fs'; // Import fs module
-import * as crypto from 'crypto'; // Import crypto module for UUID generation
+import * as fs from 'fs';
+import * as crypto from 'crypto';
 import { getServiceAdapter } from './adapter.js';
+import logger from '../utils/logger.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { getProviderModels } from './provider-models.js';
 import axios from 'axios';
@@ -104,7 +105,7 @@ export class ProviderPoolManager {
                     configPath = config.CODEX_OAUTH_CREDS_FILE_PATH;
                 }
                 
-                // console.log(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
+                // logger.info(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
                 // 排除不健康和禁用的节点
                 if (!config.isHealthy || config.isDisabled) continue;
 
@@ -411,11 +412,10 @@ export class ProviderPoolManager {
         // 1. 基础健康分：不健康的排最后
         if (!config.isHealthy || config.isDisabled) return 1e18;
         
-        // 2. 预热/刷新分：2分钟内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
-        const isFresh = config.lastHealthCheckTime &&
-                        (now - new Date(config.lastHealthCheckTime).getTime() < 120000) &&
-                        (config.usageCount === 0);
-        if (isFresh) return -2e18; // 极其优先
+        // 2. 预热/刷新分：60秒内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
+        const lastHealthCheckTime = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
+        const isFresh = lastHealthCheckTime && (now - lastHealthCheckTime < 60000); 
+        if (isFresh) return -2e18 + (config.usageCount || 0) * 10000 + (now - lastHealthCheckTime); // 极其优先
  
         // 3. 权重计算逻辑：
         // 改进点：使用 lastUsedTime + usageCount 惩罚 + selectionSequence 惩罚
@@ -453,8 +453,7 @@ export class ProviderPoolManager {
     _log(level, message) {
         const levels = { debug: 0, info: 1, warn: 2, error: 3 };
         if (levels[level] >= levels[this.logLevel]) {
-            const logMethod = level === 'debug' ? 'log' : level;
-            console[logMethod](`[ProviderPoolManager] ${message}`);
+            logger[level](`[ProviderPoolManager] ${message}`);
         }
     }
 
@@ -903,9 +902,7 @@ export class ProviderPoolManager {
             if (provider.config.errorCount >= this.maxErrorCount) {
                 provider.config.isHealthy = false;
                 this._log('warn', `Marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Total errors: ${provider.config.errorCount}`);
-            } else {
-                this._log('warn', `Provider ${providerConfig.uuid} for type ${providerType} error count: ${provider.config.errorCount}/${this.maxErrorCount}. Still healthy.`);
-            }
+            } 
 
             this._debouncedSave(providerType);
         }
@@ -1002,8 +999,8 @@ export class ProviderPoolManager {
             provider.config.lastErrorMessage = null;
             
             // 更新健康检测信息
-            provider.config.lastHealthCheckTime = new Date().toISOString();
             if (healthCheckModel) {
+                provider.config.lastHealthCheckTime = new Date().toISOString();
                 provider.config.lastHealthCheckModel = healthCheckModel;
             }
             
@@ -1456,3 +1453,4 @@ export class ProviderPoolManager {
     }
 
 }
+

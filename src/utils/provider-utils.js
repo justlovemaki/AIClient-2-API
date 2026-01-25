@@ -4,6 +4,7 @@
  */
 
 import * as path from 'path';
+import logger from './logger.js';
 import { promises as fs } from 'fs';
 
 /**
@@ -163,7 +164,7 @@ export function pathsEqual(path1, path2) {
         
         return false;
     } catch (error) {
-        console.warn(`[Path Comparison] Error comparing paths: ${path1} vs ${path2}`, error.message);
+        logger.warn(`[Path Comparison] Error comparing paths: ${path1} vs ${path2}`, error.message);
         return false;
     }
 }

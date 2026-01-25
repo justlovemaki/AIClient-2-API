@@ -1,14 +1,15 @@
-import { OpenAIResponsesApiService } from './openai/openai-responses-core.js'; // 导入OpenAIResponsesApiService
-import { GeminiApiService } from './gemini/gemini-core.js'; // 导入geminiApiService
-import { AntigravityApiService } from './gemini/antigravity-core.js'; // 导入AntigravityApiService
-import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiService
-import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
-import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
-import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
-import { IFlowApiService } from './openai/iflow-core.js'; // 导入IFlowApiService
-import { CodexApiService } from './openai/codex-core.js'; // 导入CodexApiService
-import { ForwardApiService } from './forward/forward-core.js'; // 导入ForwardApiService
-import { MODEL_PROVIDER } from '../utils/common.js'; // 导入 MODEL_PROVIDER
+import { OpenAIResponsesApiService } from './openai/openai-responses-core.js';
+import { GeminiApiService } from './gemini/gemini-core.js';
+import { AntigravityApiService } from './gemini/antigravity-core.js';
+import { OpenAIApiService } from './openai/openai-core.js';
+import { ClaudeApiService } from './claude/claude-core.js';
+import { KiroApiService } from './claude/claude-kiro.js';
+import { QwenApiService } from './openai/qwen-core.js';
+import { IFlowApiService } from './openai/iflow-core.js';
+import { CodexApiService } from './openai/codex-core.js';
+import { ForwardApiService } from './forward/forward-core.js';
+import { MODEL_PROVIDER } from '../utils/common.js';
+import logger from '../utils/logger.js';
 
 // 定义AI服务适配器接口
 // 所有的服务适配器都应该实现这些方法
@@ -78,13 +79,13 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
         super();
         this.geminiApiService = new GeminiApiService(config);
         // this.geminiApiService.initialize().catch(error => {
-        //     console.error("Failed to initialize geminiApiService:", error);
+        //     logger.error("Failed to initialize geminiApiService:", error);
         // });
     }
 
     async generateContent(model, requestBody) {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("geminiApiService not initialized, attempting to re-initialize...");
+            logger.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         return this.geminiApiService.generateContent(model, requestBody);
@@ -92,7 +93,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("geminiApiService not initialized, attempting to re-initialize...");
+            logger.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         yield* this.geminiApiService.generateContentStream(model, requestBody);
@@ -100,7 +101,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 
     async listModels() {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("geminiApiService not initialized, attempting to re-initialize...");
+            logger.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         // Gemini Core API 的 listModels 已经返回符合 Gemini 格式的数据，所以不需要额外转换
@@ -112,7 +113,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
             await this.geminiApiService.initialize();
         }
         if(this.isExpiryDateNear()===true){
-            console.log(`[Gemini] Expiry date is near, refreshing token...`);
+            logger.info(`[Gemini] Expiry date is near, refreshing token...`);
             return this.geminiApiService.initializeAuth(true);
         }
         return Promise.resolve();
@@ -122,7 +123,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
         if (!this.geminiApiService.isInitialized) {
             await this.geminiApiService.initialize();
         }
-        console.log(`[Gemini] Force refreshing token...`);
+        logger.info(`[Gemini] Force refreshing token...`);
         return this.geminiApiService.initializeAuth(true);
     }
 
@@ -136,7 +137,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
      */
     async getUsageLimits() {
         if (!this.geminiApiService.isInitialized) {
-            console.warn("geminiApiService not initialized, attempting to re-initialize...");
+            logger.warn("geminiApiService not initialized, attempting to re-initialize...");
             await this.geminiApiService.initialize();
         }
         return this.geminiApiService.getUsageLimits();
@@ -152,7 +153,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
 
     async generateContent(model, requestBody) {
         if (!this.antigravityApiService.isInitialized) {
-            console.warn("antigravityApiService not initialized, attempting to re-initialize...");
+            logger.warn("antigravityApiService not initialized, attempting to re-initialize...");
             await this.antigravityApiService.initialize();
         }
         return this.antigravityApiService.generateContent(model, requestBody);
@@ -160,7 +161,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.antigravityApiService.isInitialized) {
-            console.warn("antigravityApiService not initialized, attempting to re-initialize...");
+            logger.warn("antigravityApiService not initialized, attempting to re-initialize...");
             await this.antigravityApiService.initialize();
         }
         yield* this.antigravityApiService.generateContentStream(model, requestBody);
@@ -168,7 +169,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
 
     async listModels() {
         if (!this.antigravityApiService.isInitialized) {
-            console.warn("antigravityApiService not initialized, attempting to re-initialize...");
+            logger.warn("antigravityApiService not initialized, attempting to re-initialize...");
             await this.antigravityApiService.initialize();
         }
         return this.antigravityApiService.listModels();
@@ -179,7 +180,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
             await this.antigravityApiService.initialize();
         }
         if (this.isExpiryDateNear() === true) {
-            console.log(`[Antigravity] Expiry date is near, refreshing token...`);
+            logger.info(`[Antigravity] Expiry date is near, refreshing token...`);
             return this.antigravityApiService.initializeAuth(true);
         }
         return Promise.resolve();
@@ -189,7 +190,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
         if (!this.antigravityApiService.isInitialized) {
             await this.antigravityApiService.initialize();
         }
-        console.log(`[Antigravity] Force refreshing token...`);
+        logger.info(`[Antigravity] Force refreshing token...`);
         return this.antigravityApiService.initializeAuth(true);
     }
 
@@ -203,7 +204,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
      */
     async getUsageLimits() {
         if (!this.antigravityApiService.isInitialized) {
-            console.warn("antigravityApiService not initialized, attempting to re-initialize...");
+            logger.warn("antigravityApiService not initialized, attempting to re-initialize...");
             await this.antigravityApiService.initialize();
         }
         return this.antigravityApiService.getUsageLimits();
@@ -330,14 +331,14 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
         super();
         this.kiroApiService = new KiroApiService(config);
         // this.kiroApiService.initialize().catch(error => {
-        //     console.error("Failed to initialize kiroApiService:", error);
+        //     logger.error("Failed to initialize kiroApiService:", error);
         // });
     }
 
     async generateContent(model, requestBody) {
         // The adapter expects the requestBody to be in OpenAI format for Kiro API
         if (!this.kiroApiService.isInitialized) {
-            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            logger.warn("kiroApiService not initialized, attempting to re-initialize...");
             await this.kiroApiService.initialize();
         }
         return this.kiroApiService.generateContent(model, requestBody);
@@ -346,7 +347,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
     async *generateContentStream(model, requestBody) {
         // The adapter expects the requestBody to be in OpenAI format for Kiro API
         if (!this.kiroApiService.isInitialized) {
-            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            logger.warn("kiroApiService not initialized, attempting to re-initialize...");
             await this.kiroApiService.initialize();
         }
         const stream = this.kiroApiService.generateContentStream(model, requestBody);
@@ -356,7 +357,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
     async listModels() {
         // Returns the native model list from the Kiro service
         if (!this.kiroApiService.isInitialized) {
-            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            logger.warn("kiroApiService not initialized, attempting to re-initialize...");
             await this.kiroApiService.initialize();
         }
         return this.kiroApiService.listModels();
@@ -367,7 +368,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
             await this.kiroApiService.initialize();
         }
         if(this.isExpiryDateNear()===true){
-            console.log(`[Kiro] Expiry date is near, refreshing token...`);
+            logger.info(`[Kiro] Expiry date is near, refreshing token...`);
             return this.kiroApiService.initializeAuth(true);
         }
         return Promise.resolve();
@@ -377,7 +378,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
         if (!this.kiroApiService.isInitialized) {
             await this.kiroApiService.initialize();
         }
-        console.log(`[Kiro] Force refreshing token...`);
+        logger.info(`[Kiro] Force refreshing token...`);
         return this.kiroApiService.initializeAuth(true);
     }
 
@@ -391,7 +392,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
      */
     async getUsageLimits() {
         if (!this.kiroApiService.isInitialized) {
-            console.warn("kiroApiService not initialized, attempting to re-initialize...");
+            logger.warn("kiroApiService not initialized, attempting to re-initialize...");
             await this.kiroApiService.initialize();
         }
         return this.kiroApiService.getUsageLimits();
@@ -416,7 +417,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
 
     async generateContent(model, requestBody) {
         if (!this.qwenApiService.isInitialized) {
-            console.warn("qwenApiService not initialized, attempting to re-initialize...");
+            logger.warn("qwenApiService not initialized, attempting to re-initialize...");
             await this.qwenApiService.initialize();
         }
         return this.qwenApiService.generateContent(model, requestBody);
@@ -424,7 +425,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.qwenApiService.isInitialized) {
-            console.warn("qwenApiService not initialized, attempting to re-initialize...");
+            logger.warn("qwenApiService not initialized, attempting to re-initialize...");
             await this.qwenApiService.initialize();
         }
         yield* this.qwenApiService.generateContentStream(model, requestBody);
@@ -432,7 +433,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
 
     async listModels() {
         if (!this.qwenApiService.isInitialized) {
-            console.warn("qwenApiService not initialized, attempting to re-initialize...");
+            logger.warn("qwenApiService not initialized, attempting to re-initialize...");
             await this.qwenApiService.initialize();
         }
         return this.qwenApiService.listModels();
@@ -443,7 +444,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
             await this.qwenApiService.initialize();
         }
         if (this.isExpiryDateNear()) {
-            console.log(`[Qwen] Expiry date is near, refreshing token...`);
+            logger.info(`[Qwen] Expiry date is near, refreshing token...`);
             return this.qwenApiService._initializeAuth(true);
         }
         return Promise.resolve();
@@ -453,7 +454,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
         if (!this.qwenApiService.isInitialized) {
             await this.qwenApiService.initialize();
         }
-        console.log(`[Qwen] Force refreshing token...`);
+        logger.info(`[Qwen] Force refreshing token...`);
         return this.qwenApiService._initializeAuth(true);
     }
 
@@ -471,7 +472,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
 
     async generateContent(model, requestBody) {
         if (!this.iflowApiService.isInitialized) {
-            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            logger.warn("iflowApiService not initialized, attempting to re-initialize...");
             await this.iflowApiService.initialize();
         }
         return this.iflowApiService.generateContent(model, requestBody);
@@ -479,7 +480,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.iflowApiService.isInitialized) {
-            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            logger.warn("iflowApiService not initialized, attempting to re-initialize...");
             await this.iflowApiService.initialize();
         }
         yield* this.iflowApiService.generateContentStream(model, requestBody);
@@ -487,7 +488,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
 
     async listModels() {
         if (!this.iflowApiService.isInitialized) {
-            console.warn("iflowApiService not initialized, attempting to re-initialize...");
+            logger.warn("iflowApiService not initialized, attempting to re-initialize...");
             await this.iflowApiService.initialize();
         }
         return this.iflowApiService.listModels();
@@ -498,7 +499,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
             await this.iflowApiService.initialize();
         }
         if (this.isExpiryDateNear()) {
-            console.log(`[iFlow] Expiry date is near, refreshing API key...`);
+            logger.info(`[iFlow] Expiry date is near, refreshing API key...`);
             await this.iflowApiService.initializeAuth(true);
         }
         return Promise.resolve();
@@ -508,7 +509,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
         if (!this.iflowApiService.isInitialized) {
             await this.iflowApiService.initialize();
         }
-        console.log(`[iFlow] Force refreshing API key...`);
+        logger.info(`[iFlow] Force refreshing API key...`);
         return this.iflowApiService.initializeAuth(true);
     }
 
@@ -527,7 +528,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
 
     async generateContent(model, requestBody) {
         if (!this.codexApiService.isInitialized) {
-            console.warn("codexApiService not initialized, attempting to re-initialize...");
+            logger.warn("codexApiService not initialized, attempting to re-initialize...");
             await this.codexApiService.initialize();
         }
         return this.codexApiService.generateContent(model, requestBody);
@@ -535,7 +536,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
 
     async *generateContentStream(model, requestBody) {
         if (!this.codexApiService.isInitialized) {
-            console.warn("codexApiService not initialized, attempting to re-initialize...");
+            logger.warn("codexApiService not initialized, attempting to re-initialize...");
             await this.codexApiService.initialize();
         }
         yield* this.codexApiService.generateContentStream(model, requestBody);
@@ -550,7 +551,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
             await this.codexApiService.initialize();
         }
         if (this.isExpiryDateNear()) {
-            console.log(`[Codex] Expiry date is near, refreshing token...`);
+            logger.info(`[Codex] Expiry date is near, refreshing token...`);
             await this.codexApiService.refreshAccessToken();
         }
         return Promise.resolve();
@@ -560,7 +561,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
         if (!this.codexApiService.isInitialized) {
             await this.codexApiService.initialize();
         }
-        console.log(`[Codex] Force refreshing token...`);
+        logger.info(`[Codex] Force refreshing token...`);
         return this.codexApiService.refreshAccessToken();
     }
 
@@ -607,7 +608,7 @@ export const serviceInstances = {};
 // 服务适配器工厂
 export function getServiceAdapter(config) {
     const customNameDisplay = config.customName ? ` (${config.customName})` : '';
-    console.log(`[Adapter] getServiceAdapter, provider: ${config.MODEL_PROVIDER}, uuid: ${config.uuid}${customNameDisplay}`);
+    logger.info(`[Adapter] getServiceAdapter, provider: ${config.MODEL_PROVIDER}, uuid: ${config.uuid}${customNameDisplay}`);
     const provider = config.MODEL_PROVIDER;
     const providerKey = config.uuid ? provider + config.uuid : provider;
     if (!serviceInstances[providerKey]) {
@@ -648,3 +649,4 @@ export function getServiceAdapter(config) {
     }
     return serviceInstances[providerKey];
 }
+

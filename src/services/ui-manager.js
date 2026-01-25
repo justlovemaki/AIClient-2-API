@@ -108,6 +108,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await systemApi.handleGetSystem(req, res);
     }
 
+    // Download today's log file
+    if (method === 'GET' && pathParam === '/api/system/download-log') {
+        return await systemApi.handleDownloadTodayLog(req, res);
+    }
+
     // Get provider pools summary
     if (method === 'GET' && pathParam === '/api/providers') {
         return await providerApi.handleGetProviders(req, res, currentConfig, providerPoolManager);

@@ -369,15 +369,59 @@ input:checked + .toggle-slider:before {
 }
 
 
+/* 组合配置区块样式 */
+.config-group-section {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    background: var(--bg-primary);
+    transition: var(--transition);
+}
+
+.config-group-section:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.config-group-section h3 {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.config-group-section h3 i {
+    color: var(--primary-color);
+    width: 1.25rem;
+    text-align: center;
+}
+
+.config-group-section hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 1.5rem 0;
+    opacity: 0.5;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
-    .oauth-refresh-toggle {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+    .form-row, .config-row {
+        grid-template-columns: 1fr;
+        gap: 0;
     }
-    .restart-required-modal .restart-modal-content {
-        max-width: 95%;
+    
+    .config-panel {
+        padding: 1rem;
+    }
+    
+    .config-group-section {
+        padding: 1rem;
     }
 }
 

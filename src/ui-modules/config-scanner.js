@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
@@ -16,7 +17,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
     const configsPath = path.join(process.cwd(), 'configs');
     
     if (!existsSync(configsPath)) {
-        // console.log('[Config Scanner] configs directory not found, creating empty result');
+        // logger.info('[Config Scanner] configs directory not found, creating empty result');
         return configFiles;
     }
 
@@ -55,7 +56,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
         const configsFiles = await scanOAuthDirectory(configsPath, usedPaths, currentConfig);
         configFiles.push(...configsFiles);
     } catch (error) {
-        console.warn(`[Config Scanner] Failed to scan configs directory:`, error.message);
+        logger.warn(`[Config Scanner] Failed to scan configs directory:`, error.message);
     }
 
     return configFiles;
@@ -143,7 +144,7 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
             preview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
         };
     } catch (error) {
-        console.warn(`[OAuth Analyzer] Failed to analyze file ${filePath}:`, error.message);
+        logger.warn(`[OAuth Analyzer] Failed to analyze file ${filePath}:`, error.message);
         return null;
     }
 }
@@ -361,7 +362,7 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
             }
         }
     } catch (error) {
-        console.warn(`[OAuth Scanner] Failed to scan directory ${dirPath}:`, error.message);
+        logger.warn(`[OAuth Scanner] Failed to scan directory ${dirPath}:`, error.message);
     }
     
     return oauthFiles;

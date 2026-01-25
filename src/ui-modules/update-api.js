@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
@@ -19,7 +20,7 @@ function getUpdateProxyConfig() {
     
     const proxyConfig = parseProxyUrl(CONFIG.PROXY_URL);
     if (proxyConfig) {
-        console.log(`[Update] Using ${proxyConfig.proxyType} proxy for update check: ${CONFIG.PROXY_URL}`);
+        logger.info(`[Update] Using ${proxyConfig.proxyType} proxy for update check: ${CONFIG.PROXY_URL}`);
     }
     return proxyConfig;
 }
@@ -59,7 +60,7 @@ async function fetchWithProxy(url, options = {}) {
             });
         } catch (importError) {
             // 如果 undici 不可用，回退到原生 fetch（不使用代理）
-            console.warn('[Update] undici not available, falling back to native fetch without proxy');
+            logger.warn('[Update] undici not available, falling back to native fetch without proxy');
             return await fetch(url, options);
         }
     }
@@ -103,7 +104,7 @@ async function getLatestVersionFromGitHub() {
     const apiUrl = `https://gh-proxy.org/https://api.github.com/repos/${GITHUB_REPO}/tags`;
     
     try {
-        console.log('[Update] Fetching latest version from GitHub API...');
+        logger.info('[Update] Fetching latest version from GitHub API...');
         const response = await fetchWithProxy(apiUrl, {
             headers: {
                 'Accept': 'application/vnd.github.v3+json',
@@ -136,7 +137,7 @@ async function getLatestVersionFromGitHub() {
         
         return versions[0];
     } catch (error) {
-        console.warn('[Update] Failed to fetch from GitHub API:', error.message);
+        logger.warn('[Update] Failed to fetch from GitHub API:', error.message);
         return null;
     }
 }
@@ -158,7 +159,7 @@ export async function checkForUpdates() {
             localVersion = readFileSync(versionFilePath, 'utf-8').trim();
         }
     } catch (error) {
-        console.warn('[Update] Failed to read local VERSION file:', error.message);
+        logger.warn('[Update] Failed to read local VERSION file:', error.message);
     }
     
     // 检查是否在 git 仓库中
@@ -168,7 +169,7 @@ export async function checkForUpdates() {
         isGitRepo = true;
     } catch (error) {
         isGitRepo = false;
-        console.log('[Update] Not in a Git repository, will use GitHub API to check for updates');
+        logger.info('[Update] Not in a Git repository, will use GitHub API to check for updates');
     }
     
     let latestTag = null;
@@ -180,10 +181,10 @@ export async function checkForUpdates() {
         
         // 获取远程 tags
         try {
-            console.log('[Update] Fetching remote tags...');
+            logger.info('[Update] Fetching remote tags...');
             await execAsync('git fetch --tags');
         } catch (error) {
-            console.warn('[Update] Failed to fetch tags via git, falling back to GitHub API:', error.message);
+            logger.warn('[Update] Failed to fetch tags via git, falling back to GitHub API:', error.message);
             // 如果 git fetch 失败，回退到 GitHub API
             latestTag = await getLatestVersionFromGitHub();
             updateMethod = 'github_api';
@@ -214,7 +215,7 @@ export async function checkForUpdates() {
                         latestTag = tags[0];
                     }
                 } catch (e) {
-                    console.warn('[Update] Failed to get latest tag via git, falling back to GitHub API:', e.message);
+                    logger.warn('[Update] Failed to get latest tag via git, falling back to GitHub API:', e.message);
                     latestTag = await getLatestVersionFromGitHub();
                     updateMethod = 'github_api';
                 }
@@ -240,7 +241,7 @@ export async function checkForUpdates() {
     const comparison = compareVersions(latestTag, localVersion);
     const hasUpdate = comparison > 0;
     
-    console.log(`[Update] Local version: ${localVersion}, Latest version: ${latestTag}, Has update: ${hasUpdate}, Method: ${updateMethod}`);
+    logger.info(`[Update] Local version: ${localVersion}, Latest version: ${latestTag}, Has update: ${hasUpdate}, Method: ${updateMethod}`);
     
     return {
         hasUpdate,
@@ -278,30 +279,30 @@ export async function performUpdate() {
     // 检查更新方式 - 如果是通过 GitHub API 获取的版本信息，说明不在 Git 仓库中
     if (updateInfo.updateMethod === 'github_api') {
         // Docker/非 Git 环境，通过下载 tarball 更新
-        console.log('[Update] Running in Docker/non-Git environment, will download and extract tarball');
+        logger.info('[Update] Running in Docker/non-Git environment, will download and extract tarball');
         return await performTarballUpdate(updateInfo.localVersion, latestTag);
     }
     
-    console.log(`[Update] Starting update to ${latestTag}...`);
+    logger.info(`[Update] Starting update to ${latestTag}...`);
     
     // 检查是否有未提交的更改
     try {
         const { stdout: statusOutput } = await execAsync('git status --porcelain');
         if (statusOutput.trim()) {
             // 有未提交的更改，先 stash
-            console.log('[Update] Stashing local changes...');
+            logger.info('[Update] Stashing local changes...');
             await execAsync('git stash');
         }
     } catch (error) {
-        console.warn('[Update] Failed to check git status:', error.message);
+        logger.warn('[Update] Failed to check git status:', error.message);
     }
     
     // 执行 checkout 到最新 tag
     try {
-        console.log(`[Update] Checking out to ${latestTag}...`);
+        logger.info(`[Update] Checking out to ${latestTag}...`);
         await execAsync(`git checkout ${latestTag}`);
     } catch (error) {
-        console.error('[Update] Failed to checkout:', error.message);
+        logger.error('[Update] Failed to checkout:', error.message);
         throw new Error('Failed to switch to new version: ' + error.message);
     }
     
@@ -310,9 +311,9 @@ export async function performUpdate() {
     try {
         const newVersion = latestTag.replace(/^v/, '');
         writeFileSync(versionFilePath, newVersion, 'utf-8');
-        console.log(`[Update] VERSION file updated to ${newVersion}`);
+        logger.info(`[Update] VERSION file updated to ${newVersion}`);
     } catch (error) {
-        console.warn('[Update] Failed to update VERSION file:', error.message);
+        logger.warn('[Update] Failed to update VERSION file:', error.message);
     }
     
     // 检查是否需要安装依赖
@@ -322,15 +323,15 @@ export async function performUpdate() {
         const localVersionTag = updateInfo.localVersion.startsWith('v') ? updateInfo.localVersion : `v${updateInfo.localVersion}`;
         const { stdout: diffOutput } = await execAsync(`git diff ${localVersionTag}..${latestTag} --name-only`);
         if (diffOutput.includes('package.json') || diffOutput.includes('package-lock.json')) {
-            console.log('[Update] package.json changed, running npm install...');
+            logger.info('[Update] package.json changed, running npm install...');
             await execAsync('npm install');
             needsRestart = true;
         }
     } catch (error) {
-        console.warn('[Update] Failed to check package changes:', error.message);
+        logger.warn('[Update] Failed to check package changes:', error.message);
     }
     
-    console.log(`[Update] Update completed successfully to ${latestTag}`);
+    logger.info(`[Update] Update completed successfully to ${latestTag}`);
     
     return {
         success: true,
@@ -357,16 +358,16 @@ async function performTarballUpdate(localVersion, latestTag) {
     const tempDir = path.join(appDir, '.update_temp');
     const tarballPath = path.join(tempDir, 'update.tar.gz');
     
-    console.log(`[Update] Starting tarball update to ${latestTag}...`);
-    console.log(`[Update] Download URL: ${tarballUrl}`);
+    logger.info(`[Update] Starting tarball update to ${latestTag}...`);
+    logger.info(`[Update] Download URL: ${tarballUrl}`);
     
     try {
         // 1. 创建临时目录
         await fs.mkdir(tempDir, { recursive: true });
-        console.log('[Update] Created temp directory');
+        logger.info('[Update] Created temp directory');
         
         // 2. 下载 tarball
-        console.log('[Update] Downloading tarball...');
+        logger.info('[Update] Downloading tarball...');
         const response = await fetchWithProxy(tarballUrl, {
             headers: {
                 'User-Agent': 'AIClient2API-Updater'
@@ -381,10 +382,10 @@ async function performTarballUpdate(localVersion, latestTag) {
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         await fs.writeFile(tarballPath, buffer);
-        console.log(`[Update] Downloaded tarball (${buffer.length} bytes)`);
+        logger.info(`[Update] Downloaded tarball (${buffer.length} bytes)`);
         
         // 3. 解压 tarball
-        console.log('[Update] Extracting tarball...');
+        logger.info('[Update] Extracting tarball...');
         await execAsync(`tar -xzf "${tarballPath}" -C "${tempDir}"`);
         
         // 4. 找到解压后的目录（格式通常是 repo-name-tag）
@@ -398,7 +399,7 @@ async function performTarballUpdate(localVersion, latestTag) {
         }
         
         const sourcePath = path.join(tempDir, extractedDir);
-        console.log(`[Update] Extracted to: ${sourcePath}`);
+        logger.info(`[Update] Extracted to: ${sourcePath}`);
         
         // 5. 备份当前的 package.json 用于比较
         const oldPackageJson = existsSync(path.join(appDir, 'package.json'))
@@ -410,9 +411,9 @@ async function performTarballUpdate(localVersion, latestTag) {
         for (const dirName of dirsToClean) {
             const dirPath = path.join(appDir, dirName);
             if (existsSync(dirPath)) {
-                console.log(`[Update] Removing old ${dirName}/ directory before extraction...`);
+                logger.info(`[Update] Removing old ${dirName}/ directory before extraction...`);
                 await fs.rm(dirPath, { recursive: true, force: true });
-                console.log(`[Update] Old ${dirName}/ directory removed`);
+                logger.info(`[Update] Old ${dirName}/ directory removed`);
             }
         }
         
@@ -425,13 +426,13 @@ async function performTarballUpdate(localVersion, latestTag) {
         ];
         
         // 7. 复制新文件到应用目录
-        console.log('[Update] Copying new files...');
+        logger.info('[Update] Copying new files...');
         const sourceItems = await fs.readdir(sourcePath);
         
         for (const item of sourceItems) {
             // 跳过需要保留的目录
             if (preservePaths.includes(item)) {
-                console.log(`[Update] Skipping preserved path: ${item}`);
+                logger.info(`[Update] Skipping preserved path: ${item}`);
                 continue;
             }
             
@@ -450,7 +451,7 @@ async function performTarballUpdate(localVersion, latestTag) {
             
             // 复制新文件/目录
             await copyRecursive(srcItemPath, destItemPath);
-            console.log(`[Update] Copied: ${item}`);
+            logger.info(`[Update] Copied: ${item}`);
         }
         
         // 8. 检查是否需要更新依赖
@@ -460,23 +461,23 @@ async function performTarballUpdate(localVersion, latestTag) {
         if (oldPackageJson) {
             const newPackageJson = readFileSync(path.join(appDir, 'package.json'), 'utf-8');
             if (oldPackageJson !== newPackageJson) {
-                console.log('[Update] package.json changed, running npm install...');
+                logger.info('[Update] package.json changed, running npm install...');
                 needsNpmInstall = true;
                 try {
                     await execAsync('npm install', { cwd: appDir });
-                    console.log('[Update] npm install completed');
+                    logger.info('[Update] npm install completed');
                 } catch (npmError) {
-                    console.error('[Update] npm install failed:', npmError.message);
+                    logger.error('[Update] npm install failed:', npmError.message);
                     // 不抛出错误，继续更新流程
                 }
             }
         }
         
         // 9. 清理临时目录
-        console.log('[Update] Cleaning up...');
+        logger.info('[Update] Cleaning up...');
         await fs.rm(tempDir, { recursive: true, force: true });
         
-        console.log(`[Update] Tarball update completed successfully to ${latestTag}`);
+        logger.info(`[Update] Tarball update completed successfully to ${latestTag}`);
         
         return {
             success: true,
@@ -497,10 +498,10 @@ async function performTarballUpdate(localVersion, latestTag) {
                 await fs.rm(tempDir, { recursive: true, force: true });
             }
         } catch (cleanupError) {
-            console.warn('[Update] Failed to cleanup temp directory:', cleanupError.message);
+            logger.warn('[Update] Failed to cleanup temp directory:', cleanupError.message);
         }
         
-        console.error('[Update] Tarball update failed:', error.message);
+        logger.error('[Update] Tarball update failed:', error.message);
         throw new Error(`Tarball update failed: ${error.message}`);
     }
 }
@@ -534,7 +535,7 @@ export async function handleCheckUpdate(req, res) {
         res.end(JSON.stringify(updateInfo));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to check for updates:', error);
+        logger.error('[UI API] Failed to check for updates:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -555,7 +556,7 @@ export async function handlePerformUpdate(req, res) {
         res.end(JSON.stringify(updateResult));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to perform update:', error);
+        logger.error('[UI API] Failed to perform update:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

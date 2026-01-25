@@ -1,4 +1,5 @@
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
+import logger from '../../utils/logger.js';
 import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 
 /**
@@ -96,7 +97,7 @@ class ResponsesAPIStrategy extends ProviderStrategy {
             requestBody.instructions = filePromptContent;
         }
 
-        console.log(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'responses'.`);
+        logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'responses'.`);
 
         return requestBody;
     }

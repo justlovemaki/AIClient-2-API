@@ -22,6 +22,7 @@ const elements = {
     get navItems() { return document.querySelectorAll('.nav-item'); },
     get logsContainer() { return document.getElementById('logsContainer'); },
     get clearLogsBtn() { return document.getElementById('clearLogs'); },
+    get downloadLogsBtn() { return document.getElementById('downloadLogs'); },
     get toggleAutoScrollBtn() { return document.getElementById('toggleAutoScroll'); },
     get saveConfigBtn() { return document.getElementById('saveConfig'); },
     get resetConfigBtn() { return document.getElementById('resetConfig'); },

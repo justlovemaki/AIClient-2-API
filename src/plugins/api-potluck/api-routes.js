@@ -33,6 +33,7 @@ import {
     getAllUserApiKeys
 } from './user-data-manager.js';
 import path from 'path';
+import logger from '../../utils/logger.js';
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import multer from 'multer';
@@ -112,7 +113,7 @@ async function checkAdminAuth(req) {
         
         return true;
     } catch (error) {
-        console.error('[API Potluck] Auth check error:', error.message);
+        logger.error('[API Potluck] Auth check error:', error.message);
         return false;
     }
 }
@@ -130,7 +131,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
     if (!path.startsWith('/api/potluck')) {
         return false;
     }
-    console.log('[API Potluck] Handling request:', method, path);
+    logger.info('[API Potluck] Handling request:', method, path);
     
     // 验证管理员权限
     const isAuthed = await checkAdminAuth(req);
@@ -252,7 +253,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
                         totalBonusUpdated++;
                     }
                 } catch (error) {
-                    console.warn(`[API Potluck] Failed to sync bonus for ${apiKey.substring(0, 12)}...:`, error.message);
+                    logger.warn(`[API Potluck] Failed to sync bonus for ${apiKey.substring(0, 12)}...:`, error.message);
                 }
             }
             
@@ -412,7 +413,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
         return true;
 
     } catch (error) {
-        console.error('[API Potluck] API error:', error);
+        logger.error('[API Potluck] API error:', error);
         sendJson(res, 500, {
             success: false,
             error: { message: error.message || 'Internal server error' }
@@ -458,7 +459,7 @@ export async function handlePotluckUserApiRoutes(method, path, req, res) {
     if (!path.startsWith('/api/potluckuser')) {
         return false;
     }
-    console.log('[API Potluck User] Handling request:', method, path);
+    logger.info('[API Potluck User] Handling request:', method, path);
 
     try {
         // 从请求中提取 API Key
@@ -662,7 +663,7 @@ export async function handlePotluckUserApiRoutes(method, path, req, res) {
         return true;
 
     } catch (error) {
-        console.error('[API Potluck] User API error:', error);
+        logger.error('[API Potluck] User API error:', error);
         sendJson(res, 500, {
             success: false,
             error: { message: error.message || 'Internal server error' }
@@ -732,7 +733,7 @@ async function handleUserUpload(req, res, apiKey) {
     return new Promise((resolve) => {
         userUpload.single('file')(req, res, async (err) => {
             if (err) {
-                console.error('[API Potluck User] File upload error:', err.message);
+                logger.error('[API Potluck User] File upload error:', err.message);
                 sendJson(res, 400, { success: false, error: err.message });
                 resolve(true);
                 return;
@@ -782,10 +783,10 @@ async function handleUserUpload(req, res, apiKey) {
                 try {
                     await autoLinkProviderConfigs(CONFIG);
                 } catch (linkError) {
-                    console.warn('[API Potluck User] Auto-link failed:', linkError.message);
+                    logger.warn('[API Potluck User] Auto-link failed:', linkError.message);
                 }
                 
-                console.log(`[API Potluck User] File uploaded, linked and health checked: ${relativePath} (provider: ${providerType}, health: ${healthResult.message})`);
+                logger.info(`[API Potluck User] File uploaded, linked and health checked: ${relativePath} (provider: ${providerType}, health: ${healthResult.message})`);
                 
                 sendJson(res, 200, {
                     success: true,
@@ -798,7 +799,7 @@ async function handleUserUpload(req, res, apiKey) {
                 resolve(true);
                 
             } catch (error) {
-                console.error('[API Potluck User] File processing error:', error);
+                logger.error('[API Potluck User] File processing error:', error);
                 sendJson(res, 500, { success: false, error: error.message });
                 resolve(true);
             }
@@ -825,7 +826,7 @@ async function handleKiroBatchImportTokens(req, res, apiKey) {
             return true;
         }
         
-        console.log(`[API Potluck User] Starting batch import of ${refreshTokens.length} tokens (user: ${apiKey.substring(0, 12)}...)`);
+        logger.info(`[API Potluck User] Starting batch import of ${refreshTokens.length} tokens (user: ${apiKey.substring(0, 12)}...)`);
         
         // 设置 SSE 响应头
         res.writeHead(200, {
@@ -864,15 +865,15 @@ async function handleKiroBatchImportTokens(req, res, apiKey) {
                         
                         // 自动从主服务同步健康状态
                         await syncCredentialHealthFromPool(apiKey, credential);
-                        console.log(`[API Potluck User] Credential linked and health synced: ${credentialInfo.path}`);
+                        logger.info(`[API Potluck User] Credential linked and health synced: ${credentialInfo.path}`);
                     } catch (linkError) {
-                        console.warn('[API Potluck User] Failed to link/check credential:', linkError.message);
+                        logger.warn('[API Potluck User] Failed to link/check credential:', linkError.message);
                     }
                 }
             }
         );
         
-        console.log(`[API Potluck User] Completed: ${result.success} success, ${result.failed} failed`);
+        logger.info(`[API Potluck User] Completed: ${result.success} success, ${result.failed} failed`);
         
         // 发送完成事件
         sendSSE('complete', {
@@ -887,7 +888,7 @@ async function handleKiroBatchImportTokens(req, res, apiKey) {
         return true;
         
     } catch (error) {
-        console.error('[API Potluck User] Kiro Batch Import Error:', error);
+        logger.error('[API Potluck User] Kiro Batch Import Error:', error);
         if (res.headersSent) {
             res.write(`event: error\n`);
             res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
@@ -936,12 +937,12 @@ async function handleKiroImportAwsCredentials(req, res, apiKey) {
             return true;
         }
         
-        console.log(`[API Potluck User] Starting AWS credentials import (user: ${apiKey.substring(0, 12)}...)`);
+        logger.info(`[API Potluck User] Starting AWS credentials import (user: ${apiKey.substring(0, 12)}...)`);
         
         const result = await importAwsCredentials(credentials);
         
         if (result.success) {
-            console.log(`[API Potluck User] Successfully imported credentials to: ${result.path}`);
+            logger.info(`[API Potluck User] Successfully imported credentials to: ${result.path}`);
             
             // 将凭据路径关联到用户
             const credentialInfo = {
@@ -953,7 +954,7 @@ async function handleKiroImportAwsCredentials(req, res, apiKey) {
             
             // 自动从主服务同步健康状态
             const healthResult = await syncCredentialHealthFromPool(apiKey, credential);
-            console.log(`[API Potluck User] Health sync result: ${healthResult.message}`);
+            logger.info(`[API Potluck User] Health sync result: ${healthResult.message}`);
             
             sendJson(res, 200, {
                 success: true,
@@ -972,7 +973,7 @@ async function handleKiroImportAwsCredentials(req, res, apiKey) {
         return true;
         
     } catch (error) {
-        console.error('[API Potluck User] Kiro AWS Import Error:', error);
+        logger.error('[API Potluck User] Kiro AWS Import Error:', error);
         sendJson(res, 500, {
             success: false,
             error: error.message
@@ -1070,7 +1071,7 @@ async function handleCredentialHealthCheck(req, res, apiKey, credentialId) {
             return true;
         }
         
-        console.log(`[API Potluck User] Syncing health for credential: ${credential.path}`);
+        logger.info(`[API Potluck User] Syncing health for credential: ${credential.path}`);
         
         const result = await syncCredentialHealthFromPool(apiKey, credential);
         
@@ -1081,7 +1082,7 @@ async function handleCredentialHealthCheck(req, res, apiKey, credentialId) {
         return true;
         
     } catch (error) {
-        console.error('[API Potluck User] Health check error:', error);
+        logger.error('[API Potluck User] Health check error:', error);
         sendJson(res, 500, {
             success: false,
             error: error.message
@@ -1117,7 +1118,7 @@ async function checkAllCredentialsHealth() {
                 }
                 // isHealthy === null 表示未注册到服务，不计入健康/不健康
             } catch (error) {
-                console.warn(`[API Potluck] Health sync failed for ${credential.path}:`, error.message);
+                logger.warn(`[API Potluck] Health sync failed for ${credential.path}:`, error.message);
             }
         }
     }
@@ -1171,19 +1172,19 @@ export function startHealthCheckScheduler() {
     
     // 启动后延迟 30 秒执行第一次同步
     setTimeout(async () => {
-        console.log('[API Potluck] Running initial health sync from pool...');
+        logger.info('[API Potluck] Running initial health sync from pool...');
         const result = await checkAllCredentialsHealth();
-        console.log(`[API Potluck] Health sync complete: ${result.healthy}/${result.total} healthy`);
+        logger.info(`[API Potluck] Health sync complete: ${result.healthy}/${result.total} healthy`);
     }, 30000);
     
     // 定时同步
     healthCheckTimer = setInterval(async () => {
-        console.log('[API Potluck] Running scheduled health sync from pool...');
+        logger.info('[API Potluck] Running scheduled health sync from pool...');
         const result = await checkAllCredentialsHealth();
-        console.log(`[API Potluck] Health sync complete: ${result.healthy}/${result.total} healthy`);
+        logger.info(`[API Potluck] Health sync complete: ${result.healthy}/${result.total} healthy`);
     }, HEALTH_CHECK_INTERVAL);
     
-    console.log(`[API Potluck] Health sync scheduler started (interval: ${HEALTH_CHECK_INTERVAL / 1000}s)`);
+    logger.info(`[API Potluck] Health sync scheduler started (interval: ${HEALTH_CHECK_INTERVAL / 1000}s)`);
 }
 
 /**
@@ -1193,7 +1194,7 @@ export function stopHealthCheckScheduler() {
     if (healthCheckTimer) {
         clearInterval(healthCheckTimer);
         healthCheckTimer = null;
-        console.log('[API Potluck] Health sync scheduler stopped');
+        logger.info('[API Potluck] Health sync scheduler stopped');
     }
 }
 

@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -23,18 +24,18 @@ export async function readPasswordFile() {
         const trimmedPassword = password.trim();
         // 如果密码文件为空，使用默认密码
         if (!trimmedPassword) {
-            console.log('[Auth] Password file is empty, using default password: ' + DEFAULT_PASSWORD);
+            logger.info('[Auth] Password file is empty, using default password: ' + DEFAULT_PASSWORD);
             return DEFAULT_PASSWORD;
         }
-        console.log('[Auth] Successfully read password file');
+        logger.info('[Auth] Successfully read password file');
         return trimmedPassword;
     } catch (error) {
         // ENOENT means file does not exist, which is normal
         if (error.code === 'ENOENT') {
-            console.log('[Auth] Password file does not exist, using default password: ' + DEFAULT_PASSWORD);
+            logger.info('[Auth] Password file does not exist, using default password: ' + DEFAULT_PASSWORD);
         } else {
-            console.error('[Auth] Failed to read password file:', error.code || error.message);
-            console.log('[Auth] Using default password: ' + DEFAULT_PASSWORD);
+            logger.error('[Auth] Failed to read password file:', error.code || error.message);
+            logger.info('[Auth] Using default password: ' + DEFAULT_PASSWORD);
         }
         return DEFAULT_PASSWORD;
     }
@@ -45,9 +46,9 @@ export async function readPasswordFile() {
  */
 export async function validateCredentials(password) {
     const storedPassword = await readPasswordFile();
-    console.log('[Auth] Validating password, stored password length:', storedPassword ? storedPassword.length : 0, ', input password length:', password ? password.length : 0);
+    logger.info('[Auth] Validating password, stored password length:', storedPassword ? storedPassword.length : 0, ', input password length:', password ? password.length : 0);
     const isValid = storedPassword && password === storedPassword;
-    console.log('[Auth] Password validation result:', isValid);
+    logger.info('[Auth] Password validation result:', isValid);
     return isValid;
 }
 
@@ -105,7 +106,7 @@ async function readTokenStore() {
             return { tokens: {} };
         }
     } catch (error) {
-        console.error('[Token Store] Failed to read token store file:', error);
+        logger.error('[Token Store] Failed to read token store file:', error);
         return { tokens: {} };
     }
 }
@@ -117,7 +118,7 @@ async function writeTokenStore(tokenStore) {
     try {
         await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
     } catch (error) {
-        console.error('[Token Store] Failed to write token store file:', error);
+        logger.error('[Token Store] Failed to write token store file:', error);
     }
 }
 
@@ -245,7 +246,7 @@ export async function handleLoginRequest(req, res) {
             }));
         }
     } catch (error) {
-        console.error('[Auth] Login processing error:', error);
+        logger.error('[Auth] Login processing error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,
@@ -257,3 +258,5 @@ export async function handleLoginRequest(req, res) {
 
 // 定时清理过期token
 setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
+
+

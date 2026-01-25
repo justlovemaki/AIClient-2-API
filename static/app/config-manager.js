@@ -155,6 +155,25 @@ async function loadConfiguration() {
             });
         }
         
+        // 加载日志配置
+        const logEnabledEl = document.getElementById('logEnabled');
+        const logOutputModeEl = document.getElementById('logOutputMode');
+        const logLevelEl = document.getElementById('logLevel');
+        const logDirEl = document.getElementById('logDir');
+        const logIncludeRequestIdEl = document.getElementById('logIncludeRequestId');
+        const logIncludeTimestampEl = document.getElementById('logIncludeTimestamp');
+        const logMaxFileSizeEl = document.getElementById('logMaxFileSize');
+        const logMaxFilesEl = document.getElementById('logMaxFiles');
+        
+        if (logEnabledEl) logEnabledEl.checked = data.LOG_ENABLED !== false;
+        if (logOutputModeEl) logOutputModeEl.value = data.LOG_OUTPUT_MODE || 'all';
+        if (logLevelEl) logLevelEl.value = data.LOG_LEVEL || 'info';
+        if (logDirEl) logDirEl.value = data.LOG_DIR || 'logs';
+        if (logIncludeRequestIdEl) logIncludeRequestIdEl.checked = data.LOG_INCLUDE_REQUEST_ID !== false;
+        if (logIncludeTimestampEl) logIncludeTimestampEl.checked = data.LOG_INCLUDE_TIMESTAMP !== false;
+        if (logMaxFileSizeEl) logMaxFileSizeEl.value = data.LOG_MAX_FILE_SIZE || 10485760;
+        if (logMaxFilesEl) logMaxFilesEl.value = data.LOG_MAX_FILES || 10;
+        
     } catch (error) {
         console.error('Failed to load configuration:', error);
     }
@@ -201,7 +220,6 @@ async function saveConfiguration() {
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
     config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
     config.MAX_ERROR_COUNT = parseInt(document.getElementById('maxErrorCount')?.value || 10);
-    config.POOL_SIZE_LIMIT = parseInt(document.getElementById('poolSizeLimit')?.value || 0);
     config.WARMUP_TARGET = parseInt(document.getElementById('warmupTarget')?.value || 0);
     config.REFRESH_CONCURRENCY_PER_PROVIDER = parseInt(document.getElementById('refreshConcurrencyPerProvider')?.value || 1);
     
@@ -242,6 +260,16 @@ async function saveConfiguration() {
     } else {
         config.PROXY_ENABLED_PROVIDERS = [];
     }
+    
+    // 保存日志配置
+    config.LOG_ENABLED = document.getElementById('logEnabled')?.checked !== false;
+    config.LOG_OUTPUT_MODE = document.getElementById('logOutputMode')?.value || 'all';
+    config.LOG_LEVEL = document.getElementById('logLevel')?.value || 'info';
+    config.LOG_DIR = document.getElementById('logDir')?.value || 'logs';
+    config.LOG_INCLUDE_REQUEST_ID = document.getElementById('logIncludeRequestId')?.checked !== false;
+    config.LOG_INCLUDE_TIMESTAMP = document.getElementById('logIncludeTimestamp')?.checked !== false;
+    config.LOG_MAX_FILE_SIZE = parseInt(document.getElementById('logMaxFileSize')?.value || 10485760);
+    config.LOG_MAX_FILES = parseInt(document.getElementById('logMaxFiles')?.value || 10);
 
     try {
         await window.apiClient.post('/config', config);

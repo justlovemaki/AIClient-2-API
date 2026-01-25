@@ -5,7 +5,7 @@ import {
     ENDPOINT_TYPE
 } from '../utils/common.js';
 import { getProviderPoolManager } from './service-manager.js';
-
+import logger from '../utils/logger.js';
 /**
  * Handle API authentication and routing
  * @param {string} method - The HTTP method
@@ -65,7 +65,7 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
 export function initializeAPIManagement(services) {
     const providerPoolManager = getProviderPoolManager();
     return async function heartbeatAndRefreshToken() {
-        console.log(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`, Object.keys(services));
+        logger.info(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`, Object.keys(services));
         // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
         // if (getProviderPoolManager()) {
         //     await getProviderPoolManager().performHealthChecks(); // 定期执行健康检查
@@ -83,9 +83,9 @@ export function initializeAPIManagement(services) {
                 } else {
                     await serviceAdapter.refreshToken();
                 }
-                // console.log(`[Token Refresh] Refreshed token for ${providerKey}`);
+                // logger.info(`[Token Refresh] Refreshed token for ${providerKey}`);
             } catch (error) {
-                console.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);
+                logger.error(`[Token Refresh Error] Failed to refresh token for ${providerKey}: ${error.message}`);
                 // 如果是号池中的某个实例刷新失败，这里需要捕获并更新其状态
                 // 现有的 serviceInstances 存储的是每个配置对应的单例，而非池中的成员
                 // 这意味着如果一个池成员的 token 刷新失败，需要找到它并更新其在 poolManager 中的状态

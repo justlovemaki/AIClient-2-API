@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
@@ -15,7 +16,7 @@ export async function handleGetUploadConfigs(req, res, currentConfig, providerPo
         res.end(JSON.stringify(configFiles));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to scan config files:', error);
+        logger.error('[UI API] Failed to scan config files:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -71,7 +72,7 @@ export async function handleViewConfigFile(req, res, filePath) {
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to view config file:', error);
+        logger.error('[UI API] Failed to view config file:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -132,7 +133,7 @@ export async function handleDeleteConfigFile(req, res, filePath) {
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to delete config file:', error);
+        logger.error('[UI API] Failed to delete config file:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -185,10 +186,10 @@ export async function handleDownloadAllConfigs(req, res) {
         });
         res.end(zipBuffer);
         
-        console.log(`[UI API] All configs downloaded as zip: ${filename}`);
+        logger.info(`[UI API] All configs downloaded as zip: ${filename}`);
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to download all configs:', error);
+        logger.error('[UI API] Failed to download all configs:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -298,7 +299,7 @@ export async function handleDeleteUnboundConfigs(req, res, currentConfig, provid
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to delete unbound configs:', error);
+        logger.error('[UI API] Failed to delete unbound configs:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

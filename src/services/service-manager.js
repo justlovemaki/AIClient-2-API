@@ -1,4 +1,5 @@
 import { getServiceAdapter, serviceInstances } from '../providers/adapter.js';
+import logger from '../utils/logger.js';
 import { ProviderPoolManager } from '../providers/provider-pool-manager.js';
 import deepmerge from 'deepmerge';
 import * as fs from 'fs';
@@ -75,24 +76,24 @@ export async function autoLinkProviderConfigs(config) {
         const filePath = config.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         try {
             await pfs.writeFile(filePath, JSON.stringify(config.providerPools, null, 2), 'utf8');
-            console.log(`[Auto-Link] Added ${totalNewProviders} new config(s) to provider pools:`);
+            logger.info(`[Auto-Link] Added ${totalNewProviders} new config(s) to provider pools:`);
             for (const [displayName, providers] of Object.entries(allNewProviders)) {
-                console.log(`  ${displayName}: ${providers.length} config(s)`);
+                logger.info(`  ${displayName}: ${providers.length} config(s)`);
                 providers.forEach(p => {
                     // 获取凭据路径键（支持 _CREDS_FILE_PATH 和 _TOKEN_FILE_PATH 两种格式）
                     const credKey = Object.keys(p).find(k =>
                         k.endsWith('_CREDS_FILE_PATH') || k.endsWith('_TOKEN_FILE_PATH')
                     );
                     if (credKey) {
-                        console.log(`    - ${p[credKey]}`);
+                        logger.info(`    - ${p[credKey]}`);
                     }
                 });
             }
         } catch (error) {
-            console.error(`[Auto-Link] Failed to save provider_pools.json: ${error.message}`);
+            logger.error(`[Auto-Link] Failed to save provider_pools.json: ${error.message}`);
         }
     } else {
-        console.log('[Auto-Link] No new configs to link');
+        logger.info('[Auto-Link] No new configs to link');
     }
     
     // Update provider pool manager if available
@@ -154,7 +155,7 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
             }
         }
     } catch (error) {
-        console.warn(`[Auto-Link] Failed to scan directory ${dirPath}: ${error.message}`);
+        logger.warn(`[Auto-Link] Failed to scan directory ${dirPath}: ${error.message}`);
     }
 }
 
@@ -173,24 +174,24 @@ export async function initApiService(config, isReady = false) {
             maxErrorCount: config.MAX_ERROR_COUNT ?? 3,
             providerFallbackChain: config.providerFallbackChain || {},
         });
-        console.log('[Initialization] ProviderPoolManager initialized with configured pools.');
+        logger.info('[Initialization] ProviderPoolManager initialized with configured pools.');
 
         if(isReady){
             // --- V2: 触发系统预热 ---
             // 预热逻辑是异步的，不会阻塞服务器启动
             providerPoolManager.warmupNodes().catch(err => {
-                console.error(`[Initialization] Warmup failed: ${err.message}`);
+                logger.error(`[Initialization] Warmup failed: ${err.message}`);
             });
 
             // 检查并刷新即将过期的节点（异步调用，不阻塞启动）
             providerPoolManager.checkAndRefreshExpiringNodes().catch(err => {
-                console.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
+                logger.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
             });
         }
 
         // 健康检查将在服务器完全启动后执行
     } else {
-        console.log('[Initialization] No provider pools configured. Using single provider mode.');
+        logger.info('[Initialization] No provider pools configured. Using single provider mode.');
     }
 
     // Initialize all provider pool nodes at startup
@@ -203,7 +204,7 @@ export async function initApiService(config, isReady = false) {
             // 验证提供商类型是否在 DEFAULT_MODEL_PROVIDERS 中
             if (config.DEFAULT_MODEL_PROVIDERS && Array.isArray(config.DEFAULT_MODEL_PROVIDERS)) {
                 if (!config.DEFAULT_MODEL_PROVIDERS.includes(providerType)) {
-                    console.log(`[Initialization] Skipping provider type '${providerType}' (not in DEFAULT_MODEL_PROVIDERS).`);
+                    logger.info(`[Initialization] Skipping provider type '${providerType}' (not in DEFAULT_MODEL_PROVIDERS).`);
                     continue;
                 }
             }
@@ -212,7 +213,7 @@ export async function initApiService(config, isReady = false) {
                 continue;
             }
             
-            console.log(`[Initialization] Initializing ${providerConfigs.length} node(s) for provider '${providerType}'...`);
+            logger.info(`[Initialization] Initializing ${providerConfigs.length} node(s) for provider '${providerType}'...`);
             
             // 初始化该提供商类型的所有节点
             for (const providerConfig of providerConfigs) {
@@ -234,18 +235,18 @@ export async function initApiService(config, isReady = false) {
                     totalInitialized++;
                     
                     const identifier = providerConfig.customName || providerConfig.uuid || 'unknown';
-                    console.log(`  ✓ Initialized node: ${identifier}`);
+                    logger.info(`  ✓ Initialized node: ${identifier}`);
                 } catch (error) {
                     totalFailed++;
                     const identifier = providerConfig.customName || providerConfig.uuid || 'unknown';
-                    console.warn(`  ✗ Failed to initialize node ${identifier}: ${error.message}`);
+                    logger.warn(`  ✗ Failed to initialize node ${identifier}: ${error.message}`);
                 }
             }
         }
         
-        console.log(`[Initialization] Provider pool initialization complete: ${totalInitialized} succeeded, ${totalFailed} failed.`);
+        logger.info(`[Initialization] Provider pool initialization complete: ${totalInitialized} succeeded, ${totalFailed} failed.`);
     } else {
-        console.log('[Initialization] No provider pools configured. Skipping node initialization.');
+        logger.info('[Initialization] No provider pools configured. Skipping node initialization.');
     }
     return serviceInstances; // Return the collection of initialized service instances
 }
@@ -271,10 +272,10 @@ export async function getApiService(config, requestedModel = null, options = {})
             config.uuid = serviceConfig.uuid;
             config.customName = serviceConfig.customName;
             const customNameDisplay = serviceConfig.customName ? ` (${serviceConfig.customName})` : '';
-            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
+            logger.info(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
             const errorMsg = `[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
-            console.error(errorMsg);
+            logger.error(errorMsg);
             throw new Error(errorMsg);
         }
     }
@@ -321,7 +322,7 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
             }
         } else {
             const errorMsg = `[API Service] No healthy provider found in pool (including fallback) for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
-            console.error(errorMsg);
+            logger.error(errorMsg);
             throw new Error(errorMsg);
         }
     }
@@ -376,7 +377,7 @@ export async function getProviderStatus(config, options = {}) {
             providerPools = poolsData;
         }
     } catch (error) {
-        console.warn('[API Service] Failed to load provider pools:', error.message);
+        logger.warn('[API Service] Failed to load provider pools:', error.message);
     }
 
     // providerPoolsSlim 只保留顶级 key 及部分字段，过滤 isDisabled 为 true 的元素

@@ -1,4 +1,5 @@
 import { OAuth2Client } from 'google-auth-library';
+import logger from '../utils/logger.js';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -74,7 +75,7 @@ async function closeActiveServer(provider, port = null) {
         await new Promise((resolve) => {
             existing.server.close(() => {
                 activeServers.delete(provider);
-                console.log(`[OAuth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+                logger.info(`[OAuth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
                 resolve();
             });
         });
@@ -87,7 +88,7 @@ async function closeActiveServer(provider, port = null) {
                 await new Promise((resolve) => {
                     info.server.close(() => {
                         activeServers.delete(p);
-                        console.log(`[OAuth] 已关闭端口 ${port} 上被占用（提供商: ${p}）的旧服务器`);
+                        logger.info(`[OAuth] 已关闭端口 ${port} 上被占用（提供商: ${p}）的旧服务器`);
                         resolve();
                     });
                 });
@@ -118,7 +119,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                 const errorParam = url.searchParams.get('error');
                 
                 if (code) {
-                    console.log(`${config.logPrefix} 收到来自 Google 的成功回调: ${req.url}`);
+                    logger.info(`${config.logPrefix} 收到来自 Google 的成功回调: ${req.url}`);
                     
                     try {
                         const { tokens } = await authClient.getToken(code);
@@ -136,7 +137,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
 
                         await fs.promises.mkdir(path.dirname(finalCredPath), { recursive: true });
                         await fs.promises.writeFile(finalCredPath, JSON.stringify(tokens, null, 2));
-                        console.log(`${config.logPrefix} 新令牌已接收并保存到文件: ${finalCredPath}`);
+                        logger.info(`${config.logPrefix} 新令牌已接收并保存到文件: ${finalCredPath}`);
                         
                         const relativePath = path.relative(process.cwd(), finalCredPath);
 
@@ -154,7 +155,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(true, '您可以关闭此页面'));
                     } catch (tokenError) {
-                        console.error(`${config.logPrefix} 获取令牌失败:`, tokenError);
+                        logger.error(`${config.logPrefix} 获取令牌失败:`, tokenError);
                         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, `获取令牌失败: ${tokenError.message}`));
                     } finally {
@@ -164,7 +165,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                     }
                 } else if (errorParam) {
                     const errorMessage = `授权失败。Google 返回错误: ${errorParam}`;
-                    console.error(`${config.logPrefix}`, errorMessage);
+                    logger.error(`${config.logPrefix}`, errorMessage);
                     
                     res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
                     res.end(generateResponsePage(false, errorMessage));
@@ -172,12 +173,12 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                         activeServers.delete(provider);
                     });
                 } else {
-                    console.log(`${config.logPrefix} 忽略无关请求: ${req.url}`);
+                    logger.info(`${config.logPrefix} 忽略无关请求: ${req.url}`);
                     res.writeHead(204);
                     res.end();
                 }
             } catch (error) {
-                console.error(`${config.logPrefix} 处理回调时出错:`, error);
+                logger.error(`${config.logPrefix} 处理回调时出错:`, error);
                 res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
                 
@@ -191,17 +192,17 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
         
         server.on('error', (err) => {
             if (err.code === 'EADDRINUSE') {
-                console.error(`${config.logPrefix} 端口 ${port} 已被占用`);
+                logger.error(`${config.logPrefix} 端口 ${port} 已被占用`);
                 reject(new Error(`端口 ${port} 已被占用`));
             } else {
-                console.error(`${config.logPrefix} 服务器错误:`, err);
+                logger.error(`${config.logPrefix} 服务器错误:`, err);
                 reject(err);
             }
         });
         
         const host = '0.0.0.0';
         server.listen(port, host, () => {
-            console.log(`${config.logPrefix} OAuth 回调服务器已启动于 ${host}:${port}`);
+            logger.info(`${config.logPrefix} OAuth 回调服务器已启动于 ${host}:${port}`);
             activeServers.set(provider, { server, port });
             resolve(server);
         });
@@ -236,7 +237,7 @@ async function handleGoogleOAuth(providerKey, currentConfig, options = {}) {
 
     if (proxyConfig) {
         oauth2Options.transporterOptions = proxyConfig;
-        console.log(`${config.logPrefix} Using proxy for OAuth token exchange`);
+        logger.info(`${config.logPrefix} Using proxy for OAuth token exchange`);
     }
 
     const authClient = new OAuth2Client(oauth2Options);

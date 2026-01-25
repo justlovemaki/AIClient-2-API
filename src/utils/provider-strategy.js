@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import logger from './logger.js';
 import { FETCH_SYSTEM_PROMPT_FILE } from '../utils/common.js';
 
 /**
@@ -64,20 +65,20 @@ export class ProviderStrategy {
             currentSystemText = await fs.readFile(FETCH_SYSTEM_PROMPT_FILE, 'utf8');
         } catch (error) {
             if (error.code !== 'ENOENT') {
-                console.error(`[System Prompt Manager] Error reading system prompt file: ${error.message}`);
+                logger.error(`[System Prompt Manager] Error reading system prompt file: ${error.message}`);
             }
         }
 
         try {
             if (incomingSystemText && incomingSystemText !== currentSystemText) {
                 await fs.writeFile(FETCH_SYSTEM_PROMPT_FILE, incomingSystemText);
-                console.log(`[System Prompt Manager] System prompt updated in file for provider '${providerName}'.`);
+                logger.info(`[System Prompt Manager] System prompt updated in file for provider '${providerName}'.`);
             } else if (!incomingSystemText && currentSystemText) {
                 await fs.writeFile(FETCH_SYSTEM_PROMPT_FILE, '');
-                console.log('[System Prompt Manager] System prompt cleared from file.');
+                logger.info('[System Prompt Manager] System prompt cleared from file.');
             }
         } catch (error) {
-            console.error(`[System Prompt Manager] Failed to manage system prompt file: ${error.message}`);
+            logger.error(`[System Prompt Manager] Failed to manage system prompt file: ${error.message}`);
         }
     }
 }

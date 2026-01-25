@@ -68,8 +68,6 @@ function addLogEntry(logData) {
     const levelClass = `log-level-${logData.level}`;
 
     logEntry.innerHTML = `
-        <span class="log-time">[${time}]</span>
-        <span class="${levelClass}">[${logData.level.toUpperCase()}]</span>
         <span class="log-message">${escapeHtml(logData.message)}</span>
     `;
 

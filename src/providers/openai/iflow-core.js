@@ -17,6 +17,7 @@
  */
 
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { promises as fs } from 'fs';
@@ -115,12 +116,12 @@ async function loadTokenFromFile(filePath) {
         
         // 记录加载的 token 信息
         const refreshToken = json.refreshToken || json.refresh_token || '';
-        console.log(`[iFlow] Token loaded from: ${filePath} (refresh_token: ${refreshToken ? refreshToken.substring(0, 8) + '...' : 'EMPTY'})`);
+        logger.info(`[iFlow] Token loaded from: ${filePath} (refresh_token: ${refreshToken ? refreshToken.substring(0, 8) + '...' : 'EMPTY'})`);
         
         return IFlowTokenStorage.fromJSON(json);
     } catch (error) {
         if (error.code === 'ENOENT') {
-            console.warn(`[iFlow] Token file not found: ${filePath}`);
+            logger.warn(`[iFlow] Token file not found: ${filePath}`);
             return null;
         }
         throw new Error(`[iFlow] Failed to load token from file: ${error.message}`);
@@ -147,15 +148,15 @@ async function saveTokenToFile(filePath, tokenStorage, uuid = null) {
 
         // 验证关键字段是否存在
         if (!json.refresh_token || json.refresh_token.trim() === '') {
-            console.error('[iFlow] WARNING: Attempting to save token file with empty refresh_token!');
+            logger.error('[iFlow] WARNING: Attempting to save token file with empty refresh_token!');
         }
         if (!json.apiKey || json.apiKey.trim() === '') {
-            console.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
+            logger.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
         }
 
         await fs.writeFile(absolutePath, JSON.stringify(json, null, 2), 'utf-8');
 
-        console.log(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
+        logger.info(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
     } catch (error) {
         throw new Error(`[iFlow] Failed to save token to file: ${error.message}`);
     }
@@ -174,7 +175,7 @@ async function refreshOAuthTokens(refreshToken, axiosInstance = null) {
         throw new Error('[iFlow] refresh_token is empty');
     }
     
-    console.log('[iFlow] Refreshing OAuth tokens...');
+    logger.info('[iFlow] Refreshing OAuth tokens...');
     
     // 构建请求参数
     const params = new URLSearchParams();
@@ -205,9 +206,9 @@ async function refreshOAuthTokens(refreshToken, axiosInstance = null) {
         
         const tokenResp = response.data;
         
-        // console.log('[iFlow] Token response:', JSON.stringify(tokenResp));
+        // logger.info('[iFlow] Token response:', JSON.stringify(tokenResp));
         if (!tokenResp.access_token) {
-            console.error('[iFlow] Token response:', JSON.stringify(tokenResp));
+            logger.error('[iFlow] Token response:', JSON.stringify(tokenResp));
             throw new Error('[iFlow] Missing access_token in response');
         }
         
@@ -223,7 +224,7 @@ async function refreshOAuthTokens(refreshToken, axiosInstance = null) {
             expiryDate: expireTimestamp // 毫秒级时间戳
         };
         
-        console.log('[iFlow] OAuth tokens refreshed successfully');
+        logger.info('[iFlow] OAuth tokens refreshed successfully');
         
         // 获取用户信息以获取 API Key
         const userInfo = await fetchUserInfo(tokenData.accessToken, axiosInstance);
@@ -236,7 +237,7 @@ async function refreshOAuthTokens(refreshToken, axiosInstance = null) {
     } catch (error) {
         const status = error.response?.status;
         const data = error.response?.data;
-        console.error(`[iFlow] OAuth token refresh failed (Status: ${status}):`, data || error.message);
+        logger.error(`[iFlow] OAuth token refresh failed (Status: ${status}):`, data || error.message);
         throw error;
     }
 }
@@ -269,7 +270,7 @@ async function fetchUserInfo(accessToken, axiosInstance = null) {
             : await axios.request(requestConfig);
         
         const result = response.data;
-        // console.log('[iFlow] User info response:', JSON.stringify(result));
+        // logger.info('[iFlow] User info response:', JSON.stringify(result));
         if (!result.success) {
             throw new Error('[iFlow] User info request not successful');
         }
@@ -286,7 +287,7 @@ async function fetchUserInfo(accessToken, axiosInstance = null) {
     } catch (error) {
         const status = error.response?.status;
         const data = error.response?.data;
-        console.error(`[iFlow] Fetch user info failed (Status: ${status}):`, data || error.message);
+        logger.error(`[iFlow] Fetch user info failed (Status: ${status}):`, data || error.message);
         throw error;
     }
 }
@@ -382,7 +383,7 @@ function preserveReasoningContentInMessages(body, model) {
     );
     
     if (hasReasoningContent) {
-        console.log(`[iFlow] reasoning_content found in message history for ${model}`);
+        logger.info(`[iFlow] reasoning_content found in message history for ${model}`);
     }
     
     return body;
@@ -493,13 +494,13 @@ export class IFlowApiService {
     async initialize() {
         if (this.isInitialized) return;
         
-        console.log('[iFlow] Initializing iFlow API Service...');
+        logger.info('[iFlow] Initializing iFlow API Service...');
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
         
         this.isInitialized = true;
-        console.log('[iFlow] Initialization complete.');
+        logger.info('[iFlow] Initialization complete.');
     }
 
     /**
@@ -513,10 +514,10 @@ export class IFlowApiService {
                 this.apiKey = this.tokenStorage.apiKey;
                 // 更新 axios 实例的 Authorization header
                 this.axiosInstance.defaults.headers['Authorization'] = `Bearer ${this.apiKey}`;
-                console.log('[iFlow Auth] Credentials loaded successfully from file');
+                logger.info('[iFlow Auth] Credentials loaded successfully from file');
             }
         } catch (error) {
-            console.warn(`[iFlow Auth] Failed to load credentials from file: ${error.message}`);
+            logger.warn(`[iFlow Auth] Failed to load credentials from file: ${error.message}`);
         }
     }
 
@@ -540,17 +541,17 @@ export class IFlowApiService {
             // 从文件加载
             if (!this.tokenStorage) {
                 this.tokenStorage = await loadTokenFromFile(this.tokenFilePath);
-                console.log('[iFlow Auth] Loaded credentials from file');
+                logger.info('[iFlow Auth] Loaded credentials from file');
             }
 
             if (this.tokenStorage && this.tokenStorage.apiKey) {
                 this.apiKey = this.tokenStorage.apiKey;
-                console.log('[iFlow Auth] Authentication configured successfully from file.');
+                logger.info('[iFlow Auth] Authentication configured successfully from file.');
 
                 if (forceRefresh) {
-                    console.log('[iFlow Auth] Forcing token refresh...');
+                    logger.info('[iFlow Auth] Forcing token refresh...');
                     await this._refreshOAuthTokens();
-                    console.log('[iFlow Auth] Token refreshed and saved successfully.');
+                    logger.info('[iFlow Auth] Token refreshed and saved successfully.');
 
                     // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
                     const poolManager = getProviderPoolManager();
@@ -562,7 +563,7 @@ export class IFlowApiService {
                 throw new Error('[iFlow] No refresh token available in credentials.');
             }
         } catch (error) {
-            console.error('[iFlow Auth] Failed to initialize authentication:', error.message);
+            logger.error('[iFlow Auth] Failed to initialize authentication:', error.message);
             throw new Error(`[iFlow Auth] Failed to load OAuth credentials.`);
         }
     }
@@ -578,23 +579,23 @@ export class IFlowApiService {
 
         // 检查是否有 refresh_token
         if (!this.tokenStorage.refreshToken || this.tokenStorage.refreshToken.trim() === '') {
-            console.log('[iFlow] No refresh_token available, skipping token refresh check');
+            logger.info('[iFlow] No refresh_token available, skipping token refresh check');
             return false;
         }
 
         // 使用 isExpiryDateNear 检查过期时间
         // if (!this.isExpiryDateNear()) {
-        //     console.log('[iFlow] Token is valid, no refresh needed');
+        //     logger.info('[iFlow] Token is valid, no refresh needed');
         //     return false;
         // }
 
-        console.log('[iFlow] Token is expiring soon, attempting refresh...');
+        logger.info('[iFlow] Token is expiring soon, attempting refresh...');
 
         try {
             await this._refreshOAuthTokens();
             return true;
         } catch (error) {
-            console.error('[iFlow] Token refresh failed:', error.message);
+            logger.error('[iFlow] Token refresh failed:', error.message);
             // 刷新失败不抛出异常，继续使用现有 Token
             return false;
         }
@@ -611,7 +612,7 @@ export class IFlowApiService {
         
         const oldAccessToken = this.tokenStorage.accessToken;
         if (oldAccessToken) {
-            console.log(`[iFlow] Refreshing access token, old: ${this._maskToken(oldAccessToken)}`);
+            logger.info(`[iFlow] Refreshing access token, old: ${this._maskToken(oldAccessToken)}`);
         }
         
         // 调用刷新函数
@@ -625,7 +626,7 @@ export class IFlowApiService {
         
         // 记录 refresh_token 是否发生变化
         if (tokenData.refreshToken !== oldRefreshToken) {
-            console.log(`[iFlow] refresh_token has been rotated (old: ${this._maskToken(oldRefreshToken)}, new: ${this._maskToken(tokenData.refreshToken)})`);
+            logger.info(`[iFlow] refresh_token has been rotated (old: ${this._maskToken(oldRefreshToken)}, new: ${this._maskToken(tokenData.refreshToken)})`);
         }
         if (tokenData.apiKey) {
             this.tokenStorage.apiKey = tokenData.apiKey;
@@ -644,7 +645,7 @@ export class IFlowApiService {
         // 保存到文件
         await saveTokenToFile(this.tokenFilePath, this.tokenStorage, this.uuid);
         
-        console.log(`[iFlow] Token refresh successful, new: ${this._maskToken(tokenData.accessToken)}`);
+        logger.info(`[iFlow] Token refresh successful, new: ${this._maskToken(tokenData.accessToken)}`);
     }
 
     /**
@@ -672,7 +673,7 @@ export class IFlowApiService {
             await this._refreshOAuthTokens();
             return true;
         } catch (error) {
-            console.error('[iFlow] Manual token refresh failed:', error.message);
+            logger.error('[iFlow] Manual token refresh failed:', error.message);
             return false;
         }
     }
@@ -709,21 +710,21 @@ export class IFlowApiService {
                     expireTime = new Date(expireValue.replace(' ', 'T') + ':00').getTime();
                 }
             } else {
-                console.error(`[iFlow] Invalid expiry date type: ${typeof expireValue}`);
+                logger.error(`[iFlow] Invalid expiry date type: ${typeof expireValue}`);
                 return false;
             }
             
             if (isNaN(expireTime)) {
-                console.error(`[iFlow] Error parsing expiry date: ${expireValue}`);
+                logger.error(`[iFlow] Error parsing expiry date: ${expireValue}`);
                 return false;
             }
             
             const { message, isNearExpiry } = formatExpiryLog('iFlow', expireTime, cronNearMinutes);
-            console.log(message);
+            logger.info(message);
             
             return isNearExpiry;
         } catch (error) {
-            console.error(`[iFlow] Error checking expiry date: ${error.message}`);
+            logger.error(`[iFlow] Error checking expiry date: ${error.message}`);
             return false;
         }
     }
@@ -775,12 +776,12 @@ export class IFlowApiService {
             
             // Handle 401/400 - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log(`[iFlow] Received ${status}. Triggering background refresh via PoolManager...`);
+                logger.info(`[iFlow] Received ${status}. Triggering background refresh via PoolManager...`);
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized`);
+                    logger.info(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
                         uuid: this.uuid
                     });
@@ -794,14 +795,14 @@ export class IFlowApiService {
             }
 
             if (status === 401 || status === 403) {
-                console.error(`[iFlow] Received ${status}. API Key might be invalid or expired.`);
+                logger.error(`[iFlow] Received ${status}. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[iFlow] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
@@ -809,7 +810,7 @@ export class IFlowApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[iFlow] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
@@ -818,12 +819,12 @@ export class IFlowApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[iFlow] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
 
-            console.error(`[iFlow] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[iFlow] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
             throw error;
         }
     }
@@ -895,7 +896,7 @@ export class IFlowApiService {
                             yield parsedChunk;
                         } catch (e) {
                             // JSON 解析失败，记录警告但继续处理
-                            console.warn("[iFlow] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData.substring(0, 200));
+                            logger.warn("[iFlow] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData.substring(0, 200));
                         }
                     }
                     // 忽略其他 SSE 字段（如 event:, id:, retry: 等）
@@ -917,7 +918,7 @@ export class IFlowApiService {
                             const parsedChunk = JSON.parse(jsonData);
                             yield parsedChunk;
                         } catch (e) {
-                            console.warn("[iFlow] Failed to parse final stream chunk JSON:", e.message);
+                            logger.warn("[iFlow] Failed to parse final stream chunk JSON:", e.message);
                         }
                     }
                 }
@@ -933,12 +934,12 @@ export class IFlowApiService {
             
             // Handle 401/400 during stream - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log(`[iFlow] Received ${status} during stream. Triggering background refresh via PoolManager...`);
+                logger.info(`[iFlow] Received ${status} during stream. Triggering background refresh via PoolManager...`);
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized in stream`);
+                    logger.info(`[iFlow] Marking credential ${this.uuid} as needs refresh. Reason: ${status} Unauthorized in stream`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
                         uuid: this.uuid
                     });
@@ -952,14 +953,14 @@ export class IFlowApiService {
             }
 
             if (status === 401 || status === 403) {
-                console.error(`[iFlow] Received ${status} during stream. API Key might be invalid or expired.`);
+                logger.error(`[iFlow] Received ${status} during stream. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[iFlow] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
@@ -968,7 +969,7 @@ export class IFlowApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[iFlow] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
@@ -978,13 +979,13 @@ export class IFlowApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[iFlow] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[iFlow] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, model, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error(`[iFlow] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[iFlow] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
             throw error;
         }
     }
@@ -1001,7 +1002,7 @@ export class IFlowApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
                     uuid: this.uuid
                 });
@@ -1023,7 +1024,7 @@ export class IFlowApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[iFlow] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.IFLOW_API, {
                     uuid: this.uuid
                 });
@@ -1058,13 +1059,13 @@ export class IFlowApiService {
                         created: Math.floor(Date.now() / 1000),
                         owned_by: 'iflow'
                     });
-                    console.log('[iFlow] Added glm-4.7 to models list');
+                    logger.info('[iFlow] Added glm-4.7 to models list');
                 }
             }
             
             return modelsData;
         } catch (error) {
-            console.warn('[iFlow] Failed to fetch models from API, using default list:', error.message);
+            logger.warn('[iFlow] Failed to fetch models from API, using default list:', error.message);
             // 返回默认模型列表，确保包含 glm-4.7
             const defaultModels = [...IFLOW_MODELS];
             if (!defaultModels.includes('glm-4.7')) {

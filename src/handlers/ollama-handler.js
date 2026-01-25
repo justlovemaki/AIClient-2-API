@@ -4,10 +4,10 @@
  */
 
 import { getRequestBody, handleError, MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
+import logger from '../utils/logger.js';
 import { convertData } from '../convert/convert.js';
 import { ConverterFactory } from '../converters/ConverterFactory.js';
 import { getProviderModels } from '../providers/provider-models.js';
-
 // Ollama版本号
 /**
  * Model name prefix mapping for different providers
@@ -133,7 +133,7 @@ export function getProviderByModelName(modelName, providerPoolManager, defaultPr
     // First, check if model name has a prefix that directly indicates the provider
     const providerFromPrefix = getProviderFromPrefix(modelName);
     if (providerFromPrefix) {
-        console.log(`[Provider Selection] Provider determined from prefix: ${providerFromPrefix}`);
+        logger.info(`[Provider Selection] Provider determined from prefix: ${providerFromPrefix}`);
         return providerFromPrefix;
     }
     
@@ -222,17 +222,17 @@ export function getProviderForModel(modelName, defaultProvider) {
     
     // Remove prefix for further analysis
     const cleanModelName = removeModelPrefix(modelName);
-    console.log(`[Provider Selection] Clean model name: ${cleanModelName}`);
+    logger.info(`[Provider Selection] Clean model name: ${cleanModelName}`);
     
     // Try to find the provider by checking if the model is in the provider's model list
     // This handles cases where different providers have the same model name
     const providerType = findProviderByModelName(cleanModelName);
-    console.log(`[Provider Selection] Provider determined from model list: ${providerType}`);
+    logger.info(`[Provider Selection] Provider determined from model list: ${providerType}`);
     if (providerType) {
         return providerType;
     }
     
-    console.log(`[Provider Selection] Model name not found in provider models. Using default provider: ${defaultProvider}`);
+    logger.info(`[Provider Selection] Model name not found in provider models. Using default provider: ${defaultProvider}`);
     // Default to the provided default provider
     return defaultProvider;
 }
@@ -385,7 +385,7 @@ export async function handleOllamaEndpointsAfterAuth(method, path, req, res, api
  */
 export async function handleOllamaTags(req, res, apiService, currentConfig, providerPoolManager) {
     try {
-        console.log('[Ollama] Handling /api/tags request');
+        logger.info('[Ollama] Handling /api/tags request');
         
         const ollamaConverter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.OLLAMA);
         const { getServiceAdapter } = await import('../providers/adapter.js');
@@ -402,7 +402,7 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
                 }
                 return [];
             } catch (error) {
-                console.error(`[Ollama] Error from ${providerType}:`, error.message);
+                logger.error(`[Ollama] Error from ${providerType}:`, error.message);
                 return [];
             }
         };
@@ -435,7 +435,7 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
         
         // If no providers available, return empty list
         if (fetchPromises.length === 0) {
-            console.warn('[Ollama] No healthy providers available to fetch models');
+            logger.warn('[Ollama] No healthy providers available to fetch models');
             const response = { models: [] };
             res.writeHead(200, {
                 'Content-Type': 'application/json',
@@ -450,7 +450,7 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
         const results = await Promise.all(fetchPromises);
         const allModels = results.flat();
         
-        console.log(`[Ollama] Fetched ${allModels.length} models from ${processedProviderTypes.size} provider(s)`);
+        logger.info(`[Ollama] Fetched ${allModels.length} models from ${processedProviderTypes.size} provider(s)`);
         
         const response = { models: allModels };
         
@@ -461,7 +461,7 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
         });
         res.end(JSON.stringify(response));
     } catch (error) {
-        console.error('[Ollama Tags Error]', error);
+        logger.error('[Ollama Tags Error]', error);
         handleError(res, error, MODEL_PROTOCOL_PREFIX.OLLAMA);
     }
 }
@@ -471,7 +471,7 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
  */
 export async function handleOllamaShow(req, res) {
     try {
-        // console.log('[Ollama] Handling /api/show request');
+        // logger.info('[Ollama] Handling /api/show request');
         
         const body = await getRequestBody(req);
         const modelName = body.name || body.model || 'unknown';
@@ -486,7 +486,7 @@ export async function handleOllamaShow(req, res) {
         });
         res.end(JSON.stringify(showResponse));
     } catch (error) {
-        console.error('[Ollama Show Error]', error);
+        logger.error('[Ollama Show Error]', error);
         handleError(res, error, MODEL_PROTOCOL_PREFIX.OLLAMA);
     }
 }
@@ -505,7 +505,7 @@ export function handleOllamaVersion(res) {
         });
         res.end(JSON.stringify(response));
     } catch (error) {
-        console.error('[Ollama Version Error]', error);
+        logger.error('[Ollama Version Error]', error);
         handleError(res, error, MODEL_PROTOCOL_PREFIX.OLLAMA);
     }
 }
@@ -516,7 +516,7 @@ export function handleOllamaVersion(res) {
  */
 export async function handleOllamaChat(req, res, apiService, currentConfig, providerPoolManager) {
     try {
-        console.log('[Ollama] Handling /api/chat request');
+        logger.info('[Ollama] Handling /api/chat request');
         
         const ollamaRequest = await getRequestBody(req);
         const { getServiceAdapter } = await import('../providers/adapter.js');
@@ -527,7 +527,7 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
         ollamaRequest.model = modelName; // Use clean model name
         const detectedProvider = getProviderForModel(rawModelName, currentConfig.MODEL_PROVIDER);
         
-        console.log(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
+        logger.info(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
         
         // Get the appropriate service based on detected provider
         let actualApiService = apiService;
@@ -545,10 +545,10 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
                         MODEL_PROVIDER: detectedProvider
                     };
                     actualApiService = getServiceAdapter(actualConfig);
-                    console.log(`[Ollama] Using provider from pool: ${detectedProvider}`);
+                    logger.info(`[Ollama] Using provider from pool: ${detectedProvider}`);
                 } else {
                     // No healthy provider in pool, try to create service directly
-                    console.warn(`[Ollama] No healthy provider found for ${detectedProvider} in pool`);
+                    logger.warn(`[Ollama] No healthy provider found for ${detectedProvider} in pool`);
                     if (!apiService) {
                         throw new Error(`No healthy provider available for ${detectedProvider}`);
                     }
@@ -557,7 +557,7 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
                 // No pool manager and no apiService, try to create service directly
                 actualConfig = { ...currentConfig, MODEL_PROVIDER: detectedProvider };
                 actualApiService = getServiceAdapter(actualConfig);
-                console.log(`[Ollama] Created service adapter for: ${detectedProvider}`);
+                logger.info(`[Ollama] Created service adapter for: ${detectedProvider}`);
             }
         }
         
@@ -591,7 +591,7 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
                     const ollamaChunk = ollamaConverter.convertStreamChunk(chunk, sourceProtocol, ollamaRequest.model, false);
                     res.write(JSON.stringify(ollamaChunk) + '\n');
                 } catch (chunkError) {
-                    console.error('[Ollama] Error processing chunk:', chunkError);
+                    logger.error('[Ollama] Error processing chunk:', chunkError);
                 }
             }
             
@@ -612,7 +612,7 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
             res.end(JSON.stringify(ollamaResponse));
         }
     } catch (error) {
-        console.error('[Ollama Chat Error]', error);
+        logger.error('[Ollama Chat Error]', error);
         handleError(res, error, MODEL_PROTOCOL_PREFIX.OLLAMA);
     }
 }
@@ -623,7 +623,7 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
  */
 export async function handleOllamaGenerate(req, res, apiService, currentConfig, providerPoolManager) {
     try {
-        console.log('[Ollama] Handling /api/generate request');
+        logger.info('[Ollama] Handling /api/generate request');
         
         const ollamaRequest = await getRequestBody(req);
         const { getServiceAdapter } = await import('../providers/adapter.js');
@@ -634,7 +634,7 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
         ollamaRequest.model = modelName; // Use clean model name
         const detectedProvider = getProviderForModel(rawModelName, currentConfig.MODEL_PROVIDER);
         
-        console.log(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
+        logger.info(`[Ollama] Model: ${modelName}, Detected provider: ${detectedProvider}`);
         
         // Get the appropriate service based on detected provider
         let actualApiService = apiService;
@@ -652,10 +652,10 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
                         MODEL_PROVIDER: detectedProvider
                     };
                     actualApiService = getServiceAdapter(actualConfig);
-                    console.log(`[Ollama] Using provider from pool: ${detectedProvider}`);
+                    logger.info(`[Ollama] Using provider from pool: ${detectedProvider}`);
                 } else {
                     // No healthy provider in pool, try to create service directly
-                    console.warn(`[Ollama] No healthy provider found for ${detectedProvider} in pool`);
+                    logger.warn(`[Ollama] No healthy provider found for ${detectedProvider} in pool`);
                     if (!apiService) {
                         throw new Error(`No healthy provider available for ${detectedProvider}`);
                     }
@@ -664,7 +664,7 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
                 // No pool manager and no apiService, try to create service directly
                 actualConfig = { ...currentConfig, MODEL_PROVIDER: detectedProvider };
                 actualApiService = getServiceAdapter(actualConfig);
-                console.log(`[Ollama] Created service adapter for: ${detectedProvider}`);
+                logger.info(`[Ollama] Created service adapter for: ${detectedProvider}`);
             }
         }
         
@@ -698,7 +698,7 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
                     const ollamaChunk = ollamaConverter.toOllamaGenerateStreamChunk(chunk, ollamaRequest.model, false);
                     res.write(JSON.stringify(ollamaChunk) + '\n');
                 } catch (chunkError) {
-                    console.error('[Ollama] Error processing chunk:', chunkError);
+                    logger.error('[Ollama] Error processing chunk:', chunkError);
                 }
             }
             
@@ -719,7 +719,7 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
             res.end(JSON.stringify(ollamaResponse));
         }
     } catch (error) {
-        console.error('[Ollama Generate Error]', error);
+        logger.error('[Ollama Generate Error]', error);
         handleError(res, error, MODEL_PROTOCOL_PREFIX.OLLAMA);
     }
 }

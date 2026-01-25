@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import logger from '../utils/logger.js';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from '../utils/common.js';
 import {
   streamStateManager,
@@ -113,7 +114,7 @@ function _cleanJsonSchemaProperties(schema) {
 function _determineReasoningEffortFromBudget(budgetTokens) {
     // 如果没有提供budget_tokens，默认为high
     if (budgetTokens === null || budgetTokens === undefined) {
-        console.info("No budget_tokens provided, defaulting to reasoning_effort='high'");
+        logger.info("No budget_tokens provided, defaulting to reasoning_effort='high'");
         return "high";
     }
 
@@ -121,7 +122,7 @@ function _determineReasoningEffortFromBudget(budgetTokens) {
     const LOW_THRESHOLD = 50;    // 低推理努力的阈值
     const HIGH_THRESHOLD = 200;  // 高推理努力的阈值
 
-    console.debug(`Threshold configuration: low <= ${LOW_THRESHOLD}, medium <= ${HIGH_THRESHOLD}, high > ${HIGH_THRESHOLD}`);
+    logger.debug(`Threshold configuration: low <= ${LOW_THRESHOLD}, medium <= ${HIGH_THRESHOLD}, high > ${HIGH_THRESHOLD}`);
 
     let effort;
     if (budgetTokens <= LOW_THRESHOLD) {
@@ -132,7 +133,7 @@ function _determineReasoningEffortFromBudget(budgetTokens) {
         effort = "high";
     }
 
-    console.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${LOW_THRESHOLD}, high<=${HIGH_THRESHOLD})`);
+    logger.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${LOW_THRESHOLD}, high<=${HIGH_THRESHOLD})`);
     return effort;
 }
 
@@ -253,7 +254,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
         throw new Error(`No conversion function found from ${getProtocolPrefix(fromProvider)} to ${toProvider} for type: ${type}`);
     }
 
-    console.log(conversionFunction);
+    logger.info(conversionFunction);
     if (type === 'response' || type === 'streamChunk' || type === 'modelList') {
         return conversionFunction(data, model);
     } else {
@@ -856,16 +857,16 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
         if (claudeRequest.max_tokens !== undefined) {
             maxCompletionTokens = claudeRequest.max_tokens;
             delete openaiRequest.max_tokens; // 移除max_tokens，使用max_completion_tokens
-            console.info(`Using client max_tokens as max_completion_tokens: ${maxCompletionTokens}`);
+            logger.info(`Using client max_tokens as max_completion_tokens: ${maxCompletionTokens}`);
         } else {
             // 优先级2：环境变量OPENAI_REASONING_MAX_TOKENS
             const envMaxTokens = process.env.OPENAI_REASONING_MAX_TOKENS;
             if (envMaxTokens) {
                 try {
                     maxCompletionTokens = parseInt(envMaxTokens, 10);
-                    console.info(`Using OPENAI_REASONING_MAX_TOKENS from environment: ${maxCompletionTokens}`);
+                    logger.info(`Using OPENAI_REASONING_MAX_TOKENS from environment: ${maxCompletionTokens}`);
                 } catch (e) {
-                    console.warn(`Invalid OPENAI_REASONING_MAX_TOKENS value '${envMaxTokens}', must be integer`);
+                    logger.warn(`Invalid OPENAI_REASONING_MAX_TOKENS value '${envMaxTokens}', must be integer`);
                 }
             }
 
@@ -875,9 +876,9 @@ export function toOpenAIRequestFromClaude(claudeRequest) {
             }
         }
         openaiRequest.max_completion_tokens = maxCompletionTokens;
-        console.info(`Anthropic thinking enabled -> OpenAI reasoning_effort='${reasoningEffort}', max_completion_tokens=${maxCompletionTokens}`);
+        logger.info(`Anthropic thinking enabled -> OpenAI reasoning_effort='${reasoningEffort}', max_completion_tokens=${maxCompletionTokens}`);
         if (budgetTokens) {
-            console.info(`Budget tokens: ${budgetTokens} -> reasoning_effort: '${reasoningEffort}'`);
+            logger.info(`Budget tokens: ${budgetTokens} -> reasoning_effort: '${reasoningEffort}'`);
         }
     }
 
@@ -1026,7 +1027,7 @@ export function toGeminiRequestFromOpenAI(openaiRequest) {
             functionDeclarations: openaiRequest.tools.map(t => {
                 // Ensure tool is a valid object and has function property
                 if (!t || typeof t !== 'object' || !t.function) {
-                    console.warn("Skipping invalid tool declaration in openaiRequest.tools.");
+                    logger.warn("Skipping invalid tool declaration in openaiRequest.tools.");
                     return null; // Return null for invalid tools, filter out later
                 }
 
@@ -1057,7 +1058,7 @@ export function toGeminiRequestFromOpenAI(openaiRequest) {
     
     // Validation
     if (geminiRequest.contents[0]?.role !== 'user') {
-        console.warn(`[Request Conversion] Warning: Conversation does not start with a 'user' role.`);
+        logger.warn(`[Request Conversion] Warning: Conversation does not start with a 'user' role.`);
     }
     
     return geminiRequest;
@@ -1618,7 +1619,7 @@ export function extractTextFromMessageContent(content) {
 export function toGeminiRequestFromClaude(claudeRequest) {
     // Ensure claudeRequest is a valid object
     if (!claudeRequest || typeof claudeRequest !== 'object') {
-        console.warn("Invalid claudeRequest provided to toGeminiRequestFromClaude.");
+        logger.warn("Invalid claudeRequest provided to toGeminiRequestFromClaude.");
         return { contents: [] };
     }
 
@@ -1654,7 +1655,7 @@ export function toGeminiRequestFromClaude(claudeRequest) {
         claudeRequest.messages.forEach(message => {
             // Ensure message is a valid object and has a role and content
             if (!message || typeof message !== 'object' || !message.role || !message.content) {
-                console.warn("Skipping invalid message in claudeRequest.messages.");
+                logger.warn("Skipping invalid message in claudeRequest.messages.");
                 return;
             }
 
@@ -1698,13 +1699,13 @@ export function toGeminiRequestFromClaude(claudeRequest) {
             functionDeclarations: claudeRequest.tools.map(tool => {
                 // Ensure tool is a valid object and has a name
                 if (!tool || typeof tool !== 'object' || !tool.name) {
-                    console.warn("Skipping invalid tool declaration in claudeRequest.tools.");
+                    logger.warn("Skipping invalid tool declaration in claudeRequest.tools.");
                     return null; // Return null for invalid tools, filter out later
                 }
 
                 // Filter out TodoWrite tool
                 // if (tool.name === 'TodoWrite') {
-                //     console.log("Filtering out TodoWrite tool");
+                //     logger.info("Filtering out TodoWrite tool");
                 //     return null;
                 // }
 
@@ -1737,7 +1738,7 @@ export function toGeminiRequestFromClaude(claudeRequest) {
  */
 function buildGeminiToolConfigFromClaude(claudeToolChoice) {
     if (!claudeToolChoice || typeof claudeToolChoice !== 'object' || !claudeToolChoice.type) {
-        console.warn("Invalid claudeToolChoice provided to buildGeminiToolConfigFromClaude.");
+        logger.warn("Invalid claudeToolChoice provided to buildGeminiToolConfigFromClaude.");
         return undefined;
     }
 
@@ -1750,10 +1751,10 @@ function buildGeminiToolConfigFromClaude(claudeToolChoice) {
             if (claudeToolChoice.name && typeof claudeToolChoice.name === 'string') {
                 return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [claudeToolChoice.name] } };
             }
-            console.warn("Invalid tool name in claudeToolChoice of type 'tool'.");
+            logger.warn("Invalid tool name in claudeToolChoice of type 'tool'.");
             return undefined;
         default:
-            console.warn(`Unsupported claudeToolChoice type: ${claudeToolChoice.type}`);
+            logger.warn(`Unsupported claudeToolChoice type: ${claudeToolChoice.type}`);
             return undefined;
     }
 }
@@ -1778,7 +1779,7 @@ function processClaudeContentToGeminiParts(content) {
         content.forEach(block => {
             // Ensure block is a valid object and has a type
             if (!block || typeof block !== 'object' || !block.type) {
-                console.warn("Skipping invalid content block in processClaudeContentToGeminiParts.");
+                logger.warn("Skipping invalid content block in processClaudeContentToGeminiParts.");
                 return;
             }
 
@@ -1787,7 +1788,7 @@ function processClaudeContentToGeminiParts(content) {
                     if (typeof block.text === 'string') {
                         parts.push({ text: block.text });
                     } else {
-                        console.warn("Invalid text content in Claude text block.");
+                        logger.warn("Invalid text content in Claude text block.");
                     }
                     break;
 
@@ -1801,7 +1802,7 @@ function processClaudeContentToGeminiParts(content) {
                             }
                         });
                     } else {
-                        console.warn("Invalid image source in Claude image block.");
+                        logger.warn("Invalid image source in Claude image block.");
                     }
                     break;
 
@@ -1809,7 +1810,7 @@ function processClaudeContentToGeminiParts(content) {
                     if (typeof block.name === 'string' && block.input && typeof block.input === 'object') {
                         // Filter out TodoWrite tool use
                         // if (block.name === 'TodoWrite') {
-                        //     console.log("Filtering out TodoWrite tool use");
+                        //     logger.info("Filtering out TodoWrite tool use");
                         //     break; // Skip adding this tool to parts
                         // }
                         parts.push({
@@ -1819,7 +1820,7 @@ function processClaudeContentToGeminiParts(content) {
                             }
                         });
                     } else {
-                        console.warn("Invalid tool_use block in Claude content.");
+                        logger.warn("Invalid tool_use block in Claude content.");
                     }
                     break;
 
@@ -1837,7 +1838,7 @@ function processClaudeContentToGeminiParts(content) {
                             }
                         });
                     } else {
-                        console.warn("Invalid tool_result block in Claude content: missing tool_use_id.");
+                        logger.warn("Invalid tool_result block in Claude content: missing tool_use_id.");
                     }
                     break;
 
@@ -1846,7 +1847,7 @@ function processClaudeContentToGeminiParts(content) {
                     if (typeof block.text === 'string') {
                         parts.push({ text: block.text });
                     } else {
-                        console.warn(`Unsupported Claude content block type: ${block.type}. Skipping.`);
+                        logger.warn(`Unsupported Claude content block type: ${block.type}. Skipping.`);
                     }
             }
         });
@@ -1936,8 +1937,8 @@ function processGeminiResponseToClaudeContent(geminiResponse) {
     for (const candidate of geminiResponse.candidates) {
         // 检查完成原因是否为错误类型
         if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-            // console.log('Gemini response finishReason:', JSON.stringify(candidate));
-            // console.warn('Gemini response contains malformed function call:', candidate.finishMessage || 'No finish message');
+            // logger.info('Gemini response finishReason:', JSON.stringify(candidate));
+            // logger.warn('Gemini response contains malformed function call:', candidate.finishMessage || 'No finish message');
             
             // 将错误信息作为文本内容返回
             if (candidate.finishMessage) {
@@ -1946,7 +1947,7 @@ function processGeminiResponseToClaudeContent(geminiResponse) {
                     text: `Error: ${candidate.finishMessage}`
                 });
             }
-            // console.log("Processed content:", content);
+            // logger.info("Processed content:", content);
             continue; // 跳过当前候选的进一步处理
         }
 
@@ -2569,3 +2570,5 @@ export function  getOpenAIResponsesStreamChunkEnd(id){
         generateResponseCompleted(id)
     ];
 }
+
+

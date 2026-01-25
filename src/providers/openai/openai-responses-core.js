@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
@@ -13,7 +14,7 @@ export class OpenAIResponsesApiService {
         this.apiKey = config.OPENAI_API_KEY;
         this.baseUrl = config.OPENAI_BASE_URL || 'https://api.openai.com/v1';
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_OPENAI ?? false;
-        console.log(`[OpenAIResponses] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        logger.info(`[OpenAIResponses] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
 
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
@@ -61,14 +62,14 @@ export class OpenAIResponsesApiService {
             const status = error.response?.status;
             const data = error.response?.data;
             if (status === 401 || status === 403) {
-                console.error(`[API] Received ${status}. API Key might be invalid or expired.`);
+                logger.error(`[API] Received ${status}. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
@@ -76,12 +77,12 @@ export class OpenAIResponsesApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            console.error(`Error calling OpenAI Responses API (Status: ${status}):`, data || error.message);
+            logger.error(`Error calling OpenAI Responses API (Status: ${status}):`, data || error.message);
             throw error;
         }
     }
@@ -117,7 +118,7 @@ export class OpenAIResponsesApiService {
                             const parsedChunk = JSON.parse(jsonData);
                             yield parsedChunk;
                         } catch (e) {
-                            console.warn("[OpenAIResponsesApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
+                            logger.warn("[OpenAIResponsesApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
                         }
                     } else if (line === '') {
                         // Empty line, end of an event
@@ -128,14 +129,14 @@ export class OpenAIResponsesApiService {
             const status = error.response?.status;
             const data = error.response?.data;
             if (status === 401 || status === 403) {
-                console.error(`[API] Received ${status} during stream. API Key might be invalid or expired.`);
+                logger.error(`[API] Received ${status} during stream. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -144,13 +145,13 @@ export class OpenAIResponsesApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error(`Error calling OpenAI Responses streaming API (Status: ${status}):`, data || error.message);
+            logger.error(`Error calling OpenAI Responses streaming API (Status: ${status}):`, data || error.message);
             throw error;
         }
     }
@@ -170,7 +171,7 @@ export class OpenAIResponsesApiService {
         } catch (error) {
             const status = error.response?.status;
             const data = error.response?.data;
-            console.error(`Error listing OpenAI Responses models (Status: ${status}):`, data || error.message);
+            logger.error(`Error listing OpenAI Responses models (Status: ${status}):`, data || error.message);
             throw error;
         }
     }

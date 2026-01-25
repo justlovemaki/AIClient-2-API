@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { promises as fs } from 'fs';
 import * as path from 'path';
@@ -215,7 +216,7 @@ function extractCredentialsFromCorruptedJson(content) {
 
     // 至少需要 refreshToken 或 accessToken 才算有效
     if (extracted.refreshToken || extracted.accessToken) {
-        console.info(`[Kiro Auth] Extracted ${Object.keys(extracted).length} fields from corrupted JSON: ${Object.keys(extracted).join(', ')}`);
+        logger.info(`[Kiro Auth] Extracted ${Object.keys(extracted).length} fields from corrupted JSON: ${Object.keys(extracted).join(', ')}`);
         return extracted;
     }
 
@@ -270,7 +271,7 @@ function parseSingleToolCall(toolCallText) {
             }
         };
     } catch (e) {
-        console.error(`Failed to parse tool call arguments: ${e.message}`, jsonCandidate);
+        logger.error(`Failed to parse tool call arguments: ${e.message}`, jsonCandidate);
         return null;
     }
 }
@@ -335,7 +336,7 @@ function deduplicateToolCalls(toolCalls) {
             seen.add(key);
             uniqueToolCalls.push(tc);
         } else {
-            console.log(`Skipping duplicate tool call: ${tc.function.name}`);
+            logger.info(`Skipping duplicate tool call: ${tc.function.name}`);
         }
     }
     return uniqueToolCalls;
@@ -349,7 +350,7 @@ export class KiroApiService {
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_KIRO ?? false;
         this.uuid = config?.uuid; // 获取多节点配置的 uuid
-        console.log(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        logger.info(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         // this.accessToken = config.KIRO_ACCESS_TOKEN;
         // this.refreshToken = config.KIRO_REFRESH_TOKEN;
         // this.clientId = config.KIRO_CLIENT_ID;
@@ -366,9 +367,9 @@ export class KiroApiService {
                 const parsedCreds = JSON.parse(decodedCreds);
                 // Store parsedCreds to be merged in initializeAuth
                 this.base64Creds = parsedCreds;
-                console.info('[Kiro] Successfully decoded Base64 credentials in constructor.');
+                logger.info('[Kiro] Successfully decoded Base64 credentials in constructor.');
             } catch (error) {
-                console.error(`[Kiro] Failed to parse Base64 credentials in constructor: ${error.message}`);
+                logger.error(`[Kiro] Failed to parse Base64 credentials in constructor: ${error.message}`);
             }
         } else if (config.KIRO_OAUTH_CREDS_FILE_PATH) {
             this.credsFilePath = config.KIRO_OAUTH_CREDS_FILE_PATH;
@@ -381,7 +382,7 @@ export class KiroApiService {
  
     async initialize() {
         if (this.isInitialized) return;
-        console.log('[Kiro] Initializing Kiro API Service...');
+        logger.info('[Kiro] Initializing Kiro API Service...');
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
@@ -454,29 +455,29 @@ async loadCredentials() {
             try {
                 return JSON.parse(fileContent);
             } catch (parseError) {
-                console.warn('[Kiro Auth] JSON parse failed, attempting repair...');
+                logger.warn('[Kiro Auth] JSON parse failed, attempting repair...');
                 try {
                     const repaired = repairJson(fileContent);
                     const result = JSON.parse(repaired);
-                    console.info('[Kiro Auth] JSON repair successful');
+                    logger.info('[Kiro Auth] JSON repair successful');
                     return result;
                 } catch (repairError) {
-                    console.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
+                    logger.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
                     // 尝试从损坏的 JSON 中提取关键字段
                     const extracted = extractCredentialsFromCorruptedJson(fileContent);
                     if (extracted) {
-                        console.info('[Kiro Auth] Field extraction successful, credentials recovered');
+                        logger.info('[Kiro Auth] Field extraction successful, credentials recovered');
                         return extracted;
                     }
-                    console.error('[Kiro Auth] All recovery methods failed:', repairError.message);
+                    logger.error('[Kiro Auth] All recovery methods failed:', repairError.message);
                     return null;
                 }
             }
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
+                logger.debug(`[Kiro Auth] Credential file not found: ${filePath}`);
             } else {
-                console.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
+                logger.warn(`[Kiro Auth] Failed to read credential file ${filePath}: ${error.message}`);
             }
             return null;
         }
@@ -488,7 +489,7 @@ async loadCredentials() {
         // Priority 1: Load from Base64 credentials if available
         if (this.base64Creds) {
             Object.assign(mergedCredentials, this.base64Creds);
-            console.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
+            logger.info('[Kiro Auth] Successfully loaded credentials from Base64 (constructor).');
             this.base64Creds = null;
         }
 
@@ -497,13 +498,13 @@ async loadCredentials() {
         const dirPath = path.dirname(targetFilePath);
         const targetFileName = path.basename(targetFilePath);
 
-        console.debug(`[Kiro Auth] Loading credentials from directory: ${dirPath}`);
+        logger.debug(`[Kiro Auth] Loading credentials from directory: ${dirPath}`);
 
         try {
             const targetCredentials = await loadCredentialsFromFile(targetFilePath);
             if (targetCredentials) {
                 Object.assign(mergedCredentials, targetCredentials);
-                console.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
+                logger.info(`[Kiro Auth] Successfully loaded OAuth credentials from ${targetFilePath}`);
             }
 
             const files = await fs.readdir(dirPath);
@@ -514,12 +515,12 @@ async loadCredentials() {
                     if (credentials) {
                         credentials.expiresAt = mergedCredentials.expiresAt;
                         Object.assign(mergedCredentials, credentials);
-                        console.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
+                        logger.debug(`[Kiro Auth] Loaded Client credentials from ${file}`);
                     }
                 }
             }
         } catch (error) {
-            console.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
+            logger.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
         }
 
         // Apply loaded credentials
@@ -534,7 +535,7 @@ async loadCredentials() {
         this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
 
         if (!this.region) {
-            console.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
+            logger.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
             this.region = 'us-east-1';
         }
 
@@ -547,13 +548,13 @@ async loadCredentials() {
         this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
         this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
     } catch (error) {
-        console.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
+        logger.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
 }
 
 async initializeAuth(forceRefresh = false) {
     if (this.accessToken && !forceRefresh) {
-        console.debug('[Kiro Auth] Access token already available and not forced refresh.');
+        logger.debug('[Kiro Auth] Access token already available and not forced refresh.');
         return;
     }
 
@@ -586,33 +587,33 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             existingData = JSON.parse(fileContent);
         } catch (parseError) {
-            console.warn('[Kiro Auth] JSON parse failed, attempting repair...');
+            logger.warn('[Kiro Auth] JSON parse failed, attempting repair...');
             try {
                 const repaired = repairJson(fileContent);
                 existingData = JSON.parse(repaired);
-                console.info('[Kiro Auth] JSON repair successful');
+                logger.info('[Kiro Auth] JSON repair successful');
             } catch (repairError) {
-                console.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
+                logger.warn('[Kiro Auth] JSON repair failed, attempting field extraction...');
                 const extracted = extractCredentialsFromCorruptedJson(fileContent);
                 if (extracted) {
                     existingData = extracted;
-                    console.info('[Kiro Auth] Field extraction successful');
+                    logger.info('[Kiro Auth] Field extraction successful');
                 } else {
-                    console.error('[Kiro Auth] All recovery methods failed:', repairError.message);
+                    logger.error('[Kiro Auth] All recovery methods failed:', repairError.message);
                     existingData = {};
                 }
             }
         }
     } catch (readError) {
         if (readError.code === 'ENOENT') {
-            console.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
+            logger.debug(`[Kiro Auth] Token file not found, creating new one: ${filePath}`);
         } else {
-            console.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
+            logger.warn(`[Kiro Auth] Could not read existing token file ${filePath}: ${readError.message}`);
         }
     }
     const mergedData = { ...existingData, ...newData };
     await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
-    console.info(`[Kiro Auth] Updated token file: ${filePath}`);
+    logger.info(`[Kiro Auth] Updated token file: ${filePath}`);
 };
 
     /**
@@ -639,10 +640,10 @@ async saveCredentialsToFile(filePath, newData) {
             const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
             if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
                 response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody, refreshConfig);
-                console.log('[Kiro Auth] Token refresh social response: ok');
+                logger.info('[Kiro Auth] Token refresh social response: ok');
             } else {
                 response = await this.axiosInstance.post(refreshUrl, requestBody, refreshConfig);
-                console.log('[Kiro Auth] Token refresh idc response: ok');
+                logger.info('[Kiro Auth] Token refresh idc response: ok');
             }
 
             if (response.data && response.data.accessToken) {
@@ -652,7 +653,7 @@ async saveCredentialsToFile(filePath, newData) {
                 const expiresIn = response.data.expiresIn;
                 const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
                 this.expiresAt = expiresAt;
-                console.info('[Kiro Auth] Access token refreshed successfully');
+                logger.info('[Kiro Auth] Access token refreshed successfully');
 
                 const updatedTokenData = {
                     accessToken: this.accessToken,
@@ -673,7 +674,7 @@ async saveCredentialsToFile(filePath, newData) {
                 throw new Error('Invalid refresh response: Missing accessToken');
             }
         } catch (error) {
-            console.error('[Kiro Auth] Token refresh failed:', error.message);
+            logger.error('[Kiro Auth] Token refresh failed:', error.message);
             throw new Error(`Token refresh failed: ${error.message}`);
         }
     }
@@ -787,7 +788,7 @@ async saveCredentialsToFile(filePath, newData) {
         const lastMessage = processedMessages[processedMessages.length - 1];
         if (processedMessages.length > 0 && lastMessage.role === 'assistant') {
             if (lastMessage.content[0].type === "text" && lastMessage.content[0].text === "{") {
-                console.log('[Kiro] Removing last assistant with "{" message from processedMessages');
+                logger.info('[Kiro] Removing last assistant with "{" message from processedMessages');
                 processedMessages.pop();
             }
         }
@@ -818,7 +819,7 @@ async saveCredentialsToFile(filePath, newData) {
                         // 上一条是字符串,当前是数组,转换为数组格式
                         lastMsg.content = [{ type: 'text', text: lastMsg.content }, ...currentMsg.content];
                     }
-                    // console.log(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
+                    // logger.info(`[Kiro] Merged adjacent ${currentMsg.role} messages`);
                 } else {
                     mergedMessages.push(currentMsg);
                 }
@@ -839,14 +840,14 @@ async saveCredentialsToFile(filePath, newData) {
                 const name = (tool.name || '').toLowerCase();
                 const shouldIgnore = name === 'web_search' || name === 'websearch';
                 if (shouldIgnore) {
-                    console.log(`[Kiro] Ignoring tool: ${tool.name}`);
+                    logger.info(`[Kiro] Ignoring tool: ${tool.name}`);
                 }
                 return !shouldIgnore;
             });
             
             if (filteredTools.length === 0) {
                 // 所有工具都被过滤掉了，不添加 tools 上下文
-                console.log('[Kiro] All tools were filtered out');
+                logger.info('[Kiro] All tools were filtered out');
             } else {
             const MAX_DESCRIPTION_LENGTH = 9216;
 
@@ -858,7 +859,7 @@ async saveCredentialsToFile(filePath, newData) {
                 if (desc.length > MAX_DESCRIPTION_LENGTH) {
                     desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
                     truncatedCount++;
-                    console.log(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
+                    logger.info(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
                 }
                 
                 return {
@@ -873,7 +874,7 @@ async saveCredentialsToFile(filePath, newData) {
             });
             
             if (truncatedCount > 0) {
-                console.log(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
+                logger.info(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
             }
 
             toolsContext = { tools: kiroTools };
@@ -960,7 +961,7 @@ async saveCredentialsToFile(filePath, newData) {
                 // 如果有保留的图片，添加到消息中
                 if (images.length > 0) {
                     userInputMessage.images = images;
-                    console.log(`[Kiro] Kept ${images.length} image(s) in recent history message (distance from end: ${distanceFromEnd})`);
+                    logger.info(`[Kiro] Kept ${images.length} image(s) in recent history message (distance from end: ${distanceFromEnd})`);
                 }
                 
                 // 如果有被替换的图片，添加占位符说明
@@ -969,7 +970,7 @@ async saveCredentialsToFile(filePath, newData) {
                     userInputMessage.content = userInputMessage.content
                         ? `${userInputMessage.content}\n${imagePlaceholder}`
                         : imagePlaceholder;
-                    console.log(`[Kiro] Replaced ${imageCount} image(s) with placeholder in old history message (distance from end: ${distanceFromEnd})`);
+                    logger.info(`[Kiro] Replaced ${imageCount} image(s) with placeholder in old history message (distance from end: ${distanceFromEnd})`);
                 }
                 
                 if (toolResults.length > 0) {
@@ -1036,7 +1037,7 @@ async saveCredentialsToFile(filePath, newData) {
         // 如果最后一条消息是 assistant，需要将其加入 history，然后创建一个 user 类型的 currentMessage
         // 因为 CodeWhisperer API 的 currentMessage 必须是 userInputMessage 类型
         if (currentMessage.role === 'assistant') {
-            console.log('[Kiro] Last message is assistant, moving it to history and creating user currentMessage');
+            logger.info('[Kiro] Last message is assistant, moving it to history and creating user currentMessage');
             
             // 构建 assistant 消息并加入 history
             let assistantResponseMessage = {
@@ -1080,7 +1081,7 @@ async saveCredentialsToFile(filePath, newData) {
                 const lastHistoryItem = history[history.length - 1];
                 if (!lastHistoryItem.assistantResponseMessage) {
                     // 最后一个不是 assistantResponseMessage，需要补全一个空的
-                    console.log('[Kiro] History does not end with assistantResponseMessage, adding empty one');
+                    logger.info('[Kiro] History does not end with assistantResponseMessage, adding empty one');
                     history.push({
                         assistantResponseMessage: {
                             content: 'Continue'
@@ -1189,7 +1190,7 @@ async saveCredentialsToFile(filePath, newData) {
         let fullContent = '';
         const toolCalls = [];
         let currentToolCallDict = null;
-        // console.log(`rawStr=${rawStr}`);
+        // logger.info(`rawStr=${rawStr}`);
 
         // 改进的 SSE 事件解析：匹配 :message-typeevent 后面的 JSON 数据
         // 使用更精确的正则来匹配 SSE 格式的事件
@@ -1237,7 +1238,7 @@ async saveCredentialsToFile(filePath, newData) {
                                 const args = JSON.parse(currentToolCallDict.function.arguments);
                                 currentToolCallDict.function.arguments = JSON.stringify(args);
                             } catch (e) {
-                                console.warn(`[Kiro] Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
+                                logger.warn(`[Kiro] Tool call arguments not valid JSON: ${currentToolCallDict.function.arguments}`);
                             }
                             toolCalls.push(currentToolCallDict);
                             currentToolCallDict = null;
@@ -1329,12 +1330,12 @@ async saveCredentialsToFile(filePath, newData) {
             
             // Handle 401 (Unauthorized) - refresh UUID first, then try to refresh token
             if (status === 401 && !isRetry) {
-                console.log('[Kiro] Received 401. Refreshing UUID and triggering background refresh via PoolManager...');
+                logger.info('[Kiro] Received 401. Refreshing UUID and triggering background refresh via PoolManager...');
                 
                 // 1. 先刷新 UUID
                 const newUuid = this._refreshUuid();
                 if (newUuid) {
-                    console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
                     this.uuid = newUuid;
                 }
                 
@@ -1353,20 +1354,20 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403 && !isRetry) {
-                console.log('[Kiro] Received 403. Marking credential as need refresh...');
+                logger.info('[Kiro] Received 403. Marking credential as need refresh...');
                 
                 // 检查是否为 temporarily suspended 错误
                 const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
                 
                 if (isSuspended) {
                     // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    console.log('[Kiro] Account temporarily suspended. Marking as unhealthy without UUID refresh...');
+                    logger.info('[Kiro] Account temporarily suspended. Marking as unhealthy without UUID refresh...');
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
                 } else {
                     // 其他 403 错误：先刷新 UUID，然后标记需要刷新
                     // const newUuid = this._refreshUuid();
                     // if (newUuid) {
-                    //     console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    //     logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
                     //     this.uuid = newUuid;
                     // }
                     this._markCredentialNeedRefresh('403 Forbidden', error);
@@ -1380,7 +1381,7 @@ async saveCredentialsToFile(filePath, newData) {
             
             // Handle 429 (Too Many Requests) - wait baseDelay then switch credential
             if (status === 429) {
-                console.log(`[Kiro] Received 429 (Too Many Requests). Waiting ${baseDelay}ms before switching credential...`);
+                logger.info(`[Kiro] Received 429 (Too Many Requests). Waiting ${baseDelay}ms before switching credential...`);
                 await new Promise(resolve => setTimeout(resolve, baseDelay));
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -1390,7 +1391,7 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 5xx server errors - wait baseDelay then switch credential
             if (status >= 500 && status < 600) {
-                console.log(`[Kiro] Received ${status} server error. Waiting ${baseDelay}ms before switching credential...`);
+                logger.info(`[Kiro] Received ${status} server error. Waiting ${baseDelay}ms before switching credential...`);
                 await new Promise(resolve => setTimeout(resolve, baseDelay));
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -1402,12 +1403,12 @@ async saveCredentialsToFile(filePath, newData) {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Kiro] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Kiro] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
-            console.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
+            logger.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         }
     }
@@ -1426,7 +1427,7 @@ async saveCredentialsToFile(filePath, newData) {
             });
             return newUuid;
         } else {
-            console.warn(`[Kiro] Cannot refresh UUID: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            logger.warn(`[Kiro] Cannot refresh UUID: poolManager=${!!poolManager}, uuid=${this.uuid}`);
             return null;
         }
     }
@@ -1441,7 +1442,7 @@ async saveCredentialsToFile(filePath, newData) {
     _markCredentialNeedRefresh(reason, error = null) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
-            console.log(`[Kiro] Marking credential ${this.uuid} as needs refresh. Reason: ${reason}`);
+            logger.info(`[Kiro] Marking credential ${this.uuid} as needs refresh. Reason: ${reason}`);
             // 使用新的 markProviderNeedRefresh 方法代替 markProviderUnhealthyImmediately
             poolManager.markProviderNeedRefresh(MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
@@ -1452,7 +1453,7 @@ async saveCredentialsToFile(filePath, newData) {
             }
             return true;
         } else {
-            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            logger.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
             return false;
         }
     }
@@ -1467,7 +1468,7 @@ async saveCredentialsToFile(filePath, newData) {
     _markCredentialUnhealthy(reason, error = null) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
-            console.log(`[Kiro] Marking credential ${this.uuid} as unhealthy. Reason: ${reason}`);
+            logger.info(`[Kiro] Marking credential ${this.uuid} as unhealthy. Reason: ${reason}`);
             poolManager.markProviderUnhealthyImmediately(MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             }, reason);
@@ -1477,7 +1478,7 @@ async saveCredentialsToFile(filePath, newData) {
             }
             return true;
         } else {
-            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            logger.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
             return false;
         }
     }
@@ -1494,7 +1495,7 @@ async saveCredentialsToFile(filePath, newData) {
     _markCredentialUnhealthyWithRecovery(reason, error = null, recoveryTime = null) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
-            console.log(`[Kiro] Marking credential ${this.uuid} as unhealthy with recovery time. Reason: ${reason}, Recovery: ${recoveryTime?.toISOString()}`);
+            logger.info(`[Kiro] Marking credential ${this.uuid} as unhealthy with recovery time. Reason: ${reason}, Recovery: ${recoveryTime?.toISOString()}`);
             poolManager.markProviderUnhealthyWithRecoveryTime(MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             }, reason, recoveryTime);
@@ -1504,7 +1505,7 @@ async saveCredentialsToFile(filePath, newData) {
             }
             return true;
         } else {
-            console.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
+            logger.warn(`[Kiro] Cannot mark credential as unhealthy: poolManager=${!!poolManager}, uuid=${this.uuid}`);
             return false;
         }
     }
@@ -1528,18 +1529,18 @@ async saveCredentialsToFile(filePath, newData) {
      * @private
      */
     async _handle402Error(error, context = 'unknown') {
-        console.log(`[Kiro] Received 402 (Quota Exceeded) in ${context}. Verifying usage limits...`);
+        logger.info(`[Kiro] Received 402 (Quota Exceeded) in ${context}. Verifying usage limits...`);
         try {
             // Verify usage limits to confirm quota exhaustion
             const usageLimits = await this.getUsageLimits();
             const isQuotaExhausted = usageLimits?.usedCount >= usageLimits?.limitCount;
             
-            console.log(`[Kiro] Quota confirmed exhausted: ${usageLimits?.usedCount}/${usageLimits?.limitCount}`);
+            logger.info(`[Kiro] Quota confirmed exhausted: ${usageLimits?.usedCount}/${usageLimits?.limitCount}`);
             // Calculate recovery time: 1st day of next month at 00:00:00 UTC
             const nextMonth = this._getNextMonthFirstDay();
             this._markCredentialUnhealthyWithRecovery('402 Payment Required - Quota Exhausted', error, nextMonth);
         } catch (usageError) {
-            console.warn('[Kiro] Failed to verify usage limits:', usageError.message);
+            logger.warn('[Kiro] Failed to verify usage limits:', usageError.message);
             // If we can't verify, still mark as unhealthy with recovery time
             const nextMonth = this._getNextMonthFirstDay();
             this._markCredentialUnhealthyWithRecovery('402 Payment Required - Quota Exceeded (unverified)', error, nextMonth);
@@ -1552,27 +1553,27 @@ async saveCredentialsToFile(filePath, newData) {
 
     _processApiResponse(response) {
         const rawResponseText = Buffer.isBuffer(response.data) ? response.data.toString('utf8') : String(response.data);
-        //console.log(`[Kiro] Raw response length: ${rawResponseText.length}`);
+        //logger.info(`[Kiro] Raw response length: ${rawResponseText.length}`);
         if (rawResponseText.includes("[Called")) {
-            console.log("[Kiro] Raw response contains [Called marker.");
+            logger.info("[Kiro] Raw response contains [Called marker.");
         }
 
         // 1. Parse structured events and bracket calls from parsed content
         const parsedFromEvents = this.parseEventStreamChunk(rawResponseText);
         let fullResponseText = parsedFromEvents.content;
         let allToolCalls = [...parsedFromEvents.toolCalls]; // clone
-        //console.log(`[Kiro] Found ${allToolCalls.length} tool calls from event stream parsing.`);
+        //logger.info(`[Kiro] Found ${allToolCalls.length} tool calls from event stream parsing.`);
 
         // 2. Crucial fix from Python example: Parse bracket tool calls from the original raw response
         const rawBracketToolCalls = parseBracketToolCalls(rawResponseText);
         if (rawBracketToolCalls) {
-            //console.log(`[Kiro] Found ${rawBracketToolCalls.length} bracket tool calls in raw response.`);
+            //logger.info(`[Kiro] Found ${rawBracketToolCalls.length} bracket tool calls in raw response.`);
             allToolCalls.push(...rawBracketToolCalls);
         }
 
         // 3. Deduplicate all collected tool calls
         const uniqueToolCalls = deduplicateToolCalls(allToolCalls);
-        //console.log(`[Kiro] Total unique tool calls after deduplication: ${uniqueToolCalls.length}`);
+        //logger.info(`[Kiro] Total unique tool calls after deduplication: ${uniqueToolCalls.length}`);
 
         // 4. Clean up response text by removing all tool call syntax from the final text.
         // The text from parseEventStreamChunk is already partially cleaned.
@@ -1587,8 +1588,8 @@ async saveCredentialsToFile(filePath, newData) {
             fullResponseText = fullResponseText.replace(/\s+/g, ' ').trim();
         }
         
-        //console.log(`[Kiro] Final response text after tool call cleanup: ${fullResponseText}`);
-        //console.log(`[Kiro] Final tool calls after deduplication: ${JSON.stringify(uniqueToolCalls)}`);
+        //logger.info(`[Kiro] Final response text after tool call cleanup: ${fullResponseText}`);
+        //logger.info(`[Kiro] Final tool calls after deduplication: ${JSON.stringify(uniqueToolCalls)}`);
         return { responseText: fullResponseText, toolCalls: uniqueToolCalls };
     }
 
@@ -1597,12 +1598,12 @@ async saveCredentialsToFile(filePath, newData) {
 
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
-            console.log('[Kiro] Token is near expiry, marking credential as need refresh...');
+            logger.info('[Kiro] Token is near expiry, marking credential as need refresh...');
             this._markCredentialNeedRefresh('Token near expiry in generateContent');
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-        console.log(`[Kiro] Calling generateContent with model: ${finalModel}`);
+        logger.info(`[Kiro] Calling generateContent with model: ${finalModel}`);
         
         // Estimate input tokens before making the API call
         const inputTokens = this.estimateInputTokens(requestBody);
@@ -1613,7 +1614,7 @@ async saveCredentialsToFile(filePath, newData) {
             const { responseText, toolCalls } = this._processApiResponse(response);
             return this.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls, inputTokens);
         } catch (error) {
-            console.error('[Kiro] Error in generateContent:', error);
+            logger.error('[Kiro] Error in generateContent:', error);
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
@@ -1850,12 +1851,12 @@ async saveCredentialsToFile(filePath, newData) {
             
             // Handle 401 (Unauthorized) - try to refresh token first
             if (status === 401 && !isRetry) {
-                console.log('[Kiro] Received 401 in stream. Triggering background refresh via PoolManager...');
+                logger.info('[Kiro] Received 401 in stream. Triggering background refresh via PoolManager...');
                 
                 // 1. 先刷新 UUID
                 const newUuid = this._refreshUuid();
                 if (newUuid) {
-                    console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
                     this.uuid = newUuid;
                 }
                 // 标记当前凭证为不健康（会自动进入刷新队列）
@@ -1873,20 +1874,20 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403 && !isRetry) {
-                console.log('[Kiro] Received 403 in stream. Marking credential as need refresh...');
+                logger.info('[Kiro] Received 403 in stream. Marking credential as need refresh...');
                 
                 // 检查是否为 temporarily suspended 错误
                 const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
                 
                 if (isSuspended) {
                     // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    console.log('[Kiro] Account temporarily suspended in stream. Marking as unhealthy without UUID refresh...');
+                    logger.info('[Kiro] Account temporarily suspended in stream. Marking as unhealthy without UUID refresh...');
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
                 } else {
                     // 其他 403 错误：先刷新 UUID，然后标记需要刷新
                     // const newUuid = this._refreshUuid();
                     // if (newUuid) {
-                    //     console.log(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
+                    //     logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
                     //     this.uuid = newUuid;
                     // }
                     this._markCredentialNeedRefresh('403 Forbidden', error);
@@ -1900,7 +1901,7 @@ async saveCredentialsToFile(filePath, newData) {
             
             // Handle 429 (Too Many Requests) - wait baseDelay then switch credential
             if (status === 429) {
-                console.log(`[Kiro] Received 429 (Too Many Requests) in stream. Waiting ${baseDelay}ms before switching credential...`);
+                logger.info(`[Kiro] Received 429 (Too Many Requests) in stream. Waiting ${baseDelay}ms before switching credential...`);
                 await new Promise(resolve => setTimeout(resolve, baseDelay));
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -1910,7 +1911,7 @@ async saveCredentialsToFile(filePath, newData) {
 
             // Handle 5xx server errors - wait baseDelay then switch credential
             if (status >= 500 && status < 600) {
-                console.log(`[Kiro] Received ${status} server error in stream. Waiting ${baseDelay}ms before switching credential...`);
+                logger.info(`[Kiro] Received ${status} server error in stream. Waiting ${baseDelay}ms before switching credential...`);
                 await new Promise(resolve => setTimeout(resolve, baseDelay));
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -1922,13 +1923,13 @@ async saveCredentialsToFile(filePath, newData) {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Kiro] Network error (${errorIdentifier}) in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Kiro] Network error (${errorIdentifier}) in stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApiReal(method, model, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error(`[Kiro] Stream API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
+            logger.error(`[Kiro] Stream API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         } finally {
             // 确保流被关闭，释放资源
@@ -1943,7 +1944,7 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             return await this.callApi(method, model, body, isRetry, retryCount);
         } catch (error) {
-            console.error('[Kiro] Error calling API:', error);
+            logger.error('[Kiro] Error calling API:', error);
             throw error;
         }
     }
@@ -1954,12 +1955,12 @@ async saveCredentialsToFile(filePath, newData) {
         
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
-            console.log('[Kiro] Token is near expiry, marking credential as need refresh...');
+            logger.info('[Kiro] Token is near expiry, marking credential as need refresh...');
             this._markCredentialNeedRefresh('Token near expiry in generateContentStream');
         }
         
         const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
-        console.log(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
+        logger.info(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
 
         let inputTokens = 0;
         let contextUsagePercentage = null;
@@ -2214,7 +2215,7 @@ async saveCredentialsToFile(filePath, newData) {
 
             if (thinkingRequested && streamState.buffer) {
                 if (streamState.inThinking) {
-                    console.warn('[Kiro] Incomplete thinking tag at stream end');
+                    logger.warn('[Kiro] Incomplete thinking tag at stream end');
                     yield* pushEvents(createThinkingDeltaEvents(streamState.buffer));
                     streamState.buffer = '';
                     yield* pushEvents(createThinkingDeltaEvents(""));
@@ -2293,9 +2294,9 @@ async saveCredentialsToFile(filePath, newData) {
             if (contextUsagePercentage !== null && contextUsagePercentage > 0) {
                 const totalTokens = Math.round(KIRO_CONSTANTS.TOTAL_CONTEXT_TOKENS * contextUsagePercentage / 100);
                 inputTokens = Math.max(0, totalTokens - outputTokens);
-                console.log(`[Kiro] Token calculation from contextUsagePercentage: total=${totalTokens}, output=${outputTokens}, input=${inputTokens}`);
+                logger.info(`[Kiro] Token calculation from contextUsagePercentage: total=${totalTokens}, output=${outputTokens}, input=${inputTokens}`);
             } else {
-                console.warn('[Kiro Stream] contextUsagePercentage not received, using estimation');
+                logger.warn('[Kiro Stream] contextUsagePercentage not received, using estimation');
                 inputTokens = estimatedInputTokens;
             }
 
@@ -2315,7 +2316,7 @@ async saveCredentialsToFile(filePath, newData) {
             yield { type: "message_stop" };
 
         } catch (error) {
-            console.error('[Kiro] Error in streaming generation:', error);
+            logger.error('[Kiro] Error in streaming generation:', error);
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
@@ -2329,7 +2330,7 @@ async saveCredentialsToFile(filePath, newData) {
             return countTokens(text);
         } catch (error) {
             // Fallback to estimation if tokenizer fails
-            console.warn('[Kiro] Tokenizer error, falling back to estimation:', error.message);
+            logger.warn('[Kiro] Tokenizer error, falling back to estimation:', error.message);
             return Math.ceil((text || '').length / 4);
         }
     }
@@ -2459,7 +2460,7 @@ async saveCredentialsToFile(filePath, newData) {
                         const args = tc.function.arguments;
                         inputObject = typeof args === 'string' ? JSON.parse(args) : args;
                     } catch (e) {
-                        console.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
+                        logger.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
                         // If parsing fails, wrap the raw string in an object as a fallback,
                         // since Claude's `input` field expects an object.
                         inputObject = { "raw_arguments": tc.function.arguments };
@@ -2527,7 +2528,7 @@ async saveCredentialsToFile(filePath, newData) {
                         const args = tc.function.arguments;
                         inputObject = typeof args === 'string' ? JSON.parse(args) : args;
                     } catch (e) {
-                        console.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
+                        logger.warn(`[Kiro] Invalid JSON for tool call arguments. Wrapping in raw_arguments. Error: ${e.message}`, tc.function.arguments);
                         // If parsing fails, wrap the raw string in an object as a fallback,
                         // since Claude's `input` field expects an object.
                         inputObject = { "raw_arguments": tc.function.arguments };
@@ -2589,7 +2590,7 @@ async saveCredentialsToFile(filePath, newData) {
             const bufferMs = 30 * 1000;
             return expirationTime.getTime() <= (currentTime.getTime() + bufferMs);
         } catch (error) {
-            console.error(`[Kiro] Error checking token expiry: ${error.message}`);
+            logger.error(`[Kiro] Error checking token expiry: ${error.message}`);
             return true; // Treat as expired if parsing fails
         }
     }
@@ -2603,10 +2604,10 @@ async saveCredentialsToFile(filePath, newData) {
             const expirationTime = new Date(this.expiresAt);
             const nearMinutes = 30;
             const { message, isNearExpiry } = formatExpiryLog('Kiro', expirationTime.getTime(), nearMinutes);
-            console.log(message);
+            logger.info(message);
             return isNearExpiry;
         } catch (error) {
-            console.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
+            logger.error(`[Kiro] Error checking expiry date: ${this.expiresAt}, Error: ${error.message}`);
             return false; // Treat as expired if parsing fails
         }
     }
@@ -2615,11 +2616,11 @@ async saveCredentialsToFile(filePath, newData) {
      * 后台异步刷新 token（不阻塞当前请求）
      */
     triggerBackgroundRefresh() {
-        console.log('[Kiro] Background token refresh started...');
+        logger.info('[Kiro] Background token refresh started...');
         this.initializeAuth(true).then(() => {
-            console.log('[Kiro] Background token refresh completed successfully');
+            logger.info('[Kiro] Background token refresh completed successfully');
         }).catch((error) => {
-            console.error('[Kiro] Background token refresh failed:', error.message);
+            logger.error('[Kiro] Background token refresh failed:', error.message);
             // 后台刷新失败不抛出错误，下次请求会重试
         });
     }
@@ -2702,10 +2703,10 @@ async saveCredentialsToFile(filePath, newData) {
         // 1. 已过期 → 必须等待刷新
         // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
         // if (this.isTokenExpired()) {
-        //     console.log('[Kiro] Token is expired, must refresh before getUsageLimits request...');
+        //     logger.info('[Kiro] Token is expired, must refresh before getUsageLimits request...');
         //     await this.initializeAuth(true);
         // } else if (this.isExpiryDateNear()) {
-        //     console.log('[Kiro] Token is near expiry, triggering background refresh...');
+        //     logger.info('[Kiro] Token is near expiry, triggering background refresh...');
         //     this.triggerBackgroundRefresh();
         // }
         
@@ -2745,7 +2746,7 @@ async saveCredentialsToFile(filePath, newData) {
 
         try {
             const response = await this.axiosInstance.get(fullUrl, { headers });
-            console.log('[Kiro] Usage limits fetched successfully');
+            logger.info('[Kiro] Usage limits fetched successfully');
             return response.data;
         } catch (error) {
             const status = error.response?.status;
@@ -2771,20 +2772,20 @@ async saveCredentialsToFile(filePath, newData) {
             
             // 对于用量查询，401/403 错误直接标记凭证为不健康，不重试
             if (status === 401) {
-                console.log('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
+                logger.info('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
                 this._markCredentialNeedRefresh('401 Unauthorized on usage query', formattedError);
                 throw formattedError;
             }
             
             if (status === 403) {
-                console.log('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
+                logger.info('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
                 
                 // 检查是否为 temporarily suspended 错误
                 const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
                 
                 if (isSuspended) {
                     // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    console.log('[Kiro] Account temporarily suspended on usage query. Marking as unhealthy without UUID refresh...');
+                    logger.info('[Kiro] Account temporarily suspended on usage query. Marking as unhealthy without UUID refresh...');
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended on usage query', formattedError);
                 } else {
                     // 其他 403 错误：标记需要刷新
@@ -2794,8 +2795,9 @@ async saveCredentialsToFile(filePath, newData) {
                 throw formattedError;
             }
             
-            console.error('[Kiro] Failed to fetch usage limits:', formattedError.message, error);
+            logger.error('[Kiro] Failed to fetch usage limits:', formattedError.message, error);
             throw formattedError;
         }
     }
 }
+

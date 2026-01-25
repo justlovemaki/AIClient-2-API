@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, createReadStream } from 'fs';
+import logger from '../utils/logger.js';
 import path from 'path';
 import { getCpuUsagePercent } from './system-monitor.js';
 
@@ -16,7 +17,7 @@ export async function handleGetSystem(req, res) {
             appVersion = readFileSync(versionFilePath, 'utf8').trim();
         }
     } catch (error) {
-        console.warn('[UI API] Failed to read VERSION file:', error.message);
+        logger.warn('[UI API] Failed to read VERSION file:', error.message);
     }
     
     // 计算 CPU 使用率
@@ -43,6 +44,34 @@ export async function handleGetSystem(req, res) {
         uptime: process.uptime()
     }));
     return true;
+}
+
+/**
+ * 下载当日日志
+ */
+export async function handleDownloadTodayLog(req, res) {
+    try {
+        if (!logger.currentLogFile || !existsSync(logger.currentLogFile)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Today\'s log file not found' } }));
+            return true;
+        }
+
+        const fileName = path.basename(logger.currentLogFile);
+        res.writeHead(200, {
+            'Content-Type': 'text/plain',
+            'Content-Disposition': `attachment; filename="${fileName}"`
+        });
+
+        const readStream = createReadStream(logger.currentLogFile);
+        readStream.pipe(res);
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Failed to download log:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Failed to download log: ' + error.message } }));
+        return true;
+    }
 }
 
 /**
@@ -84,7 +113,7 @@ export async function handleRestartService(req, res) {
         
         if (IS_WORKER_PROCESS && process.send) {
             // 作为子进程运行，通知主进程重启
-            console.log('[UI API] Requesting restart from master process...');
+            logger.info('[UI API] Requesting restart from master process...');
             process.send({ type: 'restart_request' });
             
             // 广播重启事件
@@ -107,7 +136,7 @@ export async function handleRestartService(req, res) {
             }));
         } else {
             // 独立运行模式，无法自动重启
-            console.log('[UI API] Service is running in standalone mode, cannot auto-restart');
+            logger.info('[UI API] Service is running in standalone mode, cannot auto-restart');
             
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -119,7 +148,7 @@ export async function handleRestartService(req, res) {
         }
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to restart service:', error);
+        logger.error('[UI API] Failed to restart service:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

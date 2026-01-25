@@ -4,6 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import logger from '../utils/logger.js';
 
 // =============================================================================
 // 常量定义
@@ -327,14 +328,14 @@ export function mapFinishReason(reason, sourceFormat, targetFormat) {
  */
 export function determineReasoningEffortFromBudget(budgetTokens) {
     if (budgetTokens === null || budgetTokens === undefined) {
-        console.info("No budget_tokens provided, defaulting to reasoning_effort='high'");
+        logger.info("No budget_tokens provided, defaulting to reasoning_effort='high'");
         return "high";
     }
 
     const LOW_THRESHOLD = 50;
     const HIGH_THRESHOLD = 200;
 
-    console.debug(`Threshold configuration: low <= ${LOW_THRESHOLD}, medium <= ${HIGH_THRESHOLD}, high > ${HIGH_THRESHOLD}`);
+    logger.debug(`Threshold configuration: low <= ${LOW_THRESHOLD}, medium <= ${HIGH_THRESHOLD}, high > ${HIGH_THRESHOLD}`);
 
     let effort;
     if (budgetTokens <= LOW_THRESHOLD) {
@@ -345,7 +346,7 @@ export function determineReasoningEffortFromBudget(budgetTokens) {
         effort = "high";
     }
 
-    console.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${LOW_THRESHOLD}, high<=${HIGH_THRESHOLD})`);
+    logger.info(`🎯 Budget tokens ${budgetTokens} -> reasoning_effort '${effort}' (thresholds: low<=${LOW_THRESHOLD}, high<=${HIGH_THRESHOLD})`);
     return effort;
 }
 

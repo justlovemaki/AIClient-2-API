@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -17,7 +18,7 @@ export async function readUsageCache() {
         }
         return null;
     } catch (error) {
-        console.warn('[Usage Cache] Failed to read usage cache:', error.message);
+        logger.warn('[Usage Cache] Failed to read usage cache:', error.message);
         return null;
     }
 }
@@ -29,9 +30,9 @@ export async function readUsageCache() {
 export async function writeUsageCache(usageData) {
     try {
         await fs.writeFile(USAGE_CACHE_FILE, JSON.stringify(usageData, null, 2), 'utf8');
-        console.log('[Usage Cache] Usage data cached to', USAGE_CACHE_FILE);
+        logger.info('[Usage Cache] Usage data cached to', USAGE_CACHE_FILE);
     } catch (error) {
-        console.error('[Usage Cache] Failed to write usage cache:', error.message);
+        logger.error('[Usage Cache] Failed to write usage cache:', error.message);
     }
 }
 

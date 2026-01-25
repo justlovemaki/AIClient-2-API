@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
@@ -22,7 +23,7 @@ export class ClaudeApiService {
         this.apiKey = config.CLAUDE_API_KEY;
         this.baseUrl = config.CLAUDE_BASE_URL;
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_CLAUDE ?? false;
-        console.log(`[Claude] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        logger.info(`[Claude] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         this.client = this.createClient();
     }
 
@@ -92,14 +93,14 @@ export class ClaudeApiService {
             
             // 对于 Claude API，401 通常意味着 API Key 无效，不进行重试
             if (status === 401 || status === 403) {
-                console.error(`[Claude API] Received ${status}. API Key might be invalid or expired.`);
+                logger.error(`[Claude API] Received ${status}. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // 处理 429 (Too Many Requests) 与指数退避
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Claude API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
@@ -107,7 +108,7 @@ export class ClaudeApiService {
             // 处理其他可重试错误 (5xx 服务器错误)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Claude API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
@@ -116,12 +117,12 @@ export class ClaudeApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Claude API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            console.error(`[Claude API] Error calling API (Status: ${status}, Code: ${errorCode}):`, error.response ? error.response.data : error.message);
+            logger.error(`[Claude API] Error calling API (Status: ${status}, Code: ${errorCode}):`, error.response ? error.response.data : error.message);
             throw error;
         }
     }
@@ -166,7 +167,7 @@ export class ClaudeApiService {
                                 return;
                             }
                         } catch (e) {
-                            console.warn("[ClaudeApiService] Failed to parse stream chunk JSON:", e.message, "Data:", data);
+                            logger.warn("[ClaudeApiService] Failed to parse stream chunk JSON:", e.message, "Data:", data);
                         }
                     }
                 }
@@ -181,14 +182,14 @@ export class ClaudeApiService {
             
             // 对于 Claude API，401 通常意味着 API Key 无效，不进行重试
             if (status === 401 || status === 403) {
-                console.error(`[Claude API] Received ${status} during stream. API Key might be invalid or expired.`);
+                logger.error(`[Claude API] Received ${status} during stream. API Key might be invalid or expired.`);
                 throw error;
             }
 
             // 处理 429 (Too Many Requests) 与指数退避
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Claude API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -197,7 +198,7 @@ export class ClaudeApiService {
             // 处理其他可重试错误 (5xx 服务器错误)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Claude API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -207,13 +208,13 @@ export class ClaudeApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Claude API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Claude API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error(`[Claude API] Error generating content stream (Status: ${status}, Code: ${errorCode}):`, error.response ? error.response.data : error.message);
+            logger.error(`[Claude API] Error generating content stream (Status: ${status}, Code: ${errorCode}):`, error.response ? error.response.data : error.message);
             throw error;
         }
     }
@@ -248,7 +249,7 @@ export class ClaudeApiService {
      * @returns {Promise<object>} List of models.
      */
     async listModels() {
-        console.log('[ClaudeApiService] Listing available models.');
+        logger.info('[ClaudeApiService] Listing available models.');
         // Claude API 没有直接的 /models 端点来列出所有模型。
         // 通常，你需要根据 Anthropic 的文档硬编码你希望支持的模型。
         // 这里我们返回一些常见的 Claude 模型作为示例。
@@ -266,3 +267,4 @@ export class ClaudeApiService {
         return { models: models.map(m => ({ name: m.name })) };
     }
 }
+

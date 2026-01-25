@@ -1,4 +1,5 @@
 import http from 'http';
+import logger from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -67,7 +68,7 @@ async function fetchWithProxy(url, options = {}, providerType) {
         axiosConfig.httpAgent = proxyConfig.httpAgent;
         axiosConfig.httpsAgent = proxyConfig.httpsAgent;
         axiosConfig.proxy = false; // 禁用 axios 内置代理，使用我们的 agent
-        console.log(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
+        logger.info(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
     }
 
     try {
@@ -255,7 +256,7 @@ async function closeIFlowServer(provider, port = null) {
         await new Promise((resolve) => {
             existing.server.close(() => {
                 activeIFlowServers.delete(provider);
-                console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+                logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
                 resolve();
             });
         });
@@ -267,7 +268,7 @@ async function closeIFlowServer(provider, port = null) {
                 await new Promise((resolve) => {
                     info.server.close(() => {
                         activeIFlowServers.delete(p);
-                        console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭端口 ${port} 上的旧服务器`);
+                        logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭端口 ${port} 上的旧服务器`);
                         resolve();
                     });
                 });
@@ -296,7 +297,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                     const errorParam = url.searchParams.get('error');
                     
                     if (errorParam) {
-                        console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 授权失败: ${errorParam}`);
+                        logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 授权失败: ${errorParam}`);
                         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
                         server.close(() => {
@@ -306,7 +307,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                     }
                     
                     if (state !== expectedState) {
-                        console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} State 验证失败`);
+                        logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} State 验证失败`);
                         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, 'State 验证失败'));
                         server.close(() => {
@@ -316,7 +317,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                     }
                     
                     if (!code) {
-                        console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 缺少授权码`);
+                        logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 缺少授权码`);
                         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, '缺少授权码'));
                         server.close(() => {
@@ -325,16 +326,16 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                         return;
                     }
                     
-                    console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 收到授权回调，正在交换令牌...`);
+                    logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 收到授权回调，正在交换令牌...`);
                     
                     try {
                         // 1. 交换授权码获取令牌
                         const tokenData = await exchangeIFlowCodeForTokens(code, redirectUri);
-                        console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 令牌交换成功`);
+                        logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 令牌交换成功`);
                         
                         // 2. 获取用户信息（包含 API Key）
                         const userInfo = await fetchIFlowUserInfo(tokenData.accessToken);
-                        console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 用户信息获取成功: ${userInfo.email}`);
+                        logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 用户信息获取成功: ${userInfo.email}`);
                         
                         // 3. 组合完整的凭据数据
                         const credentialsData = {
@@ -360,7 +361,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                         
                         await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
                         await fs.promises.writeFile(credPath, JSON.stringify(credentialsData, null, 2));
-                        console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 凭据已保存: ${credPath}`);
+                        logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 凭据已保存: ${credPath}`);
                         
                         const relativePath = path.relative(process.cwd(), credPath);
                         
@@ -380,7 +381,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                         res.end(generateResponsePage(true, `授权成功！账户: ${userInfo.email}，您可以关闭此页面`));
                         
                     } catch (tokenError) {
-                        console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 令牌处理失败:`, tokenError);
+                        logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 令牌处理失败:`, tokenError);
                         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, `令牌处理失败: ${tokenError.message}`));
                     } finally {
@@ -394,7 +395,7 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
                     res.end();
                 }
             } catch (error) {
-                console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 处理回调出错:`, error);
+                logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 处理回调出错:`, error);
                 res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
                 
@@ -408,24 +409,24 @@ function createIFlowCallbackServer(port, redirectUri, expectedState, options = {
         
         server.on('error', (err) => {
             if (err.code === 'EADDRINUSE') {
-                console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 端口 ${port} 已被占用`);
+                logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 端口 ${port} 已被占用`);
                 reject(new Error(`端口 ${port} 已被占用`));
             } else {
-                console.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 服务器错误:`, err);
+                logger.error(`${IFLOW_OAUTH_CONFIG.logPrefix} 服务器错误:`, err);
                 reject(err);
             }
         });
         
         const host = '0.0.0.0';
         server.listen(port, host, () => {
-            console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} OAuth 回调服务器已启动于 ${host}:${port}`);
+            logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} OAuth 回调服务器已启动于 ${host}:${port}`);
             resolve(server);
         });
         
         // 10 分钟超时自动关闭
         setTimeout(() => {
             if (server.listening) {
-                console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 回调服务器超时，自动关闭`);
+                logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 回调服务器超时，自动关闭`);
                 server.close(() => {
                     activeIFlowServers.delete('openai-iflow');
                 });
@@ -453,7 +454,7 @@ export async function handleIFlowOAuth(currentConfig, options = {}) {
     // 生成授权链接
     const { authUrl, redirectUri } = generateIFlowAuthorizationURL(state, port);
     
-    console.log(`${IFLOW_OAUTH_CONFIG.logPrefix} 生成授权链接: ${authUrl}`);
+    logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 生成授权链接: ${authUrl}`);
     
     // 关闭之前可能存在的服务器
     await closeIFlowServer(providerKey, port);

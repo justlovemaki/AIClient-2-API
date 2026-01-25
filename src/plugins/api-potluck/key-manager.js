@@ -4,6 +4,7 @@
  */
 
 import { promises as fs } from 'fs';
+import logger from '../../utils/logger.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -64,7 +65,7 @@ function ensureLoaded() {
                 }
             }
             if (needsMigration) {
-                console.log('[API Potluck] Migrated legacy keys: added bonusRemaining field');
+                logger.info('[API Potluck] Migrated legacy keys: added bonusRemaining field');
                 markDirty();
             }
         } else {
@@ -72,7 +73,7 @@ function ensureLoaded() {
             syncWriteToFile();
         }
     } catch (error) {
-        console.error('[API Potluck] Failed to load key store:', error.message);
+        logger.error('[API Potluck] Failed to load key store:', error.message);
         keyStore = { keys: {} };
     }
     
@@ -101,7 +102,7 @@ function syncWriteToFile() {
         }
         writeFileSync(KEYS_STORE_FILE, JSON.stringify(keyStore, null, 2), 'utf8');
     } catch (error) {
-        console.error('[API Potluck] Sync write failed:', error.message);
+        logger.error('[API Potluck] Sync write failed:', error.message);
     }
 }
 
@@ -122,7 +123,7 @@ async function persistIfDirty() {
         await fs.rename(tempFile, KEYS_STORE_FILE);
         isDirty = false;
     } catch (error) {
-        console.error('[API Potluck] Persist failed:', error.message);
+        logger.error('[API Potluck] Persist failed:', error.message);
     } finally {
         isWriting = false;
     }
@@ -206,7 +207,7 @@ export async function createKey(name = '', dailyLimit = null) {
     markDirty();
     await persistIfDirty(); // 创建操作立即持久化
 
-    console.log(`[API Potluck] Created key: ${apiKey.substring(0, 12)}...`);
+    logger.info(`[API Potluck] Created key: ${apiKey.substring(0, 12)}...`);
     return keyData;
 }
 
@@ -245,7 +246,7 @@ export async function deleteKey(keyId) {
     delete keyStore.keys[keyId];
     markDirty();
     await persistIfDirty(); // 删除操作立即持久化
-    console.log(`[API Potluck] Deleted key: ${keyId.substring(0, 12)}...`);
+    logger.info(`[API Potluck] Deleted key: ${keyId.substring(0, 12)}...`);
     return true;
 }
 
@@ -322,7 +323,7 @@ export async function regenerateKey(oldKeyId) {
     markDirty();
     await persistIfDirty(); // 立即持久化
     
-    console.log(`[API Potluck] Regenerated key: ${oldKeyId.substring(0, 12)}... -> ${newKeyId.substring(0, 12)}...`);
+    logger.info(`[API Potluck] Regenerated key: ${oldKeyId.substring(0, 12)}... -> ${newKeyId.substring(0, 12)}...`);
     
     return {
         oldKey: oldKeyId,
@@ -491,7 +492,7 @@ export async function applyDailyLimitToAllKeys(newLimit) {
         await persistIfDirty();
     }
     
-    console.log(`[API Potluck] Applied daily limit ${newLimit} to ${updated}/${keys.length} keys`);
+    logger.info(`[API Potluck] Applied daily limit ${newLimit} to ${updated}/${keys.length} keys`);
     return { total: keys.length, updated };
 }
 

@@ -1,4 +1,5 @@
 import { CONFIG } from '../core/config-manager.js';
+import logger from '../utils/logger.js';
 import { serviceInstances, getServiceAdapter } from '../providers/adapter.js';
 import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from '../services/usage-service.js';
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
@@ -95,7 +96,7 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
         } else if (!adapter) {
             // Service instance not initialized, try auto-initialization
             try {
-                console.log(`[Usage API] Auto-initializing service adapter for ${providerType}: ${provider.uuid}`);
+                logger.info(`[Usage API] Auto-initializing service adapter for ${providerType}: ${provider.uuid}`);
                 // Build configuration object
                 const serviceConfig = {
                     ...CONFIG,
@@ -104,7 +105,7 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
                 };
                 adapter = getServiceAdapter(serviceConfig);
             } catch (initError) {
-                console.error(`[Usage API] Failed to initialize adapter for ${providerType}: ${provider.uuid}:`, initError.message);
+                logger.error(`[Usage API] Failed to initialize adapter for ${providerType}: ${provider.uuid}:`, initError.message);
                 instanceResult.error = `Service instance initialization failed: ${initError.message}`;
                 result.errorCount++;
             }
@@ -222,14 +223,14 @@ export async function handleGetUsage(req, res, currentConfig, providerPoolManage
             // 优先读取缓存
             const cachedData = await readUsageCache();
             if (cachedData) {
-                console.log('[Usage API] Returning cached usage data');
+                logger.info('[Usage API] Returning cached usage data');
                 usageResults = { ...cachedData, fromCache: true };
             }
         }
         
         if (!usageResults) {
             // 缓存不存在或需要刷新，重新查询
-            console.log('[Usage API] Fetching fresh usage data');
+            logger.info('[Usage API] Fetching fresh usage data');
             usageResults = await getAllProvidersUsage(currentConfig, providerPoolManager);
             // 写入缓存
             await writeUsageCache(usageResults);
@@ -239,7 +240,7 @@ export async function handleGetUsage(req, res, currentConfig, providerPoolManage
         res.end(JSON.stringify(usageResults));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to get usage:', error);
+        logger.error('[UI API] Failed to get usage:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -265,14 +266,14 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
             // Prefer reading from cache
             const cachedData = await readProviderUsageCache(providerType);
             if (cachedData) {
-                console.log(`[Usage API] Returning cached usage data for ${providerType}`);
+                logger.info(`[Usage API] Returning cached usage data for ${providerType}`);
                 usageResults = cachedData;
             }
         }
         
         if (!usageResults) {
             // Cache does not exist or refresh required, re-query
-            console.log(`[Usage API] Fetching fresh usage data for ${providerType}`);
+            logger.info(`[Usage API] Fetching fresh usage data for ${providerType}`);
             usageResults = await getProviderTypeUsage(providerType, currentConfig, providerPoolManager);
             // 更新缓存
             await updateProviderUsageCache(providerType, usageResults);
@@ -282,7 +283,7 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
         res.end(JSON.stringify(usageResults));
         return true;
     } catch (error) {
-        console.error(`[UI API] Failed to get usage for ${providerType}:`, error);
+        logger.error(`[UI API] Failed to get usage for ${providerType}:`, error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

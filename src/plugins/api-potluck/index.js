@@ -31,6 +31,7 @@ import {
 } from './middleware.js';
 
 import { consumeBonus, getConfig } from './user-data-manager.js';
+import logger from '../../utils/logger.js';
 
 import { handlePotluckApiRoutes, handlePotluckUserApiRoutes, startHealthCheckScheduler, stopHealthCheckScheduler } from './api-routes.js';
 
@@ -53,7 +54,7 @@ const apiPotluckPlugin = {
      * @param {Object} config - 服务器配置
      */
     async init(config) {
-        console.log('[API Potluck Plugin] Initializing...');
+        logger.info('[API Potluck Plugin] Initializing...');
         // 注入配置获取函数
         setConfigGetter(getConfig);
         // 启动定时健康检查
@@ -64,7 +65,7 @@ const apiPotluckPlugin = {
      * 销毁钩子
      */
     async destroy() {
-        console.log('[API Potluck Plugin] Destroying...');
+        logger.info('[API Potluck Plugin] Destroying...');
         // 停止定时健康检查
         stopHealthCheckScheduler();
     },
@@ -137,7 +138,7 @@ const apiPotluckPlugin = {
         }
 
         // 认证成功，返回数据供后续使用
-        console.log(`[API Potluck Plugin] Authorized with key: ${apiKey.substring(0, 12)}...`);
+        logger.info(`[API Potluck Plugin] Authorized with key: ${apiKey.substring(0, 12)}...`);
         return {
             handled: false,
             authorized: true,
@@ -165,7 +166,7 @@ const apiPotluckPlugin = {
                     });
                 } catch (e) {
                     // 静默失败，不影响主流程
-                    console.error('[API Potluck Plugin] Failed to record usage:', e.message);
+                    logger.error('[API Potluck Plugin] Failed to record usage:', e.message);
                 }
             }
         }

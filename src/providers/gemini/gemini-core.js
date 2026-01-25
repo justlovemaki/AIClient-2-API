@@ -1,4 +1,5 @@
 import { OAuth2Client } from 'google-auth-library';
+import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { promises as fs } from 'fs';
@@ -207,7 +208,7 @@ export class GeminiApiService {
         
         if (proxyConfig) {
             oauth2Options.transporterOptions = proxyConfig;
-            console.log('[Gemini] Using proxy for OAuth2Client');
+            logger.info('[Gemini] Using proxy for OAuth2Client');
         } else {
             oauth2Options.transporterOptions = {
                 agent: httpsAgent,
@@ -233,7 +234,7 @@ export class GeminiApiService {
 
     async initialize() {
         if (this.isInitialized) return;
-        console.log('[Gemini] Initializing Gemini API Service...');
+        logger.info('[Gemini] Initializing Gemini API Service...');
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
@@ -241,15 +242,15 @@ export class GeminiApiService {
         if (!this.projectId) {
             this.projectId = await this.discoverProjectAndModels();
         } else {
-            console.log(`[Gemini] Using provided Project ID: ${this.projectId}`);
+            logger.info(`[Gemini] Using provided Project ID: ${this.projectId}`);
             this.availableModels = GEMINI_MODELS;
-            console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+            logger.info(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         }
         if (this.projectId === 'default') {
             throw new Error("Error: 'default' is not a valid project ID. Please provide a valid Google Cloud Project ID using the --project-id argument.");
         }
         this.isInitialized = true;
-        console.log(`[Gemini] Initialization complete. Project ID: ${this.projectId}`);
+        logger.info(`[Gemini] Initialization complete. Project ID: ${this.projectId}`);
     }
 
     /**
@@ -261,10 +262,10 @@ export class GeminiApiService {
                 const decoded = Buffer.from(this.oauthCredsBase64, 'base64').toString('utf8');
                 const credentials = JSON.parse(decoded);
                 this.authClient.setCredentials(credentials);
-                console.log('[Gemini Auth] Credentials loaded successfully from base64 string.');
+                logger.info('[Gemini Auth] Credentials loaded successfully from base64 string.');
                 return;
             } catch (error) {
-                console.error('[Gemini Auth] Failed to parse base64 OAuth credentials:', error);
+                logger.error('[Gemini Auth] Failed to parse base64 OAuth credentials:', error);
             }
         }
 
@@ -273,12 +274,12 @@ export class GeminiApiService {
             const data = await fs.readFile(credPath, "utf8");
             const credentials = JSON.parse(data);
             this.authClient.setCredentials(credentials);
-            console.log('[Gemini Auth] Credentials loaded successfully from file.');
+            logger.info('[Gemini Auth] Credentials loaded successfully from file.');
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.debug(`[Gemini Auth] Credentials file not found: ${credPath}`);
+                logger.debug(`[Gemini Auth] Credentials file not found: ${credPath}`);
             } else {
-                console.warn(`[Gemini Auth] Failed to load credentials from file: ${error.message}`);
+                logger.warn(`[Gemini Auth] Failed to load credentials from file: ${error.message}`);
             }
         }
     }
@@ -301,16 +302,16 @@ export class GeminiApiService {
             const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
             try {
                 if (this.authClient.credentials.refresh_token) {
-                    console.log('[Gemini Auth] Token expiring soon or force refresh requested. Refreshing token...');
+                    logger.info('[Gemini Auth] Token expiring soon or force refresh requested. Refreshing token...');
                     const { credentials: newCredentials } = await this.authClient.refreshAccessToken();
                     this.authClient.setCredentials(newCredentials);
                     
                     // 如果不是从 base64 加载的，则保存到文件
                     if (!this.oauthCredsBase64) {
                         await this._saveCredentialsToFile(credPath, newCredentials);
-                        console.log('[Gemini Auth] Token refreshed and saved successfully.');
+                        logger.info('[Gemini Auth] Token refreshed and saved successfully.');
                     } else {
-                        console.log('[Gemini Auth] Token refreshed successfully (Base64 source).');
+                        logger.info('[Gemini Auth] Token refreshed successfully (Base64 source).');
                     }
 
                     // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
@@ -319,10 +320,10 @@ export class GeminiApiService {
                         poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GEMINI_CLI, this.uuid);
                     }
                 } else {
-                    console.log(`[Gemini Auth] No access token or refresh token. Starting new authentication flow...`);
+                    logger.info(`[Gemini Auth] No access token or refresh token. Starting new authentication flow...`);
                     const newTokens = await this.getNewToken(credPath);
                     this.authClient.setCredentials(newTokens);
-                    console.log('[Gemini Auth] New token obtained and loaded into memory.');
+                    logger.info('[Gemini Auth] New token obtained and loaded into memory.');
                     
                     // 认证成功，重置状态
                     const poolManager = getProviderPoolManager();
@@ -331,7 +332,7 @@ export class GeminiApiService {
                     }
                 }
             } catch (error) {
-                console.error('[Gemini Auth] Failed to initialize authentication:', error);
+                logger.error('[Gemini Auth] Failed to initialize authentication:', error);
                 throw new Error(`Failed to load OAuth credentials.`);
             }
         }
@@ -341,12 +342,12 @@ export class GeminiApiService {
         // 使用统一的 OAuth 处理方法
         const { authUrl, authInfo } = await handleGeminiCliOAuth(this.config);
         
-        console.log('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
-        console.log('[Gemini Auth] 授权链接:', authUrl, '\n');
+        logger.info('\n[Gemini Auth] 正在自动打开浏览器进行授权...');
+        logger.info('[Gemini Auth] 授权链接:', authUrl, '\n');
 
         // 自动打开浏览器
         const showFallbackMessage = () => {
-            console.log('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
+            logger.info('[Gemini Auth] 无法自动打开浏览器，请手动复制上面的链接到浏览器中打开');
         };
 
         if (this.config) {
@@ -370,7 +371,7 @@ export class GeminiApiService {
                     const credentials = JSON.parse(data);
                     if (credentials.access_token) {
                         clearInterval(checkInterval);
-                        console.log('[Gemini Auth] New token obtained successfully.');
+                        logger.info('[Gemini Auth] New token obtained successfully.');
                         resolve(credentials);
                     }
                 } catch (error) {
@@ -388,13 +389,13 @@ export class GeminiApiService {
 
     async discoverProjectAndModels() {
         if (this.projectId) {
-            console.log(`[Gemini] Using pre-configured Project ID: ${this.projectId}`);
+            logger.info(`[Gemini] Using pre-configured Project ID: ${this.projectId}`);
             return this.projectId;
         }
 
-        console.log('[Gemini] Discovering Project ID...');
+        logger.info('[Gemini] Discovering Project ID...');
         this.availableModels = GEMINI_MODELS;
-        console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+        logger.info(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
         try {
             const initialProjectId = ""
             // Prepare client metadata
@@ -447,7 +448,7 @@ export class GeminiApiService {
             const discoveredProjectId = lroResponse.response?.cloudaicompanionProject?.id || initialProjectId;
             return discoveredProjectId;
         } catch (error) {
-            console.error('[Gemini] Failed to discover Project ID:', error.response?.data || error.message);
+            logger.error('[Gemini] Failed to discover Project ID:', error.response?.data || error.message);
             throw new Error('Could not discover a valid Google Cloud Project ID.');
         }
     }
@@ -488,16 +489,16 @@ export class GeminiApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            console.error(`[Gemini API] Error calling ${method}:`, status, error.message);
+            logger.error(`[Gemini API] Error calling ${method}:`, status, error.message);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Gemini API] Received 401/400. Triggering background refresh via PoolManager...');
+                logger.info('[Gemini API] Received 401/400. Triggering background refresh via PoolManager...');
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
+                    logger.info(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
                         uuid: this.uuid
                     });
@@ -513,7 +514,7 @@ export class GeminiApiService {
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Gemini API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1);
             }
@@ -521,7 +522,7 @@ export class GeminiApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Gemini API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1);
             }
@@ -530,7 +531,7 @@ export class GeminiApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Gemini API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(method, body, isRetry, retryCount + 1);
             }
@@ -567,16 +568,16 @@ export class GeminiApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            console.error(`[Gemini API] Error during stream ${method}:`, status, error.message);
+            logger.error(`[Gemini API] Error during stream ${method}:`, status, error.message);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
-                console.log('[Gemini API] Received 401/400 during stream. Triggering background refresh via PoolManager...');
+                logger.info('[Gemini API] Received 401/400 during stream. Triggering background refresh via PoolManager...');
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
+                    logger.info(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
                         uuid: this.uuid
                     });
@@ -592,7 +593,7 @@ export class GeminiApiService {
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Gemini API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1);
                 return;
@@ -601,7 +602,7 @@ export class GeminiApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Gemini API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1);
                 return;
@@ -611,7 +612,7 @@ export class GeminiApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[Gemini API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Gemini API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(method, body, isRetry, retryCount + 1);
                 return;
@@ -627,23 +628,23 @@ export class GeminiApiService {
         for await (const line of rl) {
             if (line.startsWith("data: ")) buffer.push(line.slice(6));
             else if (line === "" && buffer.length > 0) {
-                try { yield JSON.parse(buffer.join('\n')); } catch (e) { console.error("[Stream] Failed to parse JSON chunk:", buffer.join('\n')); }
+                try { yield JSON.parse(buffer.join('\n')); } catch (e) { logger.error("[Stream] Failed to parse JSON chunk:", buffer.join('\n')); }
                 buffer = [];
             }
         }
         if (buffer.length > 0) {
-            try { yield JSON.parse(buffer.join('\n')); } catch (e) { console.error("[Stream] Failed to parse final JSON chunk:", buffer.join('\n')); }
+            try { yield JSON.parse(buffer.join('\n')); } catch (e) { logger.error("[Stream] Failed to parse final JSON chunk:", buffer.join('\n')); }
         }
     }
 
     async generateContent(model, requestBody) {
-        console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+        logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
         
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
                     uuid: this.uuid
                 });
@@ -652,7 +653,7 @@ export class GeminiApiService {
         
         let selectedModel = model;
         if (!GEMINI_MODELS.includes(model)) {
-            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+            logger.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
             selectedModel = GEMINI_MODELS[0];
         }
         const processedRequestBody = ensureRolesInContents(requestBody);
@@ -662,13 +663,13 @@ export class GeminiApiService {
     }
 
     async * generateContentStream(model, requestBody) {
-        console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+        logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
                     uuid: this.uuid
                 });
@@ -686,7 +687,7 @@ export class GeminiApiService {
             // 正常流处理
             let selectedModel = model;
             if (!GEMINI_MODELS.includes(model)) {
-                console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
+                logger.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
                 selectedModel = GEMINI_MODELS[0];
             }
             const processedRequestBody = ensureRolesInContents(requestBody);
@@ -706,10 +707,10 @@ export class GeminiApiService {
         try {
             const nearMinutes = 20;
             const { message, isNearExpiry } = formatExpiryLog('Gemini', this.authClient.credentials.expiry_date, nearMinutes);
-            console.log(message);
+            logger.info(message);
             return isNearExpiry;
         } catch (error) {
-            console.error(`[Gemini] Error checking expiry date: ${error.message}`);
+            logger.error(`[Gemini] Error checking expiry date: ${error.message}`);
             return false;
         }
     }
@@ -722,9 +723,9 @@ export class GeminiApiService {
     async _saveCredentialsToFile(filePath, credentials) {
         try {
             await fs.writeFile(filePath, JSON.stringify(credentials, null, 2));
-            console.log(`[Gemini Auth] Credentials saved to ${filePath}`);
+            logger.info(`[Gemini Auth] Credentials saved to ${filePath}`);
         } catch (error) {
-            console.error(`[Gemini Auth] Failed to save credentials to ${filePath}: ${error.message}`);
+            logger.error(`[Gemini Auth] Failed to save credentials to ${filePath}: ${error.message}`);
             throw error;
         }
     }
@@ -739,7 +740,7 @@ export class GeminiApiService {
         // 注意：V2 架构下不再在 getUsageLimits 中同步刷新 token
         // 如果 token 过期，PoolManager 后台会自动处理
         // if (this.isExpiryDateNear()) {
-        //     console.log('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
+        //     logger.info('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
         //     await this.initializeAuth(true);
         // }
 
@@ -747,7 +748,7 @@ export class GeminiApiService {
             const modelsWithQuotas = await this.getModelsWithQuotas();
             return modelsWithQuotas;
         } catch (error) {
-            console.error('[Gemini] Failed to get usage limits:', error.message);
+            logger.error('[Gemini] Failed to get usage limits:', error.message);
             throw error;
         }
     }
@@ -781,7 +782,7 @@ export class GeminiApiService {
                 };
 
                 const res = await this.authClient.request(requestOptions);
-                // console.log(`[Gemini] retrieveUserQuota success`, JSON.stringify(res.data));
+                // logger.info(`[Gemini] retrieveUserQuota success`, JSON.stringify(res.data));
                 if (res.data && res.data.buckets) {
                     const buckets = res.data.buckets;
                     
@@ -807,11 +808,11 @@ export class GeminiApiService {
                         sortedModels[key] = result.models[key];
                     });
                     result.models = sortedModels;
-                    // console.log(`[Gemini] Sorted Models:`, sortedModels);
-                    console.log(`[Gemini] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
+                    // logger.info(`[Gemini] Sorted Models:`, sortedModels);
+                    logger.info(`[Gemini] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
                 }
             } catch (fetchError) {
-                console.error(`[Gemini] Failed to fetch user quota:`, fetchError.message);
+                logger.error(`[Gemini] Failed to fetch user quota:`, fetchError.message);
                 
                 // 如果 retrieveUserQuota 失败，回退到使用固定模型列表
                 for (const modelId of GEMINI_MODELS) {
@@ -825,8 +826,9 @@ export class GeminiApiService {
 
             return result;
         } catch (error) {
-            console.error('[Gemini] Failed to get models with quotas:', error.message);
+            logger.error('[Gemini] Failed to get models with quotas:', error.message);
             throw error;
         }
     }
 }
+

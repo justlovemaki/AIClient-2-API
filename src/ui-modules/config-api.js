@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { CONFIG } from '../core/config-manager.js';
@@ -27,17 +28,17 @@ export async function reloadConfig(providerPoolManager) {
         
         // Update global CONFIG
         Object.assign(CONFIG, newConfig);
-        console.log('[UI API] Configuration reloaded:');
+        logger.info('[UI API] Configuration reloaded:');
 
         // Update initApiService - 清空并重新初始化服务实例
         Object.keys(serviceInstances).forEach(key => delete serviceInstances[key]);
         initApiService(CONFIG);
         
-        console.log('[UI API] Configuration reloaded successfully');
+        logger.info('[UI API] Configuration reloaded successfully');
         
         return newConfig;
     } catch (error) {
-        console.error('[UI API] Failed to reload configuration:', error);
+        logger.error('[UI API] Failed to reload configuration:', error);
         throw error;
     }
 }
@@ -52,7 +53,7 @@ export async function handleGetConfig(req, res, currentConfig) {
         try {
             systemPrompt = readFileSync(currentConfig.SYSTEM_PROMPT_FILE_PATH, 'utf-8');
         } catch (e) {
-            console.warn('[UI API] Failed to read system prompt file:', e.message);
+            logger.warn('[UI API] Failed to read system prompt file:', e.message);
         }
     }
 
@@ -97,6 +98,16 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.PROXY_URL !== undefined) currentConfig.PROXY_URL = newConfig.PROXY_URL;
         if (newConfig.PROXY_ENABLED_PROVIDERS !== undefined) currentConfig.PROXY_ENABLED_PROVIDERS = newConfig.PROXY_ENABLED_PROVIDERS;
 
+        // Log settings
+        if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
+        if (newConfig.LOG_OUTPUT_MODE !== undefined) currentConfig.LOG_OUTPUT_MODE = newConfig.LOG_OUTPUT_MODE;
+        if (newConfig.LOG_LEVEL !== undefined) currentConfig.LOG_LEVEL = newConfig.LOG_LEVEL;
+        if (newConfig.LOG_DIR !== undefined) currentConfig.LOG_DIR = newConfig.LOG_DIR;
+        if (newConfig.LOG_INCLUDE_REQUEST_ID !== undefined) currentConfig.LOG_INCLUDE_REQUEST_ID = newConfig.LOG_INCLUDE_REQUEST_ID;
+        if (newConfig.LOG_INCLUDE_TIMESTAMP !== undefined) currentConfig.LOG_INCLUDE_TIMESTAMP = newConfig.LOG_INCLUDE_TIMESTAMP;
+        if (newConfig.LOG_MAX_FILE_SIZE !== undefined) currentConfig.LOG_MAX_FILE_SIZE = newConfig.LOG_MAX_FILE_SIZE;
+        if (newConfig.LOG_MAX_FILES !== undefined) currentConfig.LOG_MAX_FILES = newConfig.LOG_MAX_FILES;
+
         // Handle system prompt update
         if (newConfig.systemPrompt !== undefined) {
             const promptPath = currentConfig.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
@@ -112,9 +123,9 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                     timestamp: new Date().toISOString()
                 });
                 
-                console.log('[UI API] System prompt updated');
+                logger.info('[UI API] System prompt updated');
             } catch (e) {
-                console.warn('[UI API] Failed to write system prompt:', e.message);
+                logger.warn('[UI API] Failed to write system prompt:', e.message);
             }
         }
 
@@ -139,17 +150,24 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                 PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                 MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
-                POOL_SIZE_LIMIT: currentConfig.POOL_SIZE_LIMIT,
                 WARMUP_TARGET: currentConfig.WARMUP_TARGET,
                 REFRESH_CONCURRENCY_PER_PROVIDER: currentConfig.REFRESH_CONCURRENCY_PER_PROVIDER,
                 providerFallbackChain: currentConfig.providerFallbackChain,
                 modelFallbackMapping: currentConfig.modelFallbackMapping,
                 PROXY_URL: currentConfig.PROXY_URL,
-                PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS
+                PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS,
+                LOG_ENABLED: currentConfig.LOG_ENABLED,
+                LOG_OUTPUT_MODE: currentConfig.LOG_OUTPUT_MODE,
+                LOG_LEVEL: currentConfig.LOG_LEVEL,
+                LOG_DIR: currentConfig.LOG_DIR,
+                LOG_INCLUDE_REQUEST_ID: currentConfig.LOG_INCLUDE_REQUEST_ID,
+                LOG_INCLUDE_TIMESTAMP: currentConfig.LOG_INCLUDE_TIMESTAMP,
+                LOG_MAX_FILE_SIZE: currentConfig.LOG_MAX_FILE_SIZE,
+                LOG_MAX_FILES: currentConfig.LOG_MAX_FILES
             };
 
             writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
-            console.log('[UI API] Configuration saved to configs/config.json');
+            logger.info('[UI API] Configuration saved to configs/config.json');
             
             // 广播更新事件
             broadcastEvent('config_update', {
@@ -159,7 +177,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 timestamp: new Date().toISOString()
             });
         } catch (error) {
-            console.error('[UI API] Failed to save configuration to file:', error.message);
+            logger.error('[UI API] Failed to save configuration to file:', error.message);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 error: {
@@ -215,7 +233,7 @@ export async function handleReloadConfig(req, res, providerPoolManager) {
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to reload config files:', error);
+        logger.error('[UI API] Failed to reload config files:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -248,7 +266,7 @@ export async function handleUpdateAdminPassword(req, res) {
         const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
         await fs.writeFile(pwdFilePath, password.trim(), 'utf-8');
         
-        console.log('[UI API] Admin password updated successfully');
+        logger.info('[UI API] Admin password updated successfully');
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -257,7 +275,7 @@ export async function handleUpdateAdminPassword(req, res) {
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to update admin password:', error);
+        logger.error('[UI API] Failed to update admin password:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

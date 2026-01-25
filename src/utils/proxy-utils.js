@@ -4,6 +4,7 @@
  */
 
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import logger from './logger.js';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 
@@ -42,11 +43,11 @@ export function parseProxyUrl(proxyUrl) {
                 proxyType: 'http'
             };
         } else {
-            console.warn(`[Proxy] Unsupported proxy protocol: ${protocol}`);
+            logger.warn(`[Proxy] Unsupported proxy protocol: ${protocol}`);
             return null;
         }
     } catch (error) {
-        console.error(`[Proxy] Failed to parse proxy URL: ${error.message}`);
+        logger.error(`[Proxy] Failed to parse proxy URL: ${error.message}`);
         return null;
     }
 }
@@ -83,7 +84,7 @@ export function getProxyConfigForProvider(config, providerType) {
     
     const proxyConfig = parseProxyUrl(config.PROXY_URL);
     if (proxyConfig) {
-        console.log(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${config.PROXY_URL}`);
+        logger.info(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${config.PROXY_URL}`);
     }
     return proxyConfig;
 }

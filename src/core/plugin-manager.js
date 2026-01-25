@@ -9,6 +9,7 @@
  */
 
 import { promises as fs } from 'fs';
+import logger from '../utils/logger.js';
 import { existsSync } from 'fs';
 import path from 'path';
 
@@ -72,7 +73,7 @@ class PluginManager {
                 await this.saveConfig();
             }
         } catch (error) {
-            console.error('[PluginManager] Failed to load config:', error.message);
+            logger.error('[PluginManager] Failed to load config:', error.message);
             this.pluginsConfig = { plugins: {} };
         }
     }
@@ -108,7 +109,7 @@ class PluginManager {
                             enabled: true,
                             description: plugin.description || ''
                         };
-                        console.log(`[PluginManager] Found plugin for default config: ${plugin.name}`);
+                        logger.info(`[PluginManager] Found plugin for default config: ${plugin.name}`);
                     }
                 } catch (importError) {
                     // 如果导入失败，使用目录名作为插件名
@@ -116,11 +117,11 @@ class PluginManager {
                         enabled: true,
                         description: ''
                     };
-                    console.warn(`[PluginManager] Could not import plugin ${entry.name}, using directory name:`, importError.message);
+                    logger.warn(`[PluginManager] Could not import plugin ${entry.name}, using directory name:`, importError.message);
                 }
             }
         } catch (error) {
-            console.error('[PluginManager] Failed to scan plugins directory:', error.message);
+            logger.error('[PluginManager] Failed to scan plugins directory:', error.message);
         }
         
         return defaultConfig;
@@ -137,7 +138,7 @@ class PluginManager {
             }
             await fs.writeFile(PLUGINS_CONFIG_FILE, JSON.stringify(this.pluginsConfig, null, 2), 'utf8');
         } catch (error) {
-            console.error('[PluginManager] Failed to save config:', error.message);
+            logger.error('[PluginManager] Failed to save config:', error.message);
         }
     }
 
@@ -150,11 +151,11 @@ class PluginManager {
             throw new Error('Plugin must have a name');
         }
         if (this.plugins.has(plugin.name)) {
-            console.warn(`[PluginManager] Plugin "${plugin.name}" is already registered, skipping`);
+            logger.warn(`[PluginManager] Plugin "${plugin.name}" is already registered, skipping`);
             return;
         }
         this.plugins.set(plugin.name, plugin);
-        console.log(`[PluginManager] Registered plugin: ${plugin.name} v${plugin.version || '1.0.0'}`);
+        logger.info(`[PluginManager] Registered plugin: ${plugin.name} v${plugin.version || '1.0.0'}`);
     }
 
     /**
@@ -169,18 +170,18 @@ class PluginManager {
             const enabled = pluginConfig.enabled !== false; // 默认启用
             
             if (!enabled) {
-                console.log(`[PluginManager] Plugin "${name}" is disabled, skipping init`);
+                logger.info(`[PluginManager] Plugin "${name}" is disabled, skipping init`);
                 continue;
             }
 
             try {
                 if (typeof plugin.init === 'function') {
                     await plugin.init(config);
-                    console.log(`[PluginManager] Initialized plugin: ${name}`);
+                    logger.info(`[PluginManager] Initialized plugin: ${name}`);
                 }
                 plugin._enabled = true;
             } catch (error) {
-                console.error(`[PluginManager] Failed to init plugin "${name}":`, error.message);
+                logger.error(`[PluginManager] Failed to init plugin "${name}":`, error.message);
                 plugin._enabled = false;
             }
         }
@@ -198,10 +199,10 @@ class PluginManager {
             try {
                 if (typeof plugin.destroy === 'function') {
                     await plugin.destroy();
-                    console.log(`[PluginManager] Destroyed plugin: ${name}`);
+                    logger.info(`[PluginManager] Destroyed plugin: ${name}`);
                 }
             } catch (error) {
-                console.error(`[PluginManager] Failed to destroy plugin "${name}":`, error.message);
+                logger.error(`[PluginManager] Failed to destroy plugin "${name}":`, error.message);
             }
         }
         this.initialized = false;
@@ -303,7 +304,7 @@ class PluginManager {
                 
                 // authorized === null 表示此插件不处理，继续下一个
             } catch (error) {
-                console.error(`[PluginManager] Auth error in plugin "${plugin.name}":`, error.message);
+                logger.error(`[PluginManager] Auth error in plugin "${plugin.name}":`, error.message);
             }
         }
         
@@ -345,7 +346,7 @@ class PluginManager {
                     Object.assign(config, result.data);
                 }
             } catch (error) {
-                console.error(`[PluginManager] Middleware error in plugin "${plugin.name}":`, error.message);
+                logger.error(`[PluginManager] Middleware error in plugin "${plugin.name}":`, error.message);
             }
         }
         
@@ -380,7 +381,7 @@ class PluginManager {
                         const handled = await route.handler(method, path, req, res);
                         if (handled) return true;
                     } catch (error) {
-                        console.error(`[PluginManager] Route error in plugin "${plugin.name}":`, error.message);
+                        logger.error(`[PluginManager] Route error in plugin "${plugin.name}":`, error.message);
                     }
                 }
             }
@@ -424,7 +425,7 @@ class PluginManager {
             try {
                 await plugin.hooks[hookName](...args);
             } catch (error) {
-                console.error(`[PluginManager] Hook "${hookName}" error in plugin "${plugin.name}":`, error.message);
+                logger.error(`[PluginManager] Hook "${hookName}" error in plugin "${plugin.name}":`, error.message);
             }
         }
     }
@@ -482,7 +483,7 @@ export async function discoverPlugins() {
     try {
         if (!existsSync(pluginsDir)) {
             await fs.mkdir(pluginsDir, { recursive: true });
-            console.log('[PluginManager] Created plugins directory');
+            logger.info('[PluginManager] Created plugins directory');
         }
         
         const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
@@ -502,11 +503,11 @@ export async function discoverPlugins() {
                     pluginManager.register(plugin);
                 }
             } catch (error) {
-                console.error(`[PluginManager] Failed to load plugin from ${entry.name}:`, error.message);
+                logger.error(`[PluginManager] Failed to load plugin from ${entry.name}:`, error.message);
             }
         }
     } catch (error) {
-        console.error('[PluginManager] Failed to discover plugins:', error.message);
+        logger.error('[PluginManager] Failed to discover plugins:', error.message);
     }
 }
 

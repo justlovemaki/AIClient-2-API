@@ -4,128 +4,275 @@
     <h2 id="config-title" data-i18n="config.title">配置管理</h2>
     <div class="config-panel">
         <div class="config-form">
-            <div class="form-group password-input-group">
-                <label for="apiKey" data-i18n="config.apiKey">API密钥</label>
-                <div class="password-input-wrapper">
-                    <input type="password" id="apiKey" class="form-control" data-i18n="config.apiKeyPlaceholder" placeholder="请输入API密钥" autocomplete="off">
-                    <button type="button" class="password-toggle" data-target="apiKey" aria-label="显示/隐藏密码">
-                        <i class="fas fa-eye" aria-hidden="true"></i>
-                    </button>
+            <!-- 基础设置 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.basic.title"><i class="fas fa-cog"></i> 基础设置</h3>
+                <div class="form-group password-input-group">
+                    <label for="apiKey" data-i18n="config.apiKey">API密钥</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="apiKey" class="form-control" data-i18n="config.apiKeyPlaceholder" placeholder="请输入API密钥" autocomplete="off">
+                        <button type="button" class="password-toggle" data-target="apiKey" aria-label="显示/隐藏密码">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="host" data-i18n="config.host">监听地址</label>
-                    <input type="text" id="host" class="form-control" value="127.0.0.1" data-i18n-placeholder="config.hostPlaceholder" placeholder="例如: 127.0.0.1">
-                </div>
-                <div class="form-group">
-                    <label for="port" data-i18n="config.port">端口</label>
-                    <input type="number" id="port" class="form-control" value="3000" data-i18n-placeholder="config.portPlaceholder" placeholder="3000">
-                </div>
-            </div>
-            <div class="form-group pool-section">
-                <label data-i18n="config.modelProvider">模型提供商 (可多选)</label>
-                <div id="modelProvider" class="provider-tags">
-                    <button type="button" class="provider-tag" data-value="gemini-cli-oauth">
-                        <i class="fas fa-robot"></i>
-                        <span>Gemini CLI OAuth</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="gemini-antigravity">
-                        <i class="fas fa-rocket"></i>
-                        <span>Gemini Antigravity</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="openai-custom">
-                        <i class="fas fa-brain"></i>
-                        <span>OpenAI Custom</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="claude-custom">
-                        <i class="fas fa-comment-dots"></i>
-                        <span>Claude Custom</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="claude-kiro-oauth">
-                        <i class="fas fa-key"></i>
-                        <span>Claude Kiro OAuth</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="openai-qwen-oauth">
-                        <i class="fas fa-cloud"></i>
-                        <span>Qwen OAuth</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="openaiResponses-custom">
-                        <i class="fas fa-reply"></i>
-                        <span>OpenAI Responses</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="openai-iflow">
-                        <i class="fas fa-stream"></i>
-                        <span>iFlow OAuth</span>
-                    </button>
-                    <button type="button" class="provider-tag" data-value="openai-codex-oauth">
-                        <i class="fas fa-code"></i>
-                        <span>OpenAI Codex OAuth</span>
-                    </button>
-                </div>
-                <small class="form-text" data-i18n="config.modelProviderHelp">点击选择启动时初始化的模型提供商 (必须至少选择一个)</small>
-            </div>
-            
-            <!-- 高级配置区域 -->
-            <div class="advanced-config-section">
-                <h3 data-i18n="config.advanced.title"><i class="fas fa-cogs"></i> 高级配置</h3>
-                
-                <!-- 代理配置 -->
-                <div class="proxy-config-section">
-                    <h4 data-i18n="config.proxy.title"><i class="fas fa-globe"></i> 代理设置</h4>
+                <div class="form-row">
                     <div class="form-group">
-                        <label for="proxyUrl" data-i18n="config.proxy.url">代理地址</label>
-                        <input type="text" id="proxyUrl" class="form-control" data-i18n-placeholder="config.proxy.urlPlaceholder" placeholder="例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
-                        <small class="form-text" data-i18n="config.proxy.urlNote">支持 HTTP、HTTPS 和 SOCKS5 代理，留空则不使用代理</small>
+                        <label for="host" data-i18n="config.host">监听地址</label>
+                        <input type="text" id="host" class="form-control" value="127.0.0.1" data-i18n-placeholder="config.hostPlaceholder" placeholder="例如: 127.0.0.1">
                     </div>
-                    <div class="form-group pool-section">
-                        <label data-i18n="config.proxy.enabledProviders">启用代理的提供商</label>
-                        <div id="proxyProviders" class="provider-tags">
-                            <button type="button" class="provider-tag" data-value="gemini-cli-oauth">
-                                <i class="fas fa-robot"></i>
-                                <span>Gemini CLI OAuth</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="gemini-antigravity">
-                                <i class="fas fa-rocket"></i>
-                                <span>Gemini Antigravity</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="openai-custom">
-                                <i class="fas fa-brain"></i>
-                                <span>OpenAI Custom</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="claude-custom">
-                                <i class="fas fa-comment-dots"></i>
-                                <span>Claude Custom</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="claude-kiro-oauth">
-                                <i class="fas fa-key"></i>
-                                <span>Claude Kiro OAuth</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="openai-qwen-oauth">
-                                <i class="fas fa-cloud"></i>
-                                <span>Qwen OAuth</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="openaiResponses-custom">
-                                <i class="fas fa-reply"></i>
-                                <span>OpenAI Responses</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="openai-iflow">
-                                <i class="fas fa-stream"></i>
-                                <span>iFlow OAuth</span>
-                            </button>
-                            <button type="button" class="provider-tag" data-value="openai-codex-oauth">
-                                <i class="fas fa-code"></i>
-                                <span>OpenAI Codex OAuth</span>
-                            </button>
-                        </div>
-                        <small class="form-text" data-i18n="config.proxy.enabledProvidersNote">点击选择需要通过代理访问的提供商，未选中的提供商将直接连接</small>
+                    <div class="form-group">
+                        <label for="port" data-i18n="config.port">端口</label>
+                        <input type="number" id="port" class="form-control" value="3000" data-i18n-placeholder="config.portPlaceholder" placeholder="3000">
                     </div>
                 </div>
-                
+                <div class="form-group pool-section">
+                    <label data-i18n="config.modelProvider">模型提供商 (可多选)</label>
+                    <div id="modelProvider" class="provider-tags">
+                        <button type="button" class="provider-tag" data-value="gemini-cli-oauth">
+                            <i class="fas fa-robot"></i>
+                            <span>Gemini CLI OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="gemini-antigravity">
+                            <i class="fas fa-rocket"></i>
+                            <span>Gemini Antigravity</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-custom">
+                            <i class="fas fa-brain"></i>
+                            <span>OpenAI Custom</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="claude-custom">
+                            <i class="fas fa-comment-dots"></i>
+                            <span>Claude Custom</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="claude-kiro-oauth">
+                            <i class="fas fa-key"></i>
+                            <span>Claude Kiro OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-qwen-oauth">
+                            <i class="fas fa-cloud"></i>
+                            <span>Qwen OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openaiResponses-custom">
+                            <i class="fas fa-reply"></i>
+                            <span>OpenAI Responses</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-iflow">
+                            <i class="fas fa-stream"></i>
+                            <span>iFlow OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-codex-oauth">
+                            <i class="fas fa-code"></i>
+                            <span>OpenAI Codex OAuth</span>
+                        </button>
+                    </div>
+                    <small class="form-text" data-i18n="config.modelProviderHelp">点击选择启动时初始化的模型提供商 (必须至少选择一个)</small>
+                </div>
+            </div>
+
+            <!-- 代理与网络 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.proxy.title"><i class="fas fa-globe"></i> 代理设置</h3>
+                <div class="form-group">
+                    <label for="proxyUrl" data-i18n="config.proxy.url">代理地址</label>
+                    <input type="text" id="proxyUrl" class="form-control" data-i18n-placeholder="config.proxy.urlPlaceholder" placeholder="例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+                    <small class="form-text" data-i18n="config.proxy.urlNote">支持 HTTP、HTTPS 和 SOCKS5 代理，留空则不使用代理</small>
+                </div>
+                <div class="form-group pool-section">
+                    <label data-i18n="config.proxy.enabledProviders">启用代理的提供商</label>
+                    <div id="proxyProviders" class="provider-tags">
+                        <button type="button" class="provider-tag" data-value="gemini-cli-oauth">
+                            <i class="fas fa-robot"></i>
+                            <span>Gemini CLI OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="gemini-antigravity">
+                            <i class="fas fa-rocket"></i>
+                            <span>Gemini Antigravity</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-custom">
+                            <i class="fas fa-brain"></i>
+                            <span>OpenAI Custom</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="claude-custom">
+                            <i class="fas fa-comment-dots"></i>
+                            <span>Claude Custom</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="claude-kiro-oauth">
+                            <i class="fas fa-key"></i>
+                            <span>Claude Kiro OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-qwen-oauth">
+                            <i class="fas fa-cloud"></i>
+                            <span>Qwen OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openaiResponses-custom">
+                            <i class="fas fa-reply"></i>
+                            <span>OpenAI Responses</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-iflow">
+                            <i class="fas fa-stream"></i>
+                            <span>iFlow OAuth</span>
+                        </button>
+                        <button type="button" class="provider-tag" data-value="openai-codex-oauth">
+                            <i class="fas fa-code"></i>
+                            <span>OpenAI Codex OAuth</span>
+                        </button>
+                    </div>
+                    <small class="form-text" data-i18n="config.proxy.enabledProvidersNote">点击选择需要通过代理访问的提供商，未选中的提供商将直接连接</small>
+                </div>
+            </div>
+
+            <!-- 服务治理与高可用 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.governance.title"><i class="fas fa-shield-alt"></i> 服务治理</h3>
                 <div class="config-row">
                     <div class="form-group">
+                        <label for="requestMaxRetries" data-i18n="config.advanced.maxRetries">请求最大重试次数</label>
+                        <input type="number" id="requestMaxRetries" class="form-control" min="0" max="10" value="3">
+                    </div>
+                    <div class="form-group">
+                        <label for="requestBaseDelay" data-i18n="config.advanced.baseDelay">重试基础延迟(毫秒)</label>
+                        <input type="number" id="requestBaseDelay" class="form-control" min="0" step="100" value="1000">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="credentialSwitchMaxRetries" data-i18n="config.advanced.credentialSwitchMaxRetries">坏凭证切换最大重试次数</label>
+                        <input type="number" id="credentialSwitchMaxRetries" class="form-control" min="1" max="50" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxErrorCount" data-i18n="config.advanced.maxErrorCount">节点最大错误阈值</label>
+                        <input type="number" id="maxErrorCount" class="form-control" value="10" min="1" max="20">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="warmupTarget" data-i18n="config.advanced.warmupTarget">系统预热节点数</label>
+                        <input type="number" id="warmupTarget" class="form-control" min="0" max="100" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="refreshConcurrencyPerProvider" data-i18n="config.advanced.refreshConcurrencyPerProvider">提供商刷新并发数</label>
+                        <input type="number" id="refreshConcurrencyPerProvider" class="form-control" min="1" max="10" value="1">
+                    </div>
+                </div>
+                <div class="form-group pool-section">
+                    <label for="providerFallbackChain" data-i18n="config.advanced.fallbackChain">跨类型 Fallback 链配置 (JSON)</label>
+                    <textarea id="providerFallbackChain" class="form-control" rows="4" data-i18n-placeholder="config.advanced.fallbackChainPlaceholder"></textarea>
+                </div>
+                <div class="form-group pool-section">
+                    <label for="modelFallbackMapping" data-i18n="config.advanced.modelFallbackMapping">跨协议模型 Fallback 映射 (JSON)</label>
+                    <textarea id="modelFallbackMapping" class="form-control" rows="4" data-i18n-placeholder="config.advanced.modelFallbackMappingPlaceholder"></textarea>
+                </div>
+            </div>
+
+            <!-- OAuth 与令牌 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.oauth.title"><i class="fas fa-key"></i> OAuth & 令牌</h3>
+                <div class="config-row">
+                    <div class="form-group">
+                        <label for="cronNearMinutes" data-i18n="config.advanced.cronInterval">令牌刷新间隔(分钟)</label>
+                        <input type="number" id="cronNearMinutes" class="form-control" min="1" max="60" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="config.advanced.cronEnabled">启用自动刷新 (需重启)</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="cronRefreshToken">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 日志管理 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.log.title"><i class="fas fa-file-alt"></i> 日志设置</h3>
+                <div class="config-row">
+                    <div class="form-group">
+                        <label data-i18n="config.log.enabled">启用日志</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="logEnabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="logOutputMode" data-i18n="config.log.outputMode">日志输出模式</label>
+                        <select id="logOutputMode" class="form-control">
+                            <option value="all" selected data-i18n="config.log.outputMode.all">全部 (控制台+文件)</option>
+                            <option value="console" data-i18n="config.log.outputMode.console">仅控制台</option>
+                            <option value="file" data-i18n="config.log.outputMode.file">仅文件</option>
+                            <option value="none" data-i18n="config.log.outputMode.none">禁用</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="logLevel" data-i18n="config.log.level">日志级别</label>
+                        <select id="logLevel" class="form-control">
+                            <option value="debug" data-i18n="config.log.level.debug">调试 (debug)</option>
+                            <option value="info" selected data-i18n="config.log.level.info">信息 (info)</option>
+                            <option value="warn" data-i18n="config.log.level.warn">警告 (warn)</option>
+                            <option value="error" data-i18n="config.log.level.error">错误 (error)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="logDir" data-i18n="config.log.dir">日志目录</label>
+                        <input type="text" id="logDir" class="form-control" value="logs">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="logMaxFileSize" data-i18n="config.log.maxFileSize">最大文件大小(字节)</label>
+                        <input type="number" id="logMaxFileSize" class="form-control" value="10485760" step="1048576">
+                    </div>
+                    <div class="form-group">
+                        <label for="logMaxFiles" data-i18n="config.log.maxFiles">最大保留文件数</label>
+                        <input type="number" id="logMaxFiles" class="form-control" value="10" min="1">
+                    </div>
+                </div>
+                <div class="config-row">
+                    <div class="form-group">
+                        <label data-i18n="config.log.includeRequestId">包含请求ID</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="logIncludeRequestId" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="config.log.includeTimestamp">包含时间戳</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="logIncludeTimestamp" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <hr>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="promptLogMode" data-i18n="config.advanced.promptLogMode">提示日志模式</label>
+                        <select id="promptLogMode" class="form-control">
+                            <option value="none" data-i18n="config.advanced.promptLogMode.none">无 (none)</option>
+                            <option value="console" data-i18n="config.advanced.promptLogMode.console">控制台 (console)</option>
+                            <option value="file" data-i18n="config.advanced.promptLogMode.file">文件 (file)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="promptLogBaseName" data-i18n="config.advanced.promptLogBaseName">提示日志基础名称</label>
+                        <input type="text" id="promptLogBaseName" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统与高级 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.advanced.title"><i class="fas fa-cogs"></i> 系统与高级</h3>
+                <div class="form-group">
+                    <label for="providerPoolsFilePath" data-i18n="config.advanced.poolFilePath">提供商池配置文件路径</label>
+                    <input type="text" id="providerPoolsFilePath" class="form-control">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="systemPromptFilePath" data-i18n="config.advanced.systemPromptFile">系统提示文件路径</label>
-                        <input type="text" id="systemPromptFilePath" class="form-control" value="configs/input_system_prompt.txt" data-i18n-placeholder="config.advanced.systemPromptFilePlaceholder" placeholder="例如: configs/input_system_prompt.txt">
+                        <input type="text" id="systemPromptFilePath" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="systemPromptMode" data-i18n="config.advanced.systemPromptMode">系统提示模式</label>
@@ -135,121 +282,22 @@
                         </select>
                     </div>
                 </div>
-                
-                <div class="config-row">
-                    <div class="form-group">
-                        <label for="promptLogBaseName" data-i18n="config.advanced.promptLogBaseName">提示日志基础名称</label>
-                        <input type="text" id="promptLogBaseName" class="form-control" data-i18n-placeholder="config.advanced.promptLogBaseNamePlaceholder" placeholder="例如: prompt_log">
-                    </div>
-                    <div class="form-group">
-                        <label for="promptLogMode" data-i18n="config.advanced.promptLogMode">提示日志模式</label>
-                        <select id="promptLogMode" class="form-control">
-                            <option value="none" data-i18n="config.advanced.promptLogMode.none">无 (none)</option>
-                            <option value="console" data-i18n="config.advanced.promptLogMode.console">控制台 (console)</option>
-                            <option value="file" data-i18n="config.advanced.promptLogMode.file">文件 (file)</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="systemPrompt" data-i18n="config.advanced.systemPrompt">系统提示内容</label>
+                    <textarea id="systemPrompt" class="form-control" rows="4"></textarea>
                 </div>
-                
-                <div class="config-row">
-                    <div class="form-group">
-                        <label for="requestMaxRetries" data-i18n="config.advanced.maxRetries">最大重试次数</label>
-                        <input type="number" id="requestMaxRetries" class="form-control" min="0" max="10" value="3">
-                    </div>
-                    <div class="form-group">
-                        <label for="requestBaseDelay" data-i18n="config.advanced.baseDelay">重试基础延迟(毫秒)</label>
-                        <input type="number" id="requestBaseDelay" class="form-control" min="0" step="100" value="1000">
-                    </div>
-                </div>
-                
-                <div class="config-row">
-                    <div class="form-group pool-section">
-                        <label for="credentialSwitchMaxRetries" data-i18n="config.advanced.credentialSwitchMaxRetries">坏凭证切换最大重试次数</label>
-                        <input type="number" id="credentialSwitchMaxRetries" class="form-control" min="1" max="50" value="5">
-                        <small class="form-text" data-i18n="config.advanced.credentialSwitchMaxRetriesNote">认证错误(401/403)后切换凭证的最大重试次数，默认 5 次</small>
-                    </div>
-                </div>
-                
-                <div class="config-row">
-                    <div class="form-group pool-section">
-                        <label for="warmupTarget" data-i18n="config.advanced.warmupTarget">系统预热节点数</label>
-                        <input type="number" id="warmupTarget" class="form-control" min="0" max="100" value="0">
-                        <small class="form-text" data-i18n="config.advanced.warmupTargetNote">系统启动时自动刷新的节点数量，默认为 0</small>
-                    </div>
-                    <div class="form-group pool-section">
-                        <label for="refreshConcurrencyPerProvider" data-i18n="config.advanced.refreshConcurrencyPerProvider">提供商内刷新并发数</label>
-                        <input type="number" id="refreshConcurrencyPerProvider" class="form-control" min="1" max="10" value="1">
-                        <small class="form-text" data-i18n="config.advanced.refreshConcurrencyPerProviderNote">每个提供商内部最大并行刷新任务数，默认为 1</small>
-                    </div>
-                </div>
-
-                <div class="config-row">
-                    <div class="form-group">
-                        <label for="cronNearMinutes" data-i18n="config.advanced.cronInterval">OAuth令牌刷新间隔(分钟)</label>
-                        <input type="number" id="cronNearMinutes" class="form-control" min="1" max="60" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="cronNearMinutes" data-i18n="config.advanced.cronEnabled">启用OAuth令牌自动刷新(需重启服务)</label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="cronRefreshToken">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="form-group pool-section">
-                    <label for="providerPoolsFilePath" data-i18n="config.advanced.poolFilePath">提供商池配置文件路径(不能为空)</label>
-                    <input type="text" id="providerPoolsFilePath" class="form-control" value="" data-i18n-placeholder="config.advanced.poolFilePathPlaceholder" placeholder="默认: configs/provider_pools.json">
-                    <small class="form-text" data-i18n="config.advanced.poolNote">使用默认路径配置需添加一个空节点</small>
-                </div>
-                
-                <div class="form-group pool-section">
-                    <label for="maxErrorCount" data-i18n="config.advanced.maxErrorCount">提供商最大错误次数</label>
-                    <input type="number" id="maxErrorCount" class="form-control" value="10" min="1" max="20" data-i18n-placeholder="config.advanced.maxErrorCountPlaceholder" placeholder="默认: 10">
-                    <small class="form-text" data-i18n="config.advanced.maxErrorCountNote">提供商连续错误达到此次数后将被标记为不健康，默认为 10 次</small>
-                </div>
-                
-                <div class="form-group pool-section">
-                    <label for="providerFallbackChain" data-i18n="config.advanced.fallbackChain">跨类型 Fallback 链配置</label>
-                    <textarea id="providerFallbackChain" class="form-control" rows="6" data-i18n-placeholder="config.advanced.fallbackChainPlaceholder" placeholder='例如:
-{
-  "gemini-cli-oauth": ["gemini-antigravity"],
-  "gemini-antigravity": ["gemini-cli-oauth"],
-  "claude-kiro-oauth": ["claude-custom"]
-}'></textarea>
-                    <small class="form-text" data-i18n="config.advanced.fallbackChainNote">当某一 Provider Type 所有账号都不健康时，自动切换到配置的 Fallback 类型。JSON 格式，键为主类型，值为 Fallback 类型数组（按优先级排序）</small>
-                </div>
-                
-                <div class="form-group pool-section">
-                    <label for="modelFallbackMapping" data-i18n="config.advanced.modelFallbackMapping">跨协议模型 Fallback 映射</label>
-                    <textarea id="modelFallbackMapping" class="form-control" rows="6" data-i18n-placeholder="config.advanced.modelFallbackMappingPlaceholder" placeholder='例如:
-{
-  "gemini-claude-opus-4-5-thinking": {
-    "targetProviderType": "claude-kiro-oauth",
-    "targetModel": "claude-opus-4-5"
-  }
-}'></textarea>
-                    <small class="form-text" data-i18n="config.advanced.modelFallbackMappingNote">当主 Provider 不可用时，根据模型名映射到其他协议的 Provider 和模型。JSON 格式。</small>
-                </div>
-                
-                <!-- 系统提示配置移到最下面 -->
-                <div class="form-group system-prompt-section">
-                    <label for="systemPrompt" data-i18n="config.advanced.systemPrompt">系统提示</label>
-                    <textarea id="systemPrompt" class="form-control" rows="4" data-i18n-placeholder="config.advanced.systemPromptPlaceholder" placeholder="输入系统提示..."></textarea>
-                </div>
-                
-                <!-- 后台登录密码配置 -->
-                <div class="form-group pool-section">
+                <div class="form-group">
                     <label for="adminPassword" data-i18n="config.advanced.adminPassword">后台登录密码</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="adminPassword" class="form-control" data-i18n-placeholder="config.advanced.adminPasswordPlaceholder" placeholder="设置后台登录密码（留空则不修改）" autocomplete="new-password">
-                        <button type="button" class="password-toggle" data-target="adminPassword" aria-label="显示/隐藏密码" data-i18n-aria-label="common.togglePassword">
+                        <input type="password" id="adminPassword" class="form-control" autocomplete="new-password">
+                        <button type="button" class="password-toggle" data-target="adminPassword" aria-label="显示/隐藏密码">
                             <i class="fas fa-eye" aria-hidden="true"></i>
                         </button>
                     </div>
-                    <small class="form-text" data-i18n="config.advanced.adminPasswordNote">用于保护管理控制台的访问，修改后需要重新登录</small>
+                    <small class="form-text" data-i18n="config.advanced.adminPasswordNote">修改后需要重新登录</small>
                 </div>
-            
+            </div>
+
             <div class="form-actions">
                 <button class="btn btn-success" id="saveConfig">
                     <i class="fas fa-save"></i> <span data-i18n="config.save">保存配置</span>

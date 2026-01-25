@@ -5,6 +5,7 @@
  */
 
 import { promises as fs } from 'fs';
+import logger from '../../utils/logger.js';
 import { existsSync, readFileSync, writeFileSync, watch } from 'fs';
 import path from 'path';
 
@@ -126,7 +127,7 @@ export async function updateConfig(newConfig) {
     await persistIfDirty();
     
     const updatedConfig = getFullConfig();
-    console.log(`[API Potluck UserData] Config updated:`, updatedConfig);
+    logger.info(`[API Potluck UserData] Config updated:`, updatedConfig);
     return updatedConfig;
 }
 
@@ -140,7 +141,7 @@ function updatePersistTimer(newInterval) {
     if (persistTimer) {
         clearInterval(persistTimer);
         persistTimer = setInterval(persistIfDirty, currentPersistInterval);
-        console.log(`[API Potluck UserData] Persist interval updated to ${currentPersistInterval}ms`);
+        logger.info(`[API Potluck UserData] Persist interval updated to ${currentPersistInterval}ms`);
     }
 }
 
@@ -179,7 +180,7 @@ function ensureLoaded() {
             syncWriteToFile();
         }
     } catch (error) {
-        console.error('[API Potluck UserData] Failed to load user data:', error.message);
+        logger.error('[API Potluck UserData] Failed to load user data:', error.message);
         userDataStore = { config: {}, users: {} };
     }
     
@@ -206,7 +207,7 @@ function syncWriteToFile() {
         }
         writeFileSync(USER_DATA_FILE, JSON.stringify(userDataStore, null, 2), 'utf8');
     } catch (error) {
-        console.error('[API Potluck UserData] Sync write failed:', error.message);
+        logger.error('[API Potluck UserData] Sync write failed:', error.message);
     }
 }
 
@@ -226,7 +227,7 @@ async function persistIfDirty() {
         await fs.rename(tempFile, USER_DATA_FILE);
         isDirty = false;
     } catch (error) {
-        console.error('[API Potluck UserData] Persist failed:', error.message);
+        logger.error('[API Potluck UserData] Persist failed:', error.message);
     } finally {
         isWriting = false;
     }
@@ -268,17 +269,17 @@ function startFileWatcher() {
                     // 检查配置是否有变化
                     if (JSON.stringify(oldConfig) !== JSON.stringify(newConfig)) {
                         userDataStore.config = newConfig;
-                        console.log('[API Potluck UserData] Config hot-reloaded:', getBonusConfig());
+                        logger.info('[API Potluck UserData] Config hot-reloaded:', getBonusConfig());
                     }
                 }
             } catch (error) {
-                console.error('[API Potluck UserData] Hot-reload failed:', error.message);
+                logger.error('[API Potluck UserData] Hot-reload failed:', error.message);
             }
         });
         
-        console.log('[API Potluck UserData] File watcher started for config hot-reload');
+        logger.info('[API Potluck UserData] File watcher started for config hot-reload');
     } catch (error) {
-        console.error('[API Potluck UserData] Failed to start file watcher:', error.message);
+        logger.error('[API Potluck UserData] Failed to start file watcher:', error.message);
     }
 }
 
@@ -451,7 +452,7 @@ export async function migrateUserCredentials(oldApiKey, newApiKey) {
     markDirty();
     await persistIfDirty();
     
-    console.log(`[API Potluck UserData] Migrated credentials from ${oldApiKey.substring(0, 12)}... to ${newApiKey.substring(0, 12)}...`);
+    logger.info(`[API Potluck UserData] Migrated credentials from ${oldApiKey.substring(0, 12)}... to ${newApiKey.substring(0, 12)}...`);
     return true;
 }
 
@@ -521,7 +522,7 @@ export async function addCredentialBonus(apiKey, credentialId) {
     userData.credentialBonuses.push(bonus);
     markDirty();
     
-    console.log(`[API Potluck UserData] Added bonus for credential: ${credentialId}`);
+    logger.info(`[API Potluck UserData] Added bonus for credential: ${credentialId}`);
     return bonus;
 }
 
@@ -542,7 +543,7 @@ export async function removeCredentialBonus(apiKey, credentialId) {
     userData.credentialBonuses.splice(index, 1);
     markDirty();
     
-    console.log(`[API Potluck UserData] Removed bonus for credential: ${credentialId}`);
+    logger.info(`[API Potluck UserData] Removed bonus for credential: ${credentialId}`);
     return true;
 }
 
@@ -643,7 +644,7 @@ export async function syncCredentialBonuses(apiKey, credentialsWithHealth) {
                 usedCount: 0
             });
             added++;
-            console.log(`[API Potluck UserData] Created bonus for credential ${cred.id}, grantedAt: ${grantedAt}`);
+            logger.info(`[API Potluck UserData] Created bonus for credential ${cred.id}, grantedAt: ${grantedAt}`);
         }
     }
     

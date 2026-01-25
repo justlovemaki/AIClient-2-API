@@ -4,6 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import logger from '../../utils/logger.js';
 import { BaseConverter } from '../BaseConverter.js';
 import { CodexConverter } from './CodexConverter.js';
 import {
@@ -1172,10 +1173,10 @@ export class OpenAIConverter extends BaseConverter {
         // But this parameter cannot be added when using tools (causes 400 error)
         const hasTools = tools && Array.isArray(tools) && tools.length > 0;
         if (!hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
-            console.log(`[OpenAI->Gemini] Adding responseModalities: ["TEXT"] for model: ${model}`);
+            logger.info(`[OpenAI->Gemini] Adding responseModalities: ["TEXT"] for model: ${model}`);
             config.responseModalities = ["TEXT"];
         } else if (hasTools && model && (model.includes('2.5') || model.includes('thinking') || model.includes('2.0-flash-thinking'))) {
-            console.log(`[OpenAI->Gemini] Skipping responseModalities for model ${model} because tools are present`);
+            logger.info(`[OpenAI->Gemini] Skipping responseModalities for model ${model} because tools are present`);
         }
 
         return config;

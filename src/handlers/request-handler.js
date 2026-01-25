@@ -1,4 +1,5 @@
 import deepmerge from 'deepmerge';
+import logger from '../utils/logger.js';
 import { handleError } from '../utils/common.js';
 import { handleUIApiRequests, serveStaticFiles } from '../services/ui-manager.js';
 import { handleAPIRequests } from '../services/api-manager.js';
@@ -8,7 +9,14 @@ import { MODEL_PROVIDER } from '../utils/common.js';
 import { PROMPT_LOG_FILENAME } from '../core/config-manager.js';
 import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
 import { getPluginManager } from '../core/plugin-manager.js';
+import { randomUUID } from 'crypto';
 
+/**
+ * Generate a short unique request ID (8 characters)
+ */
+function generateRequestId() {
+    return randomUUID().slice(0, 8);
+}
 /**
  * Parse request body as JSON
  */
@@ -36,6 +44,10 @@ function parseRequestBody(req) {
  */
 export function createRequestHandler(config, providerPoolManager) {
     return async function requestHandler(req, res) {
+        // Generate unique request ID and set it in logger context
+        const requestId = generateRequestId();
+        logger.setRequestContext(requestId);
+
         // Deep copy the config for each request to allow dynamic modification
         const currentConfig = deepmerge({}, config);
         const requestUrl = new URL(req.url, `http://${req.headers.host}`);
@@ -77,8 +89,8 @@ export function createRequestHandler(config, providerPoolManager) {
             return true;
         }
 
-        console.log(`\n${new Date().toLocaleString()}`);
-        console.log(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
+        // logger.info(`\n${new Date().toLocaleString()}`);
+        logger.info(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
 
         // Health check endpoint
         if (method === 'GET' && path === '/health') {
@@ -118,7 +130,7 @@ export function createRequestHandler(config, providerPoolManager) {
                 }));
                 return true;
             } catch (error) {
-                console.log(`[Server] req provider_health error: ${error.message}`);
+                logger.info(`[Server] req provider_health error: ${error.message}`);
                 handleError(res, { statusCode: 500, message: `Failed to get providers health: ${error.message}` }, currentConfig.MODEL_PROVIDER);
                 return;
             }
@@ -130,7 +142,7 @@ export function createRequestHandler(config, providerPoolManager) {
         const modelProviderHeader = req.headers['model-provider'];
         if (modelProviderHeader) {
             currentConfig.MODEL_PROVIDER = modelProviderHeader;
-            console.log(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
+            logger.info(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
         }
           
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
@@ -143,12 +155,12 @@ export function createRequestHandler(config, providerPoolManager) {
             const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
             if (firstSegment && isValidProvider) {
                 currentConfig.MODEL_PROVIDER = firstSegment;
-                console.log(`[Config] MODEL_PROVIDER overridden by path segment to: ${currentConfig.MODEL_PROVIDER}`);
+                logger.info(`[Config] MODEL_PROVIDER overridden by path segment to: ${currentConfig.MODEL_PROVIDER}`);
                 pathSegments.shift();
                 path = '/' + pathSegments.join('/');
                 requestUrl.pathname = path;
             } else if (firstSegment && !isValidProvider) {
-                console.log(`[Config] Ignoring invalid MODEL_PROVIDER in path segment: ${firstSegment}`);
+                logger.info(`[Config] Ignoring invalid MODEL_PROVIDER in path segment: ${firstSegment}`);
             }
         }
 
@@ -200,7 +212,7 @@ export function createRequestHandler(config, providerPoolManager) {
         if (path.includes('/count_tokens') && method === 'POST') {
             try {
                 const body = await parseRequestBody(req);
-                console.log(`[Server] Handling count_tokens request for model: ${body.model}`);
+                logger.info(`[Server] Handling count_tokens request for model: ${body.model}`);
 
                 // Check if apiService has countTokens method
                 if (apiService && typeof apiService.countTokens === 'function') {
@@ -221,7 +233,7 @@ export function createRequestHandler(config, providerPoolManager) {
                 }
                 return true;
             } catch (error) {
-                console.error(`[Server] count_tokens error: ${error.message}`);
+                logger.error(`[Server] count_tokens error: ${error.message}`);
                 handleError(res, { statusCode: 500, message: `Failed to count tokens: ${error.message}` }, currentConfig.MODEL_PROVIDER);
                 return;
             }
@@ -237,6 +249,9 @@ export function createRequestHandler(config, providerPoolManager) {
             res.end(JSON.stringify({ error: { message: 'Not Found' } }));
         } catch (error) {
             handleError(res, error, currentConfig.MODEL_PROVIDER);
+        } finally {
+            // Clear request context after request is complete
+            logger.clearRequestContext(requestId);
         }
     };
 }

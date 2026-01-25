@@ -1,4 +1,5 @@
 import { getRequestBody } from '../utils/common.js';
+import logger from '../utils/logger.js';
 import {
     handleGeminiCliOAuth,
     handleGeminiAntigravityOAuth,
@@ -74,7 +75,7 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
         return true;
         
     } catch (error) {
-        console.error(`[UI API] Failed to generate auth URL for ${providerType}:`, error);
+        logger.error(`[UI API] Failed to generate auth URL for ${providerType}:`, error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -102,8 +103,8 @@ export async function handleManualOAuthCallback(req, res) {
             return true;
         }
 
-        console.log(`[OAuth Manual Callback] Processing manual callback for ${provider}`);
-        console.log(`[OAuth Manual Callback] Callback URL: ${callbackUrl}`);
+        logger.info(`[OAuth Manual Callback] Processing manual callback for ${provider}`);
+        logger.info(`[OAuth Manual Callback] Callback URL: ${callbackUrl}`);
 
         // 解析回调URL
         const url = new URL(callbackUrl);
@@ -140,7 +141,7 @@ export async function handleManualOAuthCallback(req, res) {
             const response = await fetch(localUrl.href);
 
             if (response.ok) {
-                console.log(`[OAuth Manual Callback] Successfully processed callback for ${provider}`);
+                logger.info(`[OAuth Manual Callback] Successfully processed callback for ${provider}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -148,7 +149,7 @@ export async function handleManualOAuthCallback(req, res) {
                 }));
             } else {
                 const errorText = await response.text();
-                console.error(`[OAuth Manual Callback] Callback processing failed:`, errorText);
+                logger.error(`[OAuth Manual Callback] Callback processing failed:`, errorText);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: false,
@@ -156,7 +157,7 @@ export async function handleManualOAuthCallback(req, res) {
                 }));
             }
         } catch (fetchError) {
-            console.error(`[OAuth Manual Callback] Failed to process callback:`, fetchError);
+            logger.error(`[OAuth Manual Callback] Failed to process callback:`, fetchError);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
@@ -166,7 +167,7 @@ export async function handleManualOAuthCallback(req, res) {
 
         return true;
     } catch (error) {
-        console.error('[OAuth Manual Callback] Error:', error);
+        logger.error('[OAuth Manual Callback] Error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,
@@ -193,7 +194,7 @@ export async function handleBatchImportKiroTokens(req, res) {
             return true;
         }
         
-        console.log(`[Kiro Batch Import] Starting batch import of ${refreshTokens.length} tokens with SSE...`);
+        logger.info(`[Kiro Batch Import] Starting batch import of ${refreshTokens.length} tokens with SSE...`);
         
         // 设置 SSE 响应头
         res.writeHead(200, {
@@ -222,7 +223,7 @@ export async function handleBatchImportKiroTokens(req, res) {
             }
         );
         
-        console.log(`[Kiro Batch Import] Completed: ${result.success} success, ${result.failed} failed`);
+        logger.info(`[Kiro Batch Import] Completed: ${result.success} success, ${result.failed} failed`);
         
         // 发送完成事件
         sendSSE('complete', {
@@ -237,7 +238,7 @@ export async function handleBatchImportKiroTokens(req, res) {
         return true;
         
     } catch (error) {
-        console.error('[Kiro Batch Import] Error:', error);
+        logger.error('[Kiro Batch Import] Error:', error);
         // 如果已经开始发送 SSE，则发送错误事件
         if (res.headersSent) {
             res.write(`event: error\n`);
@@ -287,12 +288,12 @@ export async function handleImportAwsCredentials(req, res) {
             return true;
         }
         
-        console.log('[Kiro AWS Import] Starting AWS credentials import...');
+        logger.info('[Kiro AWS Import] Starting AWS credentials import...');
         
         const result = await importAwsCredentials(credentials);
         
         if (result.success) {
-            console.log(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
+            logger.info(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
@@ -312,7 +313,7 @@ export async function handleImportAwsCredentials(req, res) {
         return true;
         
     } catch (error) {
-        console.error('[Kiro AWS Import] Error:', error);
+        logger.error('[Kiro AWS Import] Error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import crypto from 'crypto';
 import path from 'node:path';
 import { promises as fs, unlinkSync } from 'node:fs';
@@ -75,7 +76,7 @@ async function commonFetch(url, options = {}, useSystemProxy = false) {
     if (!useSystemProxy && typeof mergedOptions.agent === 'undefined') {
         // 对于 Node.js fetch,我们可以通过设置 dispatcher 来控制代理
         // 但这需要 undici 支持,这里我们先记录日志
-        console.debug('[Qwen] System proxy disabled for fetch request');
+        logger.debug('[Qwen] System proxy disabled for fetch request');
     }
 
     const response = await fetch(url, mergedOptions);
@@ -188,13 +189,13 @@ export class QwenApiService {
         this.oauthDeviceCodeEndpoint = `${oauthBaseUrl}/api/v1/oauth2/device/code`;
         this.oauthTokenEndpoint = `${oauthBaseUrl}/api/v1/oauth2/token`;
 
-        console.log(`[Qwen] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        logger.info(`[Qwen] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         this.qwenClient = new QwenOAuth2Client(config, this.useSystemProxy);
     }
 
     async initialize() {
         if (this.isInitialized) return;
-        console.log('[Qwen] Initializing Qwen API Service...');
+        logger.info('[Qwen] Initializing Qwen API Service...');
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
@@ -234,7 +235,7 @@ export class QwenApiService {
         this.currentAxiosInstance = axios.create(axiosConfig);
 
         this.isInitialized = true;
-        console.log('[Qwen] Initialization complete.');
+        logger.info('[Qwen] Initialization complete.');
     }
 
     /**
@@ -246,12 +247,12 @@ export class QwenApiService {
             const creds = await fs.readFile(keyFile, 'utf-8');
             const credentials = JSON.parse(creds);
             this.qwenClient.setCredentials(credentials);
-            console.log('[Qwen Auth] Credentials loaded successfully from file.');
+            logger.info('[Qwen Auth] Credentials loaded successfully from file.');
         } catch (error) {
             if (error.code === 'ENOENT') {
-                console.debug('[Qwen Auth] No cached credentials found.');
+                logger.debug('[Qwen Auth] No cached credentials found.');
             } else {
-                console.warn(`[Qwen Auth] Failed to load credentials from file: ${error.message}`);
+                logger.warn(`[Qwen Auth] Failed to load credentials from file: ${error.message}`);
             }
         }
     }
@@ -266,7 +267,7 @@ export class QwenApiService {
                 forceRefresh,
                 this.tokenManagerOptions,
             );
-            // console.log('credentials', credentials);
+            // logger.info('credentials', credentials);
             this.qwenClient.setCredentials(credentials);
 
             // 如果执行了刷新或认证，重置状态
@@ -277,27 +278,27 @@ export class QwenApiService {
                 }
             }
         } catch (error) {
-            console.debug('Shared token manager failed, attempting device flow:', error);
+            logger.debug('Shared token manager failed, attempting device flow:', error);
 
             if (error instanceof TokenManagerError) {
                 switch (error.type) {
                     case TokenError.NO_REFRESH_TOKEN:
-                        console.debug('No refresh token available, proceeding with device flow');
+                        logger.debug('No refresh token available, proceeding with device flow');
                         break;
                     case TokenError.REFRESH_FAILED:
-                        console.debug('Token refresh failed, proceeding with device flow');
+                        logger.debug('Token refresh failed, proceeding with device flow');
                         break;
                     case TokenError.NETWORK_ERROR:
-                        console.warn('Network error during token refresh, trying device flow');
+                        logger.warn('Network error during token refresh, trying device flow');
                         break;
                     default:
-                        console.warn('Token manager error:', error.message);
+                        logger.warn('Token manager error:', error.message);
                 }
             }
 
             // If cached credentials are present and still valid, use them directly.
             if (await this._loadCachedQwenCredentials(this.qwenClient)) {
-                console.log('[Qwen] Using cached OAuth credentials.');
+                logger.info('[Qwen] Using cached OAuth credentials.');
                 return;
             }
 
@@ -355,10 +356,10 @@ export class QwenApiService {
             });
 
             const showFallbackMessage = () => {
-                console.log('\n=== Qwen OAuth Device Authorization ===');
-                console.log('Please visit the following URL in your browser to authorize:');
-                console.log(`\n${authUrl}\n`);
-                console.log('Waiting for authorization to complete...\n');
+                logger.info('\n=== Qwen OAuth Device Authorization ===');
+                logger.info('Please visit the following URL in your browser to authorize:');
+                logger.info(`\n${authUrl}\n`);
+                logger.info('Waiting for authorization to complete...\n');
             };
 
             if (config) {
@@ -375,7 +376,7 @@ export class QwenApiService {
             }
 
             qwenOAuth2Events.emit(QwenOAuth2Event.AuthProgress, 'polling', 'Waiting for authorization...');
-            console.debug('Waiting for authorization...\n');
+            logger.debug('Waiting for authorization...\n');
 
             // 等待 OAuth 回调完成并读取保存的凭据
             const credPath = this._getQwenCachedCredentialPath();
@@ -386,7 +387,7 @@ export class QwenApiService {
                         const creds = JSON.parse(data);
                         if (creds.access_token) {
                             clearInterval(checkInterval);
-                            console.log('[Qwen Auth] New token obtained successfully.');
+                            logger.info('[Qwen Auth] New token obtained successfully.');
                             resolve(creds);
                         }
                     } catch (error) {
@@ -405,7 +406,7 @@ export class QwenApiService {
             qwenOAuth2Events.emit(QwenOAuth2Event.AuthProgress, 'success', 'Authentication successful! Access token obtained.');
             return { success: true };
         } catch (error) {
-            console.error('Device authorization flow failed:', error.message);
+            logger.error('Device authorization flow failed:', error.message);
             qwenOAuth2Events.emit(QwenOAuth2Event.AuthProgress, 'error', error.message);
             return { success: false, reason: 'error' };
         }
@@ -439,9 +440,9 @@ export class QwenApiService {
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             const credString = JSON.stringify(credentials, null, 2);
             await fs.writeFile(filePath, credString);
-            console.log(`[Qwen Auth] Credentials cached to ${filePath}`);
+            logger.info(`[Qwen Auth] Credentials cached to ${filePath}`);
         } catch (error) {
-            console.error(`[Qwen Auth] Failed to cache credentials to ${filePath}: ${error.message}`);
+            logger.error(`[Qwen Auth] Failed to cache credentials to ${filePath}: ${error.message}`);
         }
     }
     
@@ -490,7 +491,7 @@ export class QwenApiService {
             };
         } catch (error) {
             if (this.isAuthError(error)) throw error;
-            console.warn('Failed to get token from shared manager:', error);
+            logger.warn('Failed to get token from shared manager:', error);
             throw new Error('Failed to obtain valid Qwen access token. Please re-authenticate.');
         }
     }
@@ -532,7 +533,7 @@ export class QwenApiService {
 
         const version = "0.2.1";
         const userAgent = `QwenCode/${version} (${process.platform}; ${process.arch})`;
-        console.log(`[QwenApiService] User-Agent: ${userAgent}`);
+        logger.info(`[QwenApiService] User-Agent: ${userAgent}`);
 
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
@@ -579,7 +580,7 @@ export class QwenApiService {
 
             // Check if model in body is in QWEN_MODEL_LIST, if not, use the first model's id
             if (processedBody.model && !QWEN_MODEL_LIST.some(model => model.id === processedBody.model)) {
-                console.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${QWEN_MODEL_LIST[0].id}'`);
+                logger.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${QWEN_MODEL_LIST[0].id}'`);
                 processedBody.model = QWEN_MODEL_LIST[0].id;
             }
 
@@ -610,12 +611,12 @@ export class QwenApiService {
             const isNetworkError = isRetryableNetworkError(error);
 
             if (this.isAuthError(error) && retryCount === 0) {
-                console.warn(`[QwenApiService] Auth error (${status}). Triggering background refresh via PoolManager...`);
+                logger.warn(`[QwenApiService] Auth error (${status}). Triggering background refresh via PoolManager...`);
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[Qwen] Marking credential ${this.uuid} as needs refresh. Reason: Auth Error ${status}`);
+                    logger.info(`[Qwen] Marking credential ${this.uuid} as needs refresh. Reason: Auth Error ${status}`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
                         uuid: this.uuid
                     });
@@ -630,7 +631,7 @@ export class QwenApiService {
 
             if ((status === 429 || (status >= 500 && status < 600)) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[QwenApiService] Status ${status}. Retrying in ${delay}ms...`);
+                logger.info(`[QwenApiService] Status ${status}. Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
             }
@@ -639,12 +640,12 @@ export class QwenApiService {
             if (isNetworkError && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                console.log(`[QwenApiService] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[QwenApiService] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
             }
 
-            console.error(`[QwenApiService] Error calling API (Status: ${status}, Code: ${errorCode}):`, data);
+            logger.error(`[QwenApiService] Error calling API (Status: ${status}, Code: ${errorCode}):`, data);
             throw error;
         }
     }
@@ -654,7 +655,7 @@ export class QwenApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
                     uuid: this.uuid
                 });
@@ -669,7 +670,7 @@ export class QwenApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
                     uuid: this.uuid
                 });
@@ -691,7 +692,7 @@ export class QwenApiService {
                     try {
                         yield JSON.parse(jsonData);
                     } catch (e) {
-                        console.warn("[QwenApiService] Failed to parse stream chunk:", jsonData);
+                        logger.warn("[QwenApiService] Failed to parse stream chunk:", jsonData);
                     }
                 }
             }
@@ -713,10 +714,10 @@ export class QwenApiService {
             }
             const nearMinutes = 20;
             const { message, isNearExpiry } = formatExpiryLog('Qwen', credentials.expiry_date, nearMinutes);
-            console.log(message);
+            logger.info(message);
             return isNearExpiry;
         } catch (error) {
-            console.error(`[Qwen] Error checking expiry date: ${error.message}`);
+            logger.error(`[Qwen] Error checking expiry date: ${error.message}`);
             return false;
         }
     }
@@ -890,7 +891,7 @@ class SharedTokenManager {
                 context.memoryCache.credentials = newCredentials;
                 qwenClient.setCredentials(newCredentials);
                 await this.saveCredentialsToFile(context, newCredentials);
-                console.log('[Qwen Auth] Token refresh response: ok');
+                logger.info('[Qwen Auth] Token refresh response: ok');
                 return newCredentials;
             } finally {
                 await this.releaseLock(context);
@@ -902,7 +903,7 @@ class SharedTokenManager {
             if (error instanceof CredentialsClearRequiredError) {
                 try {
                     await fs.unlink(context.credentialFilePath);
-                    console.log('[Qwen Auth] Credentials cleared due to refresh token expiry');
+                    logger.info('[Qwen Auth] Credentials cleared due to refresh token expiry');
                 } catch (_) { /* ignore */ }
                 throw error; // 重新抛出以便上层处理
             }
@@ -926,7 +927,7 @@ class SharedTokenManager {
             const stats = await fs.stat(context.credentialFilePath);
             context.memoryCache.fileModTime = stats.mtimeMs;
         } catch (error) {
-            console.error(`[Qwen Auth] Failed to save credentials to ${context.credentialFilePath}: ${error.message}`);
+            logger.error(`[Qwen Auth] Failed to save credentials to ${context.credentialFilePath}: ${error.message}`);
         }
     }
 
@@ -967,7 +968,7 @@ class SharedTokenManager {
             await fs.unlink(context.lockFilePath);
         } catch (error) {
             if (error.code !== 'ENOENT') {
-                console.warn(`Failed to release lock: ${error.message}`);
+                logger.warn(`Failed to release lock: ${error.message}`);
             }
         }
     }
@@ -1084,3 +1085,4 @@ class QwenOAuth2Client {
         }
     }
 }
+

@@ -4,6 +4,7 @@
  */
 
 import { MODEL_PROTOCOL_PREFIX } from '../utils/common.js';
+import logger from '../utils/logger.js';
 
 /**
  * 转换器工厂（单例模式 + 工厂模式）
@@ -125,7 +126,7 @@ export class ContentProcessorFactory {
     static createProcessor(sourceFormat, targetFormat) {
         // 这里返回null，实际使用时需要导入具体的处理器类
         // 为了避免循环依赖，处理器类应该在使用时动态导入
-        console.warn(`Content processor for ${sourceFormat} to ${targetFormat} not yet implemented`);
+        logger.warn(`Content processor for ${sourceFormat} to ${targetFormat} not yet implemented`);
         return null;
     }
 
@@ -166,7 +167,7 @@ export class ToolProcessorFactory {
      * @returns {ToolProcessor} 工具处理器实例
      */
     static createProcessor(sourceFormat, targetFormat) {
-        console.warn(`Tool processor for ${sourceFormat} to ${targetFormat} not yet implemented`);
+        logger.warn(`Tool processor for ${sourceFormat} to ${targetFormat} not yet implemented`);
         return null;
     }
 

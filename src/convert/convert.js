@@ -7,6 +7,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import logger from '../utils/logger.js';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from '../utils/common.js';
 import { ConverterFactory } from '../converters/ConverterFactory.js';
 import {
@@ -46,7 +47,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
 
         // 如果目标协议为 forward，直接返回原始数据，无需转换
         if (toProtocol === MODEL_PROTOCOL_PREFIX.FORWARD || fromProtocol === MODEL_PROTOCOL_PREFIX.FORWARD) {
-            console.log(`[Convert] Target protocol is forward, skipping conversion`);
+            logger.info(`[Convert] Target protocol is forward, skipping conversion`);
             return data;
         }
 
@@ -75,7 +76,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
                 throw new Error(`Unsupported conversion type: ${type}`);
         }
     } catch (error) {
-        console.error(`Conversion error: ${error.message}`);
+        logger.error(`Conversion error: ${error.message}`);
         throw error;
     }
 }
@@ -387,3 +388,5 @@ export default {
     toClaudeRequestFromOpenAIResponses,
     toGeminiRequestFromOpenAIResponses,
 };
+
+

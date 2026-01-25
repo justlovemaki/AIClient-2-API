@@ -1,4 +1,5 @@
 import http from 'http';
+import logger from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -36,7 +37,7 @@ class CodexAuth {
         if (proxyConfig) {
             axiosConfig.httpAgent = proxyConfig.httpAgent;
             axiosConfig.httpsAgent = proxyConfig.httpsAgent;
-            console.log('[Codex Auth] Proxy enabled for OAuth requests');
+            logger.info('[Codex Auth] Proxy enabled for OAuth requests');
         }
         
         this.httpClient = axios.create(axiosConfig);
@@ -68,16 +69,16 @@ class CodexAuth {
         const pkce = this.generatePKCECodes();
         const state = crypto.randomBytes(16).toString('hex');
 
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Generating auth URL...`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Generating auth URL...`);
 
         // 如果已有服务器在运行，先关闭
         if (this.server) {
-            console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Closing existing callback server...`);
+            logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Closing existing callback server...`);
             try {
                 this.server.close();
                 this.server = null;
             } catch (error) {
-                console.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to close existing server:`, error.message);
+                logger.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to close existing server:`, error.message);
             }
         }
 
@@ -143,9 +144,9 @@ class CodexAuth {
         const credPath = saveResult.credsPath;
         const relativePath = saveResult.relativePath;
 
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Authentication successful!`);
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Email: ${credentials.email}`);
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Account ID: ${credentials.account_id}`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Authentication successful!`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Email: ${credentials.email}`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Account ID: ${credentials.account_id}`);
 
         // 关闭服务器
         if (this.server) {
@@ -168,7 +169,7 @@ class CodexAuth {
         const pkce = this.generatePKCECodes();
         const state = crypto.randomBytes(16).toString('hex');
 
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Starting OAuth flow...`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Starting OAuth flow...`);
 
         // 启动本地回调服务器
         const server = await this.startCallbackServer();
@@ -186,13 +187,13 @@ class CodexAuth {
         authUrl.searchParams.set('id_token_add_organizations', 'true');
         authUrl.searchParams.set('codex_cli_simplified_flow', 'true');
 
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Opening browser for authentication...`);
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} If browser doesn't open, visit: ${authUrl.toString()}`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Opening browser for authentication...`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} If browser doesn't open, visit: ${authUrl.toString()}`);
 
         try {
             await open(authUrl.toString());
         } catch (error) {
-            console.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to open browser automatically:`, error.message);
+            logger.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to open browser automatically:`, error.message);
         }
 
         // 等待回调
@@ -218,9 +219,9 @@ class CodexAuth {
 
         await this.saveCredentials(credentials);
 
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Authentication successful!`);
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Email: ${credentials.email}`);
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Account ID: ${credentials.account_id}`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Authentication successful!`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Email: ${credentials.email}`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Account ID: ${credentials.account_id}`);
 
         return credentials;
     }
@@ -302,7 +303,7 @@ class CodexAuth {
             });
 
             server.listen(CODEX_OAUTH_CONFIG.port, () => {
-                console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Callback server listening on port ${CODEX_OAUTH_CONFIG.port}`);
+                logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Callback server listening on port ${CODEX_OAUTH_CONFIG.port}`);
                 resolve(server);
             });
 
@@ -355,7 +356,7 @@ class CodexAuth {
      * @returns {Promise<Object>}
      */
     async exchangeCodeForTokens(code, codeVerifier) {
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Exchanging authorization code for tokens...`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Exchanging authorization code for tokens...`);
 
         try {
             const response = await this.httpClient.post(
@@ -377,7 +378,7 @@ class CodexAuth {
 
             return response.data;
         } catch (error) {
-            console.error(`${CODEX_OAUTH_CONFIG.logPrefix} Token exchange failed:`, error.response?.data || error.message);
+            logger.error(`${CODEX_OAUTH_CONFIG.logPrefix} Token exchange failed:`, error.response?.data || error.message);
             throw new Error(`Failed to exchange code for tokens: ${error.response?.data?.error_description || error.message}`);
         }
     }
@@ -388,7 +389,7 @@ class CodexAuth {
      * @returns {Promise<Object>}
      */
     async refreshTokens(refreshToken) {
-        console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Refreshing access token...`);
+        logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Refreshing access token...`);
 
         try {
             const response = await this.httpClient.post(
@@ -420,7 +421,7 @@ class CodexAuth {
                 expired: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString()
             };
         } catch (error) {
-            console.error(`${CODEX_OAUTH_CONFIG.logPrefix} Token refresh failed:`, error.response?.data || error.message);
+            logger.error(`${CODEX_OAUTH_CONFIG.logPrefix} Token refresh failed:`, error.response?.data || error.message);
             throw new Error(`Failed to refresh tokens: ${error.response?.data?.error_description || error.message}`);
         }
     }
@@ -441,7 +442,7 @@ class CodexAuth {
             const payload = Buffer.from(parts[1], 'base64url').toString('utf8');
             return JSON.parse(payload);
         } catch (error) {
-            console.error(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to parse JWT:`, error.message);
+            logger.error(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to parse JWT:`, error.message);
             throw new Error(`Failed to parse JWT token: ${error.message}`);
         }
     }
@@ -474,12 +475,12 @@ class CodexAuth {
             await fs.promises.writeFile(credsPath, JSON.stringify(creds, null, 2), { mode: 0o600 });
 
             const relativePath = path.relative(process.cwd(), credsPath);
-            console.log(`${CODEX_OAUTH_CONFIG.logPrefix} Credentials saved to ${relativePath}`);
+            logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Credentials saved to ${relativePath}`);
 
             // 返回保存路径供后续使用
             return { credsPath, relativePath };
         } catch (error) {
-            console.error(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to save credentials:`, error.message);
+            logger.error(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to save credentials:`, error.message);
             throw new Error(`Failed to save credentials: ${error.message}`);
         }
     }
@@ -583,7 +584,7 @@ export async function refreshCodexTokensWithRetry(refreshToken, config = {}, max
             return await auth.refreshTokens(refreshToken);
         } catch (error) {
             lastError = error;
-            console.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Retry ${i + 1}/${maxRetries} failed:`, error.message);
+            logger.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Retry ${i + 1}/${maxRetries} failed:`, error.message);
 
             if (i < maxRetries - 1) {
                 // 指数退避
@@ -606,11 +607,11 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
     const auth = new CodexAuth(currentConfig);
 
     try {
-        console.log('[Codex Auth] Generating OAuth URL...');
+        logger.info('[Codex Auth] Generating OAuth URL...');
 
         // 清理所有旧的会话和服务器
         if (global.codexOAuthSessions && global.codexOAuthSessions.size > 0) {
-            console.log('[Codex Auth] Cleaning up old OAuth sessions...');
+            logger.info('[Codex Auth] Cleaning up old OAuth sessions...');
             for (const [sessionId, session] of global.codexOAuthSessions.entries()) {
                 try {
                     // 清理定时器
@@ -623,7 +624,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                     }
                     global.codexOAuthSessions.delete(sessionId);
                 } catch (error) {
-                    console.warn(`[Codex Auth] Failed to clean up session ${sessionId}:`, error.message);
+                    logger.warn(`[Codex Auth] Failed to clean up session ${sessionId}:`, error.message);
                 }
             }
         }
@@ -631,7 +632,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
         // 生成授权 URL 和启动回调服务器
         const { authUrl, state, pkce, server } = await auth.generateAuthUrl();
 
-        console.log('[Codex Auth] OAuth URL generated successfully');
+        logger.info('[Codex Auth] OAuth URL generated successfully');
 
         // 存储 OAuth 会话信息，供后续回调使用
         if (!global.codexOAuthSessions) {
@@ -663,13 +664,13 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
         pollTimer = setInterval(() => {
             pollCount++;
             if (pollCount <= maxPollCount && !isCompleted) {
-                console.log(`[Codex Auth] Waiting for callback... (${pollCount}/${maxPollCount})`);
+                logger.info(`[Codex Auth] Waiting for callback... (${pollCount}/${maxPollCount})`);
             }
             
             if (pollCount >= maxPollCount && !isCompleted) {
                 clearInterval(pollTimer);
                 const totalSeconds = (maxPollCount * pollInterval) / 1000;
-                console.log(`[Codex Auth] Polling timeout (${totalSeconds}s), releasing session for next authorization`);
+                logger.info(`[Codex Auth] Polling timeout (${totalSeconds}s), releasing session for next authorization`);
                 
                 // 清理会话和服务器
                 if (global.codexOAuthSessions.has(sessionId)) {
@@ -693,11 +694,11 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
             }
             
             try {
-                console.log('[Codex Auth] Received auth callback, completing OAuth flow...');
+                logger.info('[Codex Auth] Received auth callback, completing OAuth flow...');
                 
                 const session = global.codexOAuthSessions.get(sessionId);
                 if (!session) {
-                    console.error('[Codex Auth] Session not found');
+                    logger.error('[Codex Auth] Session not found');
                     return;
                 }
 
@@ -720,9 +721,9 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 // 自动关联新生成的凭据到 Pools
                 await autoLinkProviderConfigs(CONFIG);
 
-                console.log('[Codex Auth] OAuth flow completed successfully');
+                logger.info('[Codex Auth] OAuth flow completed successfully');
             } catch (error) {
-                console.error('[Codex Auth] Failed to complete OAuth flow:', error.message);
+                logger.error('[Codex Auth] Failed to complete OAuth flow:', error.message);
                 
                 // 广播认证失败事件
                 broadcastEvent('oauth_error', {
@@ -739,7 +740,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 clearInterval(pollTimer);
             }
             
-            console.error('[Codex Auth] Auth error:', error.message);
+            logger.error('[Codex Auth] Auth error:', error.message);
             global.codexOAuthSessions.delete(sessionId);
             
             broadcastEvent('oauth_error', {
@@ -767,7 +768,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
             }
         };
     } catch (error) {
-        console.error('[Codex Auth] Failed to generate OAuth URL:', error.message);
+        logger.error('[Codex Auth] Failed to generate OAuth URL:', error.message);
 
         return {
             success: false,
@@ -801,7 +802,7 @@ export async function handleCodexOAuthCallback(code, state) {
         const session = global.codexOAuthSessions.get(state);
         const { auth, state: expectedState, pkce } = session;
 
-        console.log('[Codex Auth] Processing OAuth callback...');
+        logger.info('[Codex Auth] Processing OAuth callback...');
 
         // 完成 OAuth 流程
         const result = await auth.completeOAuthFlow(code, state, expectedState, pkce);
@@ -822,7 +823,7 @@ export async function handleCodexOAuthCallback(code, state) {
         // 自动关联新生成的凭据到 Pools
         await autoLinkProviderConfigs(CONFIG);
 
-        console.log('[Codex Auth] OAuth callback processed successfully');
+        logger.info('[Codex Auth] OAuth callback processed successfully');
 
         return {
             success: true,
@@ -834,7 +835,7 @@ export async function handleCodexOAuthCallback(code, state) {
             relativePath: result.relativePath
         };
     } catch (error) {
-        console.error('[Codex Auth] OAuth callback failed:', error.message);
+        logger.error('[Codex Auth] OAuth callback failed:', error.message);
 
         // 广播认证失败事件
         broadcastEvent({

@@ -1,4 +1,5 @@
 import http from 'http';
+import logger from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -85,7 +86,7 @@ async function fetchWithProxy(url, options = {}, providerType) {
         axiosConfig.httpAgent = proxyConfig.httpAgent;
         axiosConfig.httpsAgent = proxyConfig.httpsAgent;
         axiosConfig.proxy = false; // 禁用 axios 内置代理，使用我们的 agent
-        console.log(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
+        logger.info(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
     }
 
     try {
@@ -174,7 +175,7 @@ function generateCodeChallenge(codeVerifier) {
 export async function handleKiroOAuth(currentConfig, options = {}) {
     const method = options.method || options.authMethod || 'google';  // 默认使用 Google，同时支持 authMethod 参数
     
-    console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Starting OAuth with method: ${method}`);
+    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Starting OAuth with method: ${method}`);
     
     switch (method) {
         case 'google':
@@ -249,7 +250,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
 
     // 获取 Builder ID Start URL（优先使用前端传入的值，否则使用默认值）
     const builderIDStartURL = options.builderIDStartURL || KIRO_OAUTH_CONFIG.builderIDStartURL;
-    console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Using Builder ID Start URL: ${builderIDStartURL}`);
+    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Using Builder ID Start URL: ${builderIDStartURL}`);
 
     // 1. 注册 OIDC 客户端
     const region = options.region || 'us-east-1';
@@ -308,7 +309,7 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
         taskId,
         { ...options, region }
     ).catch(error => {
-        console.error(`${KIRO_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
+        logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
         broadcastEvent('oauth_error', {
             provider: 'claude-kiro-oauth',
             error: error.message,
@@ -343,7 +344,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
     const taskControl = { shouldStop: false };
     activeKiroPollingTasks.set(taskId, taskControl);
     
-    console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 开始轮询令牌 [${taskId}]`);
+    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 开始轮询令牌 [${taskId}]`);
     
     const poll = async () => {
         if (taskControl.shouldStop) {
@@ -377,7 +378,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
             const data = await response.json();
             
             if (response.ok && data.accessToken) {
-                console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 成功获取令牌 [${taskId}]`);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 成功获取令牌 [${taskId}]`);
                 
                 // 保存令牌（符合现有规范）
                 if (options.saveToConfigs) {
@@ -419,7 +420,7 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
             
             // 检查错误类型
             if (data.error === 'authorization_pending') {
-                console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 等待用户授权 [${taskId}]... (${attempts}/${maxAttempts})`);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 等待用户授权 [${taskId}]... (${attempts}/${maxAttempts})`);
                 await new Promise(resolve => setTimeout(resolve, interval * 1000));
                 return poll();
             } else if (data.error === 'slow_down') {
@@ -449,7 +450,7 @@ function stopKiroPollingTask(taskId) {
     if (task) {
         task.shouldStop = true;
         activeKiroPollingTasks.delete(taskId);
-        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 已停止轮询任务: ${taskId}`);
+        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 已停止轮询任务: ${taskId}`);
     }
 }
 
@@ -467,10 +468,10 @@ async function startKiroCallbackServer(codeVerifier, expectedState, options = {}
     try {
         const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
         activeKiroServers.set('claude-kiro-oauth', { server, port });
-        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
+        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
         return port;
     } catch (err) {
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用，尝试下一个...`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用，尝试下一个...`);
     }
     }
     
@@ -486,7 +487,7 @@ async function closeKiroServer(provider, port = null) {
         await new Promise((resolve) => {
             existing.server.close(() => {
                 activeKiroServers.delete(provider);
-                console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
                 resolve();
             });
         });
@@ -498,7 +499,7 @@ async function closeKiroServer(provider, port = null) {
                 await new Promise((resolve) => {
                     info.server.close(() => {
                         activeKiroServers.delete(p);
-                        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 已关闭端口 ${port} 上的旧服务器`);
+                        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 已关闭端口 ${port} 上的旧服务器`);
                         resolve();
                     });
                 });
@@ -551,7 +552,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     
                     if (!tokenResponse.ok) {
                         const errorText = await tokenResponse.text();
-                        console.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token exchange failed:`, errorText);
+                        logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token exchange failed:`, errorText);
                         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(false, `获取令牌失败: ${tokenResponse.status}`));
                         return;
@@ -582,7 +583,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
                     await fs.promises.writeFile(credPath, JSON.stringify(saveData, null, 2));
                     
-                    console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 令牌已保存: ${credPath}`);
+                    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 令牌已保存: ${credPath}`);
                     
                     // 广播成功事件
                     broadcastEvent('oauth_success', {
@@ -608,7 +609,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     res.end();
                 }
             } catch (error) {
-                console.error(`${KIRO_OAUTH_CONFIG.logPrefix} 处理回调出错:`, error);
+                logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} 处理回调出错:`, error);
                 res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
             }
@@ -733,7 +734,7 @@ export async function checkKiroCredentialsDuplicate(refreshToken, provider = 'cl
                         // 检查 refreshToken 是否匹配
                         if (credentials.refreshToken && credentials.refreshToken === refreshToken) {
                             const relativePath = path.relative(process.cwd(), fullPath);
-                            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Found duplicate refreshToken in: ${relativePath}`);
+                            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Found duplicate refreshToken in: ${relativePath}`);
                             return {
                                 isDuplicate: true,
                                 existingPath: relativePath
@@ -751,7 +752,7 @@ export async function checkKiroCredentialsDuplicate(refreshToken, provider = 'cl
         return await scanDirectory(kiroDir);
         
     } catch (error) {
-        console.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Error checking duplicates:`, error.message);
+        logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Error checking duplicates:`, error.message);
         return { isDuplicate: false };
     }
 }
@@ -800,7 +801,7 @@ export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_
         }
         
         try {
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 正在刷新第 ${i + 1}/${refreshTokens.length} 个 token...`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 正在刷新第 ${i + 1}/${refreshTokens.length} 个 token...`);
             
             const tokenData = await refreshKiroToken(refreshToken, region);
             
@@ -815,7 +816,7 @@ export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_
             
             const relativePath = path.relative(process.cwd(), credPath);
             
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 已保存: ${relativePath}`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 已保存: ${relativePath}`);
             
             results.details.push({
                 index: i + 1,
@@ -826,7 +827,7 @@ export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_
             results.success++;
             
         } catch (error) {
-            console.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 刷新失败:`, error.message);
+            logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 刷新失败:`, error.message);
             
             results.details.push({
                 index: i + 1,
@@ -922,7 +923,7 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
         }
         
         try {
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} 正在刷新第 ${i + 1}/${refreshTokens.length} 个 token...`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 正在刷新第 ${i + 1}/${refreshTokens.length} 个 token...`);
             
             const tokenData = await refreshKiroToken(refreshToken, region);
             
@@ -937,7 +938,7 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
             
             const relativePath = path.relative(process.cwd(), credPath);
             
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 已保存: ${relativePath}`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 已保存: ${relativePath}`);
             
             progressData.current = {
                 index: i + 1,
@@ -949,7 +950,7 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
             results.success++;
             
         } catch (error) {
-            console.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 刷新失败:`, error.message);
+            logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token ${i + 1} 刷新失败:`, error.message);
             
             progressData.current = {
                 index: i + 1,
@@ -1020,7 +1021,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             }
         }
         
-        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Importing AWS credentials...`);
+        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Importing AWS credentials...`);
         
         // 准备凭据数据 - 四个字段都是必需的
         const credentialsData = {
@@ -1046,7 +1047,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         
         // 尝试刷新获取最新的 accessToken
         try {
-            console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Attempting to refresh token with provided credentials...`);
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Attempting to refresh token with provided credentials...`);
             
             const refreshRegion = credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION;
             const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', refreshRegion);
@@ -1070,12 +1071,12 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
                 credentialsData.refreshToken = tokenData.refreshToken;
                 const expiresIn = tokenData.expiresIn || 3600;
                 credentialsData.expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-                console.log(`${KIRO_OAUTH_CONFIG.logPrefix} Token refreshed successfully`);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Token refreshed successfully`);
             } else {
-                console.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Token refresh failed, saving original credentials`);
+                logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Token refresh failed, saving original credentials`);
             }
         } catch (refreshError) {
-            console.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Token refresh error:`, refreshError.message);
+            logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Token refresh error:`, refreshError.message);
             // 继续保存原始凭据
         }
         
@@ -1090,7 +1091,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         
         const relativePath = path.relative(process.cwd(), credPath);
         
-        console.log(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials saved to: ${relativePath}`);
+        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials saved to: ${relativePath}`);
         
         // 广播事件
         broadcastEvent('oauth_success', {
@@ -1108,10 +1109,12 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         };
         
     } catch (error) {
-        console.error(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials import failed:`, error);
+        logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials import failed:`, error);
         return {
             success: false,
             error: error.message
         };
     }
 }
+
+

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
@@ -24,7 +25,7 @@ export class ForwardApiService {
         this.headerName = config?.FORWARD_HEADER_NAME || 'Authorization';
         this.headerValuePrefix = config?.FORWARD_HEADER_VALUE_PREFIX || 'Bearer ';
 
-        console.log(`[Forward] Base URL: ${this.baseUrl}, System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+        logger.info(`[Forward] Base URL: ${this.baseUrl}, System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
 
         const httpAgent = new http.Agent({
             keepAlive: true,
@@ -75,18 +76,18 @@ export class ForwardApiService {
             const isNetworkError = isRetryableNetworkError(error);
             
             if (status === 401 || status === 403) {
-                console.error(`[Forward API] Received ${status}. API Key might be invalid or expired.`);
+                logger.error(`[Forward API] Received ${status}. API Key might be invalid or expired.`);
                 throw error;
             }
 
             if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Forward API] Error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Forward API] Error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            console.error(`[Forward API] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[Forward API] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
             throw error;
         }
     }
@@ -120,7 +121,7 @@ export class ForwardApiService {
                             yield parsedChunk;
                         } catch (e) {
                             // If it's not JSON, it might be a different format, but for a forwarder we try to parse common SSE formats
-                            console.warn("[ForwardApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
+                            logger.warn("[ForwardApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
                         }
                     }
                 }
@@ -132,7 +133,7 @@ export class ForwardApiService {
             
             if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[Forward API] Stream error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[Forward API] Stream error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -158,8 +159,9 @@ export class ForwardApiService {
             const response = await this.axiosInstance.get('/models');
             return response.data;
         } catch (error) {
-            console.error(`Error listing Forward models:`, error.message);
+            logger.error(`Error listing Forward models:`, error.message);
             return { data: [] };
         }
     }
 }
+

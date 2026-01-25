@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import logger from '../utils/logger.js';
 import { getRequestBody } from '../utils/common.js';
 import { getAllProviderModels, getProviderModels } from '../providers/provider-models.js';
 import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFromPath, addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
@@ -18,7 +19,7 @@ export async function handleGetProviders(req, res, currentConfig, providerPoolMa
             providerPools = poolsData;
         }
     } catch (error) {
-        console.warn('[UI API] Failed to load provider pools:', error.message);
+        logger.warn('[UI API] Failed to load provider pools:', error.message);
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -40,7 +41,7 @@ export async function handleGetProviderType(req, res, currentConfig, providerPoo
             providerPools = poolsData;
         }
     } catch (error) {
-        console.warn('[UI API] Failed to load provider pools:', error.message);
+        logger.warn('[UI API] Failed to load provider pools:', error.message);
     }
 
     const providers = providerPools[providerType] || [];
@@ -112,7 +113,7 @@ export async function handleAddProvider(req, res, currentConfig, providerPoolMan
                 const fileContent = readFileSync(filePath, 'utf-8');
                 providerPools = JSON.parse(fileContent);
             } catch (readError) {
-                console.warn('[UI API] Failed to read existing provider pools:', readError.message);
+                logger.warn('[UI API] Failed to read existing provider pools:', readError.message);
             }
         }
 
@@ -124,7 +125,7 @@ export async function handleAddProvider(req, res, currentConfig, providerPoolMan
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Added new provider to ${providerType}: ${providerConfig.uuid}`);
+        logger.info(`[UI API] Added new provider to ${providerType}: ${providerConfig.uuid}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -219,7 +220,7 @@ export async function handleUpdateProvider(req, res, currentConfig, providerPool
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Updated provider ${providerUuid} in ${providerType}`);
+        logger.info(`[UI API] Updated provider ${providerUuid} in ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -290,7 +291,7 @@ export async function handleDeleteProvider(req, res, currentConfig, providerPool
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Deleted provider ${providerUuid} from ${providerType}`);
+        logger.info(`[UI API] Deleted provider ${providerUuid} from ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -357,7 +358,7 @@ export async function handleDisableEnableProvider(req, res, currentConfig, provi
         
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] ${action === 'disable' ? 'Disabled' : 'Enabled'} provider ${providerUuid} in ${providerType}`);
+        logger.info(`[UI API] ${action === 'disable' ? 'Disabled' : 'Enabled'} provider ${providerUuid} in ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -439,7 +440,7 @@ export async function handleResetProviderHealth(req, res, currentConfig, provide
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Reset health status for ${resetCount} providers in ${providerType}`);
+        logger.info(`[UI API] Reset health status for ${resetCount} providers in ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -524,7 +525,7 @@ export async function handleDeleteUnhealthyProviders(req, res, currentConfig, pr
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Deleted ${unhealthyProviders.length} unhealthy providers from ${providerType}`);
+        logger.info(`[UI API] Deleted ${unhealthyProviders.length} unhealthy providers from ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -615,7 +616,7 @@ export async function handleRefreshUnhealthyUuids(req, res, currentConfig, provi
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Refreshed UUIDs for ${refreshedProviders.length} unhealthy providers in ${providerType}`);
+        logger.info(`[UI API] Refreshed UUIDs for ${refreshedProviders.length} unhealthy providers in ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -684,7 +685,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
             return true;
         }
 
-        console.log(`[UI API] Starting health check for ${unhealthyProviders.length} unhealthy providers in ${providerType} (total: ${providers.length})`);
+        logger.info(`[UI API] Starting health check for ${unhealthyProviders.length} unhealthy providers in ${providerType} (total: ${providers.length})`);
 
         // 执行健康检测（强制检查，忽略 checkHealth 配置）
         const results = [];
@@ -693,7 +694,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
             
             // 跳过已禁用的节点
             if (providerConfig.isDisabled) {
-                console.log(`[UI API] Skipping health check for disabled provider: ${providerConfig.uuid}`);
+                logger.info(`[UI API] Skipping health check for disabled provider: ${providerConfig.uuid}`);
                 continue;
             }
 
@@ -726,7 +727,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
                     
                     if (isAuthError) {
                         providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
-                        console.log(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+                        logger.info(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
                     } else {
                         providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
                     }
@@ -751,7 +752,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
                 
                 if (isAuthError) {
                     providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
-                    console.log(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+                    logger.info(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
                 } else {
                     providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
                 }
@@ -778,7 +779,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
         const successCount = results.filter(r => r.success === true).length;
         const failCount = results.filter(r => r.success === false).length;
 
-        console.log(`[UI API] Health check completed for ${providerType}: ${successCount} recovered, ${failCount} still unhealthy (checked ${unhealthyProviders.length} unhealthy nodes)`);
+        logger.info(`[UI API] Health check completed for ${providerType}: ${successCount} recovered, ${failCount} still unhealthy (checked ${unhealthyProviders.length} unhealthy nodes)`);
 
         // 广播更新事件
         broadcastEvent('config_update', {
@@ -800,7 +801,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Health check error:', error);
+        logger.error('[UI API] Health check error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: error.message } }));
         return true;
@@ -846,7 +847,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
                 const fileContent = readFileSync(poolsFilePath, 'utf-8');
                 providerPools = JSON.parse(fileContent);
             } catch (readError) {
-                console.warn('[UI API] Failed to read existing provider pools:', readError.message);
+                logger.warn('[UI API] Failed to read existing provider pools:', readError.message);
             }
         }
 
@@ -884,7 +885,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
 
         // Save to file
         writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Quick linked config: ${filePath} -> ${providerType}`);
+        logger.info(`[UI API] Quick linked config: ${filePath} -> ${providerType}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {
@@ -917,7 +918,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Quick link failed:', error);
+        logger.error('[UI API] Quick link failed:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -967,7 +968,7 @@ export async function handleRefreshProviderUuid(req, res, currentConfig, provide
 
         // Save to file
         writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        console.log(`[UI API] Refreshed UUID for provider in ${providerType}: ${oldUuid} -> ${newUuid}`);
+        logger.info(`[UI API] Refreshed UUID for provider in ${providerType}: ${oldUuid} -> ${newUuid}`);
 
         // Update provider pool manager if available
         if (providerPoolManager) {

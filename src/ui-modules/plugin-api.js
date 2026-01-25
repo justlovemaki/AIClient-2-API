@@ -1,4 +1,5 @@
 import { getPluginManager } from '../core/plugin-manager.js';
+import logger from '../utils/logger.js';
 import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from './event-broadcast.js';
 
@@ -13,7 +14,7 @@ export async function handleGetPlugins(req, res) {
         res.end(JSON.stringify({ plugins }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to get plugins:', error);
+        logger.error('[UI API] Failed to get plugins:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
@@ -64,7 +65,7 @@ export async function handleTogglePlugin(req, res, pluginName) {
         }));
         return true;
     } catch (error) {
-        console.error('[UI API] Failed to toggle plugin:', error);
+        logger.error('[UI API] Failed to toggle plugin:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import path from 'path';
 import multer from 'multer';
+import logger from '../utils/logger.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = path.join(process.cwd(), 'configs', 'token-store.json');
@@ -72,21 +73,17 @@ export function initializeUIManagement() {
     const originalLog = console.log;
     console.log = function(...args) {
         originalLog.apply(console, args);
-        const message = args.map(arg => {
-            if (typeof arg === 'string') return arg;
-            try {
-                return JSON.stringify(arg);
-            } catch (e) {
-                if (arg instanceof Error) {
-                    return `[Error: ${arg.message}] ${arg.stack || ''}`;
-                }
-                return `[Object: ${Object.prototype.toString.call(arg)}] (Circular or too complex to stringify)`;
-            }
-        }).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'info',
-            message: message
+            message: args.map(arg => {
+                if (typeof arg === 'string') return arg;
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return String(arg);
+                }
+            }).join(' ')
         };
         global.logBuffer.push(logEntry);
         if (global.logBuffer.length > 100) {
@@ -99,21 +96,17 @@ export function initializeUIManagement() {
     const originalError = console.error;
     console.error = function(...args) {
         originalError.apply(console, args);
-        const message = args.map(arg => {
-            if (typeof arg === 'string') return arg;
-            try {
-                return JSON.stringify(arg);
-            } catch (e) {
-                if (arg instanceof Error) {
-                    return `[Error: ${arg.message}] ${arg.stack || ''}`;
-                }
-                return `[Object: ${Object.prototype.toString.call(arg)}] (Circular or too complex to stringify)`;
-            }
-        }).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'error',
-            message: message
+            message: args.map(arg => {
+                if (typeof arg === 'string') return arg;
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return String(arg);
+                }
+            }).join(' ')
         };
         global.logBuffer.push(logEntry);
         if (global.logBuffer.length > 100) {
@@ -185,7 +178,7 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
     return new Promise((resolve) => {
         uploadMiddleware(req, res, async (err) => {
             if (err) {
-                console.error(`${logPrefix} File upload error:`, err.message);
+                logger.error(`${logPrefix} File upload error:`, err.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {
@@ -242,7 +235,7 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
                 });
 
                 const userInfoStr = userInfo ? `, ${userInfo}` : '';
-                console.log(`${logPrefix} OAuth credentials file uploaded: ${targetFilePath} (provider: ${provider}${userInfoStr})`);
+                logger.info(`${logPrefix} OAuth credentials file uploaded: ${targetFilePath} (provider: ${provider}${userInfoStr})`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -255,7 +248,7 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
                 resolve(true);
 
             } catch (error) {
-                console.error(`${logPrefix} File upload processing error:`, error);
+                logger.error(`${logPrefix} File upload processing error:`, error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {

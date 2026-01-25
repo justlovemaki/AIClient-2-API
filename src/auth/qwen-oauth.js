@@ -1,4 +1,5 @@
 import fs from 'fs';
+import logger from '../utils/logger.js';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
@@ -55,7 +56,7 @@ async function fetchWithProxy(url, options = {}, providerType) {
         axiosConfig.httpAgent = proxyConfig.httpAgent;
         axiosConfig.httpsAgent = proxyConfig.httpsAgent;
         axiosConfig.proxy = false; // 禁用 axios 内置代理，使用我们的 agent
-        console.log(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
+        logger.info(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
     }
 
     try {
@@ -117,7 +118,7 @@ function stopPollingTask(taskId) {
     if (task) {
         task.shouldStop = true;
         activePollingTasks.delete(taskId);
-        console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 已停止轮询任务: ${taskId}`);
+        logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 已停止轮询任务: ${taskId}`);
     }
 }
 
@@ -140,12 +141,12 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
     const taskControl = { shouldStop: false };
     activePollingTasks.set(taskId, taskControl);
     
-    console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 开始轮询令牌 [${taskId}]，间隔 ${interval} 秒，最多尝试 ${maxAttempts} 次`);
+    logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 开始轮询令牌 [${taskId}]，间隔 ${interval} 秒，最多尝试 ${maxAttempts} 次`);
     
     const poll = async () => {
         // 检查是否需要停止
         if (taskControl.shouldStop) {
-            console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询任务 [${taskId}] 已被停止`);
+            logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询任务 [${taskId}] 已被停止`);
             throw new Error('轮询任务已被取消');
         }
         
@@ -181,7 +182,7 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
             
             if (response.ok && data.access_token) {
                 // 成功获取令牌
-                console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 成功获取令牌 [${taskId}]`);
+                logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 成功获取令牌 [${taskId}]`);
                 
                 // 如果指定了保存到 configs 目录
                 if (options.saveToConfigs) {
@@ -195,7 +196,7 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
                 // 保存令牌到文件
                 await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
                 await fs.promises.writeFile(credPath, JSON.stringify(data, null, 2));
-                console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 令牌已保存到 ${credPath}`);
+                logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 令牌已保存到 ${credPath}`);
                 
                 const relativePath = path.relative(process.cwd(), credPath);
 
@@ -219,12 +220,12 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
             // 检查错误类型
             if (data.error === 'authorization_pending') {
                 // 用户尚未完成授权，继续轮询
-                console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 等待用户授权 [${taskId}]... (第 ${attempts}/${maxAttempts} 次尝试)`);
+                logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 等待用户授权 [${taskId}]... (第 ${attempts}/${maxAttempts} 次尝试)`);
                 await new Promise(resolve => setTimeout(resolve, interval * 1000));
                 return poll();
             } else if (data.error === 'slow_down') {
                 // 需要降低轮询频率
-                console.log(`${QWEN_OAUTH_CONFIG.logPrefix} 降低轮询频率`);
+                logger.info(`${QWEN_OAUTH_CONFIG.logPrefix} 降低轮询频率`);
                 await new Promise(resolve => setTimeout(resolve, (interval + 5) * 1000));
                 return poll();
             } else if (data.error === 'expired_token') {
@@ -241,7 +242,7 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
             if (error.message.includes('授权') || error.message.includes('过期') || error.message.includes('拒绝')) {
                 throw error;
             }
-            console.error(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询出错:`, error);
+            logger.error(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询出错:`, error);
             // 网络错误，继续重试
             await new Promise(resolve => setTimeout(resolve, interval * 1000));
             return poll();
@@ -310,7 +311,7 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
         // 不等待轮询完成，立即返回授权信息
         pollQwenToken(deviceAuth.device_code, codeVerifier, interval, expiresIn, taskId, options)
             .catch(error => {
-                console.error(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
+                logger.error(`${QWEN_OAUTH_CONFIG.logPrefix} 轮询失败 [${taskId}]:`, error);
                 // 广播授权失败事件
                 broadcastEvent('oauth_error', {
                     provider: 'openai-qwen-oauth',
@@ -333,7 +334,7 @@ export async function handleQwenOAuth(currentConfig, options = {}) {
             }
         };
     } catch (error) {
-        console.error(`${QWEN_OAUTH_CONFIG.logPrefix} 请求失败:`, error);
+        logger.error(`${QWEN_OAUTH_CONFIG.logPrefix} 请求失败:`, error);
         throw new Error(`Qwen OAuth 授权失败: ${error.message}`);
     }
 }

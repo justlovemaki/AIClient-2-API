@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
 import * as crypto from 'crypto'; // Import crypto for MD5 hashing
+import logger from './logger.js';
 import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
@@ -200,13 +201,13 @@ export async function logConversation(type, content, logMode, logFilename) {
     const logEntry = `${timestamp} [${type.toUpperCase()}]:\n${content}\n--------------------------------------\n`;
 
     if (logMode === 'console') {
-        console.log(logEntry);
+        logger.info(logEntry);
     } else if (logMode === 'file') {
         try {
             // Append to the file
             await fs.appendFile(logFilename, logEntry);
         } catch (err) {
-            console.error(`[Error] Failed to write conversation log to ${logFilename}:`, err);
+            logger.error(`[Error] Failed to write conversation log to ${logFilename}:`, err);
         }
     }
 }
@@ -247,7 +248,7 @@ export function isAuthorized(req, requestUrl, REQUIRED_API_KEY) {
         return true;
     }
 
-    console.log(`[Auth] Unauthorized request denied. Bearer: "${authHeader ? 'present' : 'N/A'}", Query Key: "${queryKey}", x-goog-api-key: "${googApiKey}", x-api-key: "${claudeApiKey}"`);
+    logger.info(`[Auth] Unauthorized request denied. Bearer: "${authHeader ? 'present' : 'N/A'}", Query Key: "${queryKey}", x-goog-api-key: "${googApiKey}", x-api-key: "${claudeApiKey}"`);
     return false;
 }
 
@@ -323,35 +324,35 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                     // fullOldResponseJson += chunk.type+"\n";
                     // fullResponseJson += chunk.type+"\n";
                     res.write(`event: ${chunk.type}\n`);
-                    // console.log(`event: ${chunk.type}\n`);
+                    // logger.info(`event: ${chunk.type}\n`);
                 }
 
                 // fullOldResponseJson += JSON.stringify(chunk)+"\n";
                 // fullResponseJson += JSON.stringify(chunk)+"\n\n";
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                // console.log(`data: ${JSON.stringify(chunk)}\n`);
+                // logger.info(`data: ${JSON.stringify(chunk)}\n`);
             }
         }
         if (openStop && needsConversion) {
             res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
-            // console.log(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
+            // logger.info(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
         }
 
         // 流式请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
             const customNameDisplay = customName ? `, ${customName}` : '';
-            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful stream request`);
+            logger.info(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful stream request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
             });
         }
 
     }  catch (error) {
-        console.error('\n[Server] Error during stream processing:', error.stack);
+        logger.error('\n[Server] Error during stream processing:', error.stack);
         
         // 如果已经发送了内容，不进行重试（避免响应数据损坏）
         if (fullResponseText.length > 0) {
-            console.log(`[Stream Retry] Cannot retry: ${fullResponseText.length} bytes already sent to client`);
+            logger.info(`[Stream Retry] Cannot retry: ${fullResponseText.length} bytes already sent to client`);
             // 直接发送错误并结束
             const errorPayload = createStreamErrorResponse(error, fromProvider);
             res.write(errorPayload);
@@ -375,9 +376,9 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
             if (status === 400) {
-                console.log(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
+                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
             } else {
-                console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
+                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
                 // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
                 providerPoolManager.markProviderUnhealthy(toProvider, {
                     uuid: pooluuid
@@ -385,9 +386,9 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 credentialMarkedUnhealthy = true;
             }
         } else if (credentialMarkedUnhealthy) {
-            console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+            logger.info(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
-            console.log(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
+            logger.info(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
         }
         
         // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
@@ -400,7 +401,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
             // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
             const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
-            console.log(`[Stream Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
+            logger.info(`[Stream Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
             await new Promise(resolve => setTimeout(resolve, randomDelay));
             
             try {
@@ -408,8 +409,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 const { getApiServiceWithFallback } = await import('../services/service-manager.js');
                 const result = await getApiServiceWithFallback(CONFIG, model);
                 
-                if (result && result.service && result.uuid !== pooluuid) {
-                    console.log(`[Stream Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
+                if (result && result.service) {
+                    logger.info(`[Stream Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
                     
                     // 使用新服务重试
                     const newRetryContext = {
@@ -434,13 +435,11 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                         result.serviceConfig?.customName || customName,
                         newRetryContext
                     );
-                } else if (result && result.uuid === pooluuid) {
-                    console.log(`[Stream Retry] No different healthy credential available. Same credential selected.`);
                 } else {
-                    console.log(`[Stream Retry] No healthy credential available for retry.`);
+                    logger.info(`[Stream Retry] No healthy credential available for retry.`);
                 }
             } catch (retryError) {
-                console.error(`[Stream Retry] Failed to get alternative service:`, retryError.message);
+                logger.error(`[Stream Retry] Failed to get alternative service:`, retryError.message);
             }
         }
 
@@ -478,11 +477,11 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         // Convert the response back to the client's format (fromProvider), if necessary.
         let clientResponse = nativeResponse;
         if (needsConversion) {
-            console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
+            logger.info(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
 
-        //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
+        //logger.info(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
         // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
@@ -490,13 +489,13 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         // 一元请求成功完成，统计使用次数，错误次数重置为0
         if (providerPoolManager && pooluuid) {
             const customNameDisplay = customName ? `, ${customName}` : '';
-            console.log(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful unary request`);
+            logger.info(`[Provider Pool] Increasing usage count for ${toProvider} (${pooluuid}${customNameDisplay}) after successful unary request`);
             providerPoolManager.markProviderHealthy(toProvider, {
                 uuid: pooluuid
             });
         }
     } catch (error) {
-        console.error('\n[Server] Error during unary processing:', error.stack);
+        logger.error('\n[Server] Error during unary processing:', error.stack);
         
         // 获取状态码（用于日志记录，不再用于判断是否重试）
         const status = error.response?.status;
@@ -513,9 +512,9 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
             if (status === 400) {
-                console.log(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
+                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
             } else {
-                console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
+                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
                 // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
                 providerPoolManager.markProviderUnhealthy(toProvider, {
                     uuid: pooluuid
@@ -523,9 +522,9 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 credentialMarkedUnhealthy = true;
             }
         } else if (credentialMarkedUnhealthy) {
-            console.log(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
+            logger.info(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
-            console.log(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
+            logger.info(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
         }
         
         // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
@@ -538,7 +537,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
             // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
             const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
-            console.log(`[Unary Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
+            logger.info(`[Unary Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
             await new Promise(resolve => setTimeout(resolve, randomDelay));
             
             try {
@@ -546,8 +545,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 const { getApiServiceWithFallback } = await import('../services/service-manager.js');
                 const result = await getApiServiceWithFallback(CONFIG, model);
                 
-                if (result && result.service && result.uuid !== pooluuid) {
-                    console.log(`[Unary Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
+                if (result && result.service) {
+                    logger.info(`[Unary Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
                     
                     // 使用新服务重试
                     const newRetryContext = {
@@ -572,13 +571,11 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                         result.serviceConfig?.customName || customName,
                         newRetryContext
                     );
-                } else if (result && result.uuid === pooluuid) {
-                    console.log(`[Unary Retry] No different healthy credential available. Same credential selected.`);
                 } else {
-                    console.log(`[Unary Retry] No healthy credential available for retry.`);
+                    logger.info(`[Unary Retry] No healthy credential available for retry.`);
                 }
             } catch (retryError) {
-                console.error(`[Unary Retry] Failed to get alternative service:`, retryError.message);
+                logger.error(`[Unary Retry] Failed to get alternative service:`, retryError.message);
             }
         }
 
@@ -618,17 +615,17 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         // 2. Convert the model list to the client's expected format, if necessary.
         let clientModelList = nativeModelList;
         if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
-            console.log(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
+            logger.info(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
             clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
         } else {
-            console.log(`[ModelList Convert] Model list format matches. No conversion needed.`);
+            logger.info(`[ModelList Convert] Model list format matches. No conversion needed.`);
         }
 
-        console.log(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
+        logger.info(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(clientModelList));
     } catch (error) {
-        console.error('\n[Server] Error during model list processing:', error.stack);
+        logger.error('\n[Server] Error during model list processing:', error.stack);
         if (providerPoolManager) {
             // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
             providerPoolManager.markProviderUnhealthy(toProvider, {
@@ -677,7 +674,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     if (!model) {
         throw new Error("Could not determine the model from the request.");
     }
-    console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
+    logger.info(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
 
     let actualCustomName = CONFIG.customName;
 
@@ -694,14 +691,14 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         
         // 如果发生了模型级别的 fallback，需要更新请求使用的模型
         if (result.actualModel && result.actualModel !== model) {
-            console.log(`[Content Generation] Model Fallback: ${model} -> ${result.actualModel}`);
+            logger.info(`[Content Generation] Model Fallback: ${model} -> ${result.actualModel}`);
             model = result.actualModel;
         }
 
         if (result.isFallback) {
-            console.log(`[Content Generation] Fallback activated: ${CONFIG.MODEL_PROVIDER} -> ${toProvider} (uuid: ${actualUuid})`);
+            logger.info(`[Content Generation] Fallback activated: ${CONFIG.MODEL_PROVIDER} -> ${toProvider} (uuid: ${actualUuid})`);
         } else {
-            console.log(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+            logger.info(`[Content Generation] Re-selected service adapter based on model: ${model}`);
         }
     }
 
@@ -709,15 +706,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     let processedRequestBody = originalRequestBody;
     // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-        console.log(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
+        logger.info(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
     } else {
-        console.log(`[Request Convert] Request format matches backend provider. No conversion needed.`);
+        logger.info(`[Request Convert] Request format matches backend provider. No conversion needed.`);
     }
     
     // 为 forward provider 添加原始请求路径作为 endpoint
     if (requestPath && toProvider === MODEL_PROVIDER.FORWARD_API) {
-        console.log(`[Forward API] Request path: ${requestPath}`);
+        logger.info(`[Forward API] Request path: ${requestPath}`);
         processedRequestBody.endpoint = requestPath;
     }
 
@@ -828,14 +825,14 @@ export function handleError(res, error, provider = null) {
     }
 
     errorMessage = hasOriginalMessage ? error.message.trim() : errorMessage;
-    console.error(`\n[Server] Request failed (${statusCode}): ${errorMessage}`);
+    logger.error(`\n[Server] Request failed (${statusCode}): ${errorMessage}`);
     if (suggestions.length > 0) {
-        console.error('[Server] Suggestions:');
+        logger.error('[Server] Suggestions:');
         suggestions.forEach((suggestion, index) => {
-            console.error(`  ${index + 1}. ${suggestion}`);
+            logger.error(`  ${index + 1}. ${suggestion}`);
         });
     }
-    console.error('[Server] Full error details:', error.stack);
+    logger.error('[Server] Full error details:', error.stack);
 
     if (!res.headersSent) {
         res.writeHead(statusCode, { 'Content-Type': 'application/json' });
@@ -1071,7 +1068,7 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
             }
             break;
         default:
-            console.warn(`[System Prompt] Unknown provider: ${provider}`);
+            logger.warn(`[System Prompt] Unknown provider: ${provider}`);
             break;
     }
     return incomingSystemText;

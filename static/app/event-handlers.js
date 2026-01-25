@@ -26,6 +26,67 @@ function initEventListeners() {
         });
     }
 
+    // 下载日志
+    if (elements.downloadLogsBtn) {
+        elements.downloadLogsBtn.addEventListener('click', async () => {
+            try {
+                const token = window.authManager.getToken();
+                if (!token) {
+                    showToast(t('common.error'), '请先登录', 'error');
+                    return;
+                }
+                
+                // 使用带认证的方式下载文件
+                const url = `${window.location.origin}/api/system/download-log`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    showToast(t('common.error'), '认证失败，请重新登录', 'error');
+                    window.authManager.clearToken();
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    showToast(t('common.error'), errorData.error?.message || '下载失败', 'error');
+                    return;
+                }
+                
+                // 获取文件名
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'app.log';
+                if (contentDisposition) {
+                    const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
+                    if (matches && matches[1]) {
+                        filename = matches[1];
+                    }
+                }
+                
+                // 下载文件
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+                
+                showToast(t('common.success'), '日志下载成功', 'success');
+            } catch (error) {
+                console.error('下载日志失败:', error);
+                showToast(t('common.error'), '下载失败: ' + error.message, 'error');
+            }
+        });
+    }
+
     // 自动滚动切换
     if (elements.toggleAutoScrollBtn) {
         elements.toggleAutoScrollBtn.addEventListener('click', () => {

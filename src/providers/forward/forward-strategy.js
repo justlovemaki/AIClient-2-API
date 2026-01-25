@@ -51,3 +51,4 @@ class ForwardStrategy extends ProviderStrategy {
 }
 
 export { ForwardStrategy };
+

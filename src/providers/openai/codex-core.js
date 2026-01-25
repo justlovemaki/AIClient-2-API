@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger.js';
 import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -32,13 +33,13 @@ export class CodexApiService {
      */
     async initialize() {
         if (this.isInitialized) return;
-        console.log('[Codex] Initializing Codex API Service...');
+        logger.info('[Codex] Initializing Codex API Service...');
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
 
         this.isInitialized = true;
-        console.log(`[Codex] Initialization complete. Account: ${this.email || 'unknown'}`);
+        logger.info(`[Codex] Initialization complete. Account: ${this.email || 'unknown'}`);
     }
 
     /**
@@ -84,14 +85,14 @@ export class CodexApiService {
 
             // 检查 token 是否需要刷新
             if (this.isExpiryDateNear()) {
-                console.log('[Codex] Token expiring soon, refreshing...');
+                logger.info('[Codex] Token expiring soon, refreshing...');
                 await this.refreshAccessToken();
             }
 
             this.isInitialized = true;
-            console.log(`[Codex] Initialized with account: ${this.email}`);
+            logger.info(`[Codex] Initialized with account: ${this.email}`);
         } catch (error) {
-            console.warn(`[Codex Auth] Failed to load credentials: ${error.message}`);
+            logger.warn(`[Codex Auth] Failed to load credentials: ${error.message}`);
         }
     }
 
@@ -114,7 +115,7 @@ export class CodexApiService {
             if (!this.refreshToken) {
                 throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
             }
-            console.log('[Codex] Token expiring soon or refresh requested, refreshing...');
+            logger.info('[Codex] Token expiring soon or refresh requested, refreshing...');
             await this.refreshAccessToken();
             
             // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
@@ -137,7 +138,7 @@ export class CodexApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
                     uuid: this.uuid
                 });
@@ -157,12 +158,12 @@ export class CodexApiService {
             return this.parseNonStreamResponse(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
-                console.log('[Codex] Received 401. Triggering background refresh via PoolManager...');
+                logger.info('[Codex] Received 401. Triggering background refresh via PoolManager...');
                 
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized`);
+                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
                         uuid: this.uuid
                     });
@@ -190,7 +191,7 @@ export class CodexApiService {
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                console.log(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
+                logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
                 poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
                     uuid: this.uuid
                 });
@@ -211,12 +212,12 @@ export class CodexApiService {
             yield* this.parseSSEStream(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
-                console.log('[Codex] Received 401 during stream. Triggering background refresh via PoolManager...');
+                logger.info('[Codex] Received 401 during stream. Triggering background refresh via PoolManager...');
                 
                 // 标记当前凭证为不健康
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    console.log(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in stream`);
+                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in stream`);
                     poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
                         uuid: this.uuid
                     });
@@ -293,9 +294,9 @@ export class CodexApiService {
             // 保存更新的凭据
             await this.saveCredentials();
 
-            console.log('[Codex] Token refreshed successfully');
+            logger.info('[Codex] Token refreshed successfully');
         } catch (error) {
-            console.error('[Codex] Failed to refresh token:', error.message);
+            logger.error('[Codex] Failed to refresh token:', error.message);
             throw new Error('Failed to refresh Codex token. Please re-authenticate.');
         }
     }
@@ -308,7 +309,7 @@ export class CodexApiService {
         const expiry = this.expiresAt.getTime();
         const nearMinutes = 20;
         const { message, isNearExpiry } = formatExpiryLog('Codex', expiry, nearMinutes);
-        console.log(message);
+        logger.info(message);
         return isNearExpiry;
     }
 
@@ -379,7 +380,7 @@ export class CodexApiService {
                             const parsed = JSON.parse(data);
                             yield parsed;
                         } catch (e) {
-                            console.error('[Codex] Failed to parse SSE data:', e.message);
+                            logger.error('[Codex] Failed to parse SSE data:', e.message);
                         }
                     }
                 }
@@ -395,7 +396,7 @@ export class CodexApiService {
                         const parsed = JSON.parse(data);
                         yield parsed;
                     } catch (e) {
-                        console.error('[Codex] Failed to parse final SSE data:', e.message);
+                        logger.error('[Codex] Failed to parse final SSE data:', e.message);
                     }
                 }
             }
@@ -469,3 +470,4 @@ export class CodexApiService {
         }
     }
 }
+

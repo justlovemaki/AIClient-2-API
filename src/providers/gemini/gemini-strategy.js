@@ -1,4 +1,5 @@
 import { API_ACTIONS, extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import logger from '../../utils/logger.js';
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
 
 /**
@@ -55,7 +56,7 @@ class GeminiStrategy extends ProviderStrategy {
         if (requestBody.system_instruction) {
             delete requestBody.system_instruction;
         }
-        console.log(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'gemini'.`);
+        logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'gemini'.`);
 
         return requestBody;
     }
@@ -67,3 +68,4 @@ class GeminiStrategy extends ProviderStrategy {
 }
 
 export { GeminiStrategy };
+

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { promises as pfs } from 'fs';
 import { INPUT_SYSTEM_PROMPT_FILE, MODEL_PROVIDER } from '../utils/common.js';
+import logger from '../utils/logger.js';
 
 export let CONFIG = {}; // Make CONFIG exportable
 export let PROMPT_LOG_FILENAME = ''; // Make PROMPT_LOG_FILENAME exportable
@@ -21,7 +22,7 @@ function normalizeConfiguredProviders(config) {
         }
         const matched = ALL_MODEL_PROVIDERS.find((provider) => provider.toLowerCase() === trimmed.toLowerCase());
         if (!matched) {
-            console.warn(`[Config Warning] Unknown model provider '${trimmed}'. This entry will be ignored.`);
+            logger.warn(`[Config Warning] Unknown model provider '${trimmed}'. This entry will be ignored.`);
             return;
         }
         if (!dedupedProviders.includes(matched)) {
@@ -58,9 +59,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
     try {
         const configData = fs.readFileSync(configFilePath, 'utf8');
         currentConfig = JSON.parse(configData);
-        console.log('[Config] Loaded configuration from configs/config.json');
+        logger.info('[Config] Loaded configuration from configs/config.json');
     } catch (error) {
-        console.error('[Config Error] Failed to load configs/config.json:', error.message);
+        logger.error('[Config Error] Failed to load configs/config.json:', error.message);
         // Fallback to default values if config.json is not found or invalid
         currentConfig = {
             REQUIRED_API_KEY: "123456",
@@ -80,9 +81,17 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             CRON_REFRESH_TOKEN: false,
             PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
             MAX_ERROR_COUNT: 10, // 提供商最大错误次数
-            providerFallbackChain: {} // 跨类型 Fallback 链配置
+            providerFallbackChain: {}, // 跨类型 Fallback 链配置
+            LOG_ENABLED: true,
+            LOG_OUTPUT_MODE: "all",
+            LOG_LEVEL: "info",
+            LOG_DIR: "logs",
+            LOG_INCLUDE_REQUEST_ID: true,
+            LOG_INCLUDE_TIMESTAMP: true,
+            LOG_MAX_FILE_SIZE: 10485760,
+            LOG_MAX_FILES: 10
         };
-        console.log('[Config] Using default configuration.');
+        logger.info('[Config] Using default configuration.');
     }
 
     // Parse command-line arguments
@@ -92,7 +101,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 currentConfig.REQUIRED_API_KEY = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --api-key flag requires a value.`);
+                logger.warn(`[Config Warning] --api-key flag requires a value.`);
             }
         } else if (args[i] === '--log-prompts') {
             if (i + 1 < args.length) {
@@ -100,32 +109,32 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 if (mode === 'console' || mode === 'file') {
                     currentConfig.PROMPT_LOG_MODE = mode;
                 } else {
-                    console.warn(`[Config Warning] Invalid mode for --log-prompts. Expected 'console' or 'file'. Prompt logging is disabled.`);
+                    logger.warn(`[Config Warning] Invalid mode for --log-prompts. Expected 'console' or 'file'. Prompt logging is disabled.`);
                 }
                 i++;
             } else {
-                console.warn(`[Config Warning] --log-prompts flag requires a value.`);
+                logger.warn(`[Config Warning] --log-prompts flag requires a value.`);
             }
         } else if (args[i] === '--port') {
             if (i + 1 < args.length) {
                 currentConfig.SERVER_PORT = parseInt(args[i + 1], 10);
                 i++;
             } else {
-                console.warn(`[Config Warning] --port flag requires a value.`);
+                logger.warn(`[Config Warning] --port flag requires a value.`);
             }
         } else if (args[i] === '--model-provider') {
             if (i + 1 < args.length) {
                 currentConfig.MODEL_PROVIDER = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --model-provider flag requires a value.`);
+                logger.warn(`[Config Warning] --model-provider flag requires a value.`);
             }
         } else if (args[i] === '--system-prompt-file') {
             if (i + 1 < args.length) {
                 currentConfig.SYSTEM_PROMPT_FILE_PATH = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --system-prompt-file flag requires a value.`);
+                logger.warn(`[Config Warning] --system-prompt-file flag requires a value.`);
             }
         } else if (args[i] === '--system-prompt-mode') {
             if (i + 1 < args.length) {
@@ -133,53 +142,53 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 if (mode === 'overwrite' || mode === 'append') {
                     currentConfig.SYSTEM_PROMPT_MODE = mode;
                 } else {
-                    console.warn(`[Config Warning] Invalid mode for --system-prompt-mode. Expected 'overwrite' or 'append'. Using default 'overwrite'.`);
+                    logger.warn(`[Config Warning] Invalid mode for --system-prompt-mode. Expected 'overwrite' or 'append'. Using default 'overwrite'.`);
                 }
                 i++;
             } else {
-                console.warn(`[Config Warning] --system-prompt-mode flag requires a value.`);
+                logger.warn(`[Config Warning] --system-prompt-mode flag requires a value.`);
             }
         } else if (args[i] === '--host') {
             if (i + 1 < args.length) {
                 currentConfig.HOST = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --host flag requires a value.`);
+                logger.warn(`[Config Warning] --host flag requires a value.`);
             }
         } else if (args[i] === '--prompt-log-base-name') {
             if (i + 1 < args.length) {
                 currentConfig.PROMPT_LOG_BASE_NAME = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --prompt-log-base-name flag requires a value.`);
+                logger.warn(`[Config Warning] --prompt-log-base-name flag requires a value.`);
             }
         } else if (args[i] === '--cron-near-minutes') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
                 i++;
             } else {
-                console.warn(`[Config Warning] --cron-near-minutes flag requires a value.`);
+                logger.warn(`[Config Warning] --cron-near-minutes flag requires a value.`);
             }
         } else if (args[i] === '--cron-refresh-token') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_REFRESH_TOKEN = args[i + 1].toLowerCase() === 'true';
                 i++;
             } else {
-                console.warn(`[Config Warning] --cron-refresh-token flag requires a value.`);
+                logger.warn(`[Config Warning] --cron-refresh-token flag requires a value.`);
             }
         } else if (args[i] === '--provider-pools-file') {
             if (i + 1 < args.length) {
                 currentConfig.PROVIDER_POOLS_FILE_PATH = args[i + 1];
                 i++;
             } else {
-                console.warn(`[Config Warning] --provider-pools-file flag requires a value.`);
+                logger.warn(`[Config Warning] --provider-pools-file flag requires a value.`);
             }
         } else if (args[i] === '--max-error-count') {
             if (i + 1 < args.length) {
                 currentConfig.MAX_ERROR_COUNT = parseInt(args[i + 1], 10);
                 i++;
             } else {
-                console.warn(`[Config Warning] --max-error-count flag requires a value.`);
+                logger.warn(`[Config Warning] --max-error-count flag requires a value.`);
             }
         }
     }
@@ -199,9 +208,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         try {
             const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');
             currentConfig.providerPools = JSON.parse(poolsData);
-            console.log(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}`);
+            logger.info(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}`);
         } catch (error) {
-            console.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}: ${error.message}`);
+            logger.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}: ${error.message}`);
             currentConfig.providerPools = {};
         }
     } else {
@@ -220,6 +229,22 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
 
     // Assign to the exported CONFIG
     Object.assign(CONFIG, currentConfig);
+
+    // Initialize logger
+    logger.initialize({
+        enabled: CONFIG.LOG_ENABLED,
+        outputMode: CONFIG.LOG_OUTPUT_MODE,
+        logLevel: CONFIG.LOG_LEVEL,
+        logDir: CONFIG.LOG_DIR,
+        includeRequestId: CONFIG.LOG_INCLUDE_REQUEST_ID,
+        includeTimestamp: CONFIG.LOG_INCLUDE_TIMESTAMP,
+        maxFileSize: CONFIG.LOG_MAX_FILE_SIZE,
+        maxFiles: CONFIG.LOG_MAX_FILES
+    });
+
+    // Cleanup old logs periodically
+    logger.cleanupOldLogs();
+
     return CONFIG;
 }
 
@@ -233,9 +258,9 @@ export async function getSystemPromptFileContent(filePath) {
         await pfs.access(filePath, pfs.constants.F_OK);
     } catch (error) {
         if (error.code === 'ENOENT') {
-            console.warn(`[System Prompt] Specified system prompt file not found: ${filePath}`);
+            logger.warn(`[System Prompt] Specified system prompt file not found: ${filePath}`);
         } else {
-            console.error(`[System Prompt] Error accessing system prompt file ${filePath}: ${error.message}`);
+            logger.error(`[System Prompt] Error accessing system prompt file ${filePath}: ${error.message}`);
         }
         return null;
     }
@@ -245,10 +270,10 @@ export async function getSystemPromptFileContent(filePath) {
         if (!content.trim()) {
             return null;
         }
-        console.log(`[System Prompt] Loaded system prompt from ${filePath}`);
+        logger.info(`[System Prompt] Loaded system prompt from ${filePath}`);
         return content;
     } catch (error) {
-        console.error(`[System Prompt] Error reading system prompt file ${filePath}: ${error.message}`);
+        logger.error(`[System Prompt] Error reading system prompt file ${filePath}: ${error.message}`);
         return null;
     }
 }

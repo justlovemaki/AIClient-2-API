@@ -1,3 +1,4 @@
+import logger from '../utils/logger.js';
 import * as http from 'http';
 import { initializeConfig, CONFIG } from '../core/config-manager.js';
 import { initApiService, autoLinkProviderConfigs } from './service-manager.js';
@@ -141,11 +142,11 @@ function setupWorkerCommunication() {
     process.on('message', (message) => {
         if (!message || !message.type) return;
 
-        console.log('[Worker] Received message from master:', message.type);
+        logger.info('[Worker] Received message from master:', message.type);
 
         switch (message.type) {
             case 'shutdown':
-                console.log('[Worker] Shutdown requested by master');
+                logger.info('[Worker] Shutdown requested by master');
                 gracefulShutdown();
                 break;
             case 'status':
@@ -159,13 +160,13 @@ function setupWorkerCommunication() {
                 });
                 break;
             default:
-                console.log('[Worker] Unknown message type:', message.type);
+                logger.info('[Worker] Unknown message type:', message.type);
         }
     });
 
     // 监听断开连接
     process.on('disconnect', () => {
-        console.log('[Worker] Disconnected from master, shutting down...');
+        logger.info('[Worker] Disconnected from master, shutting down...');
         gracefulShutdown();
     });
 }
@@ -174,17 +175,17 @@ function setupWorkerCommunication() {
  * 优雅关闭服务器
  */
 async function gracefulShutdown() {
-    console.log('[Server] Initiating graceful shutdown...');
+    logger.info('[Server] Initiating graceful shutdown...');
 
     if (serverInstance) {
         serverInstance.close(() => {
-            console.log('[Server] HTTP server closed');
+            logger.info('[Server] HTTP server closed');
             process.exit(0);
         });
 
         // 设置超时，防止无限等待
         setTimeout(() => {
-            console.log('[Server] Shutdown timeout, forcing exit...');
+            logger.info('[Server] Shutdown timeout, forcing exit...');
             process.exit(1);
         }, 10000);
     } else {
@@ -197,22 +198,22 @@ async function gracefulShutdown() {
  */
 function setupSignalHandlers() {
     process.on('SIGTERM', () => {
-        console.log('[Server] Received SIGTERM');
+        logger.info('[Server] Received SIGTERM');
         gracefulShutdown();
     });
 
     process.on('SIGINT', () => {
-        console.log('[Server] Received SIGINT');
+        logger.info('[Server] Received SIGINT');
         gracefulShutdown();
     });
 
     process.on('uncaughtException', (error) => {
-        console.error('[Server] Uncaught exception:', error);
+        logger.error('[Server] Uncaught exception:', error);
         gracefulShutdown();
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-        console.error('[Server] Unhandled rejection at:', promise, 'reason:', reason);
+        logger.error('[Server] Unhandled rejection at:', promise, 'reason:', reason);
     });
 }
 
@@ -222,11 +223,11 @@ async function startServer() {
     await initializeConfig(process.argv.slice(2), 'configs/config.json');
     
     // 自动关联 configs 目录中的配置文件到对应的提供商
-    // console.log('[Initialization] Checking for unlinked provider configs...');
+    // logger.info('[Initialization] Checking for unlinked provider configs...');
     // await autoLinkProviderConfigs(CONFIG);
 
     // Initialize plugin system
-    console.log('[Initialization] Discovering and initializing plugins...');
+    logger.info('[Initialization] Discovering and initializing plugins...');
     await discoverPlugins();
     const pluginManager = getPluginManager();
     await pluginManager.initAll(CONFIG);
@@ -234,10 +235,10 @@ async function startServer() {
     // Log loaded plugins
     const pluginList = pluginManager.getPluginList();
     if (pluginList.length > 0) {
-        console.log(`[Plugins] Loaded ${pluginList.length} plugin(s):`);
+        logger.info(`[Plugins] Loaded ${pluginList.length} plugin(s):`);
         pluginList.forEach(p => {
             const status = p.enabled ? '✓' : '✗';
-            console.log(`  ${status} ${p.name} v${p.version} - ${p.description}`);
+            logger.info(`  ${status} ${p.name} v${p.version} - ${p.description}`);
         });
     }
 
@@ -263,29 +264,29 @@ async function startServer() {
     // 设置服务器的最大连接数
     serverInstance.maxConnections = 1000;
     serverInstance.listen(CONFIG.SERVER_PORT, CONFIG.HOST, async () => {
-        console.log(`--- Unified API Server Configuration ---`);
+        logger.info(`--- Unified API Server Configuration ---`);
         const configuredProviders = Array.isArray(CONFIG.DEFAULT_MODEL_PROVIDERS) && CONFIG.DEFAULT_MODEL_PROVIDERS.length > 0
             ? CONFIG.DEFAULT_MODEL_PROVIDERS
             : [CONFIG.MODEL_PROVIDER];
         const uniqueProviders = [...new Set(configuredProviders)];
-        console.log(`  Primary Model Provider: ${CONFIG.MODEL_PROVIDER}`);
+        logger.info(`  Primary Model Provider: ${CONFIG.MODEL_PROVIDER}`);
         if (uniqueProviders.length > 1) {
-            console.log(`  Additional Model Providers: ${uniqueProviders.slice(1).join(', ')}`);
+            logger.info(`  Additional Model Providers: ${uniqueProviders.slice(1).join(', ')}`);
         }
-        console.log(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
-        console.log(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
-        console.log(`  Host: ${CONFIG.HOST}`);
-        console.log(`  Port: ${CONFIG.SERVER_PORT}`);
-        console.log(`  Required API Key: ${CONFIG.REQUIRED_API_KEY}`);
-        console.log(`  Prompt Logging: ${CONFIG.PROMPT_LOG_MODE}${CONFIG.PROMPT_LOG_FILENAME ? ` (to ${CONFIG.PROMPT_LOG_FILENAME})` : ''}`);
-        console.log(`------------------------------------------`);
-        console.log(`\nUnified API Server running on http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}`);
-        console.log(`Supports multiple API formats:`);
-        console.log(`  • OpenAI-compatible: /v1/chat/completions, /v1/responses, /v1/models`);
-        console.log(`  • Gemini-compatible: /v1beta/models, /v1beta/models/{model}:generateContent`);
-        console.log(`  • Claude-compatible: /v1/messages`);
-        console.log(`  • Health check: /health`);
-        console.log(`  • UI Management Console: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/`);
+        logger.info(`  System Prompt File: ${CONFIG.SYSTEM_PROMPT_FILE_PATH || 'Default'}`);
+        logger.info(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
+        logger.info(`  Host: ${CONFIG.HOST}`);
+        logger.info(`  Port: ${CONFIG.SERVER_PORT}`);
+        logger.info(`  Required API Key: ${CONFIG.REQUIRED_API_KEY}`);
+        logger.info(`  Prompt Logging: ${CONFIG.PROMPT_LOG_MODE}${CONFIG.PROMPT_LOG_FILENAME ? ` (to ${CONFIG.PROMPT_LOG_FILENAME})` : ''}`);
+        logger.info(`------------------------------------------`);
+        logger.info(`\nUnified API Server running on http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}`);
+        logger.info(`Supports multiple API formats:`);
+        logger.info(`  • OpenAI-compatible: /v1/chat/completions, /v1/responses, /v1/models`);
+        logger.info(`  • Gemini-compatible: /v1beta/models, /v1beta/models/{model}:generateContent`);
+        logger.info(`  • Claude-compatible: /v1/messages`);
+        logger.info(`  • Health check: /health`);
+        logger.info(`  • UI Management Console: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/`);
 
         // Auto-open browser to UI (only if host is 0.0.0.0 or 127.0.0.1)
         // if (CONFIG.HOST === '0.0.0.0' || CONFIG.HOST === '127.0.0.1') {
@@ -300,27 +301,27 @@ async function startServer() {
                     }
                     open(openUrl)
                         .then(() => {
-                            console.log('[UI] Opened login page in default browser');
+                            logger.info('[UI] Opened login page in default browser');
                         })
                         .catch(err => {
-                            console.log('[UI] Please open manually: http://' + CONFIG.HOST + ':' + CONFIG.SERVER_PORT + '/login.html');
+                            logger.info('[UI] Please open manually: http://' + CONFIG.HOST + ':' + CONFIG.SERVER_PORT + '/login.html');
                         });
                 }, openDelay);
             } catch (err) {
-                console.log(`[UI] Login page available at: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`);
+                logger.info(`[UI] Login page available at: http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}/login.html`);
             }
         // }
 
         if (CONFIG.CRON_REFRESH_TOKEN) {
-            console.log(`  • Cron Near Minutes: ${CONFIG.CRON_NEAR_MINUTES}`);
-            console.log(`  • Cron Refresh Token: ${CONFIG.CRON_REFRESH_TOKEN}`);
+            logger.info(`  • Cron Near Minutes: ${CONFIG.CRON_NEAR_MINUTES}`);
+            logger.info(`  • Cron Refresh Token: ${CONFIG.CRON_REFRESH_TOKEN}`);
             // 每 CRON_NEAR_MINUTES 分钟执行一次心跳日志和令牌刷新
             setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
         }
         // 服务器完全启动后,执行初始健康检查
         const poolManager = getProviderPoolManager();
         if (poolManager) {
-            console.log('[Initialization] Performing initial health checks for provider pools...');
+            logger.info('[Initialization] Performing initial health checks for provider pools...');
             poolManager.performHealthChecks(true);
         }
 
@@ -339,7 +340,7 @@ setupSignalHandlers();
 setupWorkerCommunication();
 
 startServer().catch(err => {
-    console.error("[Server] Failed to start server:", err.message);
+    logger.error("[Server] Failed to start server:", err.message);
     process.exit(1);
 });
 
