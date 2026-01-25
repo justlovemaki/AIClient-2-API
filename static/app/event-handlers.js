@@ -17,12 +17,60 @@ function initEventListeners() {
 
     // 清空日志
     if (elements.clearLogsBtn) {
-        elements.clearLogsBtn.addEventListener('click', () => {
-            clearLogs();
-            if (elements.logsContainer) {
-                elements.logsContainer.innerHTML = '';
+        elements.clearLogsBtn.addEventListener('click', async () => {
+            // 显示确认对话框，明确提示会清空本地日志文件
+            const confirmed = confirm(t('logs.clear.confirm.msg'));
+            
+            if (!confirmed) {
+                return;
             }
-            showToast(t('common.success'), t('common.refresh.success'), 'success');
+            
+            try {
+                const token = window.authManager.getToken();
+                if (!token) {
+                    showToast(t('common.error'), '请先登录', 'error');
+                    return;
+                }
+                
+                // 调用后端 API 清空日志文件
+                const response = await fetch(`${window.location.origin}/api/system/clear-log`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.status === 401) {
+                    showToast(t('common.error'), '认证失败，请重新登录', 'error');
+                    window.authManager.clearToken();
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 清空前端日志显示
+                    clearLogs();
+                    if (elements.logsContainer) {
+                        elements.logsContainer.innerHTML = '';
+                    }
+                    
+                    // 显示成功提示，明确说明已清空本地日志文件
+                    showToast(
+                        t('logs.clear.success.title'), 
+                        t('logs.clear.success.msg'), 
+                        'success',
+                        5000 // 显示 5 秒
+                    );
+                } else {
+                    showToast(t('common.error'), t('logs.clear.failed'), 'error');
+                }
+            } catch (error) {
+                console.error('清空日志失败:', error);
+                showToast(t('common.error'), t('logs.clear.failed') + ': ' + error.message, 'error');
+            }
         });
     }
 

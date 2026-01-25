@@ -16,6 +16,9 @@ import path from 'path';
 // 插件配置文件路径
 const PLUGINS_CONFIG_FILE = path.join(process.cwd(), 'configs', 'plugins.json');
 
+// 默认禁用的插件列表
+const DEFAULT_DISABLED_PLUGINS = ['api-potluck', 'ai-monitor'];
+
 /**
  * 插件类型常量
  */
@@ -105,16 +108,20 @@ class PluginManager {
                     const plugin = pluginModule.default || pluginModule;
                     
                     if (plugin && plugin.name) {
+                        // 检查是否在默认禁用列表中
+                        const enabled = !DEFAULT_DISABLED_PLUGINS.includes(plugin.name);
                         defaultConfig.plugins[plugin.name] = {
-                            enabled: true,
+                            enabled: enabled,
                             description: plugin.description || ''
                         };
                         logger.info(`[PluginManager] Found plugin for default config: ${plugin.name}`);
                     }
                 } catch (importError) {
                     // 如果导入失败，使用目录名作为插件名
+                    // 检查是否在默认禁用列表中
+                    const enabled = !DEFAULT_DISABLED_PLUGINS.includes(entry.name);
                     defaultConfig.plugins[entry.name] = {
-                        enabled: true,
+                        enabled: enabled,
                         description: ''
                     };
                     logger.warn(`[PluginManager] Could not import plugin ${entry.name}, using directory name:`, importError.message);

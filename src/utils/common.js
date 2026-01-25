@@ -312,6 +312,21 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model)
                 : nativeChunk;
 
+            // 监控钩子：流式响应分块
+            if (CONFIG?._monitorRequestId) {
+                try {
+                    const pluginManager = getPluginManager();
+                    await pluginManager.executeHook('onStreamChunk', {
+                        nativeChunk,
+                        chunkToSend,
+                        fromProvider,
+                        toProvider,
+                        model,
+                        requestId: CONFIG._monitorRequestId
+                    });
+                } catch (e) {}
+            }
+
             if (!chunkToSend) {
                 continue;
             }
@@ -479,6 +494,21 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         if (needsConversion) {
             logger.info(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
+        }
+
+        // 监控钩子：非流式响应
+        if (CONFIG?._monitorRequestId) {
+            try {
+                const pluginManager = getPluginManager();
+                await pluginManager.executeHook('onUnaryResponse', {
+                    nativeResponse,
+                    clientResponse,
+                    fromProvider,
+                    toProvider,
+                    model,
+                    requestId: CONFIG._monitorRequestId
+                });
+            } catch (e) {}
         }
 
         //logger.info(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
@@ -704,6 +734,11 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     // 1. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
+    // 将 _monitorRequestId 注入到 requestBody 中，以便在 service 内部访问
+    if (CONFIG._monitorRequestId) {
+        processedRequestBody._monitorRequestId = CONFIG._monitorRequestId;
+    }
+
     // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
         logger.info(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
@@ -742,11 +777,21 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);
     }
 
-    // 执行插件钩子：内容生成后
-    try {
-        const pluginManager = getPluginManager();
-        await pluginManager.executeHook('onContentGenerated', CONFIG);
-    } catch (e) { /* 静默失败，不影响主流程 */ }
+    if (CONFIG?._monitorRequestId) {
+        // 执行插件钩子：内容生成后
+        try {
+            const pluginManager = getPluginManager();
+            await pluginManager.executeHook('onContentGenerated', {
+                ...CONFIG,
+                originalRequestBody,
+                processedRequestBody,
+                fromProvider,
+                toProvider,
+                model,
+                isStream
+            });
+        } catch (e) { /* 静默失败，不影响主流程 */ }
+    }
 }
 
 /**

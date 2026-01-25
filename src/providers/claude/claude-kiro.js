@@ -765,7 +765,7 @@ async saveCredentialsToFile(filePath, newData) {
     /**
      * Build CodeWhisperer request from OpenAI messages
      */
-    buildCodewhispererRequest(messages, model, tools = null, inSystemPrompt = null, thinking = null) {
+    async buildCodewhispererRequest(messages, model, tools = null, inSystemPrompt = null, thinking = null) {
         const conversationId = uuidv4();
         
         let systemPrompt = this.getContentText(inSystemPrompt);
@@ -1181,6 +1181,23 @@ async saveCredentialsToFile(filePath, newData) {
             request.profileArn = this.profileArn;
         }
 
+        // 监控钩子：内部请求转换
+        if (this.config?._monitorRequestId) {
+            try {
+                const { getPluginManager } = await import('../../core/plugin-manager.js');
+                const pluginManager = getPluginManager();
+                if (pluginManager) {
+                    await pluginManager.executeHook('onInternalRequestConverted', {
+                        requestId: this.config._monitorRequestId,
+                        internalRequest: request,
+                        converterName: 'buildCodewhispererRequest'
+                    });
+                }
+            } catch (e) {
+                logger.error('[Kiro] Error calling onInternalRequestConverted hook:', e.message);
+            }
+        }
+
         // fs.writeFile('claude-kiro-request'+Date.now()+'.json', JSON.stringify(request));
         return request;
     }
@@ -1307,7 +1324,7 @@ async saveCredentialsToFile(filePath, newData) {
             throw new Error('No messages found in request body');
         }
 
-        const requestData = this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
+        const requestData = await this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
 
         try {
             const token = this.accessToken; // Use the already initialized token
@@ -1596,6 +1613,11 @@ async saveCredentialsToFile(filePath, newData) {
     async generateContent(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
 
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+        }
+        
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             logger.info('[Kiro] Token is near expiry, marking credential as need refresh...');
@@ -1787,7 +1809,7 @@ async saveCredentialsToFile(filePath, newData) {
             throw new Error('No messages found in request body');
         }
 
-        const requestData = this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
+        const requestData = await this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
 
         const token = this.accessToken;
         const headers = {
@@ -1952,6 +1974,11 @@ async saveCredentialsToFile(filePath, newData) {
     // 真正的流式传输实现
     async * generateContentStream(model, requestBody) {
         if (!this.isInitialized) await this.initialize();
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+        }
         
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {

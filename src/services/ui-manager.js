@@ -113,6 +113,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await systemApi.handleDownloadTodayLog(req, res);
     }
 
+    // Clear today's log file
+    if (method === 'POST' && pathParam === '/api/system/clear-log') {
+        return await systemApi.handleClearTodayLog(req, res);
+    }
+
     // Get provider pools summary
     if (method === 'GET' && pathParam === '/api/providers') {
         return await providerApi.handleGetProviders(req, res, currentConfig, providerPoolManager);

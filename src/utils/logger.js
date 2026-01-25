@@ -343,6 +343,39 @@ class Logger {
             console.error('[Logger] Failed to cleanup old logs:', error.message);
         }
     }
+
+    /**
+     * 清空当日日志文件
+     * @returns {boolean} 是否成功清空
+     */
+    clearTodayLog() {
+        try {
+            if (!this.currentLogFile || !fs.existsSync(this.currentLogFile)) {
+                console.warn('[Logger] No current log file to clear');
+                return false;
+            }
+
+            // 关闭当前日志流
+            if (this.logStream && !this.logStream.destroyed) {
+                this.logStream.end();
+            }
+
+            // 清空文件内容
+            fs.writeFileSync(this.currentLogFile, '');
+
+            // 重新创建日志流
+            this.logStream = fs.createWriteStream(this.currentLogFile, { flags: 'a' });
+            this.logStream.on('error', (err) => {
+                console.error('[Logger] Failed to write to log file:', err.message);
+            });
+
+            console.log('[Logger] Today\'s log file cleared successfully');
+            return true;
+        } catch (error) {
+            console.error('[Logger] Failed to clear today\'s log file:', error.message);
+            return false;
+        }
+    }
 }
 
 // 创建单例实例
