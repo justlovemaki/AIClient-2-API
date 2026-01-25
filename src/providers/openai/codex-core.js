@@ -7,6 +7,7 @@ import os from 'os';
 import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
+import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 
 /**
  * Codex API 服务类
@@ -77,10 +78,10 @@ export class CodexApiService {
                 creds = JSON.parse(await fs.readFile(credsPath, 'utf8'));
             }
 
-                this.accessToken = creds.access_token;
-                this.refreshToken = creds.refresh_token;
-                this.accountId = creds.account_id;
-                this.email = creds.email;
+            this.accessToken = creds.access_token;
+            this.refreshToken = creds.refresh_token;
+            this.accountId = creds.account_id;
+            this.email = creds.email;
             this.expiresAt = new Date(creds.expired); // 注意：字段名是 expired
 
             // 检查 token 是否需要刷新
@@ -144,16 +145,25 @@ export class CodexApiService {
         const headers = this.buildHeaders(body.prompt_cache_key);
 
         try {
-            const response = await axios.post(url, body, {
+            const config = {
                 headers,
                 timeout: 120000 // 2 分钟超时
-            });
+            };
+
+            // 配置代理
+            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            if (proxyConfig) {
+                config.httpAgent = proxyConfig.httpAgent;
+                config.httpsAgent = proxyConfig.httpsAgent;
+            }
+
+            const response = await axios.post(url, body, config);
 
             return this.parseNonStreamResponse(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
                 logger.info('[Codex] Received 401. Triggering background refresh via PoolManager...');
-                
+
                 // 标记当前凭证为不健康（会自动进入刷新队列）
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
@@ -197,17 +207,26 @@ export class CodexApiService {
         const headers = this.buildHeaders(body.prompt_cache_key);
 
         try {
-            const response = await axios.post(url, body, {
+            const config = {
                 headers,
                 responseType: 'stream',
                 timeout: 120000
-            });
+            };
+
+            // 配置代理
+            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            if (proxyConfig) {
+                config.httpAgent = proxyConfig.httpAgent;
+                config.httpsAgent = proxyConfig.httpsAgent;
+            }
+
+            const response = await axios.post(url, body, config);
 
             yield* this.parseSSEStream(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
                 logger.info('[Codex] Received 401 during stream. Triggering background refresh via PoolManager...');
-                
+
                 // 标记当前凭证为不健康
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
