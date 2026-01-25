@@ -62,12 +62,12 @@ export function isProxyEnabledForProvider(config, providerType) {
     if (!config || !config.PROXY_URL || !config.PROXY_ENABLED_PROVIDERS) {
         return false;
     }
-    
+
     const enabledProviders = config.PROXY_ENABLED_PROVIDERS;
     if (!Array.isArray(enabledProviders)) {
         return false;
     }
-    
+
     return enabledProviders.includes(providerType);
 }
 
@@ -81,10 +81,10 @@ export function getProxyConfigForProvider(config, providerType) {
     if (!isProxyEnabledForProvider(config, providerType)) {
         return null;
     }
-    
+
     const proxyConfig = parseProxyUrl(config.PROXY_URL);
     if (proxyConfig) {
-        logger.info(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${config.PROXY_URL}`);
+        // logger.info(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${config.PROXY_URL}`);
     }
     return proxyConfig;
 }
@@ -98,7 +98,7 @@ export function getProxyConfigForProvider(config, providerType) {
  */
 export function configureAxiosProxy(axiosConfig, config, providerType) {
     const proxyConfig = getProxyConfigForProvider(config, providerType);
-    
+
     if (proxyConfig) {
         // 使用代理 agent
         axiosConfig.httpAgent = proxyConfig.httpAgent;
@@ -106,7 +106,7 @@ export function configureAxiosProxy(axiosConfig, config, providerType) {
         // 禁用 axios 内置的代理配置，使用我们的 agent
         axiosConfig.proxy = false;
     }
-    
+
     return axiosConfig;
 }
 
@@ -118,12 +118,12 @@ export function configureAxiosProxy(axiosConfig, config, providerType) {
  */
 export function getGoogleAuthProxyConfig(config, providerType) {
     const proxyConfig = getProxyConfigForProvider(config, providerType);
-    
+
     if (proxyConfig) {
         return {
             agent: proxyConfig.httpsAgent
         };
     }
-    
+
     return null;
 }
