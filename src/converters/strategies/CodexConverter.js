@@ -61,7 +61,7 @@ export class CodexConverter extends BaseConverter {
                 effort: 'medium',
                 summary: 'auto'
             },
-            parallel_tool_calls: data.parallel_tool_calls !== false,
+            parallel_tool_calls: true,
             include: ['reasoning.encrypted_content']
         };
 
@@ -83,16 +83,10 @@ export class CodexConverter extends BaseConverter {
             codexRequest.reasoning.effort = data.reasoning_effort;
         }
 
-        // 添加温度和其他参数
-        if (data.temperature !== undefined) {
-            codexRequest.temperature = data.temperature;
-        }
-        if (data.max_tokens !== undefined) {
-            codexRequest.max_output_tokens = data.max_tokens;
-        }
-        if (data.top_p !== undefined) {
-            codexRequest.top_p = data.top_p;
-        }
+        /* 
+         Codex doesn't support temperature, top_p, top_k, max_tokens anymore in the new protocol.
+         Removed mapping for these fields.
+        */
 
         return codexRequest;
     }
