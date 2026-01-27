@@ -568,6 +568,18 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
     isExpiryDateNear() {
         return this.codexApiService.isExpiryDateNear();
     }
+
+    /**
+     * 获取用量限制信息
+     * @returns {Promise<Object>} 用量限制信息
+     */
+    async getUsageLimits() {
+        if (!this.codexApiService.isInitialized) {
+            logger.warn("codexApiService not initialized, attempting to re-initialize...");
+            await this.codexApiService.initialize();
+        }
+        return this.codexApiService.getUsageLimits();
+    }
 }
 
 // Forward API 服务适配器

@@ -141,7 +141,7 @@ export class CodexApiService {
         }
 
         const url = `${this.baseUrl}/responses`;
-        const body = this.prepareRequestBody(model, requestBody, false);
+        const body = this.prepareRequestBody(model, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key);
 
         try {
@@ -486,6 +486,107 @@ export class CodexApiService {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
+        }
+    }
+
+    /**
+     * 获取使用限制信息
+     * @returns {Promise<Object>} 使用限制信息（通用格式）
+     */
+    async getUsageLimits() {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        try {
+            const url = 'https://chatgpt.com/backend-api/wham/usage';
+            const headers = {
+                'user-agent': 'codex_cli_rs/0.89.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
+                'authorization': `Bearer ${this.accessToken}`,
+                'chatgpt-account-id': this.accountId,
+                'accept': '*/*',
+                'host': 'chatgpt.com',
+                'Connection': 'close'
+            };
+
+            const config = {
+                headers,
+                timeout: 30000 // 30 秒超时
+            };
+
+            // 配置代理
+            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            if (proxyConfig) {
+                config.httpAgent = proxyConfig.httpAgent;
+                config.httpsAgent = proxyConfig.httpsAgent;
+            }
+
+            const response = await axios.get(url, config);
+            
+            // 解析响应数据并转换为通用格式
+            const data = response.data;
+            
+            // 通用格式：{ lastUpdated, models: { "model-id": { remaining, resetTime, resetTimeRaw } } }
+            const result = {
+                lastUpdated: Date.now(),
+                models: {}
+            };
+
+            // 从 rate_limit 提取配额信息
+            // Codex 使用百分比表示使用量，我们需要转换为剩余量
+            if (data.rate_limit) {
+                const primaryWindow = data.rate_limit.primary_window;
+                const secondaryWindow = data.rate_limit.secondary_window;
+                
+                // 使用主窗口的数据作为主要配额信息
+                if (primaryWindow) {
+                    // remaining = 1 - (used_percent / 100)
+                    const remaining = 1 - (primaryWindow.used_percent || 0) / 100;
+                    const resetTime = primaryWindow.reset_at ? new Date(primaryWindow.reset_at * 1000).toISOString() : null;
+                    
+                    // 为所有 Codex 模型设置相同的配额信息
+                    const codexModels = ['default'];
+                    for (const modelId of codexModels) {
+                        result.models[modelId] = {
+                            remaining: Math.max(0, Math.min(1, remaining)), // 确保在 0-1 之间
+                            resetTime: resetTime,
+                            resetTimeRaw: primaryWindow.reset_at
+                        };
+                    }
+                }
+            }
+
+            // 保存原始响应数据供需要时使用
+            result.raw = {
+                planType: data.plan_type || 'unknown',
+                rateLimit: data.rate_limit,
+                codeReviewRateLimit: data.code_review_rate_limit,
+                credits: data.credits
+            };
+
+            logger.info(`[Codex] Successfully fetched usage limits for plan: ${result.raw.planType}`);
+            return result;
+        } catch (error) {
+            if (error.response?.status === 401) {
+                logger.info('[Codex] Received 401 during getUsageLimits. Triggering background refresh via PoolManager...');
+
+                // 标记当前凭证为不健康
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in getUsageLimits`);
+                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                        uuid: this.uuid
+                    });
+                    error.credentialMarkedUnhealthy = true;
+                }
+
+                // Mark error for credential switch without recording error count
+                error.shouldSwitchCredential = true;
+                error.skipErrorCount = true;
+            }
+            
+            logger.error('[Codex] Failed to get usage limits:', error.message);
+            throw error;
         }
     }
 }

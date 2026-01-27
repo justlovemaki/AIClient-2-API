@@ -20,6 +20,46 @@
     color: var(--text-secondary);
 }
 
+.usage-info-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.usage-info-banner i {
+    color: var(--primary-color);
+}
+
+.supported-providers-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.provider-tag {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.loading-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-tertiary);
+}
+
 .usage-loading, .usage-error, .usage-empty {
     text-align: center;
     padding: 3rem;
@@ -367,3 +407,23 @@
 [data-theme="dark"] .pagination-container { background: var(--bg-tertiary); }
 [data-theme="dark"] .page-btn { background: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary); }
 [data-theme="dark"] .page-jump-input { background: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary); }
+
+/* Codex 专用样式 */
+.codex-usage-item {
+    border-left: 3px solid var(--primary-color);
+}
+
+.codex-reset-info {
+    font-size: 0.65rem;
+    color: var(--text-tertiary);
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.codex-secondary-usage {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border-color);
+}

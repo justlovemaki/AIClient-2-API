@@ -111,8 +111,23 @@ const aiMonitorPlugin = {
             }
 
             const cache = aiMonitorPlugin.streamCache.get(requestId);
-            cache.nativeChunks.push(nativeChunk);
-            cache.convertedChunks.push(chunkToSend);
+            
+            // 过滤 null 值，并判断是否为数组类型
+            if (nativeChunk != null) {
+                if (Array.isArray(nativeChunk)) {
+                    cache.nativeChunks.push(...nativeChunk.filter(item => item != null));
+                } else {
+                    cache.nativeChunks.push(nativeChunk);
+                }
+            }
+            
+            if (chunkToSend != null) {
+                if (Array.isArray(chunkToSend)) {
+                    cache.convertedChunks.push(...chunkToSend.filter(item => item != null));
+                } else {
+                    cache.convertedChunks.push(chunkToSend);
+                }
+            }
         },
 
         /**

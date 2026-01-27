@@ -15,6 +15,39 @@ export function initUsageManager() {
     
     // 初始化时自动加载缓存数据
     loadUsage();
+    loadSupportedProviders();
+}
+
+/**
+ * 加载支持用量查询的提供商列表
+ */
+async function loadSupportedProviders() {
+    const listEl = document.getElementById('supportedProvidersList');
+    if (!listEl) return;
+
+    try {
+        const response = await fetch('/api/usage/supported-providers', {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const providers = await response.json();
+        
+        listEl.innerHTML = '';
+        providers.forEach(provider => {
+            const tag = document.createElement('span');
+            tag.className = 'provider-tag';
+            tag.textContent = getProviderDisplayName(provider);
+            listEl.appendChild(tag);
+        });
+    } catch (error) {
+        console.error('获取支持的提供商列表失败:', error);
+        listEl.innerHTML = '<span class="error-text">Failed to load</span>';
+    }
 }
 
 /**
@@ -467,6 +500,11 @@ function renderUsageDetails(usage) {
  * @returns {string} HTML 字符串
  */
 function createUsageBreakdownHTML(breakdown) {
+    // 特殊处理 Codex
+    if (breakdown.rateLimit && breakdown.rateLimit.primary_window) {
+        return createCodexUsageBreakdownHTML(breakdown);
+    }
+
     const usagePercent = breakdown.usageLimit > 0
         ? Math.min(100, (breakdown.currentUsage / breakdown.usageLimit) * 100)
         : 0;
@@ -512,6 +550,78 @@ function createUsageBreakdownHTML(breakdown) {
 
     html += '</div>';
     return html;
+}
+
+/**
+ * 创建 Codex 专用的用量明细 HTML
+ * @param {Object} breakdown - 包含 rateLimit 的用量明细
+ * @returns {string} HTML 字符串
+ */
+function createCodexUsageBreakdownHTML(breakdown) {
+    const rl = breakdown.rateLimit;
+    const primary = rl.primary_window;
+    const secondary = rl.secondary_window;
+    
+    const primaryPercent = primary.used_percent || 0;
+    const primaryProgressClass = primaryPercent >= 90 ? 'danger' : (primaryPercent >= 70 ? 'warning' : 'normal');
+    
+    const primaryLimitHours = Math.round(primary.limit_window_seconds / 3600);
+    const primaryResetText = formatTimeRemaining(primary.reset_after_seconds);
+
+    let html = `
+        <div class="breakdown-item-compact codex-usage-item">
+            <div class="breakdown-header-compact">
+                <span class="breakdown-name"><i class="fas fa-clock"></i> ${primaryLimitHours} 小时限制</span>
+                <span class="breakdown-usage">${primaryPercent}%</span>
+            </div>
+            <div class="progress-bar-small ${primaryProgressClass}">
+                <div class="progress-fill" style="width: ${primaryPercent}%"></div>
+            </div>
+            <div class="codex-reset-info">
+                <i class="fas fa-history"></i> 将在 ${primaryResetText} 后重置
+            </div>
+    `;
+
+    if (secondary) {
+        const secondaryPercent = secondary.used_percent || 0;
+        const secondaryProgressClass = secondaryPercent >= 90 ? 'danger' : (secondaryPercent >= 70 ? 'warning' : 'normal');
+        const secondaryResetText = formatTimeRemaining(secondary.reset_after_seconds);
+
+        html += `
+            <div class="codex-secondary-usage">
+                <div class="breakdown-header-compact">
+                    <span class="breakdown-name"><i class="fas fa-calendar-alt"></i> 每周限制</span>
+                    <span class="breakdown-usage">${secondaryPercent}%</span>
+                </div>
+                <div class="progress-bar-small ${secondaryProgressClass}">
+                    <div class="progress-fill" style="width: ${secondaryPercent}%"></div>
+                </div>
+                <div class="codex-reset-info">
+                    <i class="fas fa-history"></i> 将在 ${secondaryResetText} 后重置
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+/**
+ * 格式化剩余时间
+ * @param {number} seconds - 秒数
+ * @returns {string} 格式化后的时间
+ */
+function formatTimeRemaining(seconds) {
+    if (seconds <= 0) return '即将';
+    
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) return `${days}天${hours}小时`;
+    if (hours > 0) return `${hours}小时${minutes}分`;
+    return `${minutes}分钟`;
 }
 
 /**
@@ -569,6 +679,7 @@ function getProviderDisplayName(providerType) {
         'claude-kiro-oauth': 'Claude Kiro OAuth',
         'gemini-cli-oauth': 'Gemini CLI OAuth',
         'gemini-antigravity': 'Gemini Antigravity',
+        'openai-codex-oauth': 'Codex OAuth',
         'openai-qwen-oauth': 'Qwen OAuth'
     };
     return names[providerType] || providerType;
@@ -584,6 +695,7 @@ function getProviderIcon(providerType) {
         'claude-kiro-oauth': 'fas fa-robot',
         'gemini-cli-oauth': 'fas fa-gem',
         'gemini-antigravity': 'fas fa-rocket',
+        'openai-codex-oauth': 'fas fa-terminal',
         'openai-qwen-oauth': 'fas fa-code'
     };
     return icons[providerType] || 'fas fa-server';

@@ -1345,34 +1345,86 @@ export class OpenAIConverter extends BaseConverter {
     toOpenAIResponsesRequest(openaiRequest) {
         const responsesRequest = {
             model: openaiRequest.model,
-            messages: []
+            instructions: '',
+            input: [],
+            stream: openaiRequest.stream || false,
+            max_output_tokens: openaiRequest.max_tokens,
+            temperature: openaiRequest.temperature,
+            top_p: openaiRequest.top_p,
+            parallel_tool_calls: openaiRequest.parallel_tool_calls,
+            tool_choice: openaiRequest.tool_choice
         };
 
-        // 转换messages
-        if (openaiRequest.messages && openaiRequest.messages.length > 0) {
-            responsesRequest.messages = openaiRequest.messages.map(msg => ({
-                role: msg.role,
-                content: typeof msg.content === 'string'
-                    ? [{ type: 'input_text', text: msg.content }]
-                    : msg.content
-            }));
+        const { systemInstruction, nonSystemMessages } = extractSystemMessages(openaiRequest.messages || []);
+
+        if (systemInstruction) {
+            responsesRequest.instructions = extractText(systemInstruction.parts[0].text);
         }
 
-        // 转换其他参数
-        if (openaiRequest.temperature !== undefined) {
-            responsesRequest.temperature = openaiRequest.temperature;
+        if (openaiRequest.reasoning_effort) {
+            responsesRequest.reasoning = {
+                effort: openaiRequest.reasoning_effort
+            };
         }
-        if (openaiRequest.max_tokens !== undefined) {
-            responsesRequest.max_output_tokens = openaiRequest.max_tokens;
+
+        // 转换messages到input
+        for (const msg of nonSystemMessages) {
+            if (msg.role === 'tool') {
+                responsesRequest.input.push({
+                    type: 'function_call_output',
+                    call_id: msg.tool_call_id,
+                    output: msg.content
+                });
+            } else if (msg.role === 'assistant' && msg.tool_calls?.length) {
+                for (const tc of msg.tool_calls) {
+                    responsesRequest.input.push({
+                        type: 'function_call',
+                        call_id: tc.id,
+                        name: tc.function.name,
+                        arguments: tc.function.arguments
+                    });
+                }
+            } else {
+                let content = [];
+                if (typeof msg.content === 'string') {
+                    content.push({
+                        type: msg.role === 'assistant' ? 'output_text' : 'input_text',
+                        text: msg.content
+                    });
+                } else if (Array.isArray(msg.content)) {
+                    msg.content.forEach(c => {
+                        if (c.type === 'text') {
+                            content.push({
+                                type: msg.role === 'assistant' ? 'output_text' : 'input_text',
+                                text: c.text
+                            });
+                        } else if (c.type === 'image_url') {
+                            content.push({
+                                type: 'input_image',
+                                image_url: c.image_url
+                            });
+                        }
+                    });
+                }
+
+                if (content.length > 0) {
+                    responsesRequest.input.push({
+                        type: 'message',
+                        role: msg.role,
+                        content: content
+                    });
+                }
+            }
         }
-        if (openaiRequest.top_p !== undefined) {
-            responsesRequest.top_p = openaiRequest.top_p;
-        }
+
+        // 处理工具
         if (openaiRequest.tools) {
-            responsesRequest.tools = openaiRequest.tools;
-        }
-        if (openaiRequest.tool_choice) {
-            responsesRequest.tool_choice = openaiRequest.tool_choice;
+            responsesRequest.tools = openaiRequest.tools.map(t => ({
+                type: t.type || 'function',
+                name: t.function?.name,
+                description: t.function?.description,
+                parameters: t.function?.parameters
+            }));
         }
 
         return responsesRequest;

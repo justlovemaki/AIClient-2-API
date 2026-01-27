@@ -36,7 +36,7 @@ const httpsAgent = new https.Agent({
 const CREDENTIALS_DIR = '.antigravity';
 const CREDENTIALS_FILE = 'oauth_creds.json';
 
-// Base URLs - 按照 Go 代码的降级顺序
+// Base URLs
 const ANTIGRAVITY_BASE_URL_DAILY = 'https://daily-cloudcode-pa.googleapis.com';
 const ANTIGRAVITY_SANDBOX_BASE_URL_DAILY = 'https://daily-cloudcode-pa.sandbox.googleapis.com';
 const ANTIGRAVITY_BASE_URL_PROD = 'https://autopush-cloudcode-pa.sandbox.googleapis.com';
@@ -735,7 +735,7 @@ export class AntigravityApiService {
         this.projectId = config.PROJECT_ID;
         this.uuid = config.uuid; // 保存 uuid 用于缓存管理
 
-        // 多环境降级顺序 - 按照 Go 代码的顺序
+        // 多环境降级顺序
         this.baseURLs = this.getBaseURLFallbackOrder(config);
 
         // 保存代理配置供后续使用

@@ -3,6 +3,7 @@ import { GeminiStrategy } from '../providers/gemini/gemini-strategy.js';
 import { OpenAIStrategy } from '../providers/openai/openai-strategy.js';
 import { ClaudeStrategy } from '../providers/claude/claude-strategy.js';
 import { ResponsesAPIStrategy } from '../providers/openai/openai-responses-strategy.js';
+import { CodexResponsesAPIStrategy } from '../providers/openai/codex-responses-strategy.js';
 import { ForwardStrategy } from '../providers/forward/forward-strategy.js';
 
 /**
@@ -20,7 +21,7 @@ class ProviderStrategyFactory {
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
                 return new ClaudeStrategy();
             case MODEL_PROTOCOL_PREFIX.CODEX:
-                return new ResponsesAPIStrategy();
+                return new CodexResponsesAPIStrategy();
             case MODEL_PROTOCOL_PREFIX.FORWARD:
                 return new ForwardStrategy();
             default:

@@ -27,7 +27,6 @@ import {
 } from '../../providers/openai/openai-responses-core.mjs';
 
 /**
- * [FIX] 参考 ag/response.rs 和 ag/streaming.rs 的 remap_function_call_args 函数
  * 修复 Gemini 返回的工具参数名称问题
  * Gemini 有时会使用不同的参数名称，需要映射到 Claude Code 期望的格式
  */
@@ -176,6 +175,8 @@ export class GeminiConverter extends BaseConverter {
                 return this.toClaudeRequest(data);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesRequest(data);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -192,6 +193,8 @@ export class GeminiConverter extends BaseConverter {
                 return this.toClaudeResponse(data, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesResponse(data, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexResponse(data, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -208,6 +211,8 @@ export class GeminiConverter extends BaseConverter {
                 return this.toClaudeStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesStreamChunk(chunk, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexStreamChunk(chunk, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -357,13 +362,25 @@ export class GeminiConverter extends BaseConverter {
         // 处理finishReason
         let finishReason = null;
         if (candidate.finishReason) {
-            finishReason = candidate.finishReason === 'STOP' ? 'stop' :
-                         candidate.finishReason === 'MAX_TOKENS' ? 'length' :
-                         candidate.finishReason.toLowerCase();
+            const finishReasonMap = {
+                'FINISH_REASON_UNSPECIFIED': 'stop',
+                'STOP': 'stop',
+                'MAX_TOKENS': 'length',
+                'SAFETY': 'content_filter',
+                'RECITATION': 'content_filter',
+                'OTHER': 'stop',
+                'BLOCKLIST': 'content_filter',
+                'PROHIBITED_CONTENT': 'content_filter',
+                'SPII': 'content_filter',
+                'MALFORMED_FUNCTION_CALL': 'stop',
+                'MODEL_ARMOR': 'content_filter',
+            };
+            finishReason = finishReasonMap[candidate.finishReason] || 'stop';
         }
 
-        // 如果包含工具调用，且完成原因为 stop，则将完成原因修改为 tool_calls
-        if (toolCalls.length > 0 && finishReason === 'stop') {
+        // [FIX] 适配 Gemini 流式：Gemini 的最后一条流式消息通常不带 functionCall
+        // 如果当前 chunk 包含工具调用，直接将其标记为 tool_calls
+        if (toolCalls.length > 0) {
             finishReason = 'tool_calls';
         }
 
@@ -377,7 +394,7 @@ export class GeminiConverter extends BaseConverter {
             return null;
         }
 
-        return {
+        const chunk = {
             id: `chatcmpl-${uuidv4()}`,
             object: "chat.completion.chunk",
             created: Math.floor(Date.now() / 1000),
@@ -387,7 +404,10 @@ export class GeminiConverter extends BaseConverter {
                 delta: delta,
                 finish_reason: finishReason,
             }],
-            usage: geminiChunk.usageMetadata ? {
+        };
+
+        if(geminiChunk.usageMetadata){
+            chunk.usage = {
                 prompt_tokens: geminiChunk.usageMetadata.promptTokenCount || 0,
                 completion_tokens: geminiChunk.usageMetadata.candidatesTokenCount || 0,
                 total_tokens: geminiChunk.usageMetadata.totalTokenCount || 0,
@@ -398,19 +418,10 @@ export class GeminiConverter extends BaseConverter {
                 completion_tokens_details: {
                     reasoning_tokens: geminiChunk.usageMetadata.thoughtsTokenCount || 0
                 }
-            } : {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                cached_tokens: 0,
-                prompt_tokens_details: {
-                    cached_tokens: 0
-                },
-                completion_tokens_details: {
-                    reasoning_tokens: 0
-                }
-            },
-        };
+            };
+        }
+
+        return chunk;
     }
 
     /**
@@ -589,7 +600,7 @@ export class GeminiConverter extends BaseConverter {
         const finishReason = candidate.finishReason;
         let stopReason = "end_turn";
 
-        // [FIX] 参考 ag/response.rs - 如果有工具调用，stop_reason 应该是 "tool_use"
+        // - 如果有工具调用，stop_reason 应该是 "tool_use"
         if (hasToolUse) {
             stopReason = 'tool_use';
         } else if (finishReason) {
@@ -644,7 +655,7 @@ export class GeminiConverter extends BaseConverter {
             if (candidate) {
                 const parts = candidate.content?.parts;
                 
-                // [FIX] 参考 ag/streaming.rs 处理 thinking 和 text 块
+                // thinking 和 text 块
                 if (parts && Array.isArray(parts)) {
                     const results = [];
                     let hasToolUse = false;
@@ -826,7 +837,7 @@ export class GeminiConverter extends BaseConverter {
         parts.forEach(part => {
             if (!part) return;
 
-            // [FIX] 参考 ag/response.rs 处理 thinking 块
+            // 处理 thinking 块
             // Gemini 使用 thought: true 和 thoughtSignature 表示思考内容
             // [FIX] 同时支持 thoughtSignature 和 thought_signature（Gemini CLI 可能使用下划线格式）
             if (part.text) {
@@ -947,7 +958,7 @@ export class GeminiConverter extends BaseConverter {
 
             if (candidate.content && candidate.content.parts) {
                 for (const part of candidate.content.parts) {
-                    // [FIX] 参考 ag/response.rs 处理 thinking 块
+                    // 处理 thinking 块
                     if (part.text) {
                         if (part.thought === true) {
                             // 这是一个 thinking 块
@@ -1034,34 +1045,85 @@ export class GeminiConverter extends BaseConverter {
     toOpenAIResponsesRequest(geminiRequest) {
         const responsesRequest = {
             model: geminiRequest.model,
-            max_tokens: checkAndAssignOrDefault(geminiRequest.generationConfig?.maxOutputTokens, OPENAI_DEFAULT_MAX_TOKENS),
-            temperature: checkAndAssignOrDefault(geminiRequest.generationConfig?.temperature, OPENAI_DEFAULT_TEMPERATURE),
-            top_p: checkAndAssignOrDefault(geminiRequest.generationConfig?.topP, OPENAI_DEFAULT_TOP_P),
+            instructions: '',
+            input: [],
+            stream: geminiRequest.stream || false,
+            max_output_tokens: geminiRequest.generationConfig?.maxOutputTokens,
+            temperature: geminiRequest.generationConfig?.temperature,
+            top_p: geminiRequest.generationConfig?.topP
         };
 
         // 处理系统指令
         if (geminiRequest.systemInstruction && geminiRequest.systemInstruction.parts) {
-            const instructionsText = geminiRequest.systemInstruction.parts
+            responsesRequest.instructions = geminiRequest.systemInstruction.parts
                 .filter(p => p.text)
                 .map(p => p.text)
                 .join('\n');
-            if (instructionsText) {
-                responsesRequest.instructions = instructionsText;
-            }
         }
 
-        // 处理输入
+        // 处理内容
         if (geminiRequest.contents && Array.isArray(geminiRequest.contents)) {
-            const lastContent = geminiRequest.contents[geminiRequest.contents.length - 1];
-            if (lastContent && lastContent.parts) {
-                const inputText = lastContent.parts
-                    .filter(p => p.text)
-                    .map(p => p.text)
-                    .join(' ');
-                if (inputText) {
-                    responsesRequest.input = inputText;
-                }
-            }
+            geminiRequest.contents.forEach(content => {
+                const role = content.role === 'model' ? 'assistant' : 'user';
+                const parts = content.parts || [];
+                
+                parts.forEach(part => {
+                    if (part.text) {
+                        responsesRequest.input.push({
+                            type: 'message',
+                            role: role,
+                            content: [{
+                                type: role === 'assistant' ? 'output_text' : 'input_text',
+                                text: part.text
+                            }]
+                        });
+                    }
+                    
+                    if (part.functionCall) {
+                        responsesRequest.input.push({
+                            type: 'function_call',
+                            call_id: part.functionCall.id || `call_${uuidv4().replace(/-/g, '').slice(0, 24)}`,
+                            name: part.functionCall.name,
+                            arguments: typeof part.functionCall.args === 'string' 
+                                ? part.functionCall.args 
+                                : JSON.stringify(part.functionCall.args)
+                        });
+                    }
+                    
+                    if (part.functionResponse) {
+                        responsesRequest.input.push({
+                            type: 'function_call_output',
+                            call_id: part.functionResponse.name, // Gemini 通常使用 name 作为关联
+                            output: typeof part.functionResponse.response?.result === 'string'
+                                ? part.functionResponse.response.result
+                                : JSON.stringify(part.functionResponse.response || {})
+                        });
+                    }
+
+                    if (part.inlineData) {
+                        responsesRequest.input.push({
+                            type: 'message',
+                            role: role,
+                            content: [{
+                                type: 'input_image',
+                                image_url: {
+                                    url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+                                }
+                            }]
+                        });
+                    }
+                });
+            });
+        }
+
+        // 处理工具
+        if (geminiRequest.tools && geminiRequest.tools[0]?.functionDeclarations) {
+            responsesRequest.tools = geminiRequest.tools[0].functionDeclarations.map(fn => ({
+                type: 'function',
+                name: fn.name,
+                description: fn.description,
+                parameters: fn.parameters || fn.parametersJsonSchema || { type: 'object', properties: {} }
+            }));
         }
 
         return responsesRequest;
@@ -1220,6 +1282,196 @@ export class GeminiConverter extends BaseConverter {
         }
 
         return events;
+    }
+
+    // =========================================================================
+    // Gemini -> Codex 转换
+    // =========================================================================
+
+    /**
+     * Gemini请求 -> Codex请求
+     */
+    toCodexRequest(geminiRequest) {
+        // 使用 CodexConverter 进行转换，因为 CodexConverter.js 中已经实现了 OpenAI -> Codex 的逻辑
+        // 我们需要先将 Gemini 转为 OpenAI 格式，再转为 Codex 格式
+        const openaiRequest = this.toOpenAIRequest(geminiRequest);
+        
+        // 注意：这里我们直接在 GeminiConverter 中实现逻辑，避免循环依赖
+        const codexRequest = {
+            model: openaiRequest.model,
+            instructions: '',
+            input: [],
+            stream: geminiRequest.stream || false,
+            store: false,
+            reasoning: {
+                effort: 'medium',
+                summary: 'auto'
+            },
+            parallel_tool_calls: true,
+            include: ['reasoning.encrypted_content']
+        };
+
+        // 处理系统指令
+        if (geminiRequest.systemInstruction && geminiRequest.systemInstruction.parts) {
+            codexRequest.instructions = geminiRequest.systemInstruction.parts
+                .filter(p => p.text)
+                .map(p => p.text)
+                .join('\n');
+        }
+
+        // 处理内容
+        if (geminiRequest.contents && Array.isArray(geminiRequest.contents)) {
+            const pendingCallIDs = [];
+            
+            geminiRequest.contents.forEach(content => {
+                const role = content.role === 'model' ? 'assistant' : 'user';
+                const parts = content.parts || [];
+                
+                parts.forEach(part => {
+                    if (part.text) {
+                        codexRequest.input.push({
+                            type: 'message',
+                            role: role,
+                            content: [{
+                                type: role === 'assistant' ? 'output_text' : 'input_text',
+                                text: part.text
+                            }]
+                        });
+                    }
+                    
+                    if (part.functionCall) {
+                        const callId = `call_${uuidv4().replace(/-/g, '').slice(0, 24)}`;
+                        pendingCallIDs.push(callId);
+                        codexRequest.input.push({
+                            type: 'function_call',
+                            call_id: callId,
+                            name: part.functionCall.name,
+                            arguments: typeof part.functionCall.args === 'string' 
+                                ? part.functionCall.args 
+                                : JSON.stringify(part.functionCall.args)
+                        });
+                    }
+                    
+                    if (part.functionResponse) {
+                        const callId = pendingCallIDs.shift() || `call_${uuidv4().replace(/-/g, '').slice(0, 24)}`;
+                        codexRequest.input.push({
+                            type: 'function_call_output',
+                            call_id: callId,
+                            output: typeof part.functionResponse.response?.result === 'string'
+                                ? part.functionResponse.response.result
+                                : JSON.stringify(part.functionResponse.response || {})
+                        });
+                    }
+                });
+            });
+        }
+
+        // 处理工具
+        if (geminiRequest.tools && geminiRequest.tools[0]?.functionDeclarations) {
+            codexRequest.tools = geminiRequest.tools[0].functionDeclarations.map(fn => ({
+                type: 'function',
+                name: fn.name,
+                description: fn.description,
+                parameters: fn.parameters || { type: 'object', properties: {} }
+            }));
+        }
+
+        return codexRequest;
+    }
+
+    /**
+     * Gemini响应 -> Codex响应 (实际上是 Codex 转 Gemini)
+     */
+    toCodexResponse(geminiResponse, model) {
+        // 这里实际上是实现 Codex -> Gemini 的非流式转换
+        // 为了保持接口一致，我们按照其他 Converter 的命名习惯
+        const parts = [];
+        if (geminiResponse.response?.output) {
+            geminiResponse.response.output.forEach(item => {
+                if (item.type === 'message' && item.content) {
+                    const textPart = item.content.find(c => c.type === 'output_text');
+                    if (textPart) parts.push({ text: textPart.text });
+                } else if (item.type === 'reasoning' && item.summary) {
+                    const textPart = item.summary.find(c => c.type === 'summary_text');
+                    if (textPart) parts.push({ text: textPart.text, thought: true });
+                } else if (item.type === 'function_call') {
+                    parts.push({
+                        functionCall: {
+                            name: item.name,
+                            args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                        }
+                    });
+                }
+            });
+        }
+
+        return {
+            candidates: [{
+                content: {
+                    role: 'model',
+                    parts: parts
+                },
+                finishReason: 'STOP'
+            }],
+            usageMetadata: {
+                promptTokenCount: geminiResponse.response?.usage?.input_tokens || 0,
+                candidatesTokenCount: geminiResponse.response?.usage?.output_tokens || 0,
+                totalTokenCount: geminiResponse.response?.usage?.total_tokens || 0
+            },
+            modelVersion: model,
+            responseId: geminiResponse.response?.id
+        };
+    }
+
+    /**
+     * Gemini流式响应 -> Codex流式响应 (实际上是 Codex 转 Gemini)
+     */
+    toCodexStreamChunk(codexChunk, model) {
+        const type = codexChunk.type;
+        const resId = codexChunk.response?.id || 'default';
+        
+        const template = {
+            candidates: [{
+                content: {
+                    role: "model",
+                    parts: []
+                }
+            }],
+            modelVersion: model,
+            responseId: resId
+        };
+
+        if (type === 'response.reasoning_summary_text.delta') {
+            template.candidates[0].content.parts.push({ text: codexChunk.delta, thought: true });
+            return template;
+        }
+
+        if (type === 'response.output_text.delta') {
+            template.candidates[0].content.parts.push({ text: codexChunk.delta });
+            return template;
+        }
+
+        if (type === 'response.output_item.done' && codexChunk.item?.type === 'function_call') {
+            template.candidates[0].content.parts.push({
+                functionCall: {
+                    name: codexChunk.item.name,
+                    args: typeof codexChunk.item.arguments === 'string' ? JSON.parse(codexChunk.item.arguments) : codexChunk.item.arguments
+                }
+            });
+            return template;
+        }
+
+        if (type === 'response.completed') {
+            template.candidates[0].finishReason = "STOP";
+            template.usageMetadata = {
+                promptTokenCount: codexChunk.response.usage?.input_tokens || 0,
+                candidatesTokenCount: codexChunk.response.usage?.output_tokens || 0,
+                totalTokenCount: codexChunk.response.usage?.total_tokens || 0
+            };
+            return template;
+        }
+
+        return null;
     }
 }
 

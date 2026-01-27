@@ -268,6 +268,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await usageApi.handleGetUsage(req, res, currentConfig, providerPoolManager);
     }
 
+    // Get supported providers for usage query
+    if (method === 'GET' && pathParam === '/api/usage/supported-providers') {
+        return await usageApi.handleGetSupportedProviders(req, res);
+    }
+
     // Get usage limits for a specific provider type
     const usageProviderMatch = pathParam.match(/^\/api\/usage\/([^\/]+)$/);
     if (method === 'GET' && usageProviderMatch) {

@@ -51,6 +51,8 @@ export class ClaudeConverter extends BaseConverter {
                 return this.toGeminiRequest(data);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesRequest(data);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -67,6 +69,8 @@ export class ClaudeConverter extends BaseConverter {
                 return this.toGeminiResponse(data, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesResponse(data, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexResponse(data, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -83,6 +87,8 @@ export class ClaudeConverter extends BaseConverter {
                 return this.toGeminiStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
                 return this.toOpenAIResponsesStreamChunk(chunk, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexStreamChunk(chunk, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -542,7 +548,7 @@ export class ClaudeConverter extends BaseConverter {
                                 stopReason === 'tool_use' ? 'tool_calls' :
                                 stopReason || 'stop';
 
-            return {
+            const chunk = {
                 id: chunkId,
                 object: "chat.completion.chunk",
                 created: timestamp,
@@ -552,8 +558,11 @@ export class ClaudeConverter extends BaseConverter {
                     index: 0,
                     delta: {},
                     finish_reason: finishReason
-                }],
-                usage: claudeChunk.usage ? {
+                }]
+            };
+
+            if(claudeChunk.usage){
+                chunk.usage = {
                     prompt_tokens: claudeChunk.usage.input_tokens || 0,
                     completion_tokens: claudeChunk.usage.output_tokens || 0,
                     total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0),
@@ -561,24 +570,28 @@ export class ClaudeConverter extends BaseConverter {
                     prompt_tokens_details: {
                         cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
                     }
-                } : undefined
-            };
+                };
+            }
+
+            return chunk;
         }
 
         // message_stop 事件
         if (claudeChunk.type === 'message_stop') {
-            return {
-                id: chunkId,
-                object: "chat.completion.chunk",
-                created: timestamp,
-                model: model,
-                system_fingerprint: "",
-                choices: [{
-                    index: 0,
-                    delta: {},
-                    finish_reason: 'stop'
-                }]
-            };
+            return null;
+            // const chunk = {
+            //     id: chunkId,
+            //     object: "chat.completion.chunk",
+            //     created: timestamp,
+            //     model: model,
+            //     system_fingerprint: "",
+            //     choices: [{
+            //         index: 0,
+            //         delta: {},
+            //         finish_reason: 'stop'
+            //     }]
+            // };
+            // return chunk;
         }
 
         // 兼容旧格式：如果是字符串，直接作为文本内容
@@ -817,7 +830,7 @@ export class ClaudeConverter extends BaseConverter {
                                 }
                                 break;
                             
-                            // [FIX] 参考 ag/request.rs 添加 thinking 块处理
+                            // 添加 thinking 块处理
                             case 'thinking':
                                 if (typeof block.thinking === 'string' && block.thinking.length > 0) {
                                     const thinkingPart = {
@@ -878,7 +891,7 @@ export class ClaudeConverter extends BaseConverter {
                                 
                             case 'tool_result':
                                 // 转换为 Gemini functionResponse 格式
-                                // [FIX] 参考 ag/request.rs 的实现，正确处理 tool_use_id 到函数名的映射
+                                // 的实现，正确处理 tool_use_id 到函数名的映射
                                 const toolCallId = block.tool_use_id;
                                 if (toolCallId) {
                                     // 尝试从之前的 tool_use 块中查找对应的函数名
@@ -902,7 +915,7 @@ export class ClaudeConverter extends BaseConverter {
                                     // 获取响应数据
                                     let responseData = block.content;
                                     
-                                    // [FIX] 参考 ag/request.rs 的 tool_result_compressor 逻辑
+                                    // 的 tool_result_compressor 逻辑
                                     // 处理嵌套的 content 数组（如图片等）
                                     if (Array.isArray(responseData)) {
                                         // 提取文本内容
@@ -1103,7 +1116,7 @@ export class ClaudeConverter extends BaseConverter {
                     }
                     break;
 
-                // [FIX] 参考 ag/response.rs 添加 thinking 块处理
+                // 添加 thinking 块处理
                 case 'thinking':
                     if (block.thinking) {
                         const thinkingPart = {
@@ -1435,22 +1448,120 @@ export class ClaudeConverter extends BaseConverter {
      * Claude请求 -> OpenAI Responses请求
      */
     toOpenAIResponsesRequest(claudeRequest) {
-        // 转换为OpenAI Responses格式
         const responsesRequest = {
             model: claudeRequest.model,
-            max_tokens: checkAndAssignOrDefault(claudeRequest.max_tokens, OPENAI_DEFAULT_MAX_TOKENS),
-            temperature: checkAndAssignOrDefault(claudeRequest.temperature, OPENAI_DEFAULT_TEMPERATURE),
-            top_p: checkAndAssignOrDefault(claudeRequest.top_p, OPENAI_DEFAULT_TOP_P),
+            instructions: '',
+            input: [],
+            stream: claudeRequest.stream || false,
+            max_output_tokens: claudeRequest.max_tokens,
+            temperature: claudeRequest.temperature,
+            top_p: claudeRequest.top_p
         };
 
         // 处理系统指令
         if (claudeRequest.system) {
-            responsesRequest.instructions = claudeRequest.system;
+            if (Array.isArray(claudeRequest.system)) {
+                responsesRequest.instructions = claudeRequest.system.map(s => typeof s === 'string' ? s : s.text).join('\n');
+            } else {
+                responsesRequest.instructions = claudeRequest.system;
+            }
+        }
+
+        // 处理 thinking 配置
+        if (claudeRequest.thinking && claudeRequest.thinking.type === 'enabled') {
+            responsesRequest.reasoning = {
+                effort: determineReasoningEffortFromBudget(claudeRequest.thinking.budget_tokens)
+            };
         }
 
         // 处理消息
         if (claudeRequest.messages && Array.isArray(claudeRequest.messages)) {
-            responsesRequest.input = claudeRequest.messages;
+            claudeRequest.messages.forEach(msg => {
+                const role = msg.role;
+                const content = msg.content;
+
+                if (Array.isArray(content)) {
+                    // 检查是否包含 tool_result
+                    const toolResult = content.find(c => c.type === 'tool_result');
+                    if (toolResult) {
+                        responsesRequest.input.push({
+                            type: 'function_call_output',
+                            call_id: toolResult.tool_use_id,
+                            output: typeof toolResult.content === 'string' ? toolResult.content : JSON.stringify(toolResult.content)
+                        });
+                        return;
+                    }
+
+                    // 检查是否包含 tool_use
+                    const toolUse = content.find(c => c.type === 'tool_use');
+                    if (toolUse) {
+                        responsesRequest.input.push({
+                            type: 'function_call',
+                            call_id: toolUse.id,
+                            name: toolUse.name,
+                            arguments: typeof toolUse.input === 'string' ? toolUse.input : JSON.stringify(toolUse.input)
+                        });
+                        return;
+                    }
+
+                    const responsesContent = content.map(c => {
+                        if (c.type === 'text') {
+                            return {
+                                type: role === 'assistant' ? 'output_text' : 'input_text',
+                                text: c.text
+                            };
+                        } else if (c.type === 'image') {
+                            return {
+                                type: 'input_image',
+                                image_url: {
+                                    url: `data:${c.source.media_type};base64,${c.source.data}`
+                                }
+                            };
+                        }
+                        return null;
+                    }).filter(Boolean);
+
+                    if (responsesContent.length > 0) {
+                        responsesRequest.input.push({
+                            type: 'message',
+                            role: role,
+                            content: responsesContent
+                        });
+                    }
+                } else if (typeof content === 'string') {
+                    responsesRequest.input.push({
+                        type: 'message',
+                        role: role,
+                        content: [{
+                            type: role === 'assistant' ? 'output_text' : 'input_text',
+                            text: content
+                        }]
+                    });
+                }
+            });
+        }
+
+        // 处理工具
+        if (claudeRequest.tools && Array.isArray(claudeRequest.tools)) {
+            responsesRequest.tools = claudeRequest.tools.map(tool => ({
+                type: 'function',
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.input_schema || { type: 'object', properties: {} }
+            }));
+        }
+
+        if (claudeRequest.tool_choice) {
+            if (claudeRequest.tool_choice.type === 'auto') {
+                responsesRequest.tool_choice = 'auto';
+            } else if (claudeRequest.tool_choice.type === 'any') {
+                responsesRequest.tool_choice = 'required';
+            } else if (claudeRequest.tool_choice.type === 'tool') {
+                responsesRequest.tool_choice = {
+                    type: 'function',
+                    function: { name: claudeRequest.tool_choice.name }
+                };
+            }
         }
 
         return responsesRequest;
@@ -1647,6 +1758,426 @@ export class ClaudeConverter extends BaseConverter {
         }
 
         return events;
+    }
+
+    // =========================================================================
+    // Claude -> Codex 转换
+    // =========================================================================
+
+    /**
+     * 应用简单缩短规则缩短工具名称
+     */
+    _shortenNameIfNeeded(name) {
+        const limit = 64;
+        if (name.length <= limit) {
+            return name;
+        }
+        if (name.startsWith("mcp__")) {
+            const idx = name.lastIndexOf("__");
+            if (idx > 0) {
+                const cand = "mcp__" + name.substring(idx + 2);
+                if (cand.length > limit) {
+                    return cand.substring(0, limit);
+                }
+                return cand;
+            }
+        }
+        return name.substring(0, limit);
+    }
+
+    /**
+     * 构建短名称映射以确保请求内唯一性
+     */
+    _buildShortNameMap(names) {
+        const limit = 64;
+        const used = new Set();
+        const m = {};
+
+        const baseCandidate = (n) => {
+            if (n.length <= limit) {
+                return n;
+            }
+            if (n.startsWith("mcp__")) {
+                const idx = n.lastIndexOf("__");
+                if (idx > 0) {
+                    let cand = "mcp__" + n.substring(idx + 2);
+                    if (cand.length > limit) {
+                        cand = cand.substring(0, limit);
+                    }
+                    return cand;
+                }
+            }
+            return n.substring(0, limit);
+        };
+
+        const makeUnique = (cand) => {
+            if (!used.has(cand)) {
+                return cand;
+            }
+            const base = cand;
+            for (let i = 1; ; i++) {
+                const suffix = "_" + i;
+                const allowed = limit - suffix.length;
+                let tmp = base;
+                if (tmp.length > (allowed < 0 ? 0 : allowed)) {
+                    tmp = tmp.substring(0, allowed < 0 ? 0 : allowed);
+                }
+                tmp = tmp + suffix;
+                if (!used.has(tmp)) {
+                    return tmp;
+                }
+            }
+        };
+
+        for (const n of names) {
+            const cand = baseCandidate(n);
+            const uniq = makeUnique(cand);
+            used.add(uniq);
+            m[n] = uniq;
+        }
+        return m;
+    }
+
+    /**
+     * 标准化工具参数，确保对象 Schema 包含 properties
+     */
+    _normalizeToolParameters(schema) {
+        if (!schema || typeof schema !== 'object') {
+            return { type: 'object', properties: {} };
+        }
+        const result = { ...schema };
+        if (!result.type) {
+            result.type = 'object';
+        }
+        if (result.type === 'object' && !result.properties) {
+            result.properties = {};
+        }
+        return result;
+    }
+
+    /**
+     * Claude请求 -> Codex请求
+     */
+    toCodexRequest(claudeRequest) {
+        const codexRequest = {
+            model: claudeRequest.model,
+            instructions: '',
+            input: [],
+            stream: true,
+            store: false,
+            parallel_tool_calls: true,
+            reasoning: {
+                effort: claudeRequest.reasoning?.effort || 'medium',
+                summary: 'auto'
+            },
+            include: ['reasoning.encrypted_content']
+        };
+
+        // 处理系统指令
+        if (claudeRequest.system) {
+            let instructions = '';
+            if (Array.isArray(claudeRequest.system)) {
+                instructions = claudeRequest.system.map(s => typeof s === 'string' ? s : s.text).join('\n');
+            } else {
+                instructions = claudeRequest.system;
+            }
+            codexRequest.instructions = instructions;
+
+            // 处理 Codex 中的系统消息（作为 developer 角色添加到 input）
+            const systemParts = Array.isArray(claudeRequest.system) ? claudeRequest.system : [{ type: 'text', text: claudeRequest.system }];
+            const developerMessage = {
+                type: 'message',
+                role: 'developer',
+                content: []
+            };
+
+            systemParts.forEach(part => {
+                if (part.type === 'text') {
+                    developerMessage.content.push({
+                        type: 'input_text',
+                        text: part.text
+                    });
+                } else if (typeof part === 'string') {
+                    developerMessage.content.push({
+                        type: 'input_text',
+                        text: part
+                    });
+                }
+            });
+
+            if (developerMessage.content.length > 0) {
+                codexRequest.input.push(developerMessage);
+            }
+        }
+
+        // 处理工具并构建短名称映射
+        let shortMap = {};
+        if (claudeRequest.tools && Array.isArray(claudeRequest.tools)) {
+            const toolNames = claudeRequest.tools.map(t => t.name).filter(Boolean);
+            shortMap = this._buildShortNameMap(toolNames);
+
+            codexRequest.tools = claudeRequest.tools.map(tool => {
+                // 特殊处理：将 Claude Web Search 工具映射到 Codex web_search
+                if (tool.type === "web_search_20250305") {
+                    return { type: "web_search" };
+                }
+
+                let name = tool.name;
+                if (shortMap[name]) {
+                    name = shortMap[name];
+                } else {
+                    name = this._shortenNameIfNeeded(name);
+                }
+
+                const convertedTool = {
+                    type: 'function',
+                    name: name,
+                    description: tool.description || '',
+                    parameters: this._normalizeToolParameters(tool.input_schema),
+                    strict: false
+                };
+                
+                // 移除 parameters.$schema
+                if (convertedTool.parameters && convertedTool.parameters.$schema) {
+                    delete convertedTool.parameters.$schema;
+                }
+
+                return convertedTool;
+            });
+            codexRequest.tool_choice = "auto";
+        }
+
+        // 处理消息
+        if (claudeRequest.messages && Array.isArray(claudeRequest.messages)) {
+            for (const msg of claudeRequest.messages) {
+                const role = msg.role;
+                const content = msg.content;
+
+                let currentMessage = {
+                    type: 'message',
+                    role: role,
+                    content: []
+                };
+
+                const flushMessage = () => {
+                    if (currentMessage.content.length > 0) {
+                        codexRequest.input.push({ ...currentMessage });
+                        currentMessage.content = [];
+                    }
+                };
+
+                const appendTextContent = (text) => {
+                    const partType = role === 'assistant' ? 'output_text' : 'input_text';
+                    currentMessage.content.push({
+                        type: partType,
+                        text: text
+                    });
+                };
+
+                const appendImageContent = (data, mediaType) => {
+                    currentMessage.content.push({
+                        type: 'input_image',
+                        image_url: `data:${mediaType};base64,${data}`
+                    });
+                };
+
+                if (Array.isArray(content)) {
+                    for (const block of content) {
+                        switch (block.type) {
+                            case 'text':
+                                appendTextContent(block.text);
+                                break;
+                            case 'image':
+                                if (block.source) {
+                                    const data = block.source.data || block.source.base64 || '';
+                                    const mediaType = block.source.media_type || block.source.mime_type || 'application/octet-stream';
+                                    if (data) {
+                                        appendImageContent(data, mediaType);
+                                    }
+                                }
+                                break;
+                            case 'tool_use':
+                                flushMessage();
+                                let toolName = block.name;
+                                if (shortMap[toolName]) {
+                                    toolName = shortMap[toolName];
+                                } else {
+                                    toolName = this._shortenNameIfNeeded(toolName);
+                                }
+                                codexRequest.input.push({
+                                    type: 'function_call',
+                                    call_id: block.id,
+                                    name: toolName,
+                                    arguments: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {})
+                                });
+                                break;
+                            case 'tool_result':
+                                flushMessage();
+                                codexRequest.input.push({
+                                    type: 'function_call_output',
+                                    call_id: block.tool_use_id,
+                                    output: typeof block.content === 'string' ? block.content : JSON.stringify(block.content || "")
+                                });
+                                break;
+                        }
+                    }
+                } else if (typeof content === 'string') {
+                    appendTextContent(content);
+                }
+                flushMessage();
+            }
+        }
+
+        // 处理 thinking 转换
+        if (claudeRequest.thinking && claudeRequest.thinking.type === "enabled") {
+            const budgetTokens = claudeRequest.thinking.budget_tokens;
+            codexRequest.reasoning.effort = determineReasoningEffortFromBudget(budgetTokens);
+        } else if (claudeRequest.thinking && claudeRequest.thinking.type === "disabled") {
+             codexRequest.reasoning.effort = determineReasoningEffortFromBudget(0);
+        }
+
+        // 注入 Codex 指令 (对应 末尾的特殊逻辑)
+        // 注意：这里需要检查是否需要注入 "EXECUTE ACCORDING TO THE FOLLOWING INSTRUCTIONS!!!"
+        // 通过 misc.GetCodexInstructionsEnabled() 判断，这里我们参考其逻辑
+        const shouldInjectInstructions = process.env.CODEX_INSTRUCTIONS_ENABLED === 'true'; // 假设环境变量控制
+        if (shouldInjectInstructions && codexRequest.input.length > 0) {
+            const firstInput = codexRequest.input[0];
+            const firstText = firstInput.content && firstInput.content[0] && firstInput.content[0].text;
+            const instructions = "EXECUTE ACCORDING TO THE FOLLOWING INSTRUCTIONS!!!";
+            if (firstText !== instructions) {
+                codexRequest.input.unshift({
+                    type: 'message',
+                    role: 'user',
+                    content: [{
+                        type: 'input_text',
+                        text: instructions
+                    }]
+                });
+            }
+        }
+
+        return codexRequest;
+    }
+
+    /**
+     * Claude响应 -> Codex响应 (实际上是 Codex 转 Claude)
+     */
+    toCodexResponse(codexResponse, model) {
+        const content = [];
+        let stopReason = "end_turn";
+
+        if (codexResponse.response?.output) {
+            codexResponse.response.output.forEach(item => {
+                if (item.type === 'message' && item.content) {
+                    const textPart = item.content.find(c => c.type === 'output_text');
+                    if (textPart) content.push({ type: 'text', text: textPart.text });
+                } else if (item.type === 'reasoning' && item.summary) {
+                    const textPart = item.summary.find(c => c.type === 'summary_text');
+                    if (textPart) content.push({ type: 'thinking', thinking: textPart.text });
+                } else if (item.type === 'function_call') {
+                    stopReason = "tool_use";
+                    content.push({
+                        type: 'tool_use',
+                        id: item.call_id,
+                        name: item.name,
+                        input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                    });
+                }
+            });
+        }
+
+        return {
+            id: codexResponse.response?.id || `msg_${uuidv4().replace(/-/g, '')}`,
+            type: "message",
+            role: "assistant",
+            model: model,
+            content: content,
+            stop_reason: stopReason,
+            usage: {
+                input_tokens: codexResponse.response?.usage?.input_tokens || 0,
+                output_tokens: codexResponse.response?.usage?.output_tokens || 0
+            }
+        };
+    }
+
+    /**
+     * Claude流式响应 -> Codex流式响应 (实际上是 Codex 转 Claude)
+     */
+    toCodexStreamChunk(codexChunk, model) {
+        const type = codexChunk.type;
+        const resId = codexChunk.response?.id || 'default';
+        
+        if (type === 'response.created') {
+            return {
+                type: "message_start",
+                message: {
+                    id: codexChunk.response.id,
+                    type: "message",
+                    role: "assistant",
+                    model: model,
+                    usage: { input_tokens: 0, output_tokens: 0 }
+                }
+            };
+        }
+
+        if (type === 'response.reasoning_summary_text.delta') {
+            return {
+                type: "content_block_delta",
+                index: 0,
+                delta: { type: "thinking_delta", thinking: codexChunk.delta }
+            };
+        }
+
+        if (type === 'response.output_text.delta') {
+            return {
+                type: "content_block_delta",
+                index: 0,
+                delta: { type: "text_delta", text: codexChunk.delta }
+            };
+        }
+
+        if (type === 'response.output_item.done' && codexChunk.item?.type === 'function_call') {
+            return [
+                {
+                    type: "content_block_start",
+                    index: 0,
+                    content_block: {
+                        type: "tool_use",
+                        id: codexChunk.item.call_id,
+                        name: codexChunk.item.name,
+                        input: {}
+                    }
+                },
+                {
+                    type: "content_block_delta",
+                    index: 0,
+                    delta: {
+                        type: "input_json_delta",
+                        partial_json: typeof codexChunk.item.arguments === 'string' ? codexChunk.item.arguments : JSON.stringify(codexChunk.item.arguments)
+                    }
+                },
+                {
+                    type: "content_block_stop",
+                    index: 0
+                }
+            ];
+        }
+
+        if (type === 'response.completed') {
+            return [
+                {
+                    type: "message_delta",
+                    delta: { stop_reason: "end_turn" },
+                    usage: {
+                        input_tokens: codexChunk.response.usage?.input_tokens || 0,
+                        output_tokens: codexChunk.response.usage?.output_tokens || 0
+                    }
+                },
+                { type: "message_stop" }
+            ];
+        }
+
+        return null;
     }
 }
 

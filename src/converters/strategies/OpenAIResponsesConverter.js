@@ -3,6 +3,7 @@
  * 处理 OpenAI Responses API 格式与其他协议之间的转换
  */
 
+import { v4 as uuidv4 } from 'uuid';
 import { BaseConverter } from '../BaseConverter.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
@@ -12,6 +13,16 @@ import {
     GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
     GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
 } from '../utils.js';
+import {
+    generateResponseCreated,
+    generateResponseInProgress,
+    generateOutputItemAdded,
+    generateContentPartAdded,
+    generateOutputTextDone,
+    generateContentPartDone,
+    generateOutputItemDone,
+    generateResponseCompleted
+} from '../../providers/openai/openai-responses-core.mjs';
 
 /**
  * OpenAI Responses API 转换器类
@@ -37,6 +48,8 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 return this.toClaudeRequest(data);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiRequest(data);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${toProtocol}`);
         }
@@ -53,6 +66,8 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 return this.toClaudeResponse(data, model);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiResponse(data, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexResponse(data, model);
             default:
                 throw new Error(`Unsupported target protocol: ${toProtocol}`);
         }
@@ -69,6 +84,8 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 return this.toClaudeStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiStreamChunk(chunk, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return this.toCodexStreamChunk(chunk, model);
             default:
                 throw new Error(`Unsupported target protocol: ${toProtocol}`);
         }
@@ -104,6 +121,22 @@ export class OpenAIResponsesConverter extends BaseConverter {
             stream: responsesRequest.stream || false
         };
 
+        // 复制其他参数
+        if (responsesRequest.temperature !== undefined) {
+            openaiRequest.temperature = responsesRequest.temperature;
+        }
+        if (responsesRequest.max_output_tokens !== undefined) {
+            openaiRequest.max_tokens = responsesRequest.max_output_tokens;
+        } else if (responsesRequest.max_tokens !== undefined) {
+            openaiRequest.max_tokens = responsesRequest.max_tokens;
+        }
+        if (responsesRequest.top_p !== undefined) {
+            openaiRequest.top_p = responsesRequest.top_p;
+        }
+        if (responsesRequest.parallel_tool_calls !== undefined) {
+            openaiRequest.parallel_tool_calls = responsesRequest.parallel_tool_calls;
+        }
+
         // OpenAI Responses API 使用 instructions 和 input 字段
         // 需要转换为标准的 messages 格式
         if (responsesRequest.instructions) {
@@ -117,19 +150,50 @@ export class OpenAIResponsesConverter extends BaseConverter {
         // input 包含用户消息和历史对话
         if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
             responsesRequest.input.forEach(item => {
-                if (item.type === 'message') {
-                    // 提取消息内容
-                    const content = item.content
-                        .filter(c => c.type === 'input_text')
-                        .map(c => c.text)
-                        .join('\n');
+                const itemType = item.type || (item.role ? 'message' : '');
+                
+                switch (itemType) {
+                    case 'message':
+                        // 提取消息内容
+                        let content = '';
+                        if (Array.isArray(item.content)) {
+                            content = item.content
+                                .filter(c => c.type === 'input_text' || c.type === 'output_text')
+                                .map(c => c.text)
+                                .join('\n');
+                        } else if (typeof item.content === 'string') {
+                            content = item.content;
+                        }
+                        
+                        if (content || item.role === 'assistant') {
+                            openaiRequest.messages.push({
+                                role: item.role,
+                                content: content
+                            });
+                        }
+                        break;
                     
-                    if (content) {
+                    case 'function_call':
                         openaiRequest.messages.push({
-                            role: item.role,
-                            content: content
+                            role: 'assistant',
+                            tool_calls: [{
+                                id: item.call_id,
+                                type: 'function',
+                                function: {
+                                    name: item.name,
+                                    arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments)
+                                }
+                            }]
                         });
-                    }
+                        break;
+                    
+                    case 'function_call_output':
+                        openaiRequest.messages.push({
+                            role: 'tool',
+                            tool_call_id: item.call_id,
+                            content: item.output
+                        });
+                        break;
                 }
             });
         }
@@ -144,15 +208,25 @@ export class OpenAIResponsesConverter extends BaseConverter {
             });
         }
 
-        // 复制其他参数
-        if (responsesRequest.temperature !== undefined) {
-            openaiRequest.temperature = responsesRequest.temperature;
+        // 处理工具
+        if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
+            openaiRequest.tools = responsesRequest.tools.map(tool => {
+                if (tool.type && tool.type !== 'function') {
+                    return tool;
+                }
+                return {
+                    type: 'function',
+                    function: {
+                        name: tool.name,
+                        description: tool.description,
+                        parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+                    }
+                };
+            });
         }
-        if (responsesRequest.max_tokens !== undefined) {
-            openaiRequest.max_tokens = responsesRequest.max_tokens;
-        }
-        if (responsesRequest.top_p !== undefined) {
-            openaiRequest.top_p = responsesRequest.top_p;
+
+        if (responsesRequest.tool_choice) {
+            openaiRequest.tool_choice = responsesRequest.tool_choice;
         }
 
         return openaiRequest;
@@ -162,21 +236,53 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 响应转换为标准 OpenAI 响应
      */
     toOpenAIResponse(responsesResponse, model) {
-        // OpenAI Responses 格式已经很接近标准 OpenAI 格式
-        return {
-            id: responsesResponse.id || `chatcmpl-${Date.now()}`,
-            object: 'chat.completion',
-            created: responsesResponse.created || Math.floor(Date.now() / 1000),
-            model: model || responsesResponse.model,
-            choices: responsesResponse.choices || [{
-                index: 0,
-                message: {
-                    role: 'assistant',
-                    content: responsesResponse.content || ''
-                },
-                finish_reason: responsesResponse.finish_reason || 'stop'
-            }],
-            usage: responsesResponse.usage ? {
+        const choices = [];
+        let usage = {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+            prompt_tokens_details: { cached_tokens: 0 },
+            completion_tokens_details: { reasoning_tokens: 0 }
+        };
+
+        if (responsesResponse.output && Array.isArray(responsesResponse.output)) {
+            responsesResponse.output.forEach((item, index) => {
+                if (item.type === 'message') {
+                    const content = item.content
+                        ?.filter(c => c.type === 'output_text')
+                        .map(c => c.text)
+                        .join('') || '';
+                    
+                    choices.push({
+                        index: index,
+                        message: {
+                            role: 'assistant',
+                            content: content
+                        },
+                        finish_reason: responsesResponse.status === 'completed' ? 'stop' : null
+                    });
+                } else if (item.type === 'function_call') {
+                    choices.push({
+                        index: index,
+                        message: {
+                            role: 'assistant',
+                            tool_calls: [{
+                                id: item.call_id,
+                                type: 'function',
+                                function: {
+                                    name: item.name,
+                                    arguments: item.arguments
+                                }
+                            }]
+                        },
+                        finish_reason: 'tool_calls'
+                    });
+                }
+            });
+        }
+
+        if (responsesResponse.usage) {
+            usage = {
                 prompt_tokens: responsesResponse.usage.input_tokens || 0,
                 completion_tokens: responsesResponse.usage.output_tokens || 0,
                 total_tokens: responsesResponse.usage.total_tokens || 0,
@@ -186,17 +292,23 @@ export class OpenAIResponsesConverter extends BaseConverter {
                 completion_tokens_details: {
                     reasoning_tokens: responsesResponse.usage.output_tokens_details?.reasoning_tokens || 0
                 }
-            } : {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                prompt_tokens_details: {
-                    cached_tokens: 0
+            };
+        }
+
+        return {
+            id: responsesResponse.id || `chatcmpl-${Date.now()}`,
+            object: 'chat.completion',
+            created: responsesResponse.created_at || Math.floor(Date.now() / 1000),
+            model: model || responsesResponse.model,
+            choices: choices.length > 0 ? choices : [{
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content: ''
                 },
-                completion_tokens_details: {
-                    reasoning_tokens: 0
-                }
-            }
+                finish_reason: 'stop'
+            }],
+            usage: usage
         };
     }
 
@@ -204,17 +316,44 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 流式块转换为标准 OpenAI 流式块
      */
     toOpenAIStreamChunk(responsesChunk, model) {
+        const resId = responsesChunk.response?.id || responsesChunk.id || `chatcmpl-${Date.now()}`;
+        const created = responsesChunk.response?.created_at || responsesChunk.created || Math.floor(Date.now() / 1000);
+        
+        const delta = {};
+        let finish_reason = null;
+
+        if (responsesChunk.type === 'response.output_text.delta') {
+            delta.content = responsesChunk.delta;
+        } else if (responsesChunk.type === 'response.function_call_arguments.delta') {
+            delta.tool_calls = [{
+                index: responsesChunk.output_index || 0,
+                function: {
+                    arguments: responsesChunk.delta
+                }
+            }];
+        } else if (responsesChunk.type === 'response.output_item.added' && responsesChunk.item?.type === 'function_call') {
+            delta.tool_calls = [{
+                index: responsesChunk.output_index || 0,
+                id: responsesChunk.item.call_id,
+                type: 'function',
+                function: {
+                    name: responsesChunk.item.name,
+                    arguments: ''
+                }
+            }];
+        } else if (responsesChunk.type === 'response.completed') {
+            finish_reason = 'stop';
+        }
+
         return {
-            id: responsesChunk.id || `chatcmpl-${Date.now()}`,
+            id: resId,
             object: 'chat.completion.chunk',
-            created: responsesChunk.created || Math.floor(Date.now() / 1000),
-            model: model || responsesChunk.model,
-            choices: responsesChunk.choices || [{
+            created: created,
+            model: model || responsesChunk.response?.model || responsesChunk.model,
+            choices: [{
                 index: 0,
-                delta: {
-                    content: responsesChunk.delta?.content || ''
-                },
-                finish_reason: responsesChunk.finish_reason || null
+                delta: delta,
+                finish_reason: finish_reason
             }]
         };
     }
@@ -230,7 +369,7 @@ export class OpenAIResponsesConverter extends BaseConverter {
         const claudeRequest = {
             model: responsesRequest.model,
             messages: [],
-            max_tokens: responsesRequest.max_tokens || CLAUDE_DEFAULT_MAX_TOKENS,
+            max_tokens: responsesRequest.max_output_tokens || responsesRequest.max_tokens || CLAUDE_DEFAULT_MAX_TOKENS,
             stream: responsesRequest.stream || false
         };
 
@@ -239,50 +378,102 @@ export class OpenAIResponsesConverter extends BaseConverter {
             claudeRequest.system = responsesRequest.instructions;
         }
 
+        // 处理 reasoning effort
+        if (responsesRequest.reasoning?.effort) {
+            claudeRequest.thinking = {
+                type: 'enabled',
+                budget_tokens: 1024 // 默认 budget
+            };
+        }
+
         // 处理 input 数组中的消息
         if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
             responsesRequest.input.forEach(item => {
-                if (item.type === 'message') {
-                    const content = item.content
-                        .filter(c => c.type === 'input_text')
-                        .map(c => c.text)
-                        .join('\n');
+                const itemType = item.type || (item.role ? 'message' : '');
+                
+                switch (itemType) {
+                    case 'message':
+                        const content = [];
+                        if (Array.isArray(item.content)) {
+                            item.content.forEach(c => {
+                                if (c.type === 'input_text' || c.type === 'output_text') {
+                                    content.push({ type: 'text', text: c.text });
+                                } else if (c.type === 'input_image') {
+                                    const url = c.image_url?.url || c.url;
+                                    if (url && url.startsWith('data:')) {
+                                        const [mediaInfo, data] = url.split(';base64,');
+                                        const mediaType = mediaInfo.replace('data:', '');
+                                        content.push({
+                                            type: 'image',
+                                            source: {
+                                                type: 'base64',
+                                                media_type: mediaType,
+                                                data: data
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        } else if (typeof item.content === 'string') {
+                            content.push({ type: 'text', text: item.content });
+                        }
+                        
+                        if (content.length > 0) {
+                            claudeRequest.messages.push({
+                                role: item.role === 'assistant' ? 'assistant' : 'user',
+                                content: content.length === 1 && content[0].type === 'text' ? content[0].text : content
+                            });
+                        }
+                        break;
                     
-                    if (content) {
+                    case 'function_call':
                         claudeRequest.messages.push({
-                            role: item.role === 'assistant' ? 'assistant' : 'user',
-                            content: content
+                            role: 'assistant',
+                            content: [{
+                                type: 'tool_use',
+                                id: item.call_id || `toolu_${uuidv4().replace(/-/g, '')}`,
+                                name: item.name,
+                                input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                            }]
                         });
-                    }
+                        break;
+                    
+                    case 'function_call_output':
+                        claudeRequest.messages.push({
+                            role: 'user',
+                            content: [{
+                                type: 'tool_result',
+                                tool_use_id: item.call_id,
+                                content: item.output
+                            }]
+                        });
+                        break;
                 }
             });
         }
 
-        // 如果有标准的 messages 字段，也支持
-        if (responsesRequest.messages && Array.isArray(responsesRequest.messages)) {
-            const { systemMessages, otherMessages } = extractSystemMessages(
-                responsesRequest.messages
-            );
-            
-            if (!claudeRequest.system && systemMessages.length > 0) {
-                const systemTexts = systemMessages.map(msg => extractText(msg.content));
-                claudeRequest.system = systemTexts.join('\n');
+        // 处理工具
+        if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
+            claudeRequest.tools = responsesRequest.tools.map(tool => ({
+                name: tool.name,
+                description: tool.description,
+                input_schema: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+            }));
+        }
+
+        if (responsesRequest.tool_choice) {
+            if (typeof responsesRequest.tool_choice === 'string') {
+                if (responsesRequest.tool_choice === 'auto') {
+                    claudeRequest.tool_choice = { type: 'auto' };
+                } else if (responsesRequest.tool_choice === 'required') {
+                    claudeRequest.tool_choice = { type: 'any' };
+                }
+            } else if (responsesRequest.tool_choice.type === 'function') {
+                claudeRequest.tool_choice = {
+                    type: 'tool',
+                    name: responsesRequest.tool_choice.function.name
+                };
             }
-
-            otherMessages.forEach(msg => {
-                claudeRequest.messages.push({
-                    role: msg.role === 'assistant' ? 'assistant' : 'user',
-                    content: typeof msg.content === 'string' ? msg.content : extractText(msg.content)
-                });
-            });
-        }
-
-        // 复制其他参数
-        if (responsesRequest.temperature !== undefined) {
-            claudeRequest.temperature = responsesRequest.temperature;
-        }
-        if (responsesRequest.top_p !== undefined) {
-            claudeRequest.top_p = responsesRequest.top_p;
         }
 
         return claudeRequest;
@@ -292,30 +483,42 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 响应转换为 Claude 响应
      */
     toClaudeResponse(responsesResponse, model) {
-        const content = responsesResponse.choices?.[0]?.message?.content || 
-                       responsesResponse.content || '';
+        const content = [];
+        let stop_reason = 'end_turn';
+
+        if (responsesResponse.output && Array.isArray(responsesResponse.output)) {
+            responsesResponse.output.forEach(item => {
+                if (item.type === 'message') {
+                    const text = item.content
+                        ?.filter(c => c.type === 'output_text')
+                        .map(c => c.text)
+                        .join('') || '';
+                    if (text) {
+                        content.push({ type: 'text', text: text });
+                    }
+                } else if (item.type === 'function_call') {
+                    content.push({
+                        type: 'tool_use',
+                        id: item.call_id,
+                        name: item.name,
+                        input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                    });
+                    stop_reason = 'tool_use';
+                }
+            });
+        }
 
         return {
             id: responsesResponse.id || `msg_${Date.now()}`,
             type: 'message',
             role: 'assistant',
-            content: [{
-                type: 'text',
-                text: content
-            }],
+            content: content,
             model: model || responsesResponse.model,
-            stop_reason: responsesResponse.choices?.[0]?.finish_reason || 'end_turn',
+            stop_reason: stop_reason,
             usage: {
-                input_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
-                cache_creation_input_tokens: 0,
-                cache_read_input_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
-                output_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
-                prompt_tokens: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
-                completion_tokens: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
-                total_tokens: responsesResponse.usage?.total_tokens ||
-                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
-                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
-                cached_tokens: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0
+                input_tokens: responsesResponse.usage?.input_tokens || 0,
+                output_tokens: responsesResponse.usage?.output_tokens || 0,
+                total_tokens: responsesResponse.usage?.total_tokens || 0
             }
         };
     }
@@ -324,37 +527,61 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 流式块转换为 Claude 流式块
      */
     toClaudeStreamChunk(responsesChunk, model) {
-        const delta = responsesChunk.choices?.[0]?.delta || responsesChunk.delta || {};
-        const finishReason = responsesChunk.choices?.[0]?.finish_reason || 
-                           responsesChunk.finish_reason;
-
-        if (finishReason) {
+        if (responsesChunk.type === 'response.created') {
             return {
-                type: 'message_stop'
+                type: 'message_start',
+                message: {
+                    id: responsesChunk.response.id,
+                    type: 'message',
+                    role: 'assistant',
+                    content: [],
+                    model: model || responsesChunk.response.model
+                }
             };
         }
 
-        if (delta.content) {
+        if (responsesChunk.type === 'response.output_text.delta') {
             return {
                 type: 'content_block_delta',
                 index: 0,
                 delta: {
                     type: 'text_delta',
-                    text: delta.content
+                    text: responsesChunk.delta
                 }
             };
         }
 
-        return {
-            type: 'message_start',
-            message: {
-                id: responsesChunk.id || `msg_${Date.now()}`,
-                type: 'message',
-                role: 'assistant',
-                content: [],
-                model: model || responsesChunk.model
-            }
-        };
+        if (responsesChunk.type === 'response.function_call_arguments.delta') {
+            return {
+                type: 'content_block_delta',
+                index: responsesChunk.output_index || 0,
+                delta: {
+                    type: 'input_json_delta',
+                    partial_json: responsesChunk.delta
+                }
+            };
+        }
+
+        if (responsesChunk.type === 'response.output_item.added' && responsesChunk.item?.type === 'function_call') {
+            return {
+                type: 'content_block_start',
+                index: responsesChunk.output_index || 0,
+                content_block: {
+                    type: 'tool_use',
+                    id: responsesChunk.item.call_id,
+                    name: responsesChunk.item.name,
+                    input: {}
+                }
+            };
+        }
+
+        if (responsesChunk.type === 'response.completed') {
+            return {
+                type: 'message_stop'
+            };
+        }
+
+        return null;
     }
 
     // =============================================================================
@@ -382,53 +609,65 @@ export class OpenAIResponsesConverter extends BaseConverter {
         // 处理 input 数组中的消息
         if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
             responsesRequest.input.forEach(item => {
-                // 如果 item 没有 type 属性，默认为 message
-                // 或者 item.type 明确为 message
-                if (!item.type || item.type === 'message') {
-                    let content = '';
-                    if (Array.isArray(item.content)) {
-                        content = item.content
-                            .filter(c => c.type === 'input_text')
-                            .map(c => c.text)
-                            .join('\n');
-                    } else if (typeof item.content === 'string') {
-                        content = item.content;
-                    }
+                const itemType = item.type || (item.role ? 'message' : '');
+                
+                switch (itemType) {
+                    case 'message':
+                        const parts = [];
+                        if (Array.isArray(item.content)) {
+                            item.content.forEach(c => {
+                                if (c.type === 'input_text' || c.type === 'output_text') {
+                                    parts.push({ text: c.text });
+                                } else if (c.type === 'input_image') {
+                                    const url = c.image_url?.url || c.url;
+                                    if (url && url.startsWith('data:')) {
+                                        const [mediaInfo, data] = url.split(';base64,');
+                                        const mimeType = mediaInfo.replace('data:', '');
+                                        parts.push({
+                                            inlineData: {
+                                                mimeType: mimeType,
+                                                data: data
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        } else if (typeof item.content === 'string') {
+                            parts.push({ text: item.content });
+                        }
+                        
+                        if (parts.length > 0) {
+                            geminiRequest.contents.push({
+                                role: item.role === 'assistant' ? 'model' : 'user',
+                                parts: parts
+                            });
+                        }
+                        break;
                     
-                    if (content) {
+                    case 'function_call':
                         geminiRequest.contents.push({
-                            role: item.role === 'assistant' ? 'model' : 'user',
+                            role: 'model',
                             parts: [{
-                                text: content
+                                functionCall: {
+                                    name: item.name,
+                                    args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                                }
                             }]
                         });
-                    }
+                        break;
+                    
+                    case 'function_call_output':
+                        geminiRequest.contents.push({
+                            role: 'user', // Gemini function response role is user or tool? usually user/model
+                            parts: [{
+                                functionResponse: {
+                                    name: item.name,
+                                    response: { content: item.output }
+                                }
+                            }]
+                        });
+                        break;
                 }
-            });
-        }
-
-        // 如果有标准的 messages 字段，也支持
-        if (responsesRequest.messages && Array.isArray(responsesRequest.messages)) {
-            const { systemMessages, otherMessages } = extractSystemMessages(
-                responsesRequest.messages
-            );
-
-            if (!geminiRequest.systemInstruction && systemMessages.length > 0) {
-                const systemTexts = systemMessages.map(msg => extractText(msg.content));
-                geminiRequest.systemInstruction = {
-                    parts: [{
-                        text: systemTexts.join('\n')
-                    }]
-                };
-            }
-
-            otherMessages.forEach(msg => {
-                geminiRequest.contents.push({
-                    role: msg.role === 'assistant' ? 'model' : 'user',
-                    parts: [{
-                        text: typeof msg.content === 'string' ? msg.content : extractText(msg.content)
-                    }]
-                });
             });
         }
 
@@ -436,11 +675,24 @@ export class OpenAIResponsesConverter extends BaseConverter {
         if (responsesRequest.temperature !== undefined) {
             geminiRequest.generationConfig.temperature = responsesRequest.temperature;
         }
-        if (responsesRequest.max_tokens !== undefined) {
+        if (responsesRequest.max_output_tokens !== undefined) {
+            geminiRequest.generationConfig.maxOutputTokens = responsesRequest.max_output_tokens;
+        } else if (responsesRequest.max_tokens !== undefined) {
             geminiRequest.generationConfig.maxOutputTokens = responsesRequest.max_tokens;
         }
         if (responsesRequest.top_p !== undefined) {
             geminiRequest.generationConfig.topP = responsesRequest.top_p;
+        }
+
+        // 处理工具
+        if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
+            geminiRequest.tools = [{
+                functionDeclarations: responsesRequest.tools.map(tool => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+                }))
+            }];
         }
 
         return geminiRequest;
@@ -450,38 +702,43 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 响应转换为 Gemini 响应
      */
     toGeminiResponse(responsesResponse, model) {
-        const content = responsesResponse.choices?.[0]?.message?.content || 
-                       responsesResponse.content || '';
+        const parts = [];
+        let finishReason = 'STOP';
+
+        if (responsesResponse.output && Array.isArray(responsesResponse.output)) {
+            responsesResponse.output.forEach(item => {
+                if (item.type === 'message') {
+                    const text = item.content
+                        ?.filter(c => c.type === 'output_text')
+                        .map(c => c.text)
+                        .join('') || '';
+                    if (text) {
+                        parts.push({ text: text });
+                    }
+                } else if (item.type === 'function_call') {
+                    parts.push({
+                        functionCall: {
+                            name: item.name,
+                            args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                        }
+                    });
+                }
+            });
+        }
 
         return {
             candidates: [{
                 content: {
-                    parts: [{
-                        text: content
-                    }],
+                    parts: parts,
                     role: 'model'
                 },
-                finishReason: this.mapFinishReason(
-                    responsesResponse.choices?.[0]?.finish_reason || 'STOP'
-                ),
+                finishReason: finishReason,
                 index: 0
             }],
             usageMetadata: {
-                promptTokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0,
-                candidatesTokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0,
-                totalTokenCount: responsesResponse.usage?.total_tokens ||
-                    ((responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0) +
-                     (responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0)),
-                cachedContentTokenCount: responsesResponse.usage?.input_tokens_details?.cached_tokens || 0,
-                promptTokensDetails: [{
-                    modality: "TEXT",
-                    tokenCount: responsesResponse.usage?.input_tokens || responsesResponse.usage?.prompt_tokens || 0
-                }],
-                candidatesTokensDetails: [{
-                    modality: "TEXT",
-                    tokenCount: responsesResponse.usage?.output_tokens || responsesResponse.usage?.completion_tokens || 0
-                }],
-                thoughtsTokenCount: responsesResponse.usage?.output_tokens_details?.reasoning_tokens || 0
+                promptTokenCount: responsesResponse.usage?.input_tokens || 0,
+                candidatesTokenCount: responsesResponse.usage?.output_tokens || 0,
+                totalTokenCount: responsesResponse.usage?.total_tokens || 0
             }
         };
     }
@@ -490,22 +747,37 @@ export class OpenAIResponsesConverter extends BaseConverter {
      * 将 OpenAI Responses 流式块转换为 Gemini 流式块
      */
     toGeminiStreamChunk(responsesChunk, model) {
-        const delta = responsesChunk.choices?.[0]?.delta || responsesChunk.delta || {};
-        const finishReason = responsesChunk.choices?.[0]?.finish_reason || 
-                           responsesChunk.finish_reason;
+        if (responsesChunk.type === 'response.output_text.delta') {
+            return {
+                candidates: [{
+                    content: {
+                        parts: [{ text: responsesChunk.delta }],
+                        role: 'model'
+                    },
+                    index: 0
+                }]
+            };
+        }
 
-        return {
-            candidates: [{
-                content: {
-                    parts: delta.content ? [{
-                        text: delta.content
-                    }] : [],
-                    role: 'model'
-                },
-                finishReason: finishReason ? this.mapFinishReason(finishReason) : null,
-                index: 0
-            }]
-        };
+        if (responsesChunk.type === 'response.function_call_arguments.delta') {
+            // Gemini 不太支持流式 functionCall 参数，这里只能简单映射
+            return {
+                candidates: [{
+                    content: {
+                        parts: [{ 
+                            functionCall: { 
+                                name: '', // 无法在 delta 中获取名称
+                                args: responsesChunk.delta 
+                            } 
+                        }],
+                        role: 'model'
+                    },
+                    index: 0
+                }]
+            };
+        }
+
+        return null;
     }
 
     // =============================================================================
@@ -578,5 +850,218 @@ export class OpenAIResponsesConverter extends BaseConverter {
         };
     }
 
-}
+    // =============================================================================
+    // 转换到 Codex 格式
+    // =============================================================================
 
+    /**
+     * OpenAI Responses → Codex 请求转换
+     */
+    toCodexRequest(responsesRequest) {
+        const codexRequest = {
+            model: responsesRequest.model,
+            instructions: responsesRequest.instructions || '',
+            input: [],
+            stream: responsesRequest.stream || false,
+            store: false,
+            reasoning: {
+                effort: responsesRequest.reasoning?.effort || 'medium',
+                summary: 'auto'
+            },
+            parallel_tool_calls: responsesRequest.parallel_tool_calls ?? true,
+            include: ['reasoning.encrypted_content']
+        };
+
+        // 处理 input
+        if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
+            for (const item of responsesRequest.input) {
+                const itemType = item.type || (item.role ? 'message' : '');
+                
+                if (itemType === 'message') {
+                    const content = [];
+                    if (Array.isArray(item.content)) {
+                        item.content.forEach(c => {
+                            content.push({
+                                type: item.role === 'assistant' ? 'output_text' : 'input_text',
+                                text: c.text
+                            });
+                        });
+                    } else if (typeof item.content === 'string') {
+                        content.push({
+                            type: item.role === 'assistant' ? 'output_text' : 'input_text',
+                            text: item.content
+                        });
+                    }
+
+                    codexRequest.input.push({
+                        type: 'message',
+                        role: item.role === 'system' ? 'developer' : item.role,
+                        content: content
+                    });
+                } else if (itemType === 'function_call') {
+                    codexRequest.input.push({
+                        type: 'function_call',
+                        call_id: item.call_id,
+                        name: item.name,
+                        arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments)
+                    });
+                } else if (itemType === 'function_call_output') {
+                    codexRequest.input.push({
+                        type: 'function_call_output',
+                        call_id: item.call_id,
+                        output: item.output
+                    });
+                }
+            }
+        }
+
+        // 处理工具
+        if (responsesRequest.tools) {
+            codexRequest.tools = responsesRequest.tools.map(tool => ({
+                type: 'function',
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+            }));
+        }
+
+        return codexRequest;
+    }
+
+    /**
+     * OpenAI Responses → Codex 响应转换 (实际上是 Codex 转 OpenAI Responses)
+     */
+    toCodexResponse(codexResponse, model) {
+        const output = [];
+        const responseData = codexResponse.response || codexResponse;
+
+        if (responseData.output && Array.isArray(responseData.output)) {
+            responseData.output.forEach(item => {
+                if (item.type === 'message' && item.content) {
+                    const content = item.content.map(c => ({
+                        type: c.type === 'output_text' ? 'output_text' : 'input_text',
+                        text: c.text,
+                        annotations: []
+                    }));
+                    output.push({
+                        id: item.id || `msg_${uuidv4().replace(/-/g, '')}`,
+                        type: "message",
+                        role: item.role || "assistant",
+                        status: item.status || "completed",
+                        content: content
+                    });
+                } else if (item.type === 'reasoning') {
+                    output.push({
+                        id: item.id || `rs_${uuidv4().replace(/-/g, '')}`,
+                        type: "reasoning",
+                        status: item.status || "completed",
+                        summary: item.summary || []
+                    });
+                } else if (item.type === 'function_call') {
+                    output.push({
+                        id: item.id || `fc_${uuidv4().replace(/-/g, '')}`,
+                        call_id: item.call_id,
+                        type: "function_call",
+                        name: item.name,
+                        arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments),
+                        status: item.status || "completed"
+                    });
+                }
+            });
+        }
+
+        return {
+            id: responseData.id || `resp_${uuidv4().replace(/-/g, '')}`,
+            object: "response",
+            created_at: responseData.created_at || Math.floor(Date.now() / 1000),
+            model: model || responseData.model,
+            status: responseData.status || "completed",
+            output: output,
+            usage: {
+                input_tokens: responseData.usage?.input_tokens || 0,
+                output_tokens: responseData.usage?.output_tokens || 0,
+                total_tokens: responseData.usage?.total_tokens || 0
+            }
+        };
+    }
+
+    /**
+     * OpenAI Responses → Codex 流式响应转换 (实际上是 Codex 转 OpenAI Responses)
+     */
+    toCodexStreamChunk(codexChunk, model) {
+        const type = codexChunk.type;
+        const resId = codexChunk.response?.id || 'default';
+        const events = [];
+
+        if (type === 'response.created') {
+            events.push(
+                generateResponseCreated(resId, model || codexChunk.response?.model),
+                generateResponseInProgress(resId)
+            );
+            return events;
+        }
+
+        if (type === 'response.reasoning_summary_text.delta') {
+            events.push({
+                type: "response.reasoning_summary_text.delta",
+                response_id: resId,
+                item_id: codexChunk.item_id,
+                output_index: codexChunk.output_index,
+                summary_index: codexChunk.summary_index,
+                delta: codexChunk.delta
+            });
+            return events;
+        }
+
+        if (type === 'response.output_text.delta') {
+            events.push({
+                type: "response.output_text.delta",
+                response_id: resId,
+                item_id: codexChunk.item_id,
+                output_index: codexChunk.output_index,
+                content_index: codexChunk.content_index,
+                delta: codexChunk.delta
+            });
+            return events;
+        }
+
+        if (type === 'response.function_call_arguments.delta') {
+            events.push({
+                type: "response.function_call_arguments.delta",
+                response_id: resId,
+                item_id: codexChunk.item_id,
+                output_index: codexChunk.output_index,
+                delta: codexChunk.delta
+            });
+            return events;
+        }
+
+        if (type === 'response.output_item.added') {
+            events.push({
+                type: "response.output_item.added",
+                response_id: resId,
+                output_index: codexChunk.output_index,
+                item: codexChunk.item
+            });
+            return events;
+        }
+
+        if (type === 'response.completed') {
+            const completedEvent = generateResponseCompleted(resId);
+            completedEvent.response = {
+                ...completedEvent.response,
+                ...codexChunk.response
+            };
+            events.push(completedEvent);
+            return events;
+        }
+
+        // 透传其他 response.* 事件
+        if (type && type.startsWith('response.')) {
+            return [codexChunk];
+        }
+
+        return null;
+    }
+
+}

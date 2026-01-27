@@ -1,7 +1,7 @@
 import { CONFIG } from '../core/config-manager.js';
 import logger from '../utils/logger.js';
 import { serviceInstances, getServiceAdapter } from '../providers/adapter.js';
-import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage } from '../services/usage-service.js';
+import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage, formatCodexUsage } from '../services/usage-service.js';
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
 import path from 'path';
 
@@ -18,7 +18,7 @@ async function getAllProvidersUsage(currentConfig, providerPoolManager) {
     };
 
     // 支持用量查询的提供商列表
-    const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity'];
+    const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
 
     // 并发获取所有提供商的用量数据
     const usagePromises = supportedProviders.map(async (providerType) => {
@@ -169,6 +169,17 @@ async function getAdapterUsage(adapter, providerType) {
         }
         throw new Error('This adapter does not support usage query');
     }
+
+    if (providerType === 'openai-codex-oauth') {
+        if (typeof adapter.getUsageLimits === 'function') {
+            const rawUsage = await adapter.getUsageLimits();
+            return formatCodexUsage(rawUsage);
+        } else if (adapter.codexApiService && typeof adapter.codexApiService.getUsageLimits === 'function') {
+            const rawUsage = await adapter.codexApiService.getUsageLimits();
+            return formatCodexUsage(rawUsage);
+        }
+        throw new Error('This adapter does not support usage query');
+    }
     
     throw new Error(`Unsupported provider type: ${providerType}`);
 }
@@ -194,6 +205,7 @@ function getProviderDisplayName(provider, providerType) {
         'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
         'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
         'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
+        'openai-codex-oauth': 'CODEX_OAUTH_CREDS_FILE_PATH',
         'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
         'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
     }[providerType];
@@ -206,6 +218,27 @@ function getProviderDisplayName(provider, providerType) {
     }
 
     return 'Unnamed';
+}
+
+/**
+ * 获取支持用量查询的提供商列表
+ */
+export async function handleGetSupportedProviders(req, res) {
+    try {
+        const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(supportedProviders));
+        return true;
+    } catch (error) {
+        logger.error('[Usage API] Failed to get supported providers:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            error: {
+                message: 'Failed to get supported providers: ' + error.message
+            }
+        }));
+        return true;
+    }
 }
 
 /**

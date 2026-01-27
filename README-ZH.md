@@ -34,6 +34,7 @@
 > <details>
 > <summary>点击展开查看详细版本历史</summary>
 >
+> - **2026.01.26** - 新增 Codex 协议支持：支持 OpenAI Codex OAuth 授权接入
 > - **2026.01.25** - 增强 AI 监控插件：支持监控 AI 协议转换前后的请求参数和响应。优化日志管理：统一日志格式，可视化配置
 > - **2026.01.15** - 优化提供商池管理器：新增异步刷新队列机制、缓冲队列去重、全局并发控制，支持节点预热和自动过期检测
 > - **2026.01.07** - 新增 iFlow 协议支持，通过 OAuth 认证方式访问 Qwen、Kimi、DeepSeek 和 GLM 系列模型，支持自动 token 刷新功能
@@ -108,12 +109,12 @@
 #### 🐳 Docker 快捷启动 (推荐)
 
 ```bash
-docker run -d -p 3000:3000 -p 8085-8087:8085-8087 -p 19876-19880:19876-19880 --restart=always -v "指定路径:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+docker run -d -p 3000:3000 -p 8085-8087:8085-8087 -p 1455:1455 -p 19876-19880:19876-19880 --restart=always -v "指定路径:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
 ```
 
 **参数说明**：
 - `-d`：后台运行容器
-- `-p 3000:3000 ...`：端口映射。3000 为 Web UI，其余为 OAuth 回调端口（Gemini: 8085, Antigravity: 8086, Kiro: 19876-19880）
+- `-p 3000:3000 ...`：端口映射。3000 为 Web UI，其余为 OAuth 回调端口（Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880）
 - `--restart=always`：容器自动重启策略
 - `-v "指定路径:/app/configs"`：挂载配置目录（请将"指定路径"替换为实际路径，如 `/home/user/aiclient-configs`）
 - `--name aiclient2api`：容器名称
@@ -255,6 +256,12 @@ docker compose up -d
 4. **支持模型**：Qwen3 系列、Kimi K2、DeepSeek V3/R1、GLM-4.6/4.7 等
 5. **自动刷新**：系统会在 Token 即将过期时自动刷新，无需手动干预
 
+#### Codex OAuth 配置
+1. **生成授权**：在 Web UI 的"提供商池"或"配置管理"页面，点击 Codex 的"生成授权"按钮
+2. **浏览器登录**：系统将打开 OpenAI Codex 授权页面，完成 OAuth 登录
+3. **自动保存**：授权成功后，系统会自动保存 Codex 的 OAuth 凭据文件
+4. **回调端口**：确保 OAuth 回调端口 `1455` 未被占用
+
 #### 账号池管理配置
 1. **创建号池配置文件**：参考 [provider_pools.json.example](./configs/provider_pools.json.example) 创建配置文件
 2. **配置号池参数**：在 `configs/config.json` 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
@@ -277,6 +284,7 @@ docker compose up -d
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth 凭据 |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth 凭据 (支持 Claude 4.5 Opus) |
 | **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth 凭据 (支持 Qwen、Kimi、DeepSeek、GLM) |
+| **Codex** | `~/.codex/oauth_creds.json` | Codex OAuth 凭据 |
 
 > **说明**：`~` 表示用户主目录（Windows: `C:\Users\用户名`，Linux/macOS: `/home/用户名` 或 `/Users/用户名`）
 
@@ -454,7 +462,7 @@ curl http://localhost:3000/ollama/api/chat \
 
 **解决方案**：
 - **检查网络连接**：确保能够正常访问 Google、阿里云等服务
-- **检查端口占用**：OAuth 回调需要特定端口（Gemini: 8085, Antigravity: 8086, Kiro: 19876-19880），确保这些端口未被占用
+- **检查端口占用**：OAuth 回调需要特定端口（Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880），确保这些端口未被占用
 - **清除浏览器缓存**：尝试使用无痕模式或清除浏览器缓存后重试
 - **检查防火墙设置**：确保防火墙允许本地回调端口的访问
 - **Docker 用户**：确保已正确映射所有 OAuth 回调端口
