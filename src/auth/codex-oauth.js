@@ -24,6 +24,41 @@ const CODEX_OAUTH_CONFIG = {
 };
 
 /**
+ * 活动的服务器实例管理（与 gemini-oauth 一致）
+ */
+const activeServers = new Map();
+
+/**
+ * 关闭指定端口的活动服务器
+ */
+async function closeActiveServer(provider, port = null) {
+    const existing = activeServers.get(provider);
+    if (existing) {
+        await new Promise((resolve) => {
+            existing.server.close(() => {
+                activeServers.delete(provider);
+                logger.info(`[Codex Auth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+                resolve();
+            });
+        });
+    }
+
+    if (port) {
+        for (const [p, info] of activeServers.entries()) {
+            if (info.port === port) {
+                await new Promise((resolve) => {
+                    info.server.close(() => {
+                        activeServers.delete(p);
+                        logger.info(`[Codex Auth] 已关闭端口 ${port} 上被占用（提供商: ${p}）的旧服务器`);
+                        resolve();
+                    });
+                });
+            }
+        }
+    }
+}
+
+/**
  * Codex OAuth 认证类
  * 实现 OAuth2 + PKCE 流程
  */
@@ -70,17 +105,6 @@ class CodexAuth {
         const state = crypto.randomBytes(16).toString('hex');
 
         logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Generating auth URL...`);
-
-        // 如果已有服务器在运行，先关闭
-        if (this.server) {
-            logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Closing existing callback server...`);
-            try {
-                this.server.close();
-                this.server = null;
-            } catch (error) {
-                logger.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Failed to close existing server:`, error.message);
-            }
-        }
 
         // 启动本地回调服务器
         const server = await this.startCallbackServer();
@@ -231,6 +255,9 @@ class CodexAuth {
      * @returns {Promise<http.Server>}
      */
     async startCallbackServer() {
+        // 先清理该提供商或该端口的旧服务器
+        await closeActiveServer('openai-codex-oauth', CODEX_OAUTH_CONFIG.port);
+
         return new Promise((resolve, reject) => {
             const server = http.createServer();
 
@@ -304,6 +331,7 @@ class CodexAuth {
 
             server.listen(CODEX_OAUTH_CONFIG.port, () => {
                 logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Callback server listening on port ${CODEX_OAUTH_CONFIG.port}`);
+                activeServers.set('openai-codex-oauth', { server, port: CODEX_OAUTH_CONFIG.port });
                 resolve(server);
             });
 
@@ -618,10 +646,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                     if (session.pollTimer) {
                         clearInterval(session.pollTimer);
                     }
-                    // 关闭服务器
-                    if (session.server) {
-                        session.server.close();
-                    }
+                    // 不在这里显式关闭 server，由 startCallbackServer 中的 closeActiveServer 处理
                     global.codexOAuthSessions.delete(sessionId);
                 } catch (error) {
                     logger.warn(`[Codex Auth] Failed to clean up session ${sessionId}:`, error.message);
@@ -643,7 +668,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
         
         // 轮询计数器
         let pollCount = 0;
-        const maxPollCount = 30; // 最多轮询次数（可随意更改）
+        const maxPollCount = 200; // 增加到约 10 分钟 (200 * 3s = 600s)
         const pollInterval = 3000; // 轮询间隔（毫秒）
         let pollTimer = null;
         let isCompleted = false;
@@ -672,12 +697,8 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 const totalSeconds = (maxPollCount * pollInterval) / 1000;
                 logger.info(`[Codex Auth] Polling timeout (${totalSeconds}s), releasing session for next authorization`);
                 
-                // 清理会话和服务器
+                // 清理会话
                 if (global.codexOAuthSessions.has(sessionId)) {
-                    const session = global.codexOAuthSessions.get(sessionId);
-                    if (session.server) {
-                        session.server.close();
-                    }
                     global.codexOAuthSessions.delete(sessionId);
                 }
             }
@@ -728,7 +749,8 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 // 广播认证失败事件
                 broadcastEvent('oauth_error', {
                     provider: 'openai-codex-oauth',
-                    error: error.message
+                    error: error.message,
+                    timestamp: new Date().toISOString()
                 });
             }
         });
@@ -745,7 +767,8 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
             
             broadcastEvent('oauth_error', {
                 provider: 'openai-codex-oauth',
-                error: error.message
+                error: error.message,
+                timestamp: new Date().toISOString()
             });
         });
 
@@ -838,10 +861,10 @@ export async function handleCodexOAuthCallback(code, state) {
         logger.error('[Codex Auth] OAuth callback failed:', error.message);
 
         // 广播认证失败事件
-        broadcastEvent({
-            type: 'oauth-error',
+        broadcastEvent('oauth_error', {
             provider: 'openai-codex-oauth',
-            error: error.message
+            error: error.message,
+            timestamp: new Date().toISOString()
         });
 
         return {
