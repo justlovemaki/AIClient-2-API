@@ -42,11 +42,19 @@ async function loadSupportedProviders() {
             const tag = document.createElement('span');
             tag.className = 'provider-tag';
             tag.textContent = getProviderDisplayName(provider);
+            tag.title = t('usage.doubleClickToRefresh') || '双击刷新该提供商用量';
+            tag.setAttribute('data-i18n-title', 'usage.doubleClickToRefresh');
+            
+            // 添加双击事件
+            tag.addEventListener('dblclick', () => {
+                refreshProviderUsage(provider);
+            });
+            
             listEl.appendChild(tag);
         });
     } catch (error) {
         console.error('获取支持的提供商列表失败:', error);
-        listEl.innerHTML = '<span class="error-text">Failed to load</span>';
+        listEl.innerHTML = `<span class="error-text" data-i18n="usage.failedToLoad">${t('usage.failedToLoad')}</span>`;
     }
 }
 
@@ -105,7 +113,7 @@ export async function loadUsage() {
             errorEl.style.display = 'block';
             const errorMsgEl = document.getElementById('usageErrorMessage');
             if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || t('usage.title') + '失败';
+                errorMsgEl.textContent = error.message || (t('usage.title') + t('common.refresh.failed'));
             }
         }
     }
@@ -164,7 +172,7 @@ export async function refreshUsage() {
             errorEl.style.display = 'block';
             const errorMsgEl = document.getElementById('usageErrorMessage');
             if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || t('usage.title') + '失败';
+                errorMsgEl.textContent = error.message || (t('usage.title') + t('common.refresh.failed'));
             }
         }
         
@@ -203,7 +211,7 @@ function renderUsageData(data, container) {
             const validInstances = [];
             for (const instance of providerData.instances) {
                 // 过滤掉服务实例未初始化的
-                if (instance.error === '服务实例未初始化') {
+                if (instance.error === '服务实例未初始化' || instance.error === 'Service instance not initialized') {
                     continue;
                 }
                 // 过滤掉已禁用的提供商
@@ -232,6 +240,51 @@ function renderUsageData(data, container) {
     for (const [providerType, instances] of Object.entries(groupedInstances)) {
         const groupContainer = createProviderGroup(providerType, instances);
         container.appendChild(groupContainer);
+    }
+}
+
+/**
+ * 刷新特定提供商类型的用量数据
+ * @param {string} providerType - 提供商类型
+ */
+export async function refreshProviderUsage(providerType) {
+    const loadingEl = document.getElementById('usageLoading');
+    const refreshBtn = document.getElementById('refreshUsageBtn');
+    const contentEl = document.getElementById('usageContent');
+
+    // 显示加载状态
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    try {
+        const providerName = getProviderDisplayName(providerType);
+        showToast(t('common.info'), t('usage.refreshingProvider', { name: providerName }), 'info');
+
+        // 调用按提供商刷新的 API
+        const response = await fetch(`/api/usage/${providerType}?refresh=true`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const providerData = await response.json();
+        
+        // 获取当前完整数据并更新其中一个提供商的数据
+        // 注意：这里为了保持页面一致性，我们重新获取一次完整数据（走缓存）来重新渲染
+        // 或者手动在当前 DOM 中更新该提供商的部分。
+        // 为了简单可靠，我们重新 loadUsage()，它会读取刚刚更新过的后端缓存
+        await loadUsage();
+
+        showToast(t('common.success'), t('common.refresh.success'), 'success');
+    } catch (error) {
+        console.error(`刷新提供商 ${providerType} 失败:`, error);
+        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (refreshBtn) refreshBtn.disabled = false;
     }
 }
 
@@ -349,6 +402,10 @@ function createInstanceUsageCard(instance, providerType) {
     
     // 显示名称：优先自定义名称，其次 uuid
     const displayName = instance.name || instance.uuid;
+
+    const displayUsageText = totalUsage.isCodex 
+        ? `${totalUsage.percent.toFixed(1)}%`
+        : `${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}`;
     
     collapsedSummary.innerHTML = `
         <div class="collapsed-summary-row collapsed-summary-name-row">
@@ -362,8 +419,8 @@ function createInstanceUsageCard(instance, providerType) {
                     <div class="progress-fill" style="width: ${totalUsage.percent}%"></div>
                 </div>
                 <span class="collapsed-percent">${totalUsage.percent.toFixed(1)}%</span>
-                <span class="collapsed-usage-text">${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}</span>
-            ` : (instance.error ? `<span class="collapsed-error">${t('common.error')}</span>` : '')}
+                <span class="collapsed-usage-text">${displayUsageText}</span>
+            ` : (instance.error ? `<span class="collapsed-error" data-i18n="common.error">${t('common.error')}</span>` : '')}
         </div>
     `;
     
@@ -459,18 +516,43 @@ function renderUsageDetails(usage) {
         
         const progressClass = totalUsage.percent >= 90 ? 'danger' : (totalUsage.percent >= 70 ? 'warning' : 'normal');
         
+        // 提取第一个有重置时间的条目（通常是总配额）
+        let resetTimeHTML = '';
+        if (totalUsage.isCodex && totalUsage.resetAfterSeconds !== undefined) {
+            const resetTimeText = formatTimeRemaining(totalUsage.resetAfterSeconds);
+            resetTimeHTML = `
+                <div class="total-reset-info" data-i18n="usage.resetInfo" data-i18n-params='{"time":"${resetTimeText}"}'>
+                    <i class="fas fa-history"></i> ${t('usage.resetInfo', { time: resetTimeText })}
+                </div>
+            `;
+        } else {
+            const resetTimeEntry = usage.usageBreakdown.find(b => b.resetTime && b.resetTime !== '--');
+            resetTimeHTML = resetTimeEntry ? `
+                <div class="total-reset-info" data-i18n="usage.card.resetAt" data-i18n-params='{"time":"${resetTimeEntry.resetTime}"}'>
+                    <i class="fas fa-history"></i> ${t('usage.card.resetAt', { time: resetTimeEntry.resetTime })}
+                </div>
+            ` : '';
+        }
+
+        const displayValue = totalUsage.isCodex 
+            ? `${totalUsage.percent.toFixed(1)}%`
+            : `${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}`;
+
         totalSection.innerHTML = `
             <div class="total-usage-header">
                 <span class="total-label">
                     <i class="fas fa-chart-pie"></i>
                     <span data-i18n="usage.card.totalUsage">${t('usage.card.totalUsage')}</span>
                 </span>
-                <span class="total-value">${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}</span>
+                <span class="total-value">${displayValue}</span>
             </div>
             <div class="progress-bar ${progressClass}">
                 <div class="progress-fill" style="width: ${totalUsage.percent}%"></div>
             </div>
-            <div class="total-percent">${totalUsage.percent.toFixed(2)}%</div>
+            <div class="total-footer">
+                <div class="total-percent">${totalUsage.percent.toFixed(2)}%</div>
+                ${resetTimeHTML}
+            </div>
         `;
         
         container.appendChild(totalSection);
@@ -522,6 +604,19 @@ function createUsageBreakdownHTML(breakdown) {
             </div>
     `;
 
+    // 如果有重置时间，则显示
+    if (breakdown.resetTime && breakdown.resetTime !== '--') {
+        const resetText = t('usage.card.resetAt', { time: breakdown.resetTime });
+        html += `
+            <div class="extra-usage-info reset-time">
+                <span class="extra-label">
+                    <i class="fas fa-history"></i> 
+                    <span data-i18n="usage.card.resetAt" data-i18n-params='${JSON.stringify({ time: breakdown.resetTime })}'>${resetText}</span>
+                </span>
+            </div>
+        `;
+    }
+
     // 免费试用信息
     if (breakdown.freeTrial && breakdown.freeTrial.status === 'ACTIVE') {
         html += `
@@ -559,52 +654,28 @@ function createUsageBreakdownHTML(breakdown) {
  */
 function createCodexUsageBreakdownHTML(breakdown) {
     const rl = breakdown.rateLimit;
-    const primary = rl.primary_window;
     const secondary = rl.secondary_window;
     
-    const primaryPercent = primary.used_percent || 0;
-    const primaryProgressClass = primaryPercent >= 90 ? 'danger' : (primaryPercent >= 70 ? 'warning' : 'normal');
-    
-    const primaryLimitHours = Math.round(primary.limit_window_seconds / 3600);
-    const primaryResetText = formatTimeRemaining(primary.reset_after_seconds);
+    if (!secondary) return '';
 
-    let html = `
+    const secondaryPercent = secondary.used_percent || 0;
+    const secondaryProgressClass = secondaryPercent >= 90 ? 'danger' : (secondaryPercent >= 70 ? 'warning' : 'normal');
+    const secondaryResetText = formatTimeRemaining(secondary.reset_after_seconds);
+
+    return `
         <div class="breakdown-item-compact codex-usage-item">
             <div class="breakdown-header-compact">
-                <span class="breakdown-name"><i class="fas fa-clock"></i> ${primaryLimitHours} 小时限制</span>
-                <span class="breakdown-usage">${primaryPercent}%</span>
+                <span class="breakdown-name" data-i18n="usage.weeklyLimit"><i class="fas fa-calendar-alt"></i> ${t('usage.weeklyLimit')}</span>
+                <span class="breakdown-usage">${secondaryPercent}%</span>
             </div>
-            <div class="progress-bar-small ${primaryProgressClass}">
-                <div class="progress-fill" style="width: ${primaryPercent}%"></div>
+            <div class="progress-bar-small ${secondaryProgressClass}">
+                <div class="progress-fill" style="width: ${secondaryPercent}%"></div>
             </div>
-            <div class="codex-reset-info">
-                <i class="fas fa-history"></i> 将在 ${primaryResetText} 后重置
+            <div class="codex-reset-info" data-i18n="usage.resetInfo" data-i18n-params='{"time":"${secondaryResetText}"}'>
+                <i class="fas fa-history"></i> ${t('usage.resetInfo', { time: secondaryResetText })}
             </div>
+        </div>
     `;
-
-    if (secondary) {
-        const secondaryPercent = secondary.used_percent || 0;
-        const secondaryProgressClass = secondaryPercent >= 90 ? 'danger' : (secondaryPercent >= 70 ? 'warning' : 'normal');
-        const secondaryResetText = formatTimeRemaining(secondary.reset_after_seconds);
-
-        html += `
-            <div class="codex-secondary-usage">
-                <div class="breakdown-header-compact">
-                    <span class="breakdown-name"><i class="fas fa-calendar-alt"></i> 每周限制</span>
-                    <span class="breakdown-usage">${secondaryPercent}%</span>
-                </div>
-                <div class="progress-bar-small ${secondaryProgressClass}">
-                    <div class="progress-fill" style="width: ${secondaryPercent}%"></div>
-                </div>
-                <div class="codex-reset-info">
-                    <i class="fas fa-history"></i> 将在 ${secondaryResetText} 后重置
-                </div>
-            </div>
-        `;
-    }
-
-    html += '</div>';
-    return html;
 }
 
 /**
@@ -613,15 +684,15 @@ function createCodexUsageBreakdownHTML(breakdown) {
  * @returns {string} 格式化后的时间
  */
 function formatTimeRemaining(seconds) {
-    if (seconds <= 0) return '即将';
+    if (seconds <= 0) return t('usage.time.soon');
     
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
 
-    if (days > 0) return `${days}天${hours}小时`;
-    if (hours > 0) return `${hours}小时${minutes}分`;
-    return `${minutes}分钟`;
+    if (days > 0) return t('usage.time.days', { days, hours });
+    if (hours > 0) return t('usage.time.hours', { hours, minutes });
+    return t('usage.time.minutes', { minutes });
 }
 
 /**
@@ -632,6 +703,30 @@ function formatTimeRemaining(seconds) {
 function calculateTotalUsage(usageBreakdown) {
     if (!usageBreakdown || usageBreakdown.length === 0) {
         return { hasData: false, used: 0, limit: 0, percent: 0 };
+    }
+
+    // 特殊处理 Codex
+    const codexEntry = usageBreakdown.find(b => b.rateLimit && b.rateLimit.secondary_window);
+    if (codexEntry) {
+        const secondary = codexEntry.rateLimit.secondary_window;
+        const secondaryPercent = secondary.used_percent || 0;
+        
+        // 只有当周限制达到 100% 时，总用量才显示 100%
+        // 否则按正常逻辑计算（或者这里可以理解为非 100% 时不改变原有的总用量逻辑，
+        // 但根据用户反馈，Codex 应该主要关注周限制）
+        // 重新审视需求：达到周限制时，总用量直接100%，重置时间设置为周限制时间
+        
+        if (secondaryPercent >= 100) {
+            return {
+                hasData: true,
+                used: 100,
+                limit: 100,
+                percent: 100,
+                isCodex: true,
+                resetAfterSeconds: secondary.reset_after_seconds
+            };
+        }
+        // 如果未达到 100%，则继续执行下面的常规计算逻辑
     }
 
     let totalUsed = 0;

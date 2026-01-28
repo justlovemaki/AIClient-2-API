@@ -1155,6 +1155,34 @@ export function getMD5Hash(obj) {
     return crypto.createHash('md5').update(jsonString).digest('hex');
 }
 
+/**
+ * 将日期转换为系统本地时间格式
+ * @param {string|number} dateInput - 日期字符串或时间戳
+ * @returns {string} 格式化后的时间字符串
+ */
+export function formatToLocal(dateInput) {
+    try {
+        if (!dateInput) return '--';
+        // 处理数值型时间戳（秒 -> 毫秒）
+        let finalInput = dateInput;
+        if (typeof dateInput === 'number' && dateInput < 10000000000) {
+            finalInput = dateInput * 1000;
+        }
+        const date = new Date(finalInput);
+        if (isNaN(date.getTime())) return '--';
+        
+        return date.toLocaleString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
+    } catch (e) {
+        return '--';
+    }
+}
+
 
 /**
  * 创建符合 fromProvider 格式的错误响应（非流式）

@@ -542,7 +542,7 @@ export class CodexApiService {
                 if (primaryWindow) {
                     // remaining = 1 - (used_percent / 100)
                     const remaining = 1 - (primaryWindow.used_percent || 0) / 100;
-                    const resetTime = primaryWindow.reset_at ? new Date(primaryWindow.reset_at * 1000).toISOString() : null;
+                    const resetTime = primaryWindow.reset_at ? new Date(primaryWindow.reset_at * 1000).toDateString() : null;
                     
                     // 为所有 Codex 模型设置相同的配额信息
                     const codexModels = ['default'];
