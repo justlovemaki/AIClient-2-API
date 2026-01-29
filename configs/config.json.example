@@ -1,6 +1,6 @@
 {
     "REQUIRED_API_KEY": "123456",
-    "SERVER_PORT": 3000,
+    "SERVER_PORT": 4000,
     "HOST": "0.0.0.0",
     "MODEL_PROVIDER": "gemini-cli-oauth",
     "SYSTEM_PROMPT_FILE_PATH": "configs/input_system_prompt.txt",
