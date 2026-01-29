@@ -27,7 +27,9 @@ export const OPENAI_DEFAULT_OUTPUT_TOKEN_LIMIT = 128000;
 // =============================================================================
 // Claude 相关常量
 // =============================================================================
-export const CLAUDE_DEFAULT_MAX_TOKENS = 200000;
+// 设置为 0 表示不强制覆盖，使用客户端传入的值；设置为 > 0 的值则强制覆盖
+export const CLAUDE_FORCE_MAX_TOKENS = 2000000;
+export const CLAUDE_DEFAULT_MAX_TOKENS = 2000000;
 export const CLAUDE_DEFAULT_TEMPERATURE = 1;
 export const CLAUDE_DEFAULT_TOP_P = 0.95;
 

@@ -78,7 +78,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUEST_BASE_DELAY: 1000,
             CREDENTIAL_SWITCH_MAX_RETRIES: 5, // 坏凭证切换最大重试次数（用于认证错误后切换凭证）
             CRON_NEAR_MINUTES: 15,
-            CRON_REFRESH_TOKEN: false,
+            CRON_REFRESH_TOKEN: true,
             PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
             MAX_ERROR_COUNT: 10, // 提供商最大错误次数
             providerFallbackChain: {}, // 跨类型 Fallback 链配置

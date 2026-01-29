@@ -15,6 +15,7 @@ import {
     extractThinkingFromOpenAIText,
     mapFinishReason,
     cleanJsonSchemaProperties as cleanJsonSchema,
+    CLAUDE_FORCE_MAX_TOKENS,
     CLAUDE_DEFAULT_MAX_TOKENS,
     CLAUDE_DEFAULT_TEMPERATURE,
     CLAUDE_DEFAULT_TOP_P,
@@ -256,7 +257,10 @@ export class OpenAIConverter extends BaseConverter {
         const claudeRequest = {
             model: openaiRequest.model,
             messages: mergedClaudeMessages,
-            max_tokens: checkAndAssignOrDefault(openaiRequest.max_tokens, CLAUDE_DEFAULT_MAX_TOKENS),
+            // 如果设置了 CLAUDE_FORCE_MAX_TOKENS > 0，则强制使用该值；否则使用客户端传入的值或默认值
+            max_tokens: CLAUDE_FORCE_MAX_TOKENS > 0 
+                ? CLAUDE_FORCE_MAX_TOKENS 
+                : checkAndAssignOrDefault(openaiRequest.max_tokens, CLAUDE_DEFAULT_MAX_TOKENS),
             temperature: checkAndAssignOrDefault(openaiRequest.temperature, CLAUDE_DEFAULT_TEMPERATURE),
             top_p: checkAndAssignOrDefault(openaiRequest.top_p, CLAUDE_DEFAULT_TOP_P),
         };
@@ -266,11 +270,13 @@ export class OpenAIConverter extends BaseConverter {
         }
 
         if (openaiRequest.tools?.length) {
-            claudeRequest.tools = openaiRequest.tools.map(t => ({
-                name: t.function.name,
-                description: t.function.description || '',
-                input_schema: t.function.parameters || { type: 'object', properties: {} }
-            }));
+            claudeRequest.tools = openaiRequest.tools
+                .filter(t => t && t.function && t.function.name)
+                .map(t => ({
+                    name: t.function.name,
+                    description: t.function.description || '',
+                    input_schema: t.function.parameters || { type: 'object', properties: {} }
+                }));
             claudeRequest.tool_choice = this.buildClaudeToolChoice(openaiRequest.tool_choice);
         }
 

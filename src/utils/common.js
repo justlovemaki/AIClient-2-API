@@ -783,6 +783,13 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);
 
+    // 3.5 强制覆盖 max_tokens（如果配置了 FORCE_MAX_TOKENS > 0）
+    if (CONFIG.FORCE_MAX_TOKENS && CONFIG.FORCE_MAX_TOKENS > 0) {
+        const originalMaxTokens = processedRequestBody.max_tokens;
+        processedRequestBody.max_tokens = CONFIG.FORCE_MAX_TOKENS;
+        logger.info(`[Force Max Tokens] Overriding max_tokens: ${originalMaxTokens} -> ${CONFIG.FORCE_MAX_TOKENS}`);
+    }
+
     // 4. Log the incoming prompt (after potential conversion to the backend's format).
     const promptText = extractPromptText(processedRequestBody, toProvider);
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
