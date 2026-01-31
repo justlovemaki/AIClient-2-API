@@ -6,6 +6,8 @@ import { initializeUIManagement } from './ui-manager.js';
 import { initializeAPIManagement } from './api-manager.js';
 import { createRequestHandler } from '../handlers/request-handler.js';
 import { discoverPlugins, getPluginManager } from '../core/plugin-manager.js';
+import { cleanupAllKiroOAuthServers } from '../auth/kiro-oauth.js';
+import { cleanupAllCodexOAuthServers } from '../auth/codex-oauth.js';
 
 /**
  * @license
@@ -122,6 +124,9 @@ const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
 // 存储服务器实例，用于优雅关闭
 let serverInstance = null;
 
+// 存储 Token 刷新定时器，用于优雅关闭时清理（防止定时器泄漏）
+let tokenRefreshInterval = null;
+
 /**
  * 发送消息给主进程
  * @param {Object} message - 消息对象
@@ -176,6 +181,28 @@ function setupWorkerCommunication() {
  */
 async function gracefulShutdown() {
     logger.info('[Server] Initiating graceful shutdown...');
+
+    // 清理 Token 刷新定时器（防止泄漏）
+    if (tokenRefreshInterval) {
+        clearInterval(tokenRefreshInterval);
+        tokenRefreshInterval = null;
+        logger.info('[Server] Cleared token refresh interval');
+    }
+
+    // 清理 Provider Pool Manager 资源
+    const poolManager = getProviderPoolManager();
+    if (poolManager && typeof poolManager.cleanup === 'function') {
+        poolManager.cleanup();
+    }
+
+    // 清理 OAuth 回调服务器（防止端口泄漏）
+    try {
+        await cleanupAllKiroOAuthServers();
+        await cleanupAllCodexOAuthServers();
+        logger.info('[Server] Cleaned up OAuth callback servers');
+    } catch (err) {
+        logger.error('[Server] Error cleaning up OAuth servers:', err.message);
+    }
 
     if (serverInstance) {
         serverInstance.close(() => {
@@ -315,8 +342,13 @@ async function startServer() {
         if (CONFIG.CRON_REFRESH_TOKEN) {
             logger.info(`  • Cron Near Minutes: ${CONFIG.CRON_NEAR_MINUTES}`);
             logger.info(`  • Cron Refresh Token: ${CONFIG.CRON_REFRESH_TOKEN}`);
-            // 每 CRON_NEAR_MINUTES 分钟执行一次心跳日志和令牌刷新
-            setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
+            
+            // 清理旧的定时器（防止 Worker 重启时泄漏）
+            if (tokenRefreshInterval) {
+                clearInterval(tokenRefreshInterval);
+            }
+            
+            tokenRefreshInterval = setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
         }
         // 服务器完全启动后,执行初始健康检查
         const poolManager = getProviderPoolManager();

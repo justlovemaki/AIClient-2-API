@@ -111,9 +111,19 @@ export class ProviderPoolManager {
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
-                        if (true) {
-                            this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
-                            this._enqueueRefresh(providerType, providerStatus);
+                        const tempConfig = {
+                            ...config,
+                            MODEL_PROVIDER: providerType
+                        };
+                        const serviceAdapter = getServiceAdapter(tempConfig);
+                        
+                        if (serviceAdapter && typeof serviceAdapter.isExpiryDateNear === 'function') {
+                            if (serviceAdapter.isExpiryDateNear()) {
+                                this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
+                                this._enqueueRefresh(providerType, providerStatus);
+                            }
+                        } else {
+                            this._log('debug', `Node ${providerStatus.uuid} (${providerType}) adapter does not support expiry check.`);
                         }
                     } catch (err) {
                         this._log('error', `Failed to check expiry for node ${providerStatus.uuid}: ${err.message}`);
@@ -1450,6 +1460,49 @@ export class ProviderPoolManager {
         } catch (error) {
             this._log('error', `Failed to write provider_pools.json: ${error.message}`);
         }
+    }
+
+    /**
+     * 清理所有资源（定时器、队列等）
+     * 应在服务器关闭时调用，防止资源泄漏
+     */
+    cleanup() {
+        this._log('info', 'Cleaning up ProviderPoolManager resources...');
+        
+        // 清理所有缓冲定时器
+        for (const providerType in this.refreshBufferTimers) {
+            if (this.refreshBufferTimers[providerType]) {
+                clearTimeout(this.refreshBufferTimers[providerType]);
+            }
+        }
+        this.refreshBufferTimers = {};
+        
+        // 清理缓冲队列
+        for (const providerType in this.refreshBufferQueues) {
+            if (this.refreshBufferQueues[providerType]) {
+                this.refreshBufferQueues[providerType].clear();
+            }
+        }
+        this.refreshBufferQueues = {};
+        
+        // 清理刷新队列
+        this.refreshQueues = {};
+        this.refreshingUuids.clear();
+        this.globalRefreshWaiters = [];
+        this.activeProviderRefreshes = 0;
+        
+        // 清理防抖保存定时器
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = null;
+        }
+        
+        // 执行最后一次保存（同步方式，确保数据不丢失）
+        if (this.pendingSaves.size > 0) {
+            this._flushPendingSaves();
+        }
+        
+        this._log('info', 'ProviderPoolManager cleanup complete');
     }
 
 }

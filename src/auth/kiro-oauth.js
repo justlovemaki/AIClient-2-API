@@ -1117,4 +1117,37 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
     }
 }
 
+/**
+ * 清理所有活动的 Kiro OAuth 服务器和轮询任务
+ * 应在服务器关闭时调用，防止端口泄漏
+ */
+export async function cleanupAllKiroOAuthServers() {
+    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Cleaning up all active OAuth servers...`);
+    
+    const serverCount = activeKiroServers.size;
+    const taskCount = activeKiroPollingTasks.size;
+    
+    for (const [provider, serverInfo] of activeKiroServers.entries()) {
+        try {
+            await new Promise((resolve) => {
+                serverInfo.server.close(() => {
+                    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Closed server for ${provider} on port ${serverInfo.port}`);
+                    resolve();
+                });
+            });
+        } catch (err) {
+            logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} Failed to close server for ${provider}:`, err.message);
+        }
+    }
+    activeKiroServers.clear();
+    
+    for (const [taskId, taskControl] of activeKiroPollingTasks.entries()) {
+        taskControl.shouldStop = true;
+        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Stopped polling task: ${taskId}`);
+    }
+    activeKiroPollingTasks.clear();
+    
+    logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Cleanup complete: ${serverCount} server(s), ${taskCount} task(s)`);
+}
+
 

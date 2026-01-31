@@ -873,3 +873,40 @@ export async function handleCodexOAuthCallback(code, state) {
         };
     }
 }
+
+/**
+ * 清理所有活动的 Codex OAuth 服务器和会话
+ * 应在服务器关闭时调用，防止端口泄漏
+ */
+export async function cleanupAllCodexOAuthServers() {
+    logger.info('[Codex Auth] Cleaning up all active OAuth servers...');
+    
+    const serverCount = activeServers.size;
+    let sessionCount = 0;
+    
+    for (const [provider, serverInfo] of activeServers.entries()) {
+        try {
+            await new Promise((resolve) => {
+                serverInfo.server.close(() => {
+                    logger.info(`[Codex Auth] Closed server for ${provider} on port ${serverInfo.port}`);
+                    resolve();
+                });
+            });
+        } catch (err) {
+            logger.error(`[Codex Auth] Failed to close server for ${provider}:`, err.message);
+        }
+    }
+    activeServers.clear();
+    
+    if (global.codexOAuthSessions) {
+        sessionCount = global.codexOAuthSessions.size;
+        for (const [sessionId, session] of global.codexOAuthSessions.entries()) {
+            if (session.pollTimer) {
+                clearInterval(session.pollTimer);
+            }
+        }
+        global.codexOAuthSessions.clear();
+    }
+    
+    logger.info(`[Codex Auth] Cleanup complete: ${serverCount} server(s), ${sessionCount} session(s)`);
+}

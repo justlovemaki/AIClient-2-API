@@ -46,6 +46,7 @@ let isDirty = false;
 let isWriting = false;
 let persistTimer = null;
 let currentPersistInterval = DEFAULT_CONFIG.persistInterval;
+let exitHandlersRegistered = false;
 
 /**
  * 初始化：从文件加载数据到内存
@@ -84,10 +85,14 @@ function ensureLoaded() {
     // 启动定期持久化
     if (!persistTimer) {
         persistTimer = setInterval(persistIfDirty, currentPersistInterval);
-        // 进程退出时保存
-        process.on('beforeExit', () => persistIfDirty());
-        process.on('SIGINT', () => { persistIfDirty(); process.exit(0); });
-        process.on('SIGTERM', () => { persistIfDirty(); process.exit(0); });
+        
+        // 只注册一次退出处理器（防止 Worker 重启时重复注册）
+        if (!exitHandlersRegistered) {
+            process.on('beforeExit', () => persistIfDirty());
+            process.on('SIGINT', () => { persistIfDirty(); process.exit(0); });
+            process.on('SIGTERM', () => { persistIfDirty(); process.exit(0); });
+            exitHandlersRegistered = true;
+        }
     }
 }
 
@@ -503,6 +508,18 @@ export async function applyDailyLimitToAllKeys(newLimit) {
 export function getAllKeyIds() {
     ensureLoaded();
     return Object.keys(keyStore.keys);
+}
+
+/**
+ * 清理资源（定时器等）
+ * 应在服务关闭时调用，防止资源泄漏
+ */
+export function cleanup() {
+    if (persistTimer) {
+        clearInterval(persistTimer);
+        persistTimer = null;
+    }
+    persistIfDirty();
 }
 
 // 导出常量
