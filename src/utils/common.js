@@ -734,10 +734,11 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     let actualCustomName = CONFIG.customName;
 
-    // 2.5. 如果使用了提供商池，根据模型重新选择提供商（支持 Fallback）
-    // 注意：这里使用 skipUsageCount: true，因为初次选择时已经增加了 usageCount
-    if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
-        const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+    // 2.5. 根据模型重新选择提供商（支持 Fallback）
+    // 注意：第一次选择（在 request-handler.js）时没有模型参数，这里根据模型重新选择以应用 notSupportedModels 过滤
+    const { getApiServiceWithFallback, getProviderPoolManager } = await import('../services/service-manager.js');
+    const _providerPoolManager = providerPoolManager || getProviderPoolManager();
+    if (_providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
         const result = await getApiServiceWithFallback(CONFIG, model);
         
         service = result.service;
