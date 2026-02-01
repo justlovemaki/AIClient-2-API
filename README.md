@@ -18,7 +18,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/justlovemaki/AIClient-2-API.svg?style=flat&label=Star)](https://github.com/justlovemaki/AIClient-2-API/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/justlovemaki/AIClient-2-API.svg)](https://github.com/justlovemaki/AIClient-2-API/issues)
 
-[中文](./README-ZH.md) | [**👉 English**](./README.md) | [日本語](./README-JA.md) | [**📚 Documentation**](https://aiproxy.justlikemaki.vip/en/)
+[**🔧 OpenClaw Config**](./OPENCLAW_CONFIG_GUIDE.md) | [中文](./README-ZH.md) | [**👉 English**](./README.md) | [日本語](./README-JA.md) | [**📚 Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
 

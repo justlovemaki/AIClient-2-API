@@ -92,6 +92,14 @@ export async function loadUsage() {
         // 渲染用量数据
         renderUsageData(data, contentEl);
         
+        // 更新服务端系统时间
+        if (data.serverTime) {
+            const serverTimeEl = document.getElementById('serverTimeValue');
+            if (serverTimeEl) {
+                serverTimeEl.textContent = new Date(data.serverTime).toLocaleString(getCurrentLanguage());
+            }
+        }
+        
         // 更新最后更新时间
         if (lastUpdateEl) {
             const timeStr = new Date(data.timestamp || Date.now()).toLocaleString(getCurrentLanguage());
@@ -154,6 +162,14 @@ export async function refreshUsage() {
         
         // 渲染用量数据
         renderUsageData(data, contentEl);
+        
+        // 更新服务端系统时间
+        if (data.serverTime) {
+            const serverTimeEl = document.getElementById('serverTimeValue');
+            if (serverTimeEl) {
+                serverTimeEl.textContent = new Date(data.serverTime).toLocaleString(getCurrentLanguage());
+            }
+        }
         
         // 更新最后更新时间
         if (lastUpdateEl) {

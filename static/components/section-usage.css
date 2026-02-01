@@ -18,6 +18,20 @@
 .usage-last-update {
     font-size: 0.875rem;
     color: var(--text-secondary);
+    margin-left: auto;
+}
+
+.server-time-display {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-left: 1.5rem;
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--border-color);
+}
+
+.server-time-display i {
+    color: var(--primary-color);
+    margin-right: 0.25rem;
 }
 
 .usage-info-banner {

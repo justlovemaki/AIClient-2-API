@@ -269,8 +269,14 @@ export async function handleGetUsage(req, res, currentConfig, providerPoolManage
             await writeUsageCache(usageResults);
         }
         
+        // Always include current server time
+        const finalResults = {
+            ...usageResults,
+            serverTime: new Date().toISOString()
+        };
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(usageResults));
+        res.end(JSON.stringify(finalResults));
         return true;
     } catch (error) {
         logger.error('[UI API] Failed to get usage:', error);
@@ -300,7 +306,7 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
             const cachedData = await readProviderUsageCache(providerType);
             if (cachedData) {
                 logger.info(`[Usage API] Returning cached usage data for ${providerType}`);
-                usageResults = cachedData;
+                usageResults = { ...cachedData, fromCache: true };
             }
         }
         
@@ -312,8 +318,14 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
             await updateProviderUsageCache(providerType, usageResults);
         }
         
+        // Always include current server time
+        const finalResults = {
+            ...usageResults,
+            serverTime: new Date().toISOString()
+        };
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(usageResults));
+        res.end(JSON.stringify(finalResults));
         return true;
     } catch (error) {
         logger.error(`[UI API] Failed to get usage for ${providerType}:`, error);

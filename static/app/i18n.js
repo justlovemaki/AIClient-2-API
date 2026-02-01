@@ -515,6 +515,7 @@ const translations = {
         // Usage
         'usage.title': '用量查询',
         'usage.refresh': '刷新用量',
+        'usage.serverTime': '服务端时间',
         'usage.lastUpdate': '上次更新: {time}',
         'usage.lastUpdateCache': '缓存时间: {time}',
         'usage.supportedProvidersPrefix': '支持用量查询的提供商:',
@@ -1285,6 +1286,7 @@ const translations = {
         // Usage
         'usage.title': 'Usage Query',
         'usage.refresh': 'Refresh Usage',
+        'usage.serverTime': 'Server Time',
         'usage.lastUpdate': 'Last Update: {time}',
         'usage.lastUpdateCache': 'Cache Time: {time}',
         'usage.supportedProvidersPrefix': 'Providers supporting usage query:',
