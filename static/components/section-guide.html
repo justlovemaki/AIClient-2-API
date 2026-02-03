@@ -212,6 +212,14 @@
                     <div class="faq-question" data-i18n="guide.faq.q5">Q: 流式响应中断怎么办？</div>
                     <div class="faq-answer" data-i18n="guide.faq.a5">A: 检查网络稳定性，增加客户端请求超时时间。如使用代理，确保代理支持长连接。</div>
                 </div>
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q6">Q: 请求返回 "No available and healthy providers" 错误怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a6">A: 这表示对应类型的提供商都不可用。请在"提供商池"页面检查提供商健康状态，确认 OAuth 凭据未过期，或配置 Fallback 链实现自动切换到备用提供商。</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question" data-i18n="guide.faq.q7">Q: 请求返回 403 Forbidden 错误怎么办？</div>
+                    <div class="faq-answer" data-i18n="guide.faq.a7">A: 403 表示访问被拒绝。首先检查"提供商池"页面中节点状态，如果节点健康检查正常，可以忽略此报错。其他可能原因包括：账号权限不足、API Key 权限受限、地区访问限制、凭据已失效等。</div>
+                </div>
             </div>
         </div>
     </div>

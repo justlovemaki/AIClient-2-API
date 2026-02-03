@@ -480,6 +480,12 @@ async function handleGenerateAuthUrl(providerType) {
         return;
     }
 
+    // 如果是 Gemini OAuth 或 Antigravity，显示认证方式选择对话框
+    if (providerType === 'gemini-cli-oauth' || providerType === 'gemini-antigravity') {
+        showGeminiAuthMethodSelector(providerType);
+        return;
+    }
+
     await executeGenerateAuthUrl(providerType, {});
 }
 
@@ -521,18 +527,18 @@ function showKiroAuthMethodSelector(providerType) {
                             <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsBuilderDesc">${t('oauth.kiro.awsBuilderDesc')}</div>
                         </div>
                     </button>
-                    <button class="auth-method-btn" data-method="batch-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                        <i class="fas fa-file-import" style="font-size: 24px; color: #10b981;"></i>
-                        <div style="text-align: left;">
-                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.batchImport">${t('oauth.kiro.batchImport')}</div>
-                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.batchImportDesc">${t('oauth.kiro.batchImportDesc')}</div>
-                        </div>
-                    </button>
                     <button class="auth-method-btn" data-method="aws-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fas fa-cloud-upload-alt" style="font-size: 24px; color: #ff9900;"></i>
                         <div style="text-align: left;">
                             <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.awsImport">${t('oauth.kiro.awsImport')}</div>
                             <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsImportDesc">${t('oauth.kiro.awsImportDesc')}</div>
+                        </div>
+                    </button>
+                    <button class="auth-method-btn" data-method="batch-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-file-import" style="font-size: 24px; color: #10b981;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.batchImport">${t('oauth.kiro.batchImport')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.batchImportDesc">${t('oauth.kiro.batchImportDesc')}</div>
                         </div>
                     </button>
                 </div>
@@ -577,6 +583,373 @@ function showKiroAuthMethodSelector(providerType) {
                 await executeGenerateAuthUrl(providerType, { method });
             }
         });
+    });
+}
+
+/**
+ * 显示 Gemini OAuth 认证方式选择对话框
+ * @param {string} providerType - 提供商类型
+ */
+function showGeminiAuthMethodSelector(providerType) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-key"></i> <span data-i18n="oauth.gemini.selectMethod">${t('oauth.gemini.selectMethod')}</span></h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-method-options" style="display: flex; flex-direction: column; gap: 12px;">
+                    <button class="auth-method-btn" data-method="oauth" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fab fa-google" style="font-size: 24px; color: #4285f4;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.gemini.oauth">${t('oauth.gemini.oauth')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.gemini.oauthDesc">${t('oauth.gemini.oauthDesc')}</div>
+                        </div>
+                    </button>
+                    <button class="auth-method-btn" data-method="batch-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-file-import" style="font-size: 24px; color: #10b981;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.gemini.batchImport">${t('oauth.gemini.batchImport')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.gemini.batchImportDesc">${t('oauth.gemini.batchImportDesc')}</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 关闭按钮事件
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    [closeBtn, cancelBtn].forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+    
+    // 认证方式选择按钮事件
+    const methodBtns = modal.querySelectorAll('.auth-method-btn');
+    methodBtns.forEach(btn => {
+        btn.addEventListener('mouseenter', () => {
+            btn.style.borderColor = '#4285f4';
+            btn.style.background = '#f8faff';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.borderColor = '#e0e0e0';
+            btn.style.background = 'white';
+        });
+        btn.addEventListener('click', async () => {
+            const method = btn.dataset.method;
+            modal.remove();
+            
+            if (method === 'batch-import') {
+                showGeminiBatchImportModal(providerType);
+            } else {
+                await executeGenerateAuthUrl(providerType, {});
+            }
+        });
+    });
+}
+
+/**
+ * 显示 Gemini 批量导入模态框
+ * @param {string} providerType - 提供商类型
+ */
+function showGeminiBatchImportModal(providerType) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-import"></i> <span data-i18n="oauth.gemini.batchImport">${t('oauth.gemini.batchImport')}</span> (${providerType})</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="batch-import-instructions" style="margin-bottom: 16px; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 14px; color: #1e40af;">
+                        <i class="fas fa-info-circle"></i>
+                        <span data-i18n="oauth.gemini.importInstructions">${t('oauth.gemini.importInstructions')}</span>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label for="batchGeminiTokens" style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">
+                        <span data-i18n="oauth.gemini.tokensLabel">${t('oauth.gemini.tokensLabel')}</span>
+                    </label>
+                    <textarea 
+                        id="batchGeminiTokens" 
+                        rows="10" 
+                        style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical;"
+                        placeholder='${t('oauth.gemini.tokensPlaceholder')}'
+                        data-i18n-placeholder="oauth.gemini.tokensPlaceholder"
+                    ></textarea>
+                </div>
+                <div class="form-group" style="margin-top: 12px; margin-bottom: 16px;">
+                    <details style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        <summary style="padding: 12px; cursor: pointer; font-weight: 600; color: #374151; user-select: none;">
+                            <i class="fas fa-code" style="color: #4285f4; margin-right: 8px;"></i>
+                            <span data-i18n="oauth.gemini.jsonExample">${t('oauth.gemini.jsonExample')}</span>
+                        </summary>
+                        <div style="padding: 12px; background: #1f2937; border-radius: 0 0 8px 8px;">
+                            <div style="color: #10b981; font-family: monospace; font-size: 12px;">
+                                <div style="color: #9ca3af; margin-bottom: 8px;">// 单个凭据导入示例：</div>
+                                <pre style="margin: 0; white-space: pre; overflow-x: auto;">{
+  "access_token": "ya29.a0A...",
+  "refresh_token": "1//0...",
+  "scope": "https://www.googleapis.com/auth/cloud-platform",
+  "token_type": "Bearer",
+  "expiry_date": 1738590000000
+}</pre>
+                            </div>
+                            <div style="color: #10b981; font-family: monospace; font-size: 12px; margin-top: 16px;">
+                                <div style="color: #9ca3af; margin-bottom: 8px;">// 批量导入示例（JSON数组）：</div>
+                                <pre style="margin: 0; white-space: pre; overflow-x: auto;">[
+  {
+    "access_token": "ya29.a0A1...",
+    "refresh_token": "1//0..."
+  },
+  {
+    "access_token": "ya29.a0A2...",
+    "refresh_token": "1//0..."
+  }
+]</pre>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+                <div class="batch-import-stats" id="geminiBatchStats" style="display: none; margin-top: 12px; padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span data-i18n="oauth.gemini.tokenCount">${t('oauth.gemini.tokenCount')}</span>
+                        <span id="geminiTokenCountValue" style="font-weight: 600;">0</span>
+                    </div>
+                </div>
+                <div class="batch-import-progress" id="geminiBatchProgress" style="display: none; margin-top: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-spinner fa-spin" style="color: #4285f4;"></i>
+                        <span data-i18n="oauth.gemini.importing">${t('oauth.gemini.importing')}</span>
+                    </div>
+                    <div class="progress-bar" style="margin-top: 8px; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="geminiImportProgressBar" style="height: 100%; width: 0%; background: #4285f4; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                <div class="batch-import-result" id="geminiBatchResult" style="display: none; margin-top: 16px; padding: 12px; border-radius: 8px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                <button class="btn btn-primary batch-import-submit" id="geminiBatchSubmit">
+                    <i class="fas fa-upload"></i>
+                    <span data-i18n="oauth.gemini.startImport">${t('oauth.gemini.startImport')}</span>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const textarea = modal.querySelector('#batchGeminiTokens');
+    const statsDiv = modal.querySelector('#geminiBatchStats');
+    const tokenCountValue = modal.querySelector('#geminiTokenCountValue');
+    const progressDiv = modal.querySelector('#geminiBatchProgress');
+    const progressBar = modal.querySelector('#geminiImportProgressBar');
+    const resultDiv = modal.querySelector('#geminiBatchResult');
+    const submitBtn = modal.querySelector('#geminiBatchSubmit');
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    
+    // 实时统计 token 数量
+    textarea.addEventListener('input', () => {
+        try {
+            const val = textarea.value.trim();
+            if (!val) {
+                statsDiv.style.display = 'none';
+                return;
+            }
+            const data = JSON.parse(val);
+            const tokens = Array.isArray(data) ? data : [data];
+            statsDiv.style.display = 'block';
+            tokenCountValue.textContent = tokens.length;
+        } catch (e) {
+            statsDiv.style.display = 'none';
+        }
+    });
+    
+    // 关闭按钮事件
+    [closeBtn, cancelBtn].forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.remove();
+        });
+    });
+    
+    // 提交按钮事件
+    submitBtn.addEventListener('click', async () => {
+        let tokens = [];
+        try {
+            const val = textarea.value.trim();
+            const data = JSON.parse(val);
+            tokens = Array.isArray(data) ? data : [data];
+        } catch (e) {
+            showToast(t('common.error'), t('oauth.gemini.noTokens'), 'error');
+            return;
+        }
+        
+        if (tokens.length === 0) {
+            showToast(t('common.warning'), t('oauth.gemini.noTokens'), 'warning');
+            return;
+        }
+        
+        // 禁用输入和按钮
+        textarea.disabled = true;
+        submitBtn.disabled = true;
+        cancelBtn.disabled = true;
+        progressDiv.style.display = 'block';
+        resultDiv.style.display = 'none';
+        progressBar.style.width = '0%';
+        
+        // 创建实时结果显示区域
+        resultDiv.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #f3f4f6; border: 1px solid #d1d5db;';
+        resultDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <i class="fas fa-spinner fa-spin" style="color: #4285f4;"></i>
+                <strong id="geminiBatchProgressText">${t('oauth.gemini.importingProgress', { current: 0, total: tokens.length })}</strong>
+            </div>
+            <div id="geminiBatchResultsList" style="max-height: 200px; overflow-y: auto; font-size: 12px; margin-top: 8px;"></div>
+        `;
+        
+        const progressText = resultDiv.querySelector('#geminiBatchProgressText');
+        const resultsList = resultDiv.querySelector('#geminiBatchResultsList');
+        
+        let importSuccess = false; // 标记是否导入成功
+
+        try {
+            const response = await fetch('/api/gemini/batch-import-tokens', {
+                method: 'POST',
+                headers: window.apiClient ? window.apiClient.getAuthHeaders() : {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ providerType, tokens })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                let eventType = '';
+                let eventData = '';
+                
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.substring(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        eventData = line.substring(6).trim();
+                        
+                        if (eventType && eventData) {
+                            try {
+                                const data = JSON.parse(eventData);
+                                
+                                if (eventType === 'progress') {
+                                    const { index, total, current } = data;
+                                    const percentage = Math.round((index / total) * 100);
+                                    progressBar.style.width = `${percentage}%`;
+                                    progressText.textContent = t('oauth.gemini.importingProgress', { current: index, total: total });
+                                    
+                                    const resultItem = document.createElement('div');
+                                    resultItem.style.cssText = 'padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.1);';
+                                    if (current.success) {
+                                        resultItem.innerHTML = `Token ${current.index}: <span style="color: #166534;">✓ ${current.path}</span>`;
+                                    } else if (current.error === 'duplicate') {
+                                        resultItem.innerHTML = `Token ${current.index}: <span style="color: #d97706;">⚠ ${t('oauth.kiro.duplicateToken')}</span>
+                                            ${current.existingPath ? `<span style="color: #666; font-size: 11px;">(${current.existingPath})</span>` : ''}`;
+                                    } else {
+                                        resultItem.innerHTML = `Token ${current.index}: <span style="color: #991b1b;">✗ ${current.error}</span>`;
+                                    }
+                                    resultsList.appendChild(resultItem);
+                                    resultsList.scrollTop = resultsList.scrollHeight;
+                                } else if (eventType === 'complete') {
+                                    progressBar.style.width = '100%';
+                                    progressDiv.style.display = 'none';
+                                    
+                                    const isAllSuccess = data.failedCount === 0;
+                                    const isAllFailed = data.successCount === 0;
+                                    let resultClass, resultIcon, resultMessage;
+                                    
+                                    if (isAllSuccess) {
+                                        resultClass = 'background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
+                                        resultIcon = 'fa-check-circle';
+                                        resultMessage = t('oauth.gemini.importSuccess', { count: data.successCount });
+                                    } else if (isAllFailed) {
+                                        resultClass = 'background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+                                        resultIcon = 'fa-times-circle';
+                                        resultMessage = t('oauth.gemini.importAllFailed', { count: data.failedCount });
+                                    } else {
+                                        resultClass = 'background: #fffbeb; border: 1px solid #fde68a; color: #92400e;';
+                                        resultIcon = 'fa-exclamation-triangle';
+                                        resultMessage = t('oauth.gemini.importPartial', { success: data.successCount, failed: data.failedCount });
+                                    }
+                                    
+                                    resultDiv.style.cssText = `display: block; margin-top: 16px; padding: 12px; border-radius: 8px; ${resultClass}`;
+                                    const headerDiv = resultDiv.querySelector('div:first-child');
+                                    headerDiv.innerHTML = `<i class="fas ${resultIcon}"></i> <strong>${resultMessage}</strong>`;
+                                    
+                                    if (data.successCount > 0) {
+                                        importSuccess = true;
+                                        loadProviders();
+                                        loadConfigList();
+                                    }
+                                } else if (eventType === 'error') {
+                                    throw new Error(data.error);
+                                }
+                            } catch (parseError) {
+                                console.warn('Failed to parse SSE data:', parseError);
+                            }
+                            eventType = '';
+                            eventData = '';
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[Gemini Batch Import] Failed:', error);
+            progressDiv.style.display = 'none';
+            resultDiv.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+            resultDiv.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-times-circle"></i>
+                    <strong>${t('oauth.gemini.importError')}: ${error.message}</strong>
+                </div>
+            `;
+        } finally {
+            cancelBtn.disabled = false;
+            
+            if (!importSuccess) {
+                textarea.disabled = false;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas fa-upload"></i> <span data-i18n="oauth.gemini.startImport">${t('oauth.gemini.startImport')}</span>`;
+            } else {
+                submitBtn.innerHTML = `<i class="fas fa-check-circle"></i> <span>${t('common.success')}</span>`;
+            }
+        }
     });
 }
 
@@ -703,6 +1076,7 @@ function showKiroBatchImportModal() {
         let successCount = 0;
         let failedCount = 0;
         const details = [];
+        let importSuccess = false; // 标记是否导入成功
         
         try {
             // 使用 fetch + SSE 获取流式响应（需要带认证头）
@@ -811,6 +1185,7 @@ function showKiroBatchImportModal() {
                                     
                                     // 如果有成功的，刷新提供商列表
                                     if (data.successCount > 0) {
+                                        importSuccess = true;
                                         loadProviders();
                                         loadConfigList();
                                     }
@@ -841,9 +1216,14 @@ function showKiroBatchImportModal() {
             `;
         } finally {
             // 重新启用按钮
-            textarea.disabled = false;
-            submitBtn.disabled = false;
             cancelBtn.disabled = false;
+            if (!importSuccess) {
+                textarea.disabled = false;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas fa-upload"></i> <span data-i18n="oauth.kiro.startImport">${t('oauth.kiro.startImport')}</span>`;
+            } else {
+                submitBtn.innerHTML = `<i class="fas fa-check-circle"></i> <span>${t('common.success')}</span>`;
+            }
         }
     });
 }
@@ -940,7 +1320,10 @@ function showKiroAwsImportModal() {
                             <i class="fas fa-code" style="color: #ff9900; margin-right: 8px;"></i>
                             <span data-i18n="oauth.kiro.awsJsonExample">${t('oauth.kiro.awsJsonExample')}</span>
                         </summary>
-                        <pre style="margin: 0; padding: 12px; background: #1f2937; color: #10b981; border-radius: 0 0 8px 8px; font-family: monospace; font-size: 12px; overflow-x: auto; white-space: pre;">{
+                        <div style="padding: 12px; background: #1f2937; border-radius: 0 0 8px 8px;">
+                            <div style="color: #10b981; font-family: monospace; font-size: 12px; margin-bottom: 12px;">
+                                <div style="color: #9ca3af; margin-bottom: 8px;">// 单个凭据导入示例：</div>
+                                <pre style="margin: 0; white-space: pre; overflow-x: auto;">{
   "clientId": "VYZBSTx3Q7QEq1W3Wn8c5nVzLWVhc3QtMQ",
   "clientSecret": "eyJraWQi...OAMc",
   "expiresAt": "2026-01-09T04:43:18.079944400+00:00",
@@ -950,6 +1333,32 @@ function showKiroAwsImportModal() {
   "refreshToken": "aorAAAAAGn...uKw+E3",
   "region": "us-east-1"
 }</pre>
+                            </div>
+                            <div style="color: #10b981; font-family: monospace; font-size: 12px; margin-top: 16px;">
+                                <div style="color: #9ca3af; margin-bottom: 8px;">// 批量导入示例（JSON数组）：</div>
+                                <pre style="margin: 0; white-space: pre; overflow-x: auto;">[
+  {
+    "clientId": "VYZBSTx3Q7QEq1W3Wn8c5nVzLWVhc3QtMQ",
+    "clientSecret": "eyJraWQi...OAMc",
+    "accessToken": "aoaAAAAAGlgghoSqRgQK...2tfhmdNZDA",
+    "refreshToken": "aorAAAAAGn...uKw+E3",
+    "region": "us-east-1"
+  },
+  {
+    "clientId": "AnotherClientId123",
+    "clientSecret": "eyJraWQi...xyz",
+    "accessToken": "aoaAAAAAGlgghoSqRgQK...abc",
+    "refreshToken": "aorAAAAAGn...def",
+    "region": "us-west-2",
+    "idcRegion": "us-west-2"
+  }
+]</pre>
+                            </div>
+                            <div style="color: #fbbf24; font-size: 11px; margin-top: 12px; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 4px;">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>注意：</strong>AWS企业用户需要额外添加 <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 2px;">idcRegion</code> 字段
+                            </div>
+                        </div>
                     </details>
                 </div>
                 
@@ -1242,78 +1651,180 @@ function showKiroAwsImportModal() {
             return;
         }
         
-        // 检查所有四个必需字段
-        const hasClientId = !!mergedCredentials.clientId;
-        const hasClientSecret = !!mergedCredentials.clientSecret;
-        const hasAccessToken = !!mergedCredentials.accessToken;
-        const hasRefreshToken = !!mergedCredentials.refreshToken;
+        // 检查是否为批量导入（数组）
+        const isBatchImport = Array.isArray(mergedCredentials);
         
-        // 所有四个字段都必须存在
-        const isValid = hasClientId && hasClientSecret && hasAccessToken && hasRefreshToken;
-        
-        // 构建字段状态列表
-        const fieldsList = [
-            { key: 'clientId', has: hasClientId },
-            { key: 'clientSecret', has: hasClientSecret },
-            { key: 'accessToken', has: hasAccessToken },
-            { key: 'refreshToken', has: hasRefreshToken }
-        ];
-        
-        const fieldsHtml = fieldsList.map(f => `
-            <li>${f.key}: ${f.has 
-                ? `<code style="background: #dcfce7; padding: 1px 4px; border-radius: 2px; color: #166534;">✓ ${t('common.found')}</code>` 
-                : `<code style="background: #fecaca; padding: 1px 4px; border-radius: 2px; color: #991b1b;">✗ ${t('common.missing')}</code>`
-            }</li>
-        `).join('');
-        
-        if (isValid) {
-            validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
-            validationResult.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-check-circle"></i>
-                    <strong data-i18n="oauth.kiro.awsValidationSuccess">${t('oauth.kiro.awsValidationSuccess')}</strong>
-                </div>
-                <ul style="margin: 8px 0 0 24px; font-size: 13px; list-style: none; padding: 0;">
-                    ${fieldsHtml}
-                </ul>
-            `;
-            submitBtn.disabled = false;
+        if (isBatchImport) {
+            // 批量导入模式：验证数组中的每个对象
+            let allValid = true;
+            const credentialsValidation = mergedCredentials.map((cred, index) => {
+                const hasClientId = !!cred.clientId;
+                const hasClientSecret = !!cred.clientSecret;
+                const hasAccessToken = !!cred.accessToken;
+                const hasRefreshToken = !!cred.refreshToken;
+                const isValid = hasClientId && hasClientSecret && hasAccessToken && hasRefreshToken;
+                
+                if (!isValid) allValid = false;
+                
+                return {
+                    index: index + 1,
+                    isValid,
+                    fields: [
+                        { key: 'clientId', has: hasClientId },
+                        { key: 'clientSecret', has: hasClientSecret },
+                        { key: 'accessToken', has: hasAccessToken },
+                        { key: 'refreshToken', has: hasRefreshToken }
+                    ]
+                };
+            });
+            
+            // 构建批量验证结果HTML
+            const credentialsHtml = credentialsValidation.map(cv => {
+                const statusIcon = cv.isValid ? '✓' : '✗';
+                const statusColor = cv.isValid ? '#166534' : '#991b1b';
+                const fieldsHtml = cv.fields.map(f => `
+                    <span style="margin-right: 8px;">${f.key}: ${f.has
+                        ? `<code style="background: #dcfce7; padding: 1px 4px; border-radius: 2px; color: #166534;">✓</code>`
+                        : `<code style="background: #fecaca; padding: 1px 4px; border-radius: 2px; color: #991b1b;">✗</code>`
+                    }</span>
+                `).join('');
+                
+                return `
+                    <div style="padding: 8px; margin-bottom: 4px; background: ${cv.isValid ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${cv.isValid ? '#bbf7d0' : '#fecaca'}; border-radius: 4px;">
+                        <div style="font-weight: 600; color: ${statusColor}; margin-bottom: 4px;">
+                            ${statusIcon} 凭据 ${cv.index}
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280;">
+                            ${fieldsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            if (allValid) {
+                validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
+                validationResult.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>批量验证通过 (${mergedCredentials.length} 个凭据)</strong>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${credentialsHtml}
+                    </div>
+                `;
+                submitBtn.disabled = false;
+            } else {
+                const validCount = credentialsValidation.filter(cv => cv.isValid).length;
+                const invalidCount = credentialsValidation.length - validCount;
+                validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+                validationResult.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>批量验证失败</strong>
+                        <span style="font-weight: normal; font-size: 12px;">(${invalidCount} 个凭据缺少必需字段)</span>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${credentialsHtml}
+                    </div>
+                    <p style="margin: 12px 0 0 0; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
+                        <i class="fas fa-lightbulb" style="color: #dc2626;"></i>
+                        请确保每个凭据都包含所有必需字段：clientId, clientSecret, accessToken, refreshToken
+                    </p>
+                `;
+                submitBtn.disabled = true;
+            }
+            
+            // 显示 JSON 预览（批量模式）
+            jsonPreview.style.display = 'block';
+            const previewData = mergedCredentials.map(cred => {
+                const preview = { ...cred };
+                if (preview.clientSecret) {
+                    preview.clientSecret = preview.clientSecret.substring(0, 8) + '...' + preview.clientSecret.slice(-4);
+                }
+                if (preview.accessToken) {
+                    preview.accessToken = preview.accessToken.substring(0, 20) + '...' + preview.accessToken.slice(-10);
+                }
+                if (preview.refreshToken) {
+                    preview.refreshToken = preview.refreshToken.substring(0, 10) + '...' + preview.refreshToken.slice(-6);
+                }
+                return preview;
+            });
+            jsonContent.textContent = JSON.stringify(previewData, null, 2);
+            
         } else {
-            const missingCount = fieldsList.filter(f => !f.has).length;
-            validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
-            validationResult.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>${t('oauth.kiro.awsValidationFailed')}</strong>
-                    <span style="font-weight: normal; font-size: 12px;">(${t('oauth.kiro.awsMissingFields', { count: missingCount })})</span>
-                </div>
-                <ul style="margin: 8px 0 0 24px; font-size: 13px; list-style: none; padding: 0;">
-                    ${fieldsHtml}
-                </ul>
-                <p style="margin: 12px 0 0 0; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
-                    <i class="fas fa-lightbulb" style="color: #dc2626;"></i>
-                    <span data-i18n="oauth.kiro.awsUploadMore">${t('oauth.kiro.awsUploadMore')}</span>
-                </p>
-            `;
-            submitBtn.disabled = true;
+            // 单个导入模式：原有逻辑
+            const hasClientId = !!mergedCredentials.clientId;
+            const hasClientSecret = !!mergedCredentials.clientSecret;
+            const hasAccessToken = !!mergedCredentials.accessToken;
+            const hasRefreshToken = !!mergedCredentials.refreshToken;
+            
+            // 所有四个字段都必须存在
+            const isValid = hasClientId && hasClientSecret && hasAccessToken && hasRefreshToken;
+            
+            // 构建字段状态列表
+            const fieldsList = [
+                { key: 'clientId', has: hasClientId },
+                { key: 'clientSecret', has: hasClientSecret },
+                { key: 'accessToken', has: hasAccessToken },
+                { key: 'refreshToken', has: hasRefreshToken }
+            ];
+            
+            const fieldsHtml = fieldsList.map(f => `
+                <li>${f.key}: ${f.has
+                    ? `<code style="background: #dcfce7; padding: 1px 4px; border-radius: 2px; color: #166534;">✓ ${t('common.found')}</code>`
+                    : `<code style="background: #fecaca; padding: 1px 4px; border-radius: 2px; color: #991b1b;">✗ ${t('common.missing')}</code>`
+                }</li>
+            `).join('');
+            
+            if (isValid) {
+                validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
+                validationResult.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-check-circle"></i>
+                        <strong data-i18n="oauth.kiro.awsValidationSuccess">${t('oauth.kiro.awsValidationSuccess')}</strong>
+                    </div>
+                    <ul style="margin: 8px 0 0 24px; font-size: 13px; list-style: none; padding: 0;">
+                        ${fieldsHtml}
+                    </ul>
+                `;
+                submitBtn.disabled = false;
+            } else {
+                const missingCount = fieldsList.filter(f => !f.has).length;
+                validationResult.style.cssText = 'display: block; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+                validationResult.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>${t('oauth.kiro.awsValidationFailed')}</strong>
+                        <span style="font-weight: normal; font-size: 12px;">(${t('oauth.kiro.awsMissingFields', { count: missingCount })})</span>
+                    </div>
+                    <ul style="margin: 8px 0 0 24px; font-size: 13px; list-style: none; padding: 0;">
+                        ${fieldsHtml}
+                    </ul>
+                    <p style="margin: 12px 0 0 0; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
+                        <i class="fas fa-lightbulb" style="color: #dc2626;"></i>
+                        <span data-i18n="oauth.kiro.awsUploadMore">${t('oauth.kiro.awsUploadMore')}</span>
+                    </p>
+                `;
+                submitBtn.disabled = true;
+            }
+            
+            // 显示 JSON 预览（单个模式）
+            jsonPreview.style.display = 'block';
+            
+            // 隐藏敏感信息的部分内容
+            const previewData = { ...mergedCredentials };
+            if (previewData.clientSecret) {
+                previewData.clientSecret = previewData.clientSecret.substring(0, 8) + '...' + previewData.clientSecret.slice(-4);
+            }
+            if (previewData.accessToken) {
+                previewData.accessToken = previewData.accessToken.substring(0, 20) + '...' + previewData.accessToken.slice(-10);
+            }
+            if (previewData.refreshToken) {
+                previewData.refreshToken = previewData.refreshToken.substring(0, 10) + '...' + previewData.refreshToken.slice(-6);
+            }
+            
+            jsonContent.textContent = JSON.stringify(previewData, null, 2);
         }
-        
-        // 显示 JSON 预览
-        jsonPreview.style.display = 'block';
-        
-        // 隐藏敏感信息的部分内容
-        const previewData = { ...mergedCredentials };
-        if (previewData.clientSecret) {
-            previewData.clientSecret = previewData.clientSecret.substring(0, 8) + '...' + previewData.clientSecret.slice(-4);
-        }
-        if (previewData.accessToken) {
-            previewData.accessToken = previewData.accessToken.substring(0, 20) + '...' + previewData.accessToken.slice(-10);
-        }
-        if (previewData.refreshToken) {
-            previewData.refreshToken = previewData.refreshToken.substring(0, 10) + '...' + previewData.refreshToken.slice(-6);
-        }
-        
-        jsonContent.textContent = JSON.stringify(previewData, null, 2);
     }
     
     // 读取文件内容
@@ -1340,40 +1851,222 @@ function showKiroAwsImportModal() {
             return;
         }
         
-        // 禁用按钮
+        // 检查是否为批量导入（数组）
+        const isBatchImport = Array.isArray(mergedCredentials);
+        
+        // 禁用按钮和输入
         submitBtn.disabled = true;
+        cancelBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>${t('oauth.kiro.awsImporting')}</span>`;
         
+        if (currentMode === 'json') {
+            jsonInputTextarea.disabled = true;
+        }
+        
+        let importSuccess = false; // 标记是否导入成功
+        
         try {
-            // 确保 authMethod 为 builder-id（AWS 账号模式）
-            if (!mergedCredentials.authMethod) {
-                mergedCredentials.authMethod = 'builder-id';
-            }
-            
-            const response = await window.apiClient.post('/kiro/import-aws-credentials', {
-                credentials: mergedCredentials
-            });
-            
-            if (response.success) {
-                showToast(t('common.success'), t('oauth.kiro.awsImportSuccess'), 'success');
-                modal.remove();
+            if (isBatchImport) {
+                // 批量导入模式 - 使用 SSE 流式响应
+                // 确保每个凭据都有 authMethod
+                const credentialsToImport = mergedCredentials.map(cred => ({
+                    ...cred,
+                    authMethod: cred.authMethod || 'builder-id'
+                }));
                 
-                // 刷新提供商列表和配置列表
-                loadProviders();
-                loadConfigList();
-            } else if (response.error === 'duplicate') {
-                // 显示重复凭据警告
-                const existingPath = response.existingPath || '';
-                showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + (existingPath ? ` (${existingPath})` : ''), 'warning');
+                // 创建进度显示区域
+                validationResult.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #f3f4f6; border: 1px solid #d1d5db;';
+                validationResult.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <i class="fas fa-spinner fa-spin" style="color: #ff9900;"></i>
+                        <strong id="awsBatchProgressText">${t('oauth.kiro.importingProgress', { current: 0, total: credentialsToImport.length })}</strong>
+                    </div>
+                    <div class="progress-bar" style="margin: 8px 0; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="awsImportProgressBar" style="height: 100%; width: 0%; background: #ff9900; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="awsBatchResultsList" style="max-height: 200px; overflow-y: auto; font-size: 12px; margin-top: 8px;"></div>
+                `;
+                
+                const progressText = validationResult.querySelector('#awsBatchProgressText');
+                const progressBar = validationResult.querySelector('#awsImportProgressBar');
+                const resultsList = validationResult.querySelector('#awsBatchResultsList');
+                
+                // 使用 fetch + SSE 获取流式响应
+                const response = await fetch('/api/kiro/import-aws-credentials', {
+                    method: 'POST',
+                    headers: window.apiClient ? window.apiClient.getAuthHeaders() : {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ credentials: credentialsToImport })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                let successCount = 0;
+                let failedCount = 0;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // 解析 SSE 事件
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    let eventType = '';
+                    let eventData = '';
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.substring(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            eventData = line.substring(6).trim();
+                            
+                            if (eventType && eventData) {
+                                try {
+                                    const data = JSON.parse(eventData);
+                                    
+                                    if (eventType === 'start') {
+                                        console.log(`[AWS Batch Import] Starting import of ${data.total} credentials`);
+                                    } else if (eventType === 'progress') {
+                                        const { index, total, current, successCount: sc, failedCount: fc } = data;
+                                        successCount = sc;
+                                        failedCount = fc;
+                                        
+                                        // 更新进度条
+                                        const percentage = Math.round((index / total) * 100);
+                                        progressBar.style.width = `${percentage}%`;
+                                        
+                                        // 更新进度文本
+                                        progressText.textContent = t('oauth.kiro.importingProgress', { current: index, total: total });
+                                        
+                                        // 添加结果项
+                                        const resultItem = document.createElement('div');
+                                        resultItem.style.cssText = 'padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.1);';
+                                        
+                                        if (current.success) {
+                                            resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #166534;">✓ ${current.path}</span>`;
+                                        } else if (current.error === 'duplicate') {
+                                            resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #d97706;">⚠ ${t('oauth.kiro.duplicateCredentials')}</span>
+                                                ${current.existingPath ? `<span style="color: #666; font-size: 11px;">(${current.existingPath})</span>` : ''}`;
+                                        } else {
+                                            resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #991b1b;">✗ ${current.error}</span>`;
+                                        }
+                                        
+                                        resultsList.appendChild(resultItem);
+                                        resultsList.scrollTop = resultsList.scrollHeight;
+                                        
+                                    } else if (eventType === 'complete') {
+                                        progressBar.style.width = '100%';
+                                        
+                                        const isAllSuccess = data.failedCount === 0;
+                                        const isAllFailed = data.successCount === 0;
+                                        
+                                        let resultClass, resultIcon, resultMessage;
+                                        if (isAllSuccess) {
+                                            resultClass = 'background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;';
+                                            resultIcon = 'fa-check-circle';
+                                            resultMessage = t('oauth.kiro.awsImportSuccess') + ` (${data.successCount})`;
+                                        } else if (isAllFailed) {
+                                            resultClass = 'background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+                                            resultIcon = 'fa-times-circle';
+                                            resultMessage = t('oauth.kiro.awsImportAllFailed', { count: data.failedCount });
+                                        } else {
+                                            resultClass = 'background: #fffbeb; border: 1px solid #fde68a; color: #92400e;';
+                                            resultIcon = 'fa-exclamation-triangle';
+                                            resultMessage = t('oauth.kiro.importPartial', { success: data.successCount, failed: data.failedCount });
+                                        }
+                                        
+                                        validationResult.style.cssText = `display: block; margin-top: 16px; padding: 12px; border-radius: 8px; ${resultClass}`;
+                                        
+                                        const headerDiv = validationResult.querySelector('div:first-child');
+                                        headerDiv.innerHTML = `<i class="fas ${resultIcon}"></i> <strong>${resultMessage}</strong>`;
+                                        
+                                        // 如果有成功的，标记为成功并刷新提供商列表
+                                        if (data.successCount > 0) {
+                                            importSuccess = true;
+                                            loadProviders();
+                                            loadConfigList();
+                                        }
+                                        
+                                    } else if (eventType === 'error') {
+                                        throw new Error(data.error);
+                                    }
+                                } catch (parseError) {
+                                    console.warn('Failed to parse SSE data:', parseError);
+                                }
+                                
+                                eventType = '';
+                                eventData = '';
+                            }
+                        }
+                    }
+                }
+                
             } else {
-                showToast(t('common.error'), response.error || t('oauth.kiro.awsImportFailed'), 'error');
+                // 单个导入模式
+                // 确保 authMethod 为 builder-id（AWS 账号模式）
+                if (!mergedCredentials.authMethod) {
+                    mergedCredentials.authMethod = 'builder-id';
+                }
+                
+                const response = await window.apiClient.post('/kiro/import-aws-credentials', {
+                    credentials: mergedCredentials
+                });
+                
+                if (response.success) {
+                    importSuccess = true;
+                    showToast(t('common.success'), t('oauth.kiro.awsImportSuccess'), 'success');
+                    modal.remove();
+                    
+                    // 刷新提供商列表和配置列表
+                    loadProviders();
+                    loadConfigList();
+                } else if (response.error === 'duplicate') {
+                    // 显示重复凭据警告
+                    const existingPath = response.existingPath || '';
+                    showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + (existingPath ? ` (${existingPath})` : ''), 'warning');
+                } else {
+                    showToast(t('common.error'), response.error || t('oauth.kiro.awsImportFailed'), 'error');
+                }
             }
         } catch (error) {
             console.error('AWS import failed:', error);
+            
+            // 更新错误显示
+            validationResult.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';
+            validationResult.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-times-circle"></i>
+                    <strong>${t('oauth.kiro.awsImportFailed')}: ${error.message}</strong>
+                </div>
+            `;
+            
             showToast(t('common.error'), t('oauth.kiro.awsImportFailed') + ': ' + error.message, 'error');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = `<i class="fas fa-check"></i> <span data-i18n="oauth.kiro.awsConfirmImport">${t('oauth.kiro.awsConfirmImport')}</span>`;
+            // 取消按钮始终可用
+            cancelBtn.disabled = false;
+            
+            // 只有在导入失败时才重新启用提交按钮
+            if (!importSuccess) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas fa-check"></i> <span data-i18n="oauth.kiro.awsConfirmImport">${t('oauth.kiro.awsConfirmImport')}</span>`;
+                
+                if (currentMode === 'json') {
+                    jsonInputTextarea.disabled = false;
+                }
+            } else {
+                // 导入成功后，保持提交按钮禁用状态，并显示成功图标
+                submitBtn.innerHTML = `<i class="fas fa-check-circle"></i> <span>${t('common.success')}</span>`;
+            }
         }
     });
 }

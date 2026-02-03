@@ -291,3 +291,169 @@ export async function handleGeminiCliOAuth(currentConfig, options = {}) {
 export async function handleGeminiAntigravityOAuth(currentConfig, options = {}) {
     return handleGoogleOAuth('gemini-antigravity', currentConfig, options);
 }
+
+/**
+ * 检查 Gemini 凭据是否已存在（基于 refresh_token）
+ * @param {string} providerType - 提供商类型
+ * @param {string} refreshToken - 要检查的 refreshToken
+ * @returns {Promise<{isDuplicate: boolean, existingPath?: string}>} 检查结果
+ */
+export async function checkGeminiCredentialsDuplicate(providerType, refreshToken) {
+    const config = OAUTH_PROVIDERS[providerType];
+    if (!config) return { isDuplicate: false };
+
+    const providerDir = config.credentialsDir.replace('.', '');
+    const targetDir = path.join(process.cwd(), 'configs', providerDir);
+    
+    try {
+        if (!fs.existsSync(targetDir)) {
+            return { isDuplicate: false };
+        }
+        
+        const files = await fs.promises.readdir(targetDir);
+        for (const file of files) {
+            if (file.endsWith('.json')) {
+                try {
+                    const fullPath = path.join(targetDir, file);
+                    const content = await fs.promises.readFile(fullPath, 'utf8');
+                    const credentials = JSON.parse(content);
+                    
+                    if (credentials.refresh_token === refreshToken) {
+                        const relativePath = path.relative(process.cwd(), fullPath);
+                        return {
+                            isDuplicate: true,
+                            existingPath: relativePath
+                        };
+                    }
+                } catch (e) {
+                    // 忽略解析错误
+                }
+            }
+        }
+        return { isDuplicate: false };
+    } catch (error) {
+        logger.warn(`[Gemini Auth] Error checking duplicates for ${providerType}:`, error.message);
+        return { isDuplicate: false };
+    }
+}
+
+/**
+ * 批量导入 Gemini Token 并生成凭据文件（流式版本，支持实时进度回调）
+ * @param {string} providerType - 提供商类型 ('gemini-cli-oauth' 或 'gemini-antigravity')
+ * @param {Object[]} tokens - Token 对象数组
+ * @param {Function} onProgress - 进度回调函数
+ * @param {boolean} skipDuplicateCheck - 是否跳过重复检查 (默认: false)
+ * @returns {Promise<Object>} 批量处理结果
+ */
+export async function batchImportGeminiTokensStream(providerType, tokens, onProgress = null, skipDuplicateCheck = false) {
+    const config = OAUTH_PROVIDERS[providerType];
+    if (!config) {
+        throw new Error(`未知的提供商: ${providerType}`);
+    }
+
+    const results = {
+        total: tokens.length,
+        success: 0,
+        failed: 0,
+        details: []
+    };
+    
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        const progressData = {
+            index: i + 1,
+            total: tokens.length,
+            current: null
+        };
+        
+        try {
+            // 验证 token 是否包含必需字段 (通常是 access_token 和 refresh_token)
+            if (!token.access_token || !token.refresh_token) {
+                throw new Error('Token 缺少必需字段 (access_token 或 refresh_token)');
+            }
+
+            // 检查重复
+            if (!skipDuplicateCheck) {
+                const duplicateCheck = await checkGeminiCredentialsDuplicate(providerType, token.refresh_token);
+                if (duplicateCheck.isDuplicate) {
+                    progressData.current = {
+                        index: i + 1,
+                        success: false,
+                        error: 'duplicate',
+                        existingPath: duplicateCheck.existingPath
+                    };
+                    results.failed++;
+                    results.details.push(progressData.current);
+                    if (onProgress) {
+                        onProgress({
+                            ...progressData,
+                            successCount: results.success,
+                            failedCount: results.failed
+                        });
+                    }
+                    continue;
+                }
+            }
+
+            // 生成文件路径
+            const timestamp = Date.now();
+            const providerDir = config.credentialsDir.replace('.', ''); // 去掉开头的点
+            const targetDir = path.join(process.cwd(), 'configs', providerDir);
+            await fs.promises.mkdir(targetDir, { recursive: true });
+            
+            const filename = `${timestamp}_${i}_oauth_creds.json`;
+            const credPath = path.join(targetDir, filename);
+            
+            await fs.promises.writeFile(credPath, JSON.stringify(token, null, 2));
+            
+            const relativePath = path.relative(process.cwd(), credPath);
+            
+            logger.info(`${config.logPrefix} Token ${i + 1} 已导入并保存: ${relativePath}`);
+            
+            progressData.current = {
+                index: i + 1,
+                success: true,
+                path: relativePath
+            };
+            results.success++;
+
+            // 自动关联新生成的凭据到 Pools
+            await autoLinkProviderConfigs(CONFIG, {
+                onlyCurrentCred: true,
+                credPath: relativePath
+            });
+            
+        } catch (error) {
+            logger.error(`${config.logPrefix} Token ${i + 1} 导入失败:`, error.message);
+            
+            progressData.current = {
+                index: i + 1,
+                success: false,
+                error: error.message
+            };
+            results.failed++;
+        }
+        
+        results.details.push(progressData.current);
+
+        // 发送进度更新
+        if (onProgress) {
+            onProgress({
+                ...progressData,
+                successCount: results.success,
+                failedCount: results.failed
+            });
+        }
+    }
+    
+    // 如果有成功的，广播事件
+    if (results.success > 0) {
+        broadcastEvent('oauth_batch_success', {
+            provider: providerType,
+            count: results.success,
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    return results;
+}

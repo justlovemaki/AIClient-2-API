@@ -575,6 +575,30 @@ Or modify the port configuration in `configs/config.json` to use a different por
 - **Check Request Header Format**: Ensure the request contains the correct Authorization header format, such as `Authorization: Bearer your-api-key`
 - **Check Service Logs**: View detailed error messages on the "Real-time Logs" page in Web UI to locate the specific cause
 
+### 12. No available and healthy providers for type
+
+**Problem Description**: When calling API, it returns `No available and healthy providers for type xxx` error.
+
+**Solutions**:
+- **Check Provider Status**: Check if providers of the corresponding type are in healthy status on the "Provider Pools" page in Web UI
+- **Check Credential Validity**: Confirm OAuth credentials have not expired; if expired, regenerate authorization
+- **Check Quota Limits**: Some providers may have reached free quota limits; wait for quota reset or add more accounts
+- **Enable Fallback**: Configure `providerFallbackChain` in `config.json` to automatically switch to backup providers when the primary provider is unavailable
+- **View Detailed Logs**: Check specific health check failure reasons on the "Real-time Logs" page in Web UI
+
+### 13. Request Returns 403 Forbidden Error
+
+**Problem Description**: API requests return 403 Forbidden error.
+
+**Solutions**:
+- **Check Node Status**: If you see the node status is normal (health check passed) on the "Provider Pools" page in Web UI, you can ignore this error as the system will handle it automatically
+- **Check Account Permissions**: Confirm the account has permission to access the requested model or service
+- **Check API Key Permissions**: Some providers' API Keys may have access scope restrictions; ensure the Key has sufficient permissions
+- **Check Regional Restrictions**: Some services may have regional access restrictions; try using a proxy or VPN
+- **Check Credential Status**: OAuth credentials may have been revoked or expired; try regenerating authorization
+- **Check Request Frequency**: Some providers have strict request frequency limits; reduce request frequency and retry
+- **View Provider Documentation**: Visit the official documentation of the corresponding provider to understand specific access restrictions and requirements
+
 </details>
 
 ---

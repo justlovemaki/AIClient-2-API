@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import {
     handleGeminiCliOAuth,
     handleGeminiAntigravityOAuth,
+    batchImportGeminiTokensStream,
     handleQwenOAuth,
     handleKiroOAuth,
     handleIFlowOAuth,
@@ -256,69 +257,288 @@ export async function handleBatchImportKiroTokens(req, res) {
 }
 
 /**
- * 导入 AWS SSO 凭据用于 Kiro
+ * 批量导入 Gemini Token（带实时进度 SSE）
+ */
+export async function handleBatchImportGeminiTokens(req, res) {
+    try {
+        const body = await getRequestBody(req);
+        const { providerType, tokens, skipDuplicateCheck } = body;
+        
+        if (!providerType || !tokens || !Array.isArray(tokens) || tokens.length === 0) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: 'providerType and tokens array are required and must not be empty'
+            }));
+            return true;
+        }
+        
+        logger.info(`[Gemini Batch Import] Starting batch import for ${providerType} with ${tokens.length} tokens...`);
+        
+        // 设置 SSE 响应头
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+        
+        // 发送 SSE 事件的辅助函数
+        const sendSSE = (event, data) => {
+            res.write(`event: ${event}\n`);
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+        
+        // 发送开始事件
+        sendSSE('start', { total: tokens.length });
+        
+        // 执行流式批量导入
+        const result = await batchImportGeminiTokensStream(
+            providerType,
+            tokens,
+            (progress) => {
+                sendSSE('progress', progress);
+            },
+            skipDuplicateCheck !== false // 默认为 true
+        );
+        
+        logger.info(`[Gemini Batch Import] Completed: ${result.success} success, ${result.failed} failed`);
+        
+        // 发送完成事件
+        sendSSE('complete', {
+            success: true,
+            total: result.total,
+            successCount: result.success,
+            failedCount: result.failed,
+            details: result.details
+        });
+        
+        res.end();
+        return true;
+        
+    } catch (error) {
+        logger.error('[Gemini Batch Import] Error:', error);
+        if (res.headersSent) {
+            res.write(`event: error\n`);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        } else {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
+            }));
+        }
+        return true;
+    }
+}
+
+/**
+ * 导入 AWS SSO 凭据用于 Kiro（支持单个或批量导入）
  */
 export async function handleImportAwsCredentials(req, res) {
     try {
         const body = await getRequestBody(req);
         const { credentials } = body;
         
-        if (!credentials || typeof credentials !== 'object') {
+        if (!credentials) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
-                error: 'credentials object is required'
+                error: 'credentials is required'
             }));
             return true;
         }
         
-        // 验证必需字段 - 需要四个字段都存在
-        const missingFields = [];
-        if (!credentials.clientId) missingFields.push('clientId');
-        if (!credentials.clientSecret) missingFields.push('clientSecret');
-        if (!credentials.accessToken) missingFields.push('accessToken');
-        if (!credentials.refreshToken) missingFields.push('refreshToken');
-        
-        if (missingFields.length > 0) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                success: false,
-                error: `Missing required fields: ${missingFields.join(', ')}`
-            }));
-            return true;
-        }
-        
-        logger.info('[Kiro AWS Import] Starting AWS credentials import...');
-        
-        const result = await importAwsCredentials(credentials);
-        
-        if (result.success) {
-            logger.info(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
+        // 检查是否为批量导入（数组）
+        if (Array.isArray(credentials)) {
+            // 批量导入模式 - 使用 SSE 流式响应
+            if (credentials.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: 'credentials array must not be empty'
+                }));
+                return true;
+            }
+            
+            // 验证每个凭据对象的必需字段
+            const validationErrors = [];
+            for (let i = 0; i < credentials.length; i++) {
+                const cred = credentials[i];
+                const missingFields = [];
+                if (!cred.clientId) missingFields.push('clientId');
+                if (!cred.clientSecret) missingFields.push('clientSecret');
+                if (!cred.accessToken) missingFields.push('accessToken');
+                if (!cred.refreshToken) missingFields.push('refreshToken');
+                
+                if (missingFields.length > 0) {
+                    validationErrors.push({
+                        index: i + 1,
+                        missingFields: missingFields
+                    });
+                }
+            }
+            
+            // 如果有验证错误，返回详细信息
+            if (validationErrors.length > 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: `Validation failed for ${validationErrors.length} credential(s)`,
+                    validationErrors: validationErrors
+                }));
+                return true;
+            }
+            
+            logger.info(`[Kiro AWS Batch Import] Starting batch import of ${credentials.length} credentials with SSE...`);
+            
+            // 设置 SSE 响应头
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            });
+            
+            // 发送 SSE 事件的辅助函数
+            const sendSSE = (event, data) => {
+                res.write(`event: ${event}\n`);
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            
+            // 发送开始事件
+            sendSSE('start', { total: credentials.length });
+            
+            // 批量导入
+            let successCount = 0;
+            let failedCount = 0;
+            const details = [];
+            
+            for (let i = 0; i < credentials.length; i++) {
+                const cred = credentials[i];
+                const progressData = {
+                    index: i + 1,
+                    total: credentials.length,
+                    current: null
+                };
+                
+                try {
+                    const result = await importAwsCredentials(cred);
+                    
+                    if (result.success) {
+                        progressData.current = {
+                            index: i + 1,
+                            success: true,
+                            path: result.path
+                        };
+                        successCount++;
+                    } else {
+                        progressData.current = {
+                            index: i + 1,
+                            success: false,
+                            error: result.error,
+                            existingPath: result.existingPath
+                        };
+                        failedCount++;
+                    }
+                } catch (error) {
+                    progressData.current = {
+                        index: i + 1,
+                        success: false,
+                        error: error.message
+                    };
+                    failedCount++;
+                }
+                
+                details.push(progressData.current);
+                
+                // 发送进度更新
+                sendSSE('progress', {
+                    ...progressData,
+                    successCount,
+                    failedCount
+                });
+            }
+            
+            logger.info(`[Kiro AWS Batch Import] Completed: ${successCount} success, ${failedCount} failed`);
+            
+            // 发送完成事件
+            sendSSE('complete', {
                 success: true,
-                path: result.path,
-                message: 'AWS credentials imported successfully'
-            }));
+                total: credentials.length,
+                successCount,
+                failedCount,
+                details
+            });
+            
+            res.end();
+            return true;
+            
+        } else if (typeof credentials === 'object') {
+            // 单个导入模式
+            // 验证必需字段 - 需要四个字段都存在
+            const missingFields = [];
+            if (!credentials.clientId) missingFields.push('clientId');
+            if (!credentials.clientSecret) missingFields.push('clientSecret');
+            if (!credentials.accessToken) missingFields.push('accessToken');
+            if (!credentials.refreshToken) missingFields.push('refreshToken');
+            
+            if (missingFields.length > 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: `Missing required fields: ${missingFields.join(', ')}`
+                }));
+                return true;
+            }
+            
+            logger.info('[Kiro AWS Import] Starting AWS credentials import...');
+            
+            const result = await importAwsCredentials(credentials);
+            
+            if (result.success) {
+                logger.info(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    path: result.path,
+                    message: 'AWS credentials imported successfully'
+                }));
+            } else {
+                // 重复凭据返回 409 Conflict，其他错误返回 500
+                const statusCode = result.error === 'duplicate' ? 409 : 500;
+                res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: result.error,
+                    existingPath: result.existingPath || null
+                }));
+            }
+            return true;
         } else {
-            // 重复凭据返回 409 Conflict，其他错误返回 500
-            const statusCode = result.error === 'duplicate' ? 409 : 500;
-            res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+            res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
-                error: result.error,
-                existingPath: result.existingPath || null
+                error: 'credentials must be an object or array'
             }));
+            return true;
         }
-        return true;
         
     } catch (error) {
         logger.error('[Kiro AWS Import] Error:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            success: false,
-            error: error.message
-        }));
+        // 如果已经开始发送 SSE，则发送错误事件
+        if (res.headersSent) {
+            res.write(`event: error\n`);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        } else {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
+            }));
+        }
         return true;
     }
 }

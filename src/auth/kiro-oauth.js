@@ -852,8 +852,15 @@ export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_
             timestamp: new Date().toISOString()
         });
         
-        // 自动关联新生成的凭据到 Pools（批量导入时扫描所有）
-        await autoLinkProviderConfigs(CONFIG);
+        // 自动关联新生成的凭据到 Pools
+        for (const detail of results.details) {
+            if (detail.success && detail.path) {
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: detail.path
+                });
+            }
+        }
     }
     
     return results;
@@ -985,8 +992,15 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
             timestamp: new Date().toISOString()
         });
         
-        // 自动关联新生成的凭据到 Pools（批量导入时扫描所有）
-        await autoLinkProviderConfigs(CONFIG);
+        // 自动关联新生成的凭据到 Pools
+        for (const detail of results.details) {
+            if (detail.success && detail.path) {
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: detail.path
+                });
+            }
+        }
     }
     
     return results;

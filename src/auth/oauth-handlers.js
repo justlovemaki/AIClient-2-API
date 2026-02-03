@@ -10,6 +10,8 @@ export {
     // Gemini OAuth
     handleGeminiCliOAuth,
     handleGeminiAntigravityOAuth,
+    batchImportGeminiTokensStream,
+    checkGeminiCredentialsDuplicate,
     // Qwen OAuth
     handleQwenOAuth,
     // Kiro OAuth
