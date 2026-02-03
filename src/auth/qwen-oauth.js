@@ -212,7 +212,10 @@ async function pollQwenToken(deviceCode, codeVerifier, interval = 5, expiresIn =
                 });
                 
                 // 自动关联新生成的凭据到 Pools
-                await autoLinkProviderConfigs(CONFIG);
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: relativePath
+                });
                 
                 return data;
             }

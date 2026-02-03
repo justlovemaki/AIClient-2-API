@@ -18,9 +18,9 @@ echo.
 if !FORCE_PULL! equ 1 (
     echo [更新] 正在从远程仓库拉取最新代码...
     git --version >nul 2>&1
-    if !errorlevel! equ 0 (
+    if %errorlevel% equ 0 (
         git pull
-        if !errorlevel! neq 0 (
+        if %errorlevel% neq 0 (
             echo [警告] Git pull 失败，请检查网络或手动处理冲突。
         ) else (
             echo [成功] 代码已更新。
@@ -55,14 +55,22 @@ if not exist "package.json" (
 
 echo [成功] 找到package.json文件
 
-echo [安装] 正在安装/更新依赖...
+:: 检查 pnpm 是否安装
+where pnpm >nul 2>&1
+if %errorlevel% equ 0 (
+    set PKG_MANAGER=pnpm
+) else (
+    set PKG_MANAGER=npm
+)
+
+echo [安装] 正在使用 !PKG_MANAGER! 安装/更新依赖...
 echo 这可能需要几分钟时间，请耐心等待...
-echo 正在执行: npm install...
-:: 使用npm install并设置超时机制
-call npm install --timeout=300000
-if !errorlevel! neq 0 (
+echo 正在执行: !PKG_MANAGER! install...
+
+call !PKG_MANAGER! install
+if %errorlevel% neq 0 (
     echo [错误] 依赖安装失败
-    echo 请检查网络连接或手动运行 'npm install'
+    echo 请检查网络连接或手动运行 '!PKG_MANAGER! install'
     pause
     exit /b 1
 )

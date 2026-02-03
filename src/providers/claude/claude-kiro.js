@@ -711,6 +711,30 @@ async saveCredentialsToFile(filePath, newData) {
         return String(message.content || message);
     }
 
+    /**
+     * 统一处理内容，将不同格式的内容转换为文本
+     * @param {any} content - 内容对象或数组
+     * @returns {string} 处理后的文本
+     */
+    processContent(content) {
+        if (!content) return "";
+        if (typeof content === 'string') return content;
+        if (Array.isArray(content)) {
+            return content.map(part => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part === 'object') {
+                    if (part.type === 'text') return part.text || "";
+                    if (part.type === 'thinking') return part.thinking || part.text || "";
+                    if (part.type === 'tool_result') return this.processContent(part.content);
+                    if (part.type === 'tool_use' && part.input) return JSON.stringify(part.input);
+                    if (part.text) return part.text;
+                }
+                return "";
+            }).join("");
+        }
+        return this.getContentText(content);
+    }
+
     _normalizeThinkingBudgetTokens(budgetTokens) {
         let value = Number(budgetTokens);
         if (!Number.isFinite(value) || value <= 0) {
@@ -2366,52 +2390,34 @@ async saveCredentialsToFile(filePath, newData) {
      * Calculate input tokens from request body using Claude's official tokenizer
      */
     estimateInputTokens(requestBody) {
-        let totalTokens = 0;
+        let allText = "";
         
         // Count system prompt tokens
         if (requestBody.system) {
-            const systemText = this.getContentText(requestBody.system);
-            totalTokens += this.countTextTokens(systemText);
+            allText += this.processContent(requestBody.system);
         }
         
         // Count thinking prefix tokens if thinking is enabled
         if (requestBody.thinking?.type === 'enabled') {
             const budget = this._normalizeThinkingBudgetTokens(requestBody.thinking.budget_tokens);
-            const prefixText = `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
-            totalTokens += this.countTextTokens(prefixText);
+            allText += `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
         }
         
         // Count all messages tokens
         if (requestBody.messages && Array.isArray(requestBody.messages)) {
             for (const message of requestBody.messages) {
                 if (message.content) {
-                    if (Array.isArray(message.content)) {
-                        for (const part of message.content) {
-                            if (part.type === 'text' && part.text) {
-                                totalTokens += this.countTextTokens(part.text);
-                            } else if (part.type === 'thinking' && part.thinking) {
-                                totalTokens += this.countTextTokens(part.thinking);
-                            } else if (part.type === 'tool_result') {
-                                const resultContent = this.getContentText(part.content);
-                                totalTokens += this.countTextTokens(resultContent);
-                            } else if (part.type === 'tool_use' && part.input) {
-                                totalTokens += this.countTextTokens(JSON.stringify(part.input));
-                            }
-                        }
-                    } else {
-                        const contentText = this.getContentText(message);
-                        totalTokens += this.countTextTokens(contentText);
-                    }
+                    allText += this.processContent(message.content);
                 }
             }
         }
         
         // Count tools definitions tokens if present
         if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            totalTokens += this.countTextTokens(JSON.stringify(requestBody.tools));
+            allText += JSON.stringify(requestBody.tools);
         }
         
-        return totalTokens;
+        return this.countTextTokens(allText);
     }
 
     /**
@@ -2659,45 +2665,37 @@ async saveCredentialsToFile(filePath, newData) {
      * @returns {Object} { input_tokens: number }
      */
     countTokens(requestBody) {
-        let totalTokens = 0;
+        let allText = "";
+        let extraTokens = 0;
 
         // Count system prompt tokens
         if (requestBody.system) {
-            const systemText = this.getContentText(requestBody.system);
-            totalTokens += this.countTextTokens(systemText);
+            allText += this.processContent(requestBody.system);
         }
 
         // Count all messages tokens
         if (requestBody.messages && Array.isArray(requestBody.messages)) {
             for (const message of requestBody.messages) {
                 if (message.content) {
-                    if (typeof message.content === 'string') {
-                        totalTokens += this.countTextTokens(message.content);
-                    } else if (Array.isArray(message.content)) {
+                    if (Array.isArray(message.content)) {
                         for (const block of message.content) {
-                            if (block.type === 'text' && block.text) {
-                                totalTokens += this.countTextTokens(block.text);
-                            } else if (block.type === 'tool_use') {
-                                // Count tool use block tokens
-                                totalTokens += this.countTextTokens(block.name || '');
-                                totalTokens += this.countTextTokens(JSON.stringify(block.input || {}));
-                            } else if (block.type === 'tool_result') {
-                                // Count tool result block tokens
-                                const resultContent = this.getContentText(block.content);
-                                totalTokens += this.countTextTokens(resultContent);
-                            } else if (block.type === 'image') {
+                            if (block.type === 'image') {
                                 // Images have a fixed token cost (approximately 1600 tokens for a typical image)
                                 // This is an estimation as actual cost depends on image size
-                                totalTokens += 1600;
+                                extraTokens += 1600;
                             } else if (block.type === 'document') {
                                 // Documents - estimate based on content if available
                                 if (block.source?.data) {
                                     // For base64 encoded documents, estimate tokens
                                     const estimatedChars = block.source.data.length * 0.75; // base64 to bytes ratio
-                                    totalTokens += Math.ceil(estimatedChars / 4);
+                                    extraTokens += Math.ceil(estimatedChars / 4);
                                 }
+                            } else {
+                                allText += this.processContent([block]);
                             }
                         }
+                    } else {
+                        allText += this.processContent(message.content);
                     }
                 }
             }
@@ -2705,18 +2703,10 @@ async saveCredentialsToFile(filePath, newData) {
 
         // Count tools definitions tokens if present
         if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            for (const tool of requestBody.tools) {
-                // Count tool name and description
-                totalTokens += this.countTextTokens(tool.name || '');
-                totalTokens += this.countTextTokens(tool.description || '');
-                // Count input schema
-                if (tool.input_schema) {
-                    totalTokens += this.countTextTokens(JSON.stringify(tool.input_schema));
-                }
-            }
+            allText += JSON.stringify(requestBody.tools);
         }
 
-        return { input_tokens: totalTokens };
+        return { input_tokens: this.countTextTokens(allText) + extraTokens };
     }
 
     /**

@@ -150,7 +150,10 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                         });
                         
                         // 自动关联新生成的凭据到 Pools
-                        await autoLinkProviderConfigs(CONFIG);
+                        await autoLinkProviderConfigs(CONFIG, {
+                            onlyCurrentCred: true,
+                            credPath: relativePath
+                        });
                         
                         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(generateResponsePage(true, '您可以关闭此页面'));
