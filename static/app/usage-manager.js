@@ -5,6 +5,23 @@ import { getAuthHeaders } from './auth.js';
 import { t, getCurrentLanguage } from './i18n.js';
 
 /**
+ * 不支持显示用量数据的提供商列表
+ * 这些提供商只显示模型名称和重置时间，不显示用量数字和进度条
+ */
+const PROVIDERS_WITHOUT_USAGE_DISPLAY = [
+    'gemini-antigravity'
+];
+
+/**
+ * 检查提供商是否支持显示用量
+ * @param {string} providerType - 提供商类型
+ * @returns {boolean} 是否支持显示用量
+ */
+function shouldShowUsage(providerType) {
+    return !PROVIDERS_WITHOUT_USAGE_DISPLAY.includes(providerType);
+}
+
+/**
  * 初始化用量管理功能
  */
 export function initUsageManager() {
@@ -404,6 +421,9 @@ function createInstanceUsageCard(instance, providerType) {
     const providerDisplayName = getProviderDisplayName(providerType);
     const providerIcon = getProviderIcon(providerType);
 
+    // 检查是否应该显示用量信息
+    const showUsage = shouldShowUsage(providerType);
+
     // 计算总用量（用于折叠摘要显示）
     const totalUsage = instance.usage ? calculateTotalUsage(instance.usage.usageBreakdown) : { hasData: false, percent: 0 };
     const progressClass = totalUsage.percent >= 90 ? 'danger' : (totalUsage.percent >= 70 ? 'warning' : 'normal');
@@ -429,6 +449,7 @@ function createInstanceUsageCard(instance, providerType) {
             <span class="collapsed-name" title="${displayName}">${displayName}</span>
             ${statusIcon}
         </div>
+        ${showUsage ? `
         <div class="collapsed-summary-row collapsed-summary-usage-row">
             ${totalUsage.hasData ? `
                 <div class="collapsed-progress-bar ${progressClass}">
@@ -438,6 +459,7 @@ function createInstanceUsageCard(instance, providerType) {
                 <span class="collapsed-usage-text">${displayUsageText}</span>
             ` : (instance.error ? `<span class="collapsed-error" data-i18n="common.error">${t('common.error')}</span>` : '')}
         </div>
+        ` : ''}
     `;
     
     // 点击折叠摘要切换展开状态
@@ -504,7 +526,7 @@ function createInstanceUsageCard(instance, providerType) {
             </div>
         `;
     } else if (instance.usage) {
-        content.appendChild(renderUsageDetails(instance.usage));
+        content.appendChild(renderUsageDetails(instance.usage, providerType));
     }
 
     expandedContent.appendChild(content);
@@ -516,17 +538,21 @@ function createInstanceUsageCard(instance, providerType) {
 /**
  * 渲染用量详情 - 显示总用量、用量明细和到期时间
  * @param {Object} usage - 用量数据
+ * @param {string} providerType - 提供商类型
  * @returns {HTMLElement} 详情元素
  */
-function renderUsageDetails(usage) {
+function renderUsageDetails(usage, providerType) {
     const container = document.createElement('div');
     container.className = 'usage-details';
 
+    // 检查是否应该显示用量信息
+    const showUsage = shouldShowUsage(providerType);
+    
     // 计算总用量
     const totalUsage = calculateTotalUsage(usage.usageBreakdown);
     
-    // 总用量进度条
-    if (totalUsage.hasData) {
+    // 总用量进度条（不支持显示用量的提供商不显示）
+    if (totalUsage.hasData && showUsage) {
         const totalSection = document.createElement('div');
         totalSection.className = 'usage-section total-usage';
         
@@ -543,11 +569,14 @@ function renderUsageDetails(usage) {
             `;
         } else {
             const resetTimeEntry = usage.usageBreakdown.find(b => b.resetTime && b.resetTime !== '--');
-            resetTimeHTML = resetTimeEntry ? `
-                <div class="total-reset-info" data-i18n="usage.card.resetAt" data-i18n-params='{"time":"${resetTimeEntry.resetTime}"}'>
-                    <i class="fas fa-history"></i> ${t('usage.card.resetAt', { time: resetTimeEntry.resetTime })}
-                </div>
-            ` : '';
+            if (resetTimeEntry) {
+                const formattedResetTime = formatDate(resetTimeEntry.resetTime);
+                resetTimeHTML = `
+                    <div class="total-reset-info" data-i18n="usage.card.resetAt" data-i18n-params='{"time":"${formattedResetTime}"}'>
+                        <i class="fas fa-history"></i> ${t('usage.card.resetAt', { time: formattedResetTime })}
+                    </div>
+                `;
+            }
         }
 
         const displayValue = totalUsage.isCodex 
@@ -582,7 +611,7 @@ function renderUsageDetails(usage) {
         let breakdownHTML = '';
         
         for (const breakdown of usage.usageBreakdown) {
-            breakdownHTML += createUsageBreakdownHTML(breakdown);
+            breakdownHTML += createUsageBreakdownHTML(breakdown, providerType);
         }
         
         breakdownSection.innerHTML = breakdownHTML;
@@ -595,13 +624,17 @@ function renderUsageDetails(usage) {
 /**
  * 创建用量明细 HTML（紧凑版）
  * @param {Object} breakdown - 用量明细数据
+ * @param {string} providerType - 提供商类型
  * @returns {string} HTML 字符串
  */
-function createUsageBreakdownHTML(breakdown) {
+function createUsageBreakdownHTML(breakdown, providerType) {
     // 特殊处理 Codex
     if (breakdown.rateLimit && breakdown.rateLimit.primary_window) {
         return createCodexUsageBreakdownHTML(breakdown);
     }
+
+    // 检查是否应该显示用量信息
+    const showUsage = shouldShowUsage(providerType);
 
     const usagePercent = breakdown.usageLimit > 0
         ? Math.min(100, (breakdown.currentUsage / breakdown.usageLimit) * 100)
@@ -613,21 +646,24 @@ function createUsageBreakdownHTML(breakdown) {
         <div class="breakdown-item-compact">
             <div class="breakdown-header-compact">
                 <span class="breakdown-name">${breakdown.displayName || breakdown.resourceType}</span>
-                <span class="breakdown-usage">${formatNumber(breakdown.currentUsage)} / ${formatNumber(breakdown.usageLimit)}</span>
+                ${showUsage ? `<span class="breakdown-usage">${formatNumber(breakdown.currentUsage)} / ${formatNumber(breakdown.usageLimit)}</span>` : ''}
             </div>
+            ${showUsage ? `
             <div class="progress-bar-small ${progressClass}">
                 <div class="progress-fill" style="width: ${usagePercent}%"></div>
             </div>
+            ` : ''}
     `;
 
     // 如果有重置时间，则显示
     if (breakdown.resetTime && breakdown.resetTime !== '--') {
-        const resetText = t('usage.card.resetAt', { time: breakdown.resetTime });
+        const formattedResetTime = formatDate(breakdown.resetTime);
+        const resetText = t('usage.card.resetAt', { time: formattedResetTime });
         html += `
             <div class="extra-usage-info reset-time">
                 <span class="extra-label">
                     <i class="fas fa-history"></i> 
-                    <span data-i18n="usage.card.resetAt" data-i18n-params='${JSON.stringify({ time: breakdown.resetTime })}'>${resetText}</span>
+                    <span data-i18n="usage.card.resetAt" data-i18n-params='${JSON.stringify({ time: formattedResetTime })}'>${resetText}</span>
                 </span>
             </div>
         `;

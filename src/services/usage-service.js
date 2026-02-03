@@ -5,7 +5,7 @@
 
 import { getProviderPoolManager } from './service-manager.js';
 import { serviceInstances } from '../providers/adapter.js';
-import { MODEL_PROVIDER, formatToLocal } from '../utils/common.js';
+import { MODEL_PROVIDER } from '../utils/common.js';
 
 /**
  * 用量查询服务类
@@ -396,8 +396,7 @@ export function formatGeminiUsage(usageData) {
                 outputTokenLimit: modelInfo.outputTokenLimit || 0,
                 remaining: remainingPercent,
                 remainingPercent: Math.round(remainingPercent * 100), // 剩余百分比
-                resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
-                           formatToLocal(modelInfo.resetTimeRaw || modelInfo.resetTime) : '--',
+                resetTime: modelInfo.resetTime || '--',
                 resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null
             };
 
@@ -464,7 +463,7 @@ export function formatAntigravityUsage(usageData) {
             
             // 优先使用模型自己的重置时间，如果没有则使用全局重置时间
             const resetTimeRaw = modelInfo.resetTimeRaw || (usageData.quotaInfo ? usageData.quotaInfo.quotaResetTime : null);
-            const resetTimeFormatted = resetTimeRaw ? formatToLocal(resetTimeRaw) : (modelInfo.resetTime || '--');
+            const resetTimeFormatted = modelInfo.resetTime || '--';
 
             const item = {
                 resourceType: 'MODEL_USAGE',
@@ -592,8 +591,7 @@ export function formatCodexUsage(usageData) {
                 modelName: modelName,
                 remaining: remainingPercent,
                 remainingPercent: Math.round(remainingPercent * 100), // 剩余百分比
-                resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
-                           formatToLocal(modelInfo.resetTimeRaw || modelInfo.resetTime) : '--',
+                resetTime: modelInfo.resetTime || '--',
                 resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null,
                 
                 // 注入 raw 窗口信息以便前端使用

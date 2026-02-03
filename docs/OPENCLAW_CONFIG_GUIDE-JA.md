@@ -210,4 +210,4 @@ openclaw chat --model aiclient2api/gemini-3-flash-preview "あなたの質問"
 
 ---
 
-詳細については、[AIClient-2-API ドキュメント](./README-JA.md) を参照してください
+詳細については、[AIClient-2-API ドキュメント](../README-JA.md) を参照してください

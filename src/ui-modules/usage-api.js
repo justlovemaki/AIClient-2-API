@@ -5,6 +5,8 @@ import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage, formatCodex
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
 import path from 'path';
 
+const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
+
 /**
  * 获取所有支持用量查询的提供商的用量信息
  * @param {Object} currentConfig - 当前配置
@@ -16,9 +18,6 @@ async function getAllProvidersUsage(currentConfig, providerPoolManager) {
         timestamp: new Date().toISOString(),
         providers: {}
     };
-
-    // 支持用量查询的提供商列表
-    const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
 
     // 并发获取所有提供商的用量数据
     const usagePromises = supportedProviders.map(async (providerType) => {
@@ -225,7 +224,6 @@ function getProviderDisplayName(provider, providerType) {
  */
 export async function handleGetSupportedProviders(req, res) {
     try {
-        const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(supportedProviders));
         return true;
