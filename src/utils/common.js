@@ -491,6 +491,17 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         responseClosed = true;
     } finally {
         if (!responseClosed) {
+            // 根据客户端协议发送相应的流式结束标记
+            const clientProtocol = getProtocolPrefix(fromProvider);
+            if (clientProtocol === MODEL_PROTOCOL_PREFIX.OPENAI) {
+                res.write('data: [DONE]\n\n');
+            } else if (clientProtocol === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES) {
+                res.write('event: done\n');
+                res.write('data: {}\n\n');
+            } else if (clientProtocol === MODEL_PROTOCOL_PREFIX.CLAUDE) {
+                res.write('event: message_stop\n');
+                res.write('data: {"type":"message_stop"}\n\n');
+            }
             res.end();
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
