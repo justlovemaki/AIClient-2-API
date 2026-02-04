@@ -284,6 +284,46 @@ export class GeminiConverter extends BaseConverter {
     toOpenAIResponse(geminiResponse, model) {
         const content = this.processGeminiResponseContent(geminiResponse);
         
+        // 提取 tool_calls
+        const toolCalls = [];
+        let finishReason = "stop";
+        
+        if (geminiResponse && geminiResponse.candidates) {
+            for (const candidate of geminiResponse.candidates) {
+                if (candidate.content && candidate.content.parts) {
+                    for (const part of candidate.content.parts) {
+                        if (part.functionCall) {
+                            toolCalls.push({
+                                id: part.functionCall.id || `call_${uuidv4()}`,
+                                type: 'function',
+                                function: {
+                                    name: part.functionCall.name,
+                                    arguments: typeof part.functionCall.args === 'string' 
+                                        ? part.functionCall.args 
+                                        : JSON.stringify(part.functionCall.args)
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果有工具调用，设置 finish_reason 为 tool_calls
+        if (toolCalls.length > 0) {
+            finishReason = "tool_calls";
+        }
+        
+        const message = {
+            role: "assistant",
+            content: content
+        };
+        
+        // 只有在有 tool_calls 时才添加该字段
+        if (toolCalls.length > 0) {
+            message.tool_calls = toolCalls;
+        }
+        
         return {
             id: `chatcmpl-${uuidv4()}`,
             object: "chat.completion",
@@ -291,11 +331,8 @@ export class GeminiConverter extends BaseConverter {
             model: model,
             choices: [{
                 index: 0,
-                message: {
-                    role: "assistant",
-                    content: content
-                },
-                finish_reason: "stop",
+                message: message,
+                finish_reason: finishReason,
             }],
             usage: geminiResponse.usageMetadata ? {
                 prompt_tokens: geminiResponse.usageMetadata.promptTokenCount || 0,
@@ -318,7 +355,7 @@ export class GeminiConverter extends BaseConverter {
                 },
                 completion_tokens_details: {
                     reasoning_tokens: 0
-                }
+        }
             },
         };
     }
