@@ -189,10 +189,22 @@ export class OpenAIApiService {
     }
 
     async generateContent(model, requestBody) {
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         return this.callApi('/chat/completions', requestBody);
     }
 
     async *generateContentStream(model, requestBody) {
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         yield* this.streamApi('/chat/completions', requestBody);
     }
 

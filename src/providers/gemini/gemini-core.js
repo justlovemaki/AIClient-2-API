@@ -640,6 +640,12 @@ export class GeminiApiService {
     async generateContent(model, requestBody) {
         logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
         
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+        
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
@@ -664,6 +670,12 @@ export class GeminiApiService {
 
     async * generateContentStream(model, requestBody) {
         logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
 
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {

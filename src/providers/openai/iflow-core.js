@@ -997,6 +997,12 @@ export class IFlowApiService {
         if (!this.isInitialized) {
             await this.initialize();
         }
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
         
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
@@ -1018,6 +1024,12 @@ export class IFlowApiService {
     async *generateContentStream(model, requestBody) {
         if (!this.isInitialized) {
             await this.initialize();
+        }
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
         }
         
         // 检查 token 是否即将过期，如果是则推送到刷新队列
