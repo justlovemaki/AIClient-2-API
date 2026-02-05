@@ -205,10 +205,18 @@ export async function handleBatchImportKiroTokens(req, res) {
             'X-Accel-Buffering': 'no'
         });
         
-        // 发送 SSE 事件的辅助函数
+        // 发送 SSE 事件的辅助函数（带错误处理）
         const sendSSE = (event, data) => {
-            res.write(`event: ${event}\n`);
-            res.write(`data: ${JSON.stringify(data)}\n\n`);
+            if (!res.writableEnded && !res.destroyed) {
+                try {
+                    res.write(`event: ${event}\n`);
+                    res.write(`data: ${JSON.stringify(data)}\n\n`);
+                } catch (err) {
+                    logger.error('[Kiro Batch Import] Failed to write SSE:', err.message);
+                    return false;
+                }
+            }
+            return true;
         };
         
         // 发送开始事件
@@ -241,11 +249,15 @@ export async function handleBatchImportKiroTokens(req, res) {
     } catch (error) {
         logger.error('[Kiro Batch Import] Error:', error);
         // 如果已经开始发送 SSE，则发送错误事件
-        if (res.headersSent) {
-            res.write(`event: error\n`);
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-            res.end();
-        } else {
+        if (res.headersSent && !res.writableEnded && !res.destroyed) {
+            try {
+                res.write(`event: error\n`);
+                res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+                res.end();
+            } catch (writeErr) {
+                logger.error('[Kiro Batch Import] Failed to write error:', writeErr.message);
+            }
+        } else if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,

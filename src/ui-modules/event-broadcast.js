@@ -36,7 +36,12 @@ export async function handleEvents(req, res) {
         'Access-Control-Allow-Origin': '*'
     });
 
-    res.write('\n');
+    try {
+        res.write('\n');
+    } catch (err) {
+        logger.error('[Event Broadcast] Failed to write initial data:', err.message);
+        return true;
+    }
 
     // Store the response object for broadcasting
     if (!global.eventClients) {
@@ -46,7 +51,18 @@ export async function handleEvents(req, res) {
 
     // Keep connection alive
     const keepAlive = setInterval(() => {
-        res.write(':\n\n');
+        if (!res.writableEnded && !res.destroyed) {
+            try {
+                res.write(':\n\n');
+            } catch (err) {
+                logger.error('[Event Broadcast] Failed to write keepalive:', err.message);
+                clearInterval(keepAlive);
+                global.eventClients = global.eventClients.filter(r => r !== res);
+            }
+        } else {
+            clearInterval(keepAlive);
+            global.eventClients = global.eventClients.filter(r => r !== res);
+        }
     }, 30000);
 
     req.on('close', () => {
