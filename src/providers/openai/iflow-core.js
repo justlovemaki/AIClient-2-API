@@ -1054,34 +1054,41 @@ export class IFlowApiService {
             await this.initialize();
         }
         
+        // 需要手动添加的模型列表
+        const manualModels = ['glm-4.7', 'kimi-k2.5', 'minimax-m2.1'];
+        
         try {
             const response = await this.axiosInstance.get('/models', {
                 headers: this._getHeaders(false)
             });
             
-            // 检查返回数据中是否包含 glm-4.7，如果没有则添加
+            // 检查返回数据中是否包含手动添加的模型，如果没有则添加
             const modelsData = response.data;
             if (modelsData && modelsData.data && Array.isArray(modelsData.data)) {
-                const hasGlm47 = modelsData.data.some(model => model.id === 'glm-4.7');
-                if (!hasGlm47) {
-                    // 添加 glm-4.7 模型到返回列表
-                    modelsData.data.push({
-                        id: 'glm-4.7',
-                        object: 'model',
-                        created: Math.floor(Date.now() / 1000),
-                        owned_by: 'iflow'
-                    });
-                    logger.info('[iFlow] Added glm-4.7 to models list');
+                for (const modelId of manualModels) {
+                    const hasModel = modelsData.data.some(model => model.id === modelId);
+                    if (!hasModel) {
+                        // 添加模型到返回列表
+                        modelsData.data.push({
+                            id: modelId,
+                            object: 'model',
+                            created: Math.floor(Date.now() / 1000),
+                            owned_by: 'iflow'
+                        });
+                        logger.info(`[iFlow] Added ${modelId} to models list`);
+                    }
                 }
             }
             
             return modelsData;
         } catch (error) {
             logger.warn('[iFlow] Failed to fetch models from API, using default list:', error.message);
-            // 返回默认模型列表，确保包含 glm-4.7
+            // 返回默认模型列表，确保包含手动添加的模型
             const defaultModels = [...IFLOW_MODELS];
-            if (!defaultModels.includes('glm-4.7')) {
-                defaultModels.push('glm-4.7');
+            for (const modelId of manualModels) {
+                if (!defaultModels.includes(modelId)) {
+                    defaultModels.push(modelId);
+                }
             }
             return {
                 object: 'list',

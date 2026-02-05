@@ -56,11 +56,14 @@ export const PROVIDER_MODELS = {
         'kimi-k2',
         // GLM 模型
         'glm-4.6',
-        'glm-4.7',
         // DeepSeek 模型
         'deepseek-v3.2',
         'deepseek-r1',
-        'deepseek-v3'
+        'deepseek-v3',
+        // 手动定义
+        'glm-4.7',
+        'kimi-k2.5',
+        'minimax-m2.1',
     ],
     'openai-codex-oauth': [
         'gpt-5',

@@ -810,34 +810,22 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
 
 /**
  * 快速链接配置文件到对应的提供商
+ * 支持单个文件路径或文件路径数组
  */
 export async function handleQuickLinkProvider(req, res, currentConfig, providerPoolManager) {
     try {
         const body = await getRequestBody(req);
-        const { filePath } = body;
+        const { filePath, filePaths } = body;
 
-        if (!filePath) {
+        // 支持单个文件路径或文件路径数组
+        const pathsToLink = filePaths || (filePath ? [filePath] : []);
+
+        if (!pathsToLink || pathsToLink.length === 0) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'filePath is required' } }));
+            res.end(JSON.stringify({ error: { message: 'filePath or filePaths is required' } }));
             return true;
         }
 
-        const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase();
-        
-        // 根据文件路径自动识别提供商类型
-        const providerMapping = detectProviderFromPath(normalizedPath);
-        
-        if (!providerMapping) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                error: {
-                    message: 'Unable to identify provider type for config file, please ensure file is in configs/kiro/, configs/gemini/, configs/qwen/ or configs/antigravity/ directory'
-                }
-            }));
-            return true;
-        }
-
-        const { providerType, credPathKey, defaultCheckModel, displayName } = providerMapping;
         const poolsFilePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         
         // Load existing pools
@@ -851,70 +839,116 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
             }
         }
 
-        // Ensure provider type array exists
-        if (!providerPools[providerType]) {
-            providerPools[providerType] = [];
+        const results = [];
+        const linkedProviders = [];
+
+        // 处理每个文件路径
+        for (const currentFilePath of pathsToLink) {
+            const normalizedPath = currentFilePath.replace(/\\/g, '/').toLowerCase();
+            
+            // 根据文件路径自动识别提供商类型
+            const providerMapping = detectProviderFromPath(normalizedPath);
+            
+            if (!providerMapping) {
+                results.push({
+                    filePath: currentFilePath,
+                    success: false,
+                    error: 'Unable to identify provider type for config file'
+                });
+                continue;
+            }
+
+            const { providerType, credPathKey, defaultCheckModel, displayName } = providerMapping;
+
+            // Ensure provider type array exists
+            if (!providerPools[providerType]) {
+                providerPools[providerType] = [];
+            }
+
+            // Check if already linked - 使用标准化路径进行比较
+            const normalizedForComparison = currentFilePath.replace(/\\/g, '/');
+            const isAlreadyLinked = providerPools[providerType].some(p => {
+                const existingPath = p[credPathKey];
+                if (!existingPath) return false;
+                const normalizedExistingPath = existingPath.replace(/\\/g, '/');
+                return normalizedExistingPath === normalizedForComparison ||
+                       normalizedExistingPath === './' + normalizedForComparison ||
+                       './' + normalizedExistingPath === normalizedForComparison;
+            });
+
+            if (isAlreadyLinked) {
+                results.push({
+                    filePath: currentFilePath,
+                    success: false,
+                    error: 'This config file is already linked',
+                    providerType: providerType
+                });
+                continue;
+            }
+
+            // Create new provider config based on provider type
+            const newProvider = createProviderConfig({
+                credPathKey,
+                credPath: formatSystemPath(currentFilePath),
+                defaultCheckModel,
+                needsProjectId: providerMapping.needsProjectId
+            });
+
+            providerPools[providerType].push(newProvider);
+            linkedProviders.push({ providerType, provider: newProvider });
+
+            results.push({
+                filePath: currentFilePath,
+                success: true,
+                providerType: providerType,
+                displayName: displayName,
+                provider: newProvider
+            });
+
+            logger.info(`[UI API] Quick linked config: ${currentFilePath} -> ${providerType}`);
         }
 
-        // Check if already linked - 使用标准化路径进行比较
-        const normalizedForComparison = filePath.replace(/\\/g, '/');
-        const isAlreadyLinked = providerPools[providerType].some(p => {
-            const existingPath = p[credPathKey];
-            if (!existingPath) return false;
-            const normalizedExistingPath = existingPath.replace(/\\/g, '/');
-            return normalizedExistingPath === normalizedForComparison ||
-                   normalizedExistingPath === './' + normalizedForComparison ||
-                   './' + normalizedExistingPath === normalizedForComparison;
-        });
+        // Save to file only if there were successful links
+        const successCount = results.filter(r => r.success).length;
+        if (successCount > 0) {
+            writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf-8');
 
-        if (isAlreadyLinked) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'This config file is already linked' } }));
-            return true;
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+
+            // Broadcast update events
+            broadcastEvent('config_update', {
+                action: 'quick_link_batch',
+                filePath: poolsFilePath,
+                results: results,
+                timestamp: new Date().toISOString()
+            });
+
+            for (const { providerType, provider } of linkedProviders) {
+                broadcastEvent('provider_update', {
+                    action: 'add',
+                    providerType,
+                    providerConfig: provider,
+                    timestamp: new Date().toISOString()
+                });
+            }
         }
 
-        // Create new provider config based on provider type
-        const newProvider = createProviderConfig({
-            credPathKey,
-            credPath: formatSystemPath(filePath),
-            defaultCheckModel,
-            needsProjectId: providerMapping.needsProjectId
-        });
-
-        providerPools[providerType].push(newProvider);
-
-        // Save to file
-        writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf-8');
-        logger.info(`[UI API] Quick linked config: ${filePath} -> ${providerType}`);
-
-        // Update provider pool manager if available
-        if (providerPoolManager) {
-            providerPoolManager.providerPools = providerPools;
-            providerPoolManager.initializeProviderStatus();
-        }
-
-        // Broadcast update event
-        broadcastEvent('config_update', {
-            action: 'quick_link',
-            filePath: poolsFilePath,
-            providerType,
-            newProvider,
-            timestamp: new Date().toISOString()
-        });
-
-        broadcastEvent('provider_update', {
-            action: 'add',
-            providerType,
-            providerConfig: newProvider,
-            timestamp: new Date().toISOString()
-        });
+        const failCount = results.filter(r => !r.success).length;
+        const message = successCount > 0
+            ? `Successfully linked ${successCount} config file(s)${failCount > 0 ? `, ${failCount} failed` : ''}`
+            : `Failed to link all ${failCount} config file(s)`;
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            success: true,
-            message: `Config successfully linked to ${displayName}`,
-            provider: newProvider,
-            providerType: providerType
+            success: successCount > 0,
+            message: message,
+            successCount: successCount,
+            failCount: failCount,
+            results: results
         }));
         return true;
     } catch (error) {
