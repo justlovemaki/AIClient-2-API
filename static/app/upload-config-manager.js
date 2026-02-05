@@ -852,7 +852,7 @@ function detectProviderFromPath(filePath) {
         },
         {
             patterns: ['configs/iflow/', '/iflow/'],
-            providerType: 'openai-iflow-oauth',
+            providerType: 'openai-iflow',
             displayName: 'OpenAI iFlow OAuth',
             shortName: 'iflow-oauth'
         }
