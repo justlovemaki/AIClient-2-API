@@ -147,6 +147,19 @@ export function sendPotluckError(res, error) {
         };
     }
 
-    res.writeHead(error.statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(response));
+    // 检查响应流是否已关闭
+    if (res.writableEnded || res.destroyed) {
+        logger.warn('[API Potluck] Response already ended, skipping error response');
+        return;
+    }
+
+    if (!res.headersSent) {
+        res.writeHead(error.statusCode, { 'Content-Type': 'application/json' });
+    }
+    
+    try {
+        res.end(JSON.stringify(response));
+    } catch (writeError) {
+        logger.error('[API Potluck] Failed to write error response:', writeError.message);
+    }
 }
