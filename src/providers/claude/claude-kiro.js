@@ -1040,6 +1040,11 @@ async saveCredentialsToFile(filePath, newData) {
                     userInputMessage.userInputMessageContext = { toolResults: uniqueToolResults };
                 }
                 
+                // Kiro API 要求 content 不能为空，即使有 toolResults（与 currentMessage 保持一致）
+                if (!userInputMessage.content) {
+                    userInputMessage.content = toolResults.length > 0 ? 'Tool results provided.' : 'Continue';
+                }
+
                 history.push({ userInputMessage });
             } else if (message.role === 'assistant') {
                 let assistantResponseMessage = {
