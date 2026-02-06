@@ -144,12 +144,24 @@ export class ForwardApiService {
     }
 
     async generateContent(model, requestBody) {
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         // Transparently pass the endpoint if provided in requestBody, otherwise use default
         const endpoint = requestBody.endpoint || '';
         return this.callApi(endpoint, requestBody);
     }
 
     async *generateContentStream(model, requestBody) {
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         const endpoint = requestBody.endpoint || '';
         yield* this.streamApi(endpoint, requestBody);
     }

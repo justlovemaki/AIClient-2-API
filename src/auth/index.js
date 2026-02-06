@@ -8,7 +8,9 @@ export {
 // Gemini OAuth
 export {
     handleGeminiCliOAuth,
-    handleGeminiAntigravityOAuth
+    handleGeminiAntigravityOAuth,
+    batchImportGeminiTokensStream,
+    checkGeminiCredentialsDuplicate
 } from './gemini-oauth.js';
 
 // Qwen OAuth

@@ -1305,6 +1305,12 @@ export class AntigravityApiService {
     async generateContent(model, requestBody) {
         logger.info(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
@@ -1371,6 +1377,12 @@ export class AntigravityApiService {
 
     async * generateContentStream(model, requestBody) {
         logger.info(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
 
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
@@ -1468,29 +1480,32 @@ export class AntigravityApiService {
                     };
 
                     const res = await this.authClient.request(requestOptions);
-                    logger.info(`[Antigravity] fetchAvailableModels success`);
-                    if (res.data && res.data.models) {
-                        const modelsData = res.data.models;
-                        
-                        // 遍历模型数据，提取配额信息
-                        for (const [modelId, modelData] of Object.entries(modelsData)) {
-                            const aliasName = modelName2Alias(modelId);
-                            if (aliasName == null || aliasName === '') continue; // 跳过不支持的模型
+                    // logger.info(`[Antigravity] fetchAvailableModels success: ${JSON.stringify(res.data)}`);
+                    if (res.data) {
+
+                        if (res.data.models) {
+                            const modelsData = res.data.models;
                             
-                            const modelInfo = {
-                                remaining: 0,
-                                resetTime: null,
-                                resetTimeRaw: null
-                            };
-                            
-                            // 从 quotaInfo 中提取配额信息
-                            if (modelData.quotaInfo) {
-                                modelInfo.remaining = modelData.quotaInfo.remainingFraction || modelData.quotaInfo.remaining || 0;
-                                modelInfo.resetTime = modelData.quotaInfo.resetTime || null;
-                                modelInfo.resetTimeRaw = modelData.quotaInfo.resetTime;
+                            // 遍历模型数据，提取配额信息
+                            for (const [modelId, modelData] of Object.entries(modelsData)) {
+                                const aliasName = modelName2Alias(modelId);
+                                if (aliasName == null || aliasName === '') continue; // 跳过不支持的模型
+                                
+                                const modelInfo = {
+                                    remaining: 0,
+                                    resetTime: null,
+                                    resetTimeRaw: null
+                                };
+                                
+                                // 从 quotaInfo 中提取配额信息
+                                if (modelData.quotaInfo) {
+                                    modelInfo.remaining = modelData.quotaInfo.remainingFraction !== undefined ? modelData.quotaInfo.remainingFraction : (modelData.quotaInfo.remaining || 0);
+                                    modelInfo.resetTime = modelData.quotaInfo.resetTime || null;
+                                    modelInfo.resetTimeRaw = modelData.quotaInfo.resetTime;
+                                }
+                                
+                                result.models[aliasName] = modelInfo;
                             }
-                            
-                            result.models[aliasName] = modelInfo;
                         }
 
                         // 对模型按名称排序

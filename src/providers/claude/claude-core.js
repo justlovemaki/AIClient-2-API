@@ -226,6 +226,12 @@ export class ClaudeApiService {
      * @returns {Promise<object>} Claude API response (Claude compatible format).
      */
     async generateContent(model, requestBody) {
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+        
         const response = await this.callApi('/messages', requestBody);
         return response;
     }

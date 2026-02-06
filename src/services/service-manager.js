@@ -20,9 +20,12 @@ let providerPoolManager = null;
 /**
  * 扫描 configs 目录并自动关联未关联的配置文件到对应的提供商
  * @param {Object} config - 服务器配置对象
+ * @param {Object} options - 可选参数
+ * @param {boolean} options.onlyCurrentCred - 为 true 时，只自动关联当前凭证
+ * @param {string} options.credPath - 当前凭证的路径（当 onlyCurrentCred 为 true 时必需）
  * @returns {Promise<Object>} 更新后的 providerPools 对象
  */
-export async function autoLinkProviderConfigs(config) {
+export async function autoLinkProviderConfigs(config, options = {}) {
     // 确保 providerPools 对象存在
     if (!config.providerPools) {
         config.providerPools = {};
@@ -31,43 +34,52 @@ export async function autoLinkProviderConfigs(config) {
     let totalNewProviders = 0;
     const allNewProviders = {};
     
-    // 遍历所有提供商映射
-    for (const mapping of PROVIDER_MAPPINGS) {
-        const configsPath = path.join(process.cwd(), 'configs', mapping.dirName);
-        const { providerType, credPathKey, defaultCheckModel, displayName, needsProjectId } = mapping;
-        
-        // 确保提供商类型数组存在
-        if (!config.providerPools[providerType]) {
-            config.providerPools[providerType] = [];
+    // 如果只关联当前凭证
+    if (options.onlyCurrentCred && options.credPath) {
+        const result = await linkSingleCredential(config, options.credPath);
+        if (result) {
+            totalNewProviders = 1;
+            allNewProviders[result.displayName] = [result.provider];
         }
-        
-        // 检查目录是否存在
-        if (!fs.existsSync(configsPath)) {
-            continue;
-        }
-        
-        // 获取已关联的配置文件路径集合
-        const linkedPaths = new Set();
-        for (const provider of config.providerPools[providerType]) {
-            if (provider[credPathKey]) {
-                // 使用公共方法添加路径的所有变体格式
-                addToUsedPaths(linkedPaths, provider[credPathKey]);
+    } else {
+        // 遍历所有提供商映射
+        for (const mapping of PROVIDER_MAPPINGS) {
+            const configsPath = path.join(process.cwd(), 'configs', mapping.dirName);
+            const { providerType, credPathKey, defaultCheckModel, displayName, needsProjectId } = mapping;
+            
+            // 确保提供商类型数组存在
+            if (!config.providerPools[providerType]) {
+                config.providerPools[providerType] = [];
             }
-        }
-        
-        // 递归扫描目录
-        const newProviders = [];
-        await scanProviderDirectory(configsPath, linkedPaths, newProviders, {
-            credPathKey,
-            defaultCheckModel,
-            needsProjectId
-        });
-        
-        // 如果有新的配置文件需要关联
-        if (newProviders.length > 0) {
-            config.providerPools[providerType].push(...newProviders);
-            totalNewProviders += newProviders.length;
-            allNewProviders[displayName] = newProviders;
+            
+            // 检查目录是否存在
+            if (!fs.existsSync(configsPath)) {
+                continue;
+            }
+            
+            // 获取已关联的配置文件路径集合
+            const linkedPaths = new Set();
+            for (const provider of config.providerPools[providerType]) {
+                if (provider[credPathKey]) {
+                    // 使用公共方法添加路径的所有变体格式
+                    addToUsedPaths(linkedPaths, provider[credPathKey]);
+                }
+            }
+            
+            // 递归扫描目录
+            const newProviders = [];
+            await scanProviderDirectory(configsPath, linkedPaths, newProviders, {
+                credPathKey,
+                defaultCheckModel,
+                needsProjectId
+            });
+            
+            // 如果有新的配置文件需要关联
+            if (newProviders.length > 0) {
+                config.providerPools[providerType].push(...newProviders);
+                totalNewProviders += newProviders.length;
+                allNewProviders[displayName] = newProviders;
+            }
         }
     }
     
@@ -102,6 +114,94 @@ export async function autoLinkProviderConfigs(config) {
         providerPoolManager.initializeProviderStatus();
     }
     return config.providerPools;
+}
+
+/**
+ * 关联单个凭证文件到对应的提供商
+ * @param {Object} config - 服务器配置对象
+ * @param {string} credPath - 凭证文件路径（相对或绝对路径）
+ * @returns {Promise<Object|null>} 返回关联结果或 null
+ */
+async function linkSingleCredential(config, credPath) {
+    try {
+        // 规范化路径
+        const absolutePath = path.isAbsolute(credPath) ? credPath : path.join(process.cwd(), credPath);
+        const relativePath = path.relative(process.cwd(), absolutePath);
+        
+        // 检查文件是否存在
+        if (!fs.existsSync(absolutePath)) {
+            logger.warn(`[Auto-Link] Credential file not found: ${relativePath}`);
+            return null;
+        }
+        
+        // 检查文件扩展名
+        const ext = path.extname(absolutePath).toLowerCase();
+        if (ext !== '.json') {
+            logger.warn(`[Auto-Link] Only JSON files are supported: ${relativePath}`);
+            return null;
+        }
+        
+        // 根据文件路径确定提供商类型
+        let matchedMapping = null;
+        for (const mapping of PROVIDER_MAPPINGS) {
+            const configsPath = path.join(process.cwd(), 'configs', mapping.dirName);
+            // 检查文件是否在该提供商的配置目录下
+            if (absolutePath.startsWith(configsPath)) {
+                matchedMapping = mapping;
+                break;
+            }
+        }
+        
+        if (!matchedMapping) {
+            logger.warn(`[Auto-Link] Could not determine provider type for: ${relativePath}`);
+            return null;
+        }
+        
+        const { providerType, credPathKey, defaultCheckModel, displayName, needsProjectId } = matchedMapping;
+        
+        // 确保提供商类型数组存在
+        if (!config.providerPools[providerType]) {
+            config.providerPools[providerType] = [];
+        }
+        
+        // 检查是否已关联
+        const linkedPaths = new Set();
+        for (const provider of config.providerPools[providerType]) {
+            if (provider[credPathKey]) {
+                addToUsedPaths(linkedPaths, provider[credPathKey]);
+            }
+        }
+        
+        const fileName = getFileName(absolutePath);
+        const isLinked = isPathUsed(relativePath, fileName, linkedPaths);
+        
+        if (isLinked) {
+            logger.info(`[Auto-Link] Credential already linked: ${relativePath}`);
+            return null;
+        }
+        
+        // 创建新的提供商配置
+        const newProvider = createProviderConfig({
+            credPathKey,
+            credPath: formatSystemPath(relativePath),
+            defaultCheckModel,
+            needsProjectId
+        });
+        
+        // 添加到配置
+        config.providerPools[providerType].push(newProvider);
+        
+        logger.info(`[Auto-Link] Successfully linked credential: ${relativePath} to ${displayName}`);
+        
+        return {
+            provider: newProvider,
+            displayName,
+            providerType
+        };
+    } catch (error) {
+        logger.error(`[Auto-Link] Failed to link credential ${credPath}: ${error.message}`);
+        return null;
+    }
 }
 
 /**

@@ -740,7 +740,10 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
                 });
 
                 // 自动关联新生成的凭据到 Pools
-                await autoLinkProviderConfigs(CONFIG);
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: credentials.relativePath
+                });
 
                 logger.info('[Codex Auth] OAuth flow completed successfully');
             } catch (error) {
@@ -844,7 +847,10 @@ export async function handleCodexOAuthCallback(code, state) {
         });
 
         // 自动关联新生成的凭据到 Pools
-        await autoLinkProviderConfigs(CONFIG);
+        await autoLinkProviderConfigs(CONFIG, {
+            onlyCurrentCred: true,
+            credPath: result.relativePath
+        });
 
         logger.info('[Codex Auth] OAuth callback processed successfully');
 

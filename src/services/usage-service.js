@@ -314,31 +314,6 @@ export function formatGeminiUsage(usageData) {
         return null;
     }
 
-    const TZ_OFFSET = 8 * 60 * 60 * 1000; // Beijing timezone offset
-
-    /**
-     * 将 UTC 时间转换为北京时间
-     * @param {string} utcString - UTC 时间字符串
-     * @returns {string} 北京时间字符串
-     */
-    function utcToBeijing(utcString) {
-        try {
-            if (!utcString) return '--';
-            const utcDate = new Date(utcString);
-            const beijingTime = new Date(utcDate.getTime() + TZ_OFFSET);
-            return beijingTime
-                .toLocaleString('zh-CN', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-                .replace(/\//g, '-');
-        } catch (e) {
-            return '--';
-        }
-    }
-
     const result = {
         // 基本信息 - 映射到 Kiro 结构
         daysUntilReset: null,
@@ -377,16 +352,20 @@ export function formatGeminiUsage(usageData) {
 
     // 解析模型配额信息
     if (usageData.models && typeof usageData.models === 'object') {
-        for (const [modelName, modelInfo] of Object.entries(usageData.models)) {
-            // Gemini 返回的数据结构：{ remaining, resetTime, resetTimeRaw }
+        for (const [modelKey, modelInfo] of Object.entries(usageData.models)) {
+            // Gemini 返回的数据结构：{ remaining, resetTime, resetTimeRaw, tokenType }
             // remaining 是 0-1 之间的比例值，表示剩余配额百分比
             const remainingPercent = typeof modelInfo.remaining === 'number' ? modelInfo.remaining : 1;
             const usedPercent = 1 - remainingPercent;
             
+            // 解析 modelKey (modelId:tokenType)
+            const [modelId, tokenType] = modelKey.split(':');
+            const displayName = tokenType ? `${modelId} (${tokenType})` : modelId;
+
             const item = {
                 resourceType: 'MODEL_USAGE',
-                displayName: modelInfo.displayName || modelName,
-                displayNamePlural: modelInfo.displayName || modelName,
+                displayName: displayName,
+                displayNamePlural: displayName,
                 unit: 'quota',
                 currency: null,
                 
@@ -411,13 +390,13 @@ export function formatGeminiUsage(usageData) {
                 bonuses: [],
 
                 // 额外的 Gemini 特有信息
-                modelName: modelName,
+                modelName: modelId,
+                tokenType: tokenType,
                 inputTokenLimit: modelInfo.inputTokenLimit || 0,
                 outputTokenLimit: modelInfo.outputTokenLimit || 0,
                 remaining: remainingPercent,
                 remainingPercent: Math.round(remainingPercent * 100), // 剩余百分比
-                resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
-                           utcToBeijing(modelInfo.resetTimeRaw || modelInfo.resetTime) : '--',
+                resetTime: modelInfo.resetTime || '--',
                 resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null
             };
 
@@ -436,31 +415,6 @@ export function formatGeminiUsage(usageData) {
 export function formatAntigravityUsage(usageData) {
     if (!usageData) {
         return null;
-    }
-
-    const TZ_OFFSET = 8 * 60 * 60 * 1000; // Beijing timezone offset
-
-    /**
-     * 将 UTC 时间转换为北京时间
-     * @param {string} utcString - UTC 时间字符串
-     * @returns {string} 北京时间字符串
-     */
-    function utcToBeijing(utcString) {
-        try {
-            if (!utcString) return '--';
-            const utcDate = new Date(utcString);
-            const beijingTime = new Date(utcDate.getTime() + TZ_OFFSET);
-            return beijingTime
-                .toLocaleString('zh-CN', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-                .replace(/\//g, '-');
-        } catch (e) {
-            return '--';
-        }
     }
 
     const result = {
@@ -507,6 +461,10 @@ export function formatAntigravityUsage(usageData) {
             const remainingPercent = typeof modelInfo.remaining === 'number' ? modelInfo.remaining : 1;
             const usedPercent = 1 - remainingPercent;
             
+            // 优先使用模型自己的重置时间，如果没有则使用全局重置时间
+            const resetTimeRaw = modelInfo.resetTimeRaw || (usageData.quotaInfo ? usageData.quotaInfo.quotaResetTime : null);
+            const resetTimeFormatted = modelInfo.resetTime || '--';
+
             const item = {
                 resourceType: 'MODEL_USAGE',
                 displayName: modelInfo.displayName || modelName,
@@ -515,7 +473,7 @@ export function formatAntigravityUsage(usageData) {
                 currency: null,
                 
                 // 当前用量 - Antigravity 返回的是剩余比例，转换为已用比例（百分比形式）
-                currentUsage: usedPercent * 100,
+                currentUsage: Math.round(usedPercent * 100 * 100) / 100,
                 usageLimit: 100, // 以百分比表示，总量为 100%
                 
                 // 超额信息
@@ -525,8 +483,7 @@ export function formatAntigravityUsage(usageData) {
                 overageCharges: 0,
                 
                 // 下次重置时间
-                nextDateReset: modelInfo.resetTimeRaw ? new Date(modelInfo.resetTimeRaw).toISOString() :
-                               (modelInfo.resetTime ? new Date(modelInfo.resetTime).toISOString() : null),
+                nextDateReset: resetTimeRaw ? (typeof resetTimeRaw === 'number' ? new Date(resetTimeRaw * 1000).toISOString() : new Date(resetTimeRaw).toISOString()) : null,
                 
                 // 免费试用信息
                 freeTrial: null,
@@ -539,10 +496,9 @@ export function formatAntigravityUsage(usageData) {
                 inputTokenLimit: modelInfo.inputTokenLimit || 0,
                 outputTokenLimit: modelInfo.outputTokenLimit || 0,
                 remaining: remainingPercent,
-                remainingPercent: remainingPercent * 100, // 剩余百分比
-                resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
-                           utcToBeijing(modelInfo.resetTimeRaw || modelInfo.resetTime) : '--',
-                resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null
+                remainingPercent: Math.round(remainingPercent * 100 * 100) / 100, // 剩余百分比
+                resetTime: resetTimeFormatted,
+                resetTimeRaw: resetTimeRaw
             };
 
             result.usageBreakdown.push(item);
@@ -560,31 +516,6 @@ export function formatAntigravityUsage(usageData) {
 export function formatCodexUsage(usageData) {
     if (!usageData) {
         return null;
-    }
-
-    const TZ_OFFSET = 8 * 60 * 60 * 1000; // Beijing timezone offset
-
-    /**
-     * 将 UTC 时间转换为北京时间
-     * @param {string} utcString - UTC 时间字符串
-     * @returns {string} 北京时间字符串
-     */
-    function utcToBeijing(utcString) {
-        try {
-            if (!utcString) return '--';
-            const utcDate = new Date(utcString);
-            const beijingTime = new Date(utcDate.getTime() + TZ_OFFSET);
-            return beijingTime
-                .toLocaleString('zh-CN', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-                .replace(/\//g, '-');
-        } catch (e) {
-            return '--';
-        }
     }
 
     const result = {
@@ -660,8 +591,7 @@ export function formatCodexUsage(usageData) {
                 modelName: modelName,
                 remaining: remainingPercent,
                 remainingPercent: Math.round(remainingPercent * 100), // 剩余百分比
-                resetTime: (modelInfo.resetTimeRaw || modelInfo.resetTime) ?
-                           utcToBeijing(modelInfo.resetTimeRaw ? new Date(modelInfo.resetTimeRaw * 1000).toISOString() : modelInfo.resetTime) : '--',
+                resetTime: modelInfo.resetTime || '--',
                 resetTimeRaw: modelInfo.resetTimeRaw || modelInfo.resetTime || null,
                 
                 // 注入 raw 窗口信息以便前端使用

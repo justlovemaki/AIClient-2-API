@@ -852,7 +852,7 @@ function detectProviderFromPath(filePath) {
         },
         {
             patterns: ['configs/iflow/', '/iflow/'],
-            providerType: 'openai-iflow-oauth',
+            providerType: 'openai-iflow',
             displayName: 'OpenAI iFlow OAuth',
             shortName: 'iflow-oauth'
         }
@@ -941,28 +941,27 @@ async function batchLinkProviderConfigs() {
     
     showToast(t('common.info'), t('upload.batchLink.processing', { count: unlinkedConfigs.length }), 'info');
     
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (const config of unlinkedConfigs) {
-        try {
-            await window.apiClient.post('/quick-link-provider', {
-                filePath: config.path
-            });
-            successCount++;
-        } catch (error) {
-            console.error(`关联失败: ${config.path}`, error);
-            failCount++;
+    try {
+        // 一次性传递所有文件路径进行批量关联
+        const filePaths = unlinkedConfigs.map(config => config.path);
+        const result = await window.apiClient.post('/quick-link-provider', {
+            filePaths: filePaths
+        });
+        
+        // 刷新配置列表
+        await loadConfigList();
+        
+        if (result.failCount === 0) {
+            showToast(t('common.success'), t('upload.batchLink.success', { count: result.successCount }), 'success');
+        } else {
+            showToast(t('common.warning'), t('upload.batchLink.partial', { success: result.successCount, fail: result.failCount }), 'warning');
         }
-    }
-    
-    // 刷新配置列表
-    await loadConfigList();
-    
-    if (failCount === 0) {
-        showToast(t('common.success'), t('upload.batchLink.success', { count: successCount }), 'success');
-    } else {
-        showToast(t('common.warning'), t('upload.batchLink.partial', { success: successCount, fail: failCount }), 'warning');
+    } catch (error) {
+        console.error('批量关联失败:', error);
+        showToast(t('common.error'), t('upload.batchLink.failed') + ': ' + error.message, 'error');
+        
+        // 即使失败也刷新列表，可能部分成功
+        await loadConfigList();
     }
 }
 

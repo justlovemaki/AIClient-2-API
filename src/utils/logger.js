@@ -239,10 +239,15 @@ class Logger {
 
         // 输出到文件
         if (this.config.outputMode === 'file' || this.config.outputMode === 'all') {
-            if (this.logStream && !this.logStream.destroyed) {
-                // 检查文件大小并轮转
-                this.checkAndRotateLogFile();
-                this.logStream.write(message + '\n');
+            if (this.logStream && !this.logStream.destroyed && this.logStream.writable) {
+                try {
+                    // 检查文件大小并轮转
+                    this.checkAndRotateLogFile();
+                    this.logStream.write(message + '\n');
+                } catch (err) {
+                    // 如果写入失败，输出到控制台作为备份
+                    console.error('[Logger] Failed to write to log file:', err.message);
+                }
             }
         }
     }

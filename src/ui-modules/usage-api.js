@@ -5,6 +5,8 @@ import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage, formatCodex
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
 import path from 'path';
 
+const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
+
 /**
  * 获取所有支持用量查询的提供商的用量信息
  * @param {Object} currentConfig - 当前配置
@@ -16,9 +18,6 @@ async function getAllProvidersUsage(currentConfig, providerPoolManager) {
         timestamp: new Date().toISOString(),
         providers: {}
     };
-
-    // 支持用量查询的提供商列表
-    const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
 
     // 并发获取所有提供商的用量数据
     const usagePromises = supportedProviders.map(async (providerType) => {
@@ -225,7 +224,6 @@ function getProviderDisplayName(provider, providerType) {
  */
 export async function handleGetSupportedProviders(req, res) {
     try {
-        const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth'];
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(supportedProviders));
         return true;
@@ -269,8 +267,14 @@ export async function handleGetUsage(req, res, currentConfig, providerPoolManage
             await writeUsageCache(usageResults);
         }
         
+        // Always include current server time
+        const finalResults = {
+            ...usageResults,
+            serverTime: new Date().toISOString()
+        };
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(usageResults));
+        res.end(JSON.stringify(finalResults));
         return true;
     } catch (error) {
         logger.error('[UI API] Failed to get usage:', error);
@@ -300,7 +304,7 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
             const cachedData = await readProviderUsageCache(providerType);
             if (cachedData) {
                 logger.info(`[Usage API] Returning cached usage data for ${providerType}`);
-                usageResults = cachedData;
+                usageResults = { ...cachedData, fromCache: true };
             }
         }
         
@@ -312,8 +316,14 @@ export async function handleGetProviderUsage(req, res, currentConfig, providerPo
             await updateProviderUsageCache(providerType, usageResults);
         }
         
+        // Always include current server time
+        const finalResults = {
+            ...usageResults,
+            serverTime: new Date().toISOString()
+        };
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(usageResults));
+        res.end(JSON.stringify(finalResults));
         return true;
     } catch (error) {
         logger.error(`[UI API] Failed to get usage for ${providerType}:`, error);

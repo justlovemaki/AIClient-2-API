@@ -413,7 +413,10 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                 });
                 
                 // 自动关联新生成的凭据到 Pools
-                await autoLinkProviderConfigs(CONFIG);
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: path.relative(process.cwd(), credPath)
+                });
                 
                 return tokenData;
             }
@@ -594,7 +597,10 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     });
                     
                     // 自动关联新生成的凭据到 Pools
-                    await autoLinkProviderConfigs(CONFIG);
+                    await autoLinkProviderConfigs(CONFIG, {
+                        onlyCurrentCred: true,
+                        credPath: path.relative(process.cwd(), credPath)
+                    });
                     
                     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                     res.end(generateResponsePage(true, '授权成功！您可以关闭此页面'));
@@ -847,7 +853,14 @@ export async function batchImportKiroRefreshTokens(refreshTokens, region = KIRO_
         });
         
         // 自动关联新生成的凭据到 Pools
-        await autoLinkProviderConfigs(CONFIG);
+        for (const detail of results.details) {
+            if (detail.success && detail.path) {
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: detail.path
+                });
+            }
+        }
     }
     
     return results;
@@ -980,7 +993,14 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
         });
         
         // 自动关联新生成的凭据到 Pools
-        await autoLinkProviderConfigs(CONFIG);
+        for (const detail of results.details) {
+            if (detail.success && detail.path) {
+                await autoLinkProviderConfigs(CONFIG, {
+                    onlyCurrentCred: true,
+                    credPath: detail.path
+                });
+            }
+        }
     }
     
     return results;
@@ -1101,7 +1121,10 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         });
         
         // 自动关联新生成的凭据到 Pools
-        await autoLinkProviderConfigs(CONFIG);
+        await autoLinkProviderConfigs(CONFIG, {
+            onlyCurrentCred: true,
+            credPath: relativePath
+        });
         
         return {
             success: true,

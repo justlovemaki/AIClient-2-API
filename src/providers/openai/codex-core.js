@@ -129,6 +129,12 @@ export class CodexApiService {
             await this.initialize();
         }
 
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
@@ -189,6 +195,12 @@ export class CodexApiService {
     async *generateContentStream(model, requestBody) {
         if (!this.isInitialized) {
             await this.initialize();
+        }
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
         }
 
         // 检查 token 是否即将过期，如果是则推送到刷新队列
@@ -252,7 +264,7 @@ export class CodexApiService {
      */
     buildHeaders(cacheId) {
         return {
-            'version': '0.89.0',
+            'version': '0.98.0',
             'x-codex-beta-features': 'powershell_utf8',
             'x-oai-web-search-eligible': 'true',
             'session_id': cacheId,
@@ -459,7 +471,8 @@ export class CodexApiService {
                 { id: 'gpt-5.1-codex-mini', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.1-codex-max', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.2', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
+                { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
+                { id: 'gpt-5.3-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
             ]
         };
     }
@@ -542,7 +555,7 @@ export class CodexApiService {
                 if (primaryWindow) {
                     // remaining = 1 - (used_percent / 100)
                     const remaining = 1 - (primaryWindow.used_percent || 0) / 100;
-                    const resetTime = primaryWindow.reset_at ? new Date(primaryWindow.reset_at * 1000).toISOString() : null;
+                    const resetTime = primaryWindow.reset_at ? new Date(primaryWindow.reset_at * 1000).toDateString() : null;
                     
                     // 为所有 Codex 模型设置相同的配额信息
                     const codexModels = ['default'];

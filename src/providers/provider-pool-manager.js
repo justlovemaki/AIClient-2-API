@@ -359,9 +359,9 @@ export class ProviderPoolManager {
     async _refreshNodeToken(providerType, providerStatus, force = false) {
         const config = providerStatus.config;
         
-        // 检查刷新次数是否已达上限（最大3次）
+        // 检查刷新次数是否已达上限（最大5次）
         const currentRefreshCount = config.refreshCount || 0;
-        if (currentRefreshCount >= 3 && !force) {
+        if (currentRefreshCount >= 5 && !force) {
             this._log('warn', `Node ${providerStatus.uuid} has reached maximum refresh count (3), marking as unhealthy`);
             // 标记为不健康
             this.markProviderUnhealthyImmediately(providerType, config, 'Maximum refresh count (3) reached');

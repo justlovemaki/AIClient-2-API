@@ -576,29 +576,64 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
         
         // Handle streaming
         if (ollamaRequest.stream) {
-            res.writeHead(200, {
-                'Content-Type': 'application/json',
-                'Transfer-Encoding': 'chunked',
-                'Access-Control-Allow-Origin': '*',
-                'Server': `ollama/${OLLAMA_VERSION}`
-            });
-            
-            const stream = await actualApiService.generateContentStream(openaiRequest.model, backendRequest);
-            
-            for await (const chunk of stream) {
-                try {
-                    // Convert backend chunk to Ollama format
-                    const ollamaChunk = ollamaConverter.convertStreamChunk(chunk, sourceProtocol, ollamaRequest.model, false);
-                    res.write(JSON.stringify(ollamaChunk) + '\n');
-                } catch (chunkError) {
-                    logger.error('[Ollama] Error processing chunk:', chunkError);
+            let clientDisconnected = false;
+            let listenersRegistered = false;
+
+            // 监听客户端断开连接（只注册一次）
+            const onClientClose = () => {
+                clientDisconnected = true;
+                logger.info('[Ollama] Client disconnected during streaming');
+            };
+            const onClientError = (err) => {
+                clientDisconnected = true;
+                logger.error('[Ollama] Response stream error:', err.message);
+            };
+
+            if (!listenersRegistered) {
+                res.on('close', onClientClose);
+                res.on('error', onClientError);
+                listenersRegistered = true;
+            }
+
+            try {
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Transfer-Encoding': 'chunked',
+                    'Access-Control-Allow-Origin': '*',
+                    'Server': `ollama/${OLLAMA_VERSION}`
+                });
+                
+                const stream = await actualApiService.generateContentStream(openaiRequest.model, backendRequest);
+                
+                for await (const chunk of stream) {
+                    if (clientDisconnected) {
+                        logger.info('[Ollama] Stopping stream due to client disconnect');
+                        break;
+                    }
+                    
+                    try {
+                        // Convert backend chunk to Ollama format
+                        const ollamaChunk = ollamaConverter.convertStreamChunk(chunk, sourceProtocol, ollamaRequest.model, false);
+                        if (!res.writableEnded) {
+                            res.write(JSON.stringify(ollamaChunk) + '\n');
+                        }
+                    } catch (chunkError) {
+                        logger.error('[Ollama] Error processing chunk:', chunkError);
+                    }
+                }
+                
+                // Send final chunk
+                if (!clientDisconnected && !res.writableEnded) {
+                    const finalChunk = ollamaConverter.convertStreamChunk({}, sourceProtocol, ollamaRequest.model, true);
+                    res.write(JSON.stringify(finalChunk) + '\n');
+                    res.end();
+                }
+            } finally {
+                if (listenersRegistered) {
+                    res.off('close', onClientClose);
+                    res.off('error', onClientError);
                 }
             }
-            
-            // Send final chunk
-            const finalChunk = ollamaConverter.convertStreamChunk({}, sourceProtocol, ollamaRequest.model, true);
-            res.write(JSON.stringify(finalChunk) + '\n');
-            res.end();
         } else {
             // Non-streaming response
             const backendResponse = await actualApiService.generateContent(openaiRequest.model, backendRequest);
@@ -683,29 +718,64 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
         
         // Handle streaming
         if (ollamaRequest.stream) {
-            res.writeHead(200, {
-                'Content-Type': 'application/json',
-                'Transfer-Encoding': 'chunked',
-                'Access-Control-Allow-Origin': '*',
-                'Server': `ollama/${OLLAMA_VERSION}`
-            });
-            
-            const stream = await actualApiService.generateContentStream(openaiRequest.model, backendRequest);
-            
-            for await (const chunk of stream) {
-                try {
-                    // Convert backend chunk to Ollama generate format
-                    const ollamaChunk = ollamaConverter.toOllamaGenerateStreamChunk(chunk, ollamaRequest.model, false);
-                    res.write(JSON.stringify(ollamaChunk) + '\n');
-                } catch (chunkError) {
-                    logger.error('[Ollama] Error processing chunk:', chunkError);
+            let clientDisconnected = false;
+            let listenersRegistered = false;
+
+            // 监听客户端断开连接（只注册一次）
+            const onClientClose = () => {
+                clientDisconnected = true;
+                logger.info('[Ollama Generate] Client disconnected during streaming');
+            };
+            const onClientError = (err) => {
+                clientDisconnected = true;
+                logger.error('[Ollama Generate] Response stream error:', err.message);
+            };
+
+            if (!listenersRegistered) {
+                res.on('close', onClientClose);
+                res.on('error', onClientError);
+                listenersRegistered = true;
+            }
+
+            try {
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Transfer-Encoding': 'chunked',
+                    'Access-Control-Allow-Origin': '*',
+                    'Server': `ollama/${OLLAMA_VERSION}`
+                });
+                
+                const stream = await actualApiService.generateContentStream(openaiRequest.model, backendRequest);
+                
+                for await (const chunk of stream) {
+                    if (clientDisconnected) {
+                        logger.info('[Ollama Generate] Stopping stream due to client disconnect');
+                        break;
+                    }
+                    
+                    try {
+                        // Convert backend chunk to Ollama generate format
+                        const ollamaChunk = ollamaConverter.toOllamaGenerateStreamChunk(chunk, ollamaRequest.model, false);
+                        if (!res.writableEnded) {
+                            res.write(JSON.stringify(ollamaChunk) + '\n');
+                        }
+                    } catch (chunkError) {
+                        logger.error('[Ollama] Error processing chunk:', chunkError);
+                    }
+                }
+                
+                // Send final chunk
+                if (!clientDisconnected && !res.writableEnded) {
+                    const finalChunk = ollamaConverter.toOllamaGenerateStreamChunk({}, ollamaRequest.model, true);
+                    res.write(JSON.stringify(finalChunk) + '\n');
+                    res.end();
+                }
+            } finally {
+                if (listenersRegistered) {
+                    res.off('close', onClientClose);
+                    res.off('error', onClientError);
                 }
             }
-            
-            // Send final chunk
-            const finalChunk = ollamaConverter.toOllamaGenerateStreamChunk({}, ollamaRequest.model, true);
-            res.write(JSON.stringify(finalChunk) + '\n');
-            res.end();
         } else {
             // Non-streaming response
             const backendResponse = await actualApiService.generateContent(openaiRequest.model, backendRequest);
