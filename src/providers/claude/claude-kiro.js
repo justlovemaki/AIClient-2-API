@@ -2011,6 +2011,24 @@ async saveCredentialsToFile(filePath, newData) {
                 return;
             }
 
+            // 记录错误响应体，帮助诊断 400 等客户端错误
+            if (error.response?.data) {
+                try {
+                    let responseBody = error.response.data;
+                    // 如果是 stream，尝试读取内容
+                    if (typeof responseBody === 'object' && typeof responseBody.read === 'function') {
+                        const chunks = [];
+                        for await (const chunk of responseBody) {
+                            chunks.push(chunk);
+                        }
+                        responseBody = Buffer.concat(chunks).toString('utf-8');
+                    }
+                    logger.error(`[Kiro] Stream API error response body:`, typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody));
+                } catch (bodyErr) {
+                    logger.error(`[Kiro] Failed to read error response body:`, bodyErr.message);
+                }
+            }
+
             logger.error(`[Kiro] Stream API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         } finally {
