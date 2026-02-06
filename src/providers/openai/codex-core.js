@@ -264,7 +264,7 @@ export class CodexApiService {
      */
     buildHeaders(cacheId) {
         return {
-            'version': '0.89.0',
+            'version': '0.98.0',
             'x-codex-beta-features': 'powershell_utf8',
             'x-oai-web-search-eligible': 'true',
             'session_id': cacheId,
@@ -471,7 +471,8 @@ export class CodexApiService {
                 { id: 'gpt-5.1-codex-mini', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.1-codex-max', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.2', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
+                { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
+                { id: 'gpt-5.3-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
             ]
         };
     }

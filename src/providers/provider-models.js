@@ -26,6 +26,7 @@ export const PROVIDER_MODELS = {
     'claude-custom': [],
     'claude-kiro-oauth': [
         'claude-haiku-4-5',
+        'claude-opus-4-6',
         'claude-opus-4-5',
         'claude-opus-4-5-20251101',
         'claude-sonnet-4-5',
@@ -74,7 +75,8 @@ export const PROVIDER_MODELS = {
         'gpt-5.1-codex-mini',
         'gpt-5.1-codex-max',
         'gpt-5.2',
-        'gpt-5.2-codex'
+        'gpt-5.2-codex',
+        'gpt-5.3-codex'
     ],
     'forward-api': []
 };
