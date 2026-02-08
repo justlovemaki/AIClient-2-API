@@ -322,6 +322,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
 
     let hasToolCall = false;
+    let hasMessageStop = false; // 跟踪是否已经发送过结束标志（message_stop / done）
 
     try {
         for await (const nativeChunk of nativeStream) {
@@ -397,6 +398,20 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                         // 修正 Gemini 原生格式的结束原因
                         chunk.candidates[0].finishReason = 'TOOL_CALLS';
                     }
+                }
+
+                // 防止重复发送结束标志
+                // OpenAI: choices[].finish_reason
+                // Claude: message_stop
+                // OpenAI Responses: done
+                // Gemini: candidates[].finishReason（如 STOP / MAX_TOKENS / SAFETY 等）
+                if (
+                    chunk?.choices?.some(choice => choice?.finish_reason) ||
+                    chunk?.type === 'message_stop' ||
+                    chunk?.type === 'done' ||
+                    chunk?.candidates?.some(candidate => candidate?.finishReason)
+                ) {
+                    hasMessageStop = true;
                 }
 
                 if (addEvent) {
@@ -574,13 +589,27 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             if (!res.writableEnded) {
                 try {
                     if (clientProtocol === MODEL_PROTOCOL_PREFIX.OPENAI) {
-                        res.write('data: [DONE]\n\n');
+                        if (!hasMessageStop) {
+                            res.write('data: [DONE]\n\n');
+                            hasMessageStop = true;
+                        }
                     } else if (clientProtocol === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES) {
-                        res.write('event: done\n');
-                        res.write('data: {}\n\n');
+                        if (!hasMessageStop) {
+                            res.write('event: done\n');
+                            res.write('data: {}\n\n');
+                            hasMessageStop = true;
+                        }
                     } else if (clientProtocol === MODEL_PROTOCOL_PREFIX.CLAUDE) {
-                        res.write('event: message_stop\n');
-                        res.write('data: {"type":"message_stop"}\n\n');
+                        if (!hasMessageStop) {
+                            res.write('event: message_stop\n');
+                            res.write('data: {"type":"message_stop"}\n\n');
+                            hasMessageStop = true;
+                        }
+                    } else if (clientProtocol === MODEL_PROTOCOL_PREFIX.GEMINI) {
+                        if (!hasMessageStop) {
+                            res.write('data: {"candidates":[{"finishReason":"STOP"}]}\n\n');
+                            hasMessageStop = true;
+                        }
                     }
                     res.end();
                 } catch (writeErr) {

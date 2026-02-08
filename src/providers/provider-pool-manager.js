@@ -379,6 +379,7 @@ export class ProviderPoolManager {
 
             // 使用适配器进行刷新
             const tempConfig = {
+                ...this.globalConfig,
                 ...config,
                 MODEL_PROVIDER: providerType
             };

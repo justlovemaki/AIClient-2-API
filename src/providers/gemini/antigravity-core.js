@@ -66,7 +66,8 @@ const MODEL_ALIAS_MAP = {
     'gemini-2.5-flash-preview': 'gemini-2.5-flash',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
     'gemini-claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
-    'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking'
+    'gemini-claude-opus-4-5-thinking': 'claude-opus-4-5-thinking',
+    'gemini-claude-opus-4-6-thinking': 'claude-opus-4-6-thinking'
 };
 
 // 真实模型名 -> 别名
@@ -78,7 +79,8 @@ const MODEL_NAME_MAP = {
     'gemini-2.5-flash': 'gemini-2.5-flash-preview',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
     'claude-sonnet-4-5-thinking': 'gemini-claude-sonnet-4-5-thinking',
-    'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking'
+    'claude-opus-4-5-thinking': 'gemini-claude-opus-4-5-thinking',
+    'claude-opus-4-6-thinking': 'gemini-claude-opus-4-6-thinking'
 };
 
 /**
