@@ -323,6 +323,9 @@ async function startServer() {
         if (poolManager) {
             logger.info('[Initialization] Performing initial health checks for provider pools...');
             poolManager.performHealthChecks(true);
+
+            // 启动不健康节点自动恢复定时任务
+            poolManager.startAutoRecoveryScheduler();
         }
 
         // 如果是子进程，通知主进程已就绪

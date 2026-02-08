@@ -103,6 +103,12 @@ async function loadConfiguration() {
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 10;
         if (warmupTargetEl) warmupTargetEl.value = data.WARMUP_TARGET || 0;
         if (refreshConcurrencyPerProviderEl) refreshConcurrencyPerProviderEl.value = data.REFRESH_CONCURRENCY_PER_PROVIDER || 1;
+
+        // 自动恢复定时任务配置
+        const autoRecoveryIntervalEl = document.getElementById('autoRecoveryInterval');
+        const autoRecoveryThresholdEl = document.getElementById('autoRecoveryThreshold');
+        if (autoRecoveryIntervalEl) autoRecoveryIntervalEl.value = data.AUTO_RECOVERY_INTERVAL || 5;
+        if (autoRecoveryThresholdEl) autoRecoveryThresholdEl.value = data.AUTO_RECOVERY_UNHEALTHY_THRESHOLD || 50;
         
         // 加载 Fallback 链配置
         if (providerFallbackChainEl) {
@@ -222,6 +228,8 @@ async function saveConfiguration() {
     config.MAX_ERROR_COUNT = parseInt(document.getElementById('maxErrorCount')?.value || 10);
     config.WARMUP_TARGET = parseInt(document.getElementById('warmupTarget')?.value || 0);
     config.REFRESH_CONCURRENCY_PER_PROVIDER = parseInt(document.getElementById('refreshConcurrencyPerProvider')?.value || 1);
+    config.AUTO_RECOVERY_INTERVAL = parseInt(document.getElementById('autoRecoveryInterval')?.value || 5);
+    config.AUTO_RECOVERY_UNHEALTHY_THRESHOLD = parseInt(document.getElementById('autoRecoveryThreshold')?.value || 50);
     
     // 保存 Fallback 链配置
     const fallbackChainValue = document.getElementById('providerFallbackChain')?.value?.trim() || '';

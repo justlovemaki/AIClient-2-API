@@ -155,6 +155,16 @@
                         <input type="number" id="refreshConcurrencyPerProvider" class="form-control" min="1" max="10" value="1">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="autoRecoveryInterval" data-i18n="config.advanced.autoRecoveryInterval">自动恢复间隔(分钟)</label>
+                        <input type="number" id="autoRecoveryInterval" class="form-control" min="1" max="60" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="autoRecoveryThreshold" data-i18n="config.advanced.autoRecoveryThreshold">不健康比例阈值(%)</label>
+                        <input type="number" id="autoRecoveryThreshold" class="form-control" min="10" max="100" value="50">
+                    </div>
+                </div>
                 <div class="form-group pool-section">
                     <label for="providerFallbackChain" data-i18n="config.advanced.fallbackChain">跨类型 Fallback 链配置 (JSON)</label>
                     <textarea id="providerFallbackChain" class="form-control" rows="4" data-i18n-placeholder="config.advanced.fallbackChainPlaceholder"></textarea>

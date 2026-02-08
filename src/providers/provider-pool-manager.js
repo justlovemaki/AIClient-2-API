@@ -74,6 +74,11 @@ export class ProviderPoolManager {
         
         // 用于并发选点时的原子排序辅助（自增序列）
         this._selectionSequence = 0;
+
+        // --- 自动恢复定时任务配置 ---
+        this.autoRecoveryInterval = (options.globalConfig?.AUTO_RECOVERY_INTERVAL ?? 5) * 60 * 1000; // 默认5分钟
+        this.autoRecoveryThreshold = (options.globalConfig?.AUTO_RECOVERY_UNHEALTHY_THRESHOLD ?? 50) / 100; // 默认50%
+        this._autoRecoveryTimer = null;
  
         this.initializeProviderStatus();
     }
@@ -1450,6 +1455,115 @@ export class ProviderPoolManager {
         } catch (error) {
             this._log('error', `Failed to write provider_pools.json: ${error.message}`);
         }
+    }
+
+    /**
+     * 启动不健康节点自动恢复定时任务
+     * 每隔指定时间检查各提供商类型的不健康节点比例，
+     * 当比例超过阈值时自动对不健康节点执行健康检查并恢复
+     */
+    startAutoRecoveryScheduler() {
+        if (this._autoRecoveryTimer) {
+            clearInterval(this._autoRecoveryTimer);
+        }
+
+        const intervalMinutes = this.autoRecoveryInterval / 60000;
+        const thresholdPercent = Math.round(this.autoRecoveryThreshold * 100);
+        this._log('info', `[AutoRecovery] Scheduler started (interval: ${intervalMinutes}min, threshold: ${thresholdPercent}%)`);
+
+        this._autoRecoveryTimer = setInterval(async () => {
+            await this._runAutoRecovery();
+        }, this.autoRecoveryInterval);
+    }
+
+    /**
+     * 停止不健康节点自动恢复定时任务
+     */
+    stopAutoRecoveryScheduler() {
+        if (this._autoRecoveryTimer) {
+            clearInterval(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+            this._log('info', '[AutoRecovery] Scheduler stopped');
+        }
+    }
+
+    /**
+     * 执行一次自动恢复检查
+     * @private
+     */
+    async _runAutoRecovery() {
+        this._log('info', '[AutoRecovery] Running scheduled auto-recovery check...');
+
+        for (const providerType in this.providerStatus) {
+            const providers = this.providerStatus[providerType] || [];
+            const totalCount = providers.length;
+
+            // 至少需要 2 个节点才触发自动恢复，避免单节点池误触发
+            if (totalCount < 2) {
+                continue;
+            }
+
+            const unhealthyProviders = providers.filter(ps => !ps.config.isHealthy && !ps.config.isDisabled);
+            const unhealthyRatio = unhealthyProviders.length / totalCount;
+
+            if (unhealthyRatio <= this.autoRecoveryThreshold) {
+                continue;
+            }
+
+            this._log('info', `[AutoRecovery] Provider type "${providerType}": ${unhealthyProviders.length}/${totalCount} unhealthy (${Math.round(unhealthyRatio * 100)}% > ${Math.round(this.autoRecoveryThreshold * 100)}%). Triggering health checks...`);
+
+            let recoveredCount = 0;
+            let stillUnhealthyCount = 0;
+
+            for (const providerStatus of unhealthyProviders) {
+                const providerConfig = providerStatus.config;
+
+                try {
+                    const healthResult = await this._checkProviderHealth(providerType, providerConfig, true);
+
+                    if (healthResult === null) {
+                        this._log('debug', `[AutoRecovery] Health check not supported for ${providerConfig.uuid} (${providerType})`);
+                        continue;
+                    }
+
+                    if (healthResult.success) {
+                        this.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);
+                        recoveredCount++;
+                        this._log('info', `[AutoRecovery] Provider ${providerConfig.uuid} (${providerType}) recovered to healthy`);
+                    } else {
+                        const errorMessage = healthResult.errorMessage || 'Check failed';
+                        const isAuthError = /\b(401|403)\b/.test(errorMessage) ||
+                                           /\b(Unauthorized|Forbidden|AccessDenied|InvalidToken|ExpiredToken)\b/i.test(errorMessage);
+
+                        if (isAuthError) {
+                            this.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
+                        } else {
+                            this.markProviderUnhealthy(providerType, providerConfig, errorMessage);
+                        }
+
+                        // 更新健康检测时间和模型
+                        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+                        if (healthResult.modelName) {
+                            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+                        }
+
+                        stillUnhealthyCount++;
+                        this._log('debug', `[AutoRecovery] Provider ${providerConfig.uuid} (${providerType}) still unhealthy: ${errorMessage}`);
+                    }
+                } catch (error) {
+                    this.markProviderUnhealthy(providerType, providerConfig, error.message);
+                    stillUnhealthyCount++;
+                    this._log('error', `[AutoRecovery] Health check failed for ${providerConfig.uuid} (${providerType}): ${error.message}`);
+                }
+            }
+
+            // 持久化保存
+            this._debouncedSave(providerType);
+
+            this._log('info', `[AutoRecovery] Provider type "${providerType}" completed: ${recoveredCount} recovered, ${stillUnhealthyCount} still unhealthy`);
+        }
+
+        this._log('info', '[AutoRecovery] Auto-recovery check completed');
     }
 
 }
