@@ -21,7 +21,8 @@ export const PROVIDER_MODELS = {
         'gemini-2.5-flash-preview',
         'gemini-claude-sonnet-4-5',
         'gemini-claude-sonnet-4-5-thinking',
-        'gemini-claude-opus-4-5-thinking'
+        'gemini-claude-opus-4-5-thinking',
+        'gemini-claude-opus-4-6-thinking'
     ],
     'claude-custom': [],
     'claude-kiro-oauth': [
