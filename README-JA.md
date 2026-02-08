@@ -353,7 +353,7 @@ curl http://localhost:3000/ollama/api/chat \
    - **設定ファイル**：`configs/config.json`で設定
    ```json
    {
-     "PROXY_URL": "http://127.0.0.1:7890",
+     "PROXY_URL": "http://host.docker.internal:7890",
      "PROXY_ENABLED_PROVIDERS": [
        "gemini-cli-oauth",
        "gemini-antigravity",

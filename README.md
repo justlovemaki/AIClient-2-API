@@ -353,7 +353,7 @@ This project supports flexible proxy configuration, allowing you to configure a 
    - **Configuration File**: Configure in `configs/config.json`
    ```json
    {
-     "PROXY_URL": "http://127.0.0.1:7890",
+     "PROXY_URL": "http://host.docker.internal:7890",
      "PROXY_ENABLED_PROVIDERS": [
        "gemini-cli-oauth",
        "gemini-antigravity",
