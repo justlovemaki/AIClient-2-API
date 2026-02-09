@@ -115,6 +115,7 @@ import { discoverPlugins, getPluginManager } from '../core/plugin-manager.js';
 import 'dotenv/config'; // Import dotenv and configure it
 import '../converters/register-converters.js'; // 注册所有转换器
 import { getProviderPoolManager } from './service-manager.js';
+import { isRetryableNetworkError } from '../utils/common.js';
 
 // 检测是否作为子进程运行
 const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
@@ -209,11 +210,26 @@ function setupSignalHandlers() {
 
     process.on('uncaughtException', (error) => {
         logger.error('[Server] Uncaught exception:', error);
+        
+        // 检查是否为可重试的网络错误
+        if (isRetryableNetworkError(error)) {
+            logger.warn('[Server] Network error detected, continuing operation...');
+            return; // 不退出程序，继续运行
+        }
+        
+        // 对于其他严重错误，执行优雅关闭
+        logger.error('[Server] Fatal error detected, initiating shutdown...');
         gracefulShutdown();
     });
 
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('[Server] Unhandled rejection at:', promise, 'reason:', reason);
+        
+        // 检查是否为可重试的网络错误
+        if (reason && isRetryableNetworkError(reason)) {
+            logger.warn('[Server] Network error in promise rejection, continuing operation...');
+            return; // 不退出程序，继续运行
+        }
     });
 }
 

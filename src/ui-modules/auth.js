@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { CONFIG } from '../core/config-manager.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = path.join(process.cwd(), 'configs', 'token-store.json');
@@ -83,14 +84,15 @@ function generateToken() {
     return crypto.randomBytes(32).toString('hex');
 }
 
-/**
+ /**
  * 生成token过期时间
  */
 function getExpiryTime() {
     const now = Date.now();
-    const expiry = 60 * 60 * 1000; // 1小时
+    const expiry = (CONFIG.LOGIN_EXPIRY || 3600) * 1000; // 使用配置的过期时间，默认1小时
     return now + expiry;
 }
+
 
 /**
  * 读取token存储文件
@@ -231,12 +233,12 @@ export async function handleLoginRequest(req, res) {
                 expiryTime
             });
 
-            res.writeHead(200, { 'Content-Type': 'application/json' });
+             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
                 message: 'Login successful',
                 token,
-                expiresIn: '1 hour'
+                expiresIn: `${CONFIG.LOGIN_EXPIRY || 3600} seconds`
             }));
         } else {
             res.writeHead(401, { 'Content-Type': 'application/json' });

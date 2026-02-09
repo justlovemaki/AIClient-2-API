@@ -87,6 +87,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.CREDENTIAL_SWITCH_MAX_RETRIES !== undefined) currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES = newConfig.CREDENTIAL_SWITCH_MAX_RETRIES;
         if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
         if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
+        if (newConfig.LOGIN_EXPIRY !== undefined) currentConfig.LOGIN_EXPIRY = newConfig.LOGIN_EXPIRY;
         if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
         if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
         if (newConfig.WARMUP_TARGET !== undefined) currentConfig.WARMUP_TARGET = newConfig.WARMUP_TARGET;
@@ -148,6 +149,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 CREDENTIAL_SWITCH_MAX_RETRIES: currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES,
                 CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                 CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
+                LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
                 PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                 MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
                 WARMUP_TARGET: currentConfig.WARMUP_TARGET,

@@ -16,6 +16,7 @@ import logger from '../utils/logger.js';
 import * as http from 'http';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { isRetryableNetworkError } from '../utils/common.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -344,10 +345,25 @@ function setupSignalHandlers() {
     // 未捕获的异常
     process.on('uncaughtException', (error) => {
         logger.error('[Master] Uncaught exception:', error);
+        
+        // 检查是否为可重试的网络错误
+        if (isRetryableNetworkError(error)) {
+            logger.warn('[Master] Network error detected, continuing operation...');
+            return; // 不退出程序，继续运行
+        }
+        
+        // 对于其他严重错误，记录但不退出（由主进程管理子进程）
+        logger.error('[Master] Fatal error detected in master process');
     });
 
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('[Master] Unhandled rejection at:', promise, 'reason:', reason);
+        
+        // 检查是否为可重试的网络错误
+        if (reason && isRetryableNetworkError(reason)) {
+            logger.warn('[Master] Network error in promise rejection, continuing operation...');
+            return; // 不退出程序，继续运行
+        }
     });
 }
 

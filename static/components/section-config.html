@@ -173,7 +173,7 @@
                         <label for="cronNearMinutes" data-i18n="config.advanced.cronInterval">令牌刷新间隔(分钟)</label>
                         <input type="number" id="cronNearMinutes" class="form-control" min="1" max="60" value="1">
                     </div>
-                    <div class="form-group">
+                     <div class="form-group">
                         <label data-i18n="config.advanced.cronEnabled">启用自动刷新 (需重启)</label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="cronRefreshToken">
@@ -181,7 +181,13 @@
                         </label>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="loginExpiry" data-i18n="config.advanced.loginExpiry">登录过期时间(秒)</label>
+                    <input type="number" id="loginExpiry" class="form-control" min="60" value="3600">
+                    <small class="form-text" data-i18n="config.advanced.loginExpiryNote">管理后台登录后的 Token 有效期，默认 3600 秒 (1小时)</small>
+                </div>
             </div>
+
 
             <!-- 日志管理 -->
             <div class="config-group-section">
