@@ -157,7 +157,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;
@@ -226,7 +226,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;
@@ -528,7 +528,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'codex');
+            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;
