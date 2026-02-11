@@ -10,6 +10,9 @@ import axios from 'axios';
  * Manages a pool of API service providers, handling their health and selection.
  */
 export class ProviderPoolManager {
+    // 默认节点优先级（数值越小优先级越高）
+    static DEFAULT_PROVIDER_PRIORITY = 100;
+
     // 默认健康检查模型配置
     // 键名必须与 MODEL_PROVIDER 常量值一致
     static DEFAULT_HEALTH_CHECK_MODELS = {
@@ -441,6 +444,26 @@ export class ProviderPoolManager {
     }
 
     /**
+     * 解析并返回节点优先级（数值越小优先级越高）
+     * @param {object} providerConfig - 节点配置
+     * @returns {number} 规范化优先级
+     * @private
+     */
+    _getProviderPriority(providerConfig) {
+        const raw = providerConfig?.priority;
+        if (raw === undefined || raw === null || raw === '') {
+            return ProviderPoolManager.DEFAULT_PROVIDER_PRIORITY;
+        }
+
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) {
+            return ProviderPoolManager.DEFAULT_PROVIDER_PRIORITY;
+        }
+
+        return parsed;
+    }
+
+    /**
      * 获取指定类型的健康节点数量
      */
     getHealthyCount(providerType) {
@@ -490,6 +513,7 @@ export class ProviderPoolManager {
                 providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
                 providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
                 providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
+                providerConfig.priority = this._getProviderPriority(providerConfig);
                 
                 // --- V2: 刷新监控字段 ---
                 providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
@@ -590,6 +614,22 @@ export class ProviderPoolManager {
             this._log('warn', `No available and healthy providers for type: ${providerType}`);
             return null;
         }
+
+        // 优先选择更高优先级（数值更小）的节点；
+        // 同优先级节点之间继续走现有 LRU/评分逻辑。
+        const minPriority = Math.min(...availableAndHealthyProviders.map(p => this._getProviderPriority(p.config)));
+        const priorityFilteredProviders = availableAndHealthyProviders.filter(
+            p => this._getProviderPriority(p.config) === minPriority
+        );
+
+        if (priorityFilteredProviders.length !== availableAndHealthyProviders.length) {
+            this._log(
+                'debug',
+                `Priority filter for ${providerType}: selected ${priorityFilteredProviders.length}/${availableAndHealthyProviders.length} providers at priority ${minPriority}`
+            );
+        }
+
+        availableAndHealthyProviders = priorityFilteredProviders;
 
         // 改进：使用统一的评分策略进行选择
         // 传入当前时间戳 now 确保一致性
@@ -1454,4 +1494,3 @@ export class ProviderPoolManager {
     }
 
 }
-

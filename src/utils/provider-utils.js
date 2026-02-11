@@ -320,6 +320,7 @@ export function createProviderConfig(options) {
         uuid: generateUUID(),
         checkModelName: defaultCheckModel,
         checkHealth: false,
+        priority: 100,
         isHealthy: true,
         isDisabled: false,
         lastUsed: null,
