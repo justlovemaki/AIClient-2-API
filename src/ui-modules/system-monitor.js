@@ -1,4 +1,5 @@
 import os from 'os';
+import fs from 'fs';
 import { execSync } from 'child_process';
 
 // CPU 使用率计算相关变量
@@ -6,6 +7,45 @@ let previousCpuInfo = null;
 
 // 进程 CPU 使用率计算相关变量 (PID -> info)
 const processCpuInfoMap = new Map();
+
+let cachedClockTicksPerSecond = null;
+
+function getClockTicksPerSecond() {
+    if (cachedClockTicksPerSecond) return cachedClockTicksPerSecond;
+
+    // Best-effort: try getconf; fallback to 100 (common Linux USER_HZ).
+    try {
+        const output = execSync('getconf CLK_TCK', { encoding: 'utf8' }).trim();
+        const value = Number.parseInt(output, 10);
+        if (Number.isFinite(value) && value > 0) {
+            cachedClockTicksPerSecond = value;
+            return cachedClockTicksPerSecond;
+        }
+    } catch {}
+
+    cachedClockTicksPerSecond = 100;
+    return cachedClockTicksPerSecond;
+}
+
+function readLinuxProcessTotalTicks(pid) {
+    try {
+        const content = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+        const end = content.lastIndexOf(')');
+        if (end < 0) return null;
+
+        // After the "(comm)" field, the rest are space-delimited fields.
+        // utime/stime are fields 14/15; in the post-comm slice they are indices 11/12.
+        const fields = content.slice(end + 1).trim().split(/\s+/);
+        if (fields.length < 13) return null;
+
+        const utime = Number(fields[11]);
+        const stime = Number(fields[12]);
+        if (!Number.isFinite(utime) || !Number.isFinite(stime)) return null;
+        return utime + stime;
+    } catch {
+        return null;
+    }
+}
 
 /**
  * 获取系统 CPU 使用率百分比
@@ -54,10 +94,10 @@ export function getProcessCpuUsagePercent(pid) {
     if (!pid) return '0.0%';
 
     try {
-        const isWindows = process.platform === 'win32';
+        const platform = process.platform;
         let cpuPercent = 0;
 
-        if (isWindows) {
+        if (platform === 'win32') {
             // Windows 下使用 PowerShell 获取进程的 CPU 使用率
             // CPU = (Process.TotalProcessorTime / ElapsedTime) / ProcessorCount
             const command = `powershell -Command "Get-Process -Id ${pid} | Select-Object -ExpandProperty TotalProcessorTime | ForEach-Object { $_.TotalSeconds }"`;
@@ -84,12 +124,38 @@ export function getProcessCpuUsagePercent(pid) {
                     timestamp
                 });
             }
+        } else if (platform === 'linux') {
+            // Alpine containers use BusyBox ps which lacks -p; read /proc instead.
+            const totalTicks = readLinuxProcessTotalTicks(pid);
+            const timestamp = Date.now();
+
+            if (Number.isFinite(totalTicks)) {
+                const prevInfo = processCpuInfoMap.get(pid);
+                if (prevInfo && Number.isFinite(prevInfo.totalTicks)) {
+                    const timeDiff = (timestamp - prevInfo.timestamp) / 1000;
+                    const ticksDiff = totalTicks - prevInfo.totalTicks;
+
+                    if (timeDiff > 0 && ticksDiff >= 0) {
+                        const clockTicks = getClockTicksPerSecond();
+                        const processSecondsDiff = ticksDiff / clockTicks;
+                        const cpuCount = os.cpus().length;
+
+                        cpuPercent = (processSecondsDiff / timeDiff) * 100;
+                        cpuPercent = cpuCount > 0 ? cpuPercent / cpuCount : cpuPercent;
+                    }
+                }
+
+                processCpuInfoMap.set(pid, {
+                    totalTicks,
+                    timestamp
+                });
+            }
         } else {
-            // Linux/macOS 使用 ps 命令直接获取
-            const output = execSync(`ps -p ${pid} -o %cpu`, { encoding: 'utf8' });
-            const lines = output.trim().split('\n');
-            if (lines.length >= 2) {
-                cpuPercent = parseFloat(lines[1].trim());
+            // macOS / other Unix: use ps directly (no BusyBox limitation).
+            const output = execSync(`ps -p ${pid} -o %cpu=`, { encoding: 'utf8' }).trim();
+            const parsed = parseFloat(output);
+            if (!Number.isNaN(parsed)) {
+                cpuPercent = parsed;
             }
         }
 
