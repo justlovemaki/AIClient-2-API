@@ -323,6 +323,26 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
     if (!currentConfig.BITBROWSER_CORE_VERSION) {
         currentConfig.BITBROWSER_CORE_VERSION = '124';
     }
+    if (currentConfig.LOCAL_BROWSER_ENABLED === undefined) {
+        currentConfig.LOCAL_BROWSER_ENABLED = true;
+    }
+    if (!currentConfig.LOCAL_BROWSER_PROFILE_BASE_DIR) {
+        currentConfig.LOCAL_BROWSER_PROFILE_BASE_DIR = 'configs/browser-profiles';
+    }
+    if (currentConfig.LOCAL_BROWSER_OPEN_COMMAND === undefined) {
+        currentConfig.LOCAL_BROWSER_OPEN_COMMAND = '';
+    }
+    if (currentConfig.LOCAL_BROWSER_BINARY === undefined) {
+        currentConfig.LOCAL_BROWSER_BINARY = '';
+    }
+    if (currentConfig.LOCAL_BROWSER_EXTRA_ARGS === undefined) {
+        currentConfig.LOCAL_BROWSER_EXTRA_ARGS = '';
+    }
+    if (!currentConfig.ISOLATED_BROWSER_PROVIDER) {
+        currentConfig.ISOLATED_BROWSER_PROVIDER = currentConfig.BITBROWSER_ENABLED
+            ? 'bitbrowser'
+            : 'local-chromium';
+    }
 
     if (!currentConfig.SYSTEM_PROMPT_FILE_PATH) {
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;

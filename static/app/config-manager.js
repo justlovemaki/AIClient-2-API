@@ -162,9 +162,19 @@ async function loadConfiguration() {
         const bitbrowserEnabledEl = document.getElementById('bitbrowserEnabled');
         const bitbrowserApiUrlEl = document.getElementById('bitbrowserApiUrl');
         const bitbrowserCoreVersionEl = document.getElementById('bitbrowserCoreVersion');
+        const isolatedBrowserProviderEl = document.getElementById('isolatedBrowserProvider');
+        const localBrowserEnabledEl = document.getElementById('localBrowserEnabled');
+        const localBrowserOpenCommandEl = document.getElementById('localBrowserOpenCommand');
+        const localBrowserProfileBaseDirEl = document.getElementById('localBrowserProfileBaseDir');
         if (bitbrowserEnabledEl) bitbrowserEnabledEl.checked = data.BITBROWSER_ENABLED === true;
         if (bitbrowserApiUrlEl) bitbrowserApiUrlEl.value = data.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
         if (bitbrowserCoreVersionEl) bitbrowserCoreVersionEl.value = data.BITBROWSER_CORE_VERSION || '124';
+        if (isolatedBrowserProviderEl) {
+            isolatedBrowserProviderEl.value = data.ISOLATED_BROWSER_PROVIDER || (data.BITBROWSER_ENABLED === true ? 'bitbrowser' : 'local-chromium');
+        }
+        if (localBrowserEnabledEl) localBrowserEnabledEl.checked = data.LOCAL_BROWSER_ENABLED !== false;
+        if (localBrowserOpenCommandEl) localBrowserOpenCommandEl.value = data.LOCAL_BROWSER_OPEN_COMMAND || '';
+        if (localBrowserProfileBaseDirEl) localBrowserProfileBaseDirEl.value = data.LOCAL_BROWSER_PROFILE_BASE_DIR || 'configs/browser-profiles';
         
         // 加载日志配置
         const logEnabledEl = document.getElementById('logEnabled');
@@ -277,6 +287,10 @@ async function saveConfiguration() {
     config.BITBROWSER_ENABLED = document.getElementById('bitbrowserEnabled')?.checked === true;
     config.BITBROWSER_API_URL = document.getElementById('bitbrowserApiUrl')?.value?.trim() || 'http://127.0.0.1:54345';
     config.BITBROWSER_CORE_VERSION = document.getElementById('bitbrowserCoreVersion')?.value?.trim() || '124';
+    config.ISOLATED_BROWSER_PROVIDER = document.getElementById('isolatedBrowserProvider')?.value?.trim() || (config.BITBROWSER_ENABLED ? 'bitbrowser' : 'local-chromium');
+    config.LOCAL_BROWSER_ENABLED = document.getElementById('localBrowserEnabled')?.checked === true;
+    config.LOCAL_BROWSER_OPEN_COMMAND = document.getElementById('localBrowserOpenCommand')?.value?.trim() || '';
+    config.LOCAL_BROWSER_PROFILE_BASE_DIR = document.getElementById('localBrowserProfileBaseDir')?.value?.trim() || 'configs/browser-profiles';
     
     // 保存日志配置
     config.LOG_ENABLED = document.getElementById('logEnabled')?.checked !== false;

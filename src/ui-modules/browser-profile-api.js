@@ -1,22 +1,13 @@
 import { getRequestBody } from '../utils/common.js';
 import logger from '../utils/logger.js';
 import {
-    ensureBitBrowserProfileForCredential,
-    openBitBrowserProfileForCredential
+    ensureIsolatedBrowserForCredential,
+    openIsolatedBrowserForCredential
 } from '../services/browser-profile-manager.js';
-
-function requireBitBrowserEnabled(currentConfig) {
-    if (currentConfig?.BITBROWSER_ENABLED !== true) {
-        const apiUrl = currentConfig?.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
-        throw new Error(`BitBrowser is disabled. Set BITBROWSER_ENABLED=true (API: ${apiUrl})`);
-    }
-}
 
 export async function handleEnsureBrowserProfile(req, res, currentConfig, providerPoolManager, providerType, uuid) {
     try {
-        requireBitBrowserEnabled(currentConfig);
-
-        const result = await ensureBitBrowserProfileForCredential({
+        const result = await ensureIsolatedBrowserForCredential({
             appConfig: currentConfig,
             providerPoolManager,
             providerType,
@@ -36,8 +27,6 @@ export async function handleEnsureBrowserProfile(req, res, currentConfig, provid
 
 export async function handleOpenBrowserProfile(req, res, currentConfig, providerPoolManager, providerType, uuid) {
     try {
-        requireBitBrowserEnabled(currentConfig);
-
         let body = {};
         try {
             body = await getRequestBody(req);
@@ -45,7 +34,7 @@ export async function handleOpenBrowserProfile(req, res, currentConfig, provider
 
         const url = body?.url ? String(body.url) : null;
 
-        const result = await openBitBrowserProfileForCredential({
+        const result = await openIsolatedBrowserForCredential({
             appConfig: currentConfig,
             providerPoolManager,
             providerType,

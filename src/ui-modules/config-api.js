@@ -103,6 +103,12 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.BITBROWSER_ENABLED !== undefined) currentConfig.BITBROWSER_ENABLED = newConfig.BITBROWSER_ENABLED;
         if (newConfig.BITBROWSER_API_URL !== undefined) currentConfig.BITBROWSER_API_URL = newConfig.BITBROWSER_API_URL;
         if (newConfig.BITBROWSER_CORE_VERSION !== undefined) currentConfig.BITBROWSER_CORE_VERSION = newConfig.BITBROWSER_CORE_VERSION;
+        if (newConfig.ISOLATED_BROWSER_PROVIDER !== undefined) currentConfig.ISOLATED_BROWSER_PROVIDER = newConfig.ISOLATED_BROWSER_PROVIDER;
+        if (newConfig.LOCAL_BROWSER_ENABLED !== undefined) currentConfig.LOCAL_BROWSER_ENABLED = newConfig.LOCAL_BROWSER_ENABLED;
+        if (newConfig.LOCAL_BROWSER_OPEN_COMMAND !== undefined) currentConfig.LOCAL_BROWSER_OPEN_COMMAND = newConfig.LOCAL_BROWSER_OPEN_COMMAND;
+        if (newConfig.LOCAL_BROWSER_PROFILE_BASE_DIR !== undefined) currentConfig.LOCAL_BROWSER_PROFILE_BASE_DIR = newConfig.LOCAL_BROWSER_PROFILE_BASE_DIR;
+        if (newConfig.LOCAL_BROWSER_BINARY !== undefined) currentConfig.LOCAL_BROWSER_BINARY = newConfig.LOCAL_BROWSER_BINARY;
+        if (newConfig.LOCAL_BROWSER_EXTRA_ARGS !== undefined) currentConfig.LOCAL_BROWSER_EXTRA_ARGS = newConfig.LOCAL_BROWSER_EXTRA_ARGS;
 
         // Log settings
         if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
@@ -166,6 +172,12 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 BITBROWSER_ENABLED: currentConfig.BITBROWSER_ENABLED,
                 BITBROWSER_API_URL: currentConfig.BITBROWSER_API_URL,
                 BITBROWSER_CORE_VERSION: currentConfig.BITBROWSER_CORE_VERSION,
+                ISOLATED_BROWSER_PROVIDER: currentConfig.ISOLATED_BROWSER_PROVIDER,
+                LOCAL_BROWSER_ENABLED: currentConfig.LOCAL_BROWSER_ENABLED,
+                LOCAL_BROWSER_OPEN_COMMAND: currentConfig.LOCAL_BROWSER_OPEN_COMMAND,
+                LOCAL_BROWSER_PROFILE_BASE_DIR: currentConfig.LOCAL_BROWSER_PROFILE_BASE_DIR,
+                LOCAL_BROWSER_BINARY: currentConfig.LOCAL_BROWSER_BINARY,
+                LOCAL_BROWSER_EXTRA_ARGS: currentConfig.LOCAL_BROWSER_EXTRA_ARGS,
                 LOG_ENABLED: currentConfig.LOG_ENABLED,
                 LOG_OUTPUT_MODE: currentConfig.LOG_OUTPUT_MODE,
                 LOG_LEVEL: currentConfig.LOG_LEVEL,

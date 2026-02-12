@@ -122,9 +122,16 @@
                 </div>
             </div>
 
-            <!-- 隔离浏览器 (BitBrowser) -->
+            <!-- 隔离浏览器 -->
             <div class="config-group-section">
-                <h3 data-i18n="config.bitbrowser.title"><i class="fas fa-user-shield"></i> 隔离浏览器 (BitBrowser)</h3>
+                <h3 data-i18n="config.bitbrowser.title"><i class="fas fa-user-shield"></i> 隔离浏览器</h3>
+                <div class="form-group">
+                    <label for="isolatedBrowserProvider" data-i18n="config.isolated.provider">隔离浏览器提供商</label>
+                    <select id="isolatedBrowserProvider" class="form-control">
+                        <option value="bitbrowser" data-i18n="config.isolated.provider.bitbrowser">BitBrowser</option>
+                        <option value="local-chromium" data-i18n="config.isolated.provider.localChromium">本地 Chromium (Linux/Xpra/noVNC/Kasm)</option>
+                    </select>
+                </div>
                 <div class="config-row">
                     <div class="form-group">
                         <label data-i18n="config.bitbrowser.enabled">启用 BitBrowser</label>
@@ -143,6 +150,27 @@
                     <label for="bitbrowserApiUrl" data-i18n="config.bitbrowser.apiUrl">API 地址</label>
                     <input type="text" id="bitbrowserApiUrl" class="form-control" data-i18n-placeholder="config.bitbrowser.apiUrlPlaceholder" placeholder="http://127.0.0.1:54345">
                     <small class="form-text" data-i18n="config.bitbrowser.apiUrlNote">BitBrowser 本地服务地址，必须可从 AIClient 主机访问</small>
+                </div>
+
+                <div class="config-row">
+                    <div class="form-group">
+                        <label data-i18n="config.isolated.localEnabled">启用本地 Chromium</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="localBrowserEnabled">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="localBrowserProfileBaseDir" data-i18n="config.isolated.localProfileBaseDir">本地浏览器 Profile 目录</label>
+                        <input type="text" id="localBrowserProfileBaseDir" class="form-control" data-i18n-placeholder="config.isolated.localProfileBaseDirPlaceholder" placeholder="configs/browser-profiles">
+                        <small class="form-text" data-i18n="config.isolated.localProfileBaseDirNote">每个节点会分配独立 user-data-dir</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="localBrowserOpenCommand" data-i18n="config.isolated.localOpenCommand">本地浏览器启动命令模板（可选）</label>
+                    <input type="text" id="localBrowserOpenCommand" class="form-control" data-i18n-placeholder="config.isolated.localOpenCommandPlaceholder" placeholder='xpra start :100 --bind-tcp=0.0.0.0:14500 --html=on --start-child="chromium --user-data-dir={profileDir_raw} {url_raw}"'>
+                    <small class="form-text" data-i18n="config.isolated.localOpenCommandNote">支持占位符 {url}/{profileDir}/{proxyUrl}/{providerType}/{uuid}，以及 *_raw 版本。可用于 Xpra/noVNC/Kasm 启动链路。</small>
                 </div>
             </div>
 

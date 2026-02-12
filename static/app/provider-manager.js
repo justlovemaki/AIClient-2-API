@@ -826,6 +826,7 @@ async function showKiroEnterpriseWizard(providerType) {
     const machineIdEl = modal.querySelector('.kiro-wiz-machine-id');
     const startUrlEl = modal.querySelector('.kiro-wiz-idc-start-url');
     const regionEl = modal.querySelector('.kiro-wiz-idc-region');
+    let isolatedBrowserProvider = 'bitbrowser';
 
     const closeModal = () => modal.remove();
     [closeBtn, cancelBtn].forEach((btn) => btn?.addEventListener?.('click', closeModal));
@@ -861,6 +862,10 @@ async function showKiroEnterpriseWizard(providerType) {
     // Load defaults
     try {
         const cfg = await window.apiClient.get('/config');
+        isolatedBrowserProvider = String(
+            cfg?.ISOLATED_BROWSER_PROVIDER ||
+            (cfg?.BITBROWSER_ENABLED === true ? 'bitbrowser' : 'local-chromium')
+        ).trim() || 'bitbrowser';
         if (bitbrowserEnabledEl) bitbrowserEnabledEl.checked = cfg?.BITBROWSER_ENABLED === true;
         if (bitbrowserApiUrlEl) bitbrowserApiUrlEl.value = cfg?.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
         if (bitbrowserCoreVersionEl) bitbrowserCoreVersionEl.value = cfg?.BITBROWSER_CORE_VERSION || '124';
@@ -919,7 +924,7 @@ async function showKiroEnterpriseWizard(providerType) {
             machineIdEl?.focus?.();
             return;
         }
-        if (useBitbrowser && !bbApiUrl) {
+        if (useBitbrowser && isolatedBrowserProvider === 'bitbrowser' && !bbApiUrl) {
             showToast(t('common.warning'), `${t('modal.provider.kiroWizard.bitbrowserApiUrl')} ${t('common.required') || 'required'}`, 'warning');
             bitbrowserApiUrlEl?.focus?.();
             return;
@@ -932,12 +937,17 @@ async function showKiroEnterpriseWizard(providerType) {
 
         try {
             if (useBitbrowser) {
-                // Persist BitBrowser config (wizard-driven), so backend APIs can use it.
-                await window.apiClient.post('/config', {
-                    BITBROWSER_ENABLED: true,
-                    BITBROWSER_API_URL: bbApiUrl,
-                    BITBROWSER_CORE_VERSION: bbCoreVersion
-                });
+                const browserPatch = {
+                    ISOLATED_BROWSER_PROVIDER: isolatedBrowserProvider
+                };
+                if (isolatedBrowserProvider === 'bitbrowser') {
+                    browserPatch.BITBROWSER_ENABLED = true;
+                    browserPatch.BITBROWSER_API_URL = bbApiUrl;
+                    browserPatch.BITBROWSER_CORE_VERSION = bbCoreVersion;
+                } else {
+                    browserPatch.LOCAL_BROWSER_ENABLED = true;
+                }
+                await window.apiClient.post('/config', browserPatch);
             }
 
             const providerConfig = {
@@ -2014,6 +2024,7 @@ async function showKiroAwsImportModal(providerType = 'claude-kiro-oauth') {
     const nodeBitbrowserFieldsEl = modal.querySelector('.aws-wiz-bitbrowser-fields');
     const nodeBitbrowserApiUrlEl = modal.querySelector('.aws-wiz-bitbrowser-api-url');
     const nodeBitbrowserCoreVersionEl = modal.querySelector('.aws-wiz-bitbrowser-core-version');
+    let isolatedBrowserProvider = 'bitbrowser';
 
     const fileInput = modal.querySelector('#awsFilesInput');
     const uploadArea = modal.querySelector('.aws-file-upload-area');
@@ -2060,6 +2071,10 @@ async function showKiroAwsImportModal(providerType = 'claude-kiro-oauth') {
     // Defaults: BitBrowser global config -> prefill wizard fields
     try {
         const cfg = await window.apiClient.get('/config');
+        isolatedBrowserProvider = String(
+            cfg?.ISOLATED_BROWSER_PROVIDER ||
+            (cfg?.BITBROWSER_ENABLED === true ? 'bitbrowser' : 'local-chromium')
+        ).trim() || 'bitbrowser';
         if (nodeBitbrowserApiUrlEl) {
             nodeBitbrowserApiUrlEl.value = cfg?.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
         }
@@ -2742,19 +2757,24 @@ async function showKiroAwsImportModal(providerType = 'claude-kiro-oauth') {
                         nodeMachineIdEl?.focus?.();
                         return;
                     }
-                    if (useBitbrowser && !bbApiUrl) {
+                    if (useBitbrowser && isolatedBrowserProvider === 'bitbrowser' && !bbApiUrl) {
                         showToast(t('common.warning'), `${t('modal.provider.kiroWizard.bitbrowserApiUrl')} ${t('common.required') || 'required'}`, 'warning');
                         nodeBitbrowserApiUrlEl?.focus?.();
                         return;
                     }
 
                     if (useBitbrowser) {
-                        // Persist BitBrowser config so backend can ensure profiles.
-                        await window.apiClient.post('/config', {
-                            BITBROWSER_ENABLED: true,
-                            BITBROWSER_API_URL: bbApiUrl,
-                            BITBROWSER_CORE_VERSION: bbCoreVersion
-                        });
+                        const browserPatch = {
+                            ISOLATED_BROWSER_PROVIDER: isolatedBrowserProvider
+                        };
+                        if (isolatedBrowserProvider === 'bitbrowser') {
+                            browserPatch.BITBROWSER_ENABLED = true;
+                            browserPatch.BITBROWSER_API_URL = bbApiUrl;
+                            browserPatch.BITBROWSER_CORE_VERSION = bbCoreVersion;
+                        } else {
+                            browserPatch.LOCAL_BROWSER_ENABLED = true;
+                        }
+                        await window.apiClient.post('/config', browserPatch);
                         shouldEnsureBitbrowser = true;
                         ensureBitbrowserApiUrl = bbApiUrl;
                         ensureBitbrowserCoreVersion = bbCoreVersion;

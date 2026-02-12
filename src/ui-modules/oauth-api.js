@@ -11,7 +11,7 @@ import {
     batchImportKiroRefreshTokensStream,
     importAwsCredentials
 } from '../auth/oauth-handlers.js';
-import { openBitBrowserProfileForCredential } from '../services/browser-profile-manager.js';
+import { openIsolatedBrowserForCredential } from '../services/browser-profile-manager.js';
 
 function findNodeConfig(providerPoolManager, providerType, uuid) {
     const list = providerPoolManager?.providerStatus?.[providerType];
@@ -104,12 +104,12 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerPoo
             return true;
         }
 
-        // Optionally open in isolated browser profile (BitBrowser)
+        // Optionally open in isolated browser profile (provider: bitbrowser | local-chromium)
         let isolatedBrowser = null;
         const shouldOpenIsolated = options?.openInIsolatedBrowser === true || options?.useIsolatedBrowser === true;
         if (shouldOpenIsolated && targetProviderUuid) {
             try {
-                const openResult = await openBitBrowserProfileForCredential({
+                const openResult = await openIsolatedBrowserForCredential({
                     appConfig: currentConfig,
                     providerPoolManager,
                     providerType,
@@ -117,7 +117,7 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerPoo
                     url: authUrl
                 });
                 isolatedBrowser = {
-                    provider: 'bitbrowser',
+                    provider: openResult.provider || 'isolated-browser',
                     profileId: openResult.profileId,
                     openedUrl: openResult.openedUrl === true,
                     openInfo: openResult.openInfo || null,
@@ -125,7 +125,7 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerPoo
                 };
             } catch (e) {
                 isolatedBrowser = {
-                    provider: 'bitbrowser',
+                    provider: 'isolated-browser',
                     error: e.message
                 };
             }
