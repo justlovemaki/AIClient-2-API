@@ -585,7 +585,7 @@ function showKiroAuthMethodSelector(providerType) {
             if (method === 'batch-import') {
                 showKiroBatchImportModal();
             } else if (method === 'aws-import') {
-                showKiroAwsImportModal();
+                await showKiroAwsImportModal(providerType);
             } else if (method === 'iam-identity-center') {
                 showKiroEnterpriseWizard(providerType);
             } else {
@@ -642,6 +642,13 @@ function validateHttpUrl(value) {
     }
 }
 
+function validateMachineId(value) {
+    const s = String(value || '').trim();
+    if (!s) return true;
+    if (s.length < 8 || s.length > 128) return false;
+    return /^[A-Za-z0-9._:-]+$/.test(s);
+}
+
 async function showKiroEnterpriseWizard(providerType) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -683,6 +690,18 @@ async function showKiroEnterpriseWizard(providerType) {
                         placeholder="acct-001"
                         style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
                     />
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                        <span data-i18n="modal.provider.kiroWizard.machineId">${t('modal.provider.kiroWizard.machineId')}</span>
+                        <span class="optional-tag">${t('config.optional')}</span>
+                    </label>
+                    <input type="text" class="form-control kiro-wiz-machine-id"
+                        placeholder="${t('modal.provider.field.machineId.placeholder')}"
+                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                    />
+                    <small class="form-text" data-i18n="modal.provider.kiroWizard.machineIdHint">${t('modal.provider.kiroWizard.machineIdHint')}</small>
                 </div>
 
                 <div style="margin-top: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
@@ -804,6 +823,7 @@ async function showKiroEnterpriseWizard(providerType) {
     const bitbrowserCoreVersionEl = modal.querySelector('.kiro-wiz-bitbrowser-core-version');
     const accountIdEl = modal.querySelector('.kiro-wiz-account-id');
     const customNameEl = modal.querySelector('.kiro-wiz-custom-name');
+    const machineIdEl = modal.querySelector('.kiro-wiz-machine-id');
     const startUrlEl = modal.querySelector('.kiro-wiz-idc-start-url');
     const regionEl = modal.querySelector('.kiro-wiz-idc-region');
 
@@ -865,6 +885,7 @@ async function showKiroEnterpriseWizard(providerType) {
     createBtn.addEventListener('click', async () => {
         const accountId = normalizeNonEmptyString(accountIdEl?.value);
         const customName = normalizeNonEmptyString(customNameEl?.value) || accountId;
+        const machineId = normalizeNonEmptyString(machineIdEl?.value);
         const proxyEnabled = proxyEnabledEl?.checked === true;
         const proxyUrl = proxyEnabled ? normalizeNonEmptyString(proxyUrlEl?.value) : '';
         const builderIDStartURL = normalizeNonEmptyString(startUrlEl?.value);
@@ -893,6 +914,11 @@ async function showKiroEnterpriseWizard(providerType) {
             proxyUrlEl?.focus?.();
             return;
         }
+        if (machineId && !validateMachineId(machineId)) {
+            showToast(t('common.warning'), `${t('modal.provider.kiroWizard.machineId')} ${t('common.invalid') || 'invalid'}`, 'warning');
+            machineIdEl?.focus?.();
+            return;
+        }
         if (useBitbrowser && !bbApiUrl) {
             showToast(t('common.warning'), `${t('modal.provider.kiroWizard.bitbrowserApiUrl')} ${t('common.required') || 'required'}`, 'warning');
             bitbrowserApiUrlEl?.focus?.();
@@ -918,6 +944,7 @@ async function showKiroEnterpriseWizard(providerType) {
                 accountId,
                 customName,
                 authMethod: 'iam-identity-center',
+                ...(machineId ? { machineId, KIRO_MACHINE_ID: machineId } : {}),
                 // Explicit per-node proxy override semantics:
                 // - if proxy enabled: set URL
                 // - if proxy disabled: set empty string to disable global proxy inheritance
@@ -1712,7 +1739,7 @@ function showKiroBatchImportModal() {
  * 显示 Kiro AWS 账号导入模态框
  * 支持从 AWS SSO cache 目录导入凭据文件，或直接粘贴 JSON
  */
-function showKiroAwsImportModal() {
+async function showKiroAwsImportModal(providerType = 'claude-kiro-oauth') {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.style.display = 'flex';
@@ -1733,6 +1760,116 @@ function showKiroAwsImportModal() {
                         <i class="fas fa-folder-open"></i>
                         <code style="background: #fed7aa; padding: 2px 6px; border-radius: 4px;">C:\\Users\\{username}\\.aws\\sso\\cache</code>
                     </p>
+                </div>
+
+                <!-- Provider node config (recommended) -->
+                <div class="aws-node-config" style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="font-weight: 700; color: #111827;">
+                            <i class="fas fa-user-cog" style="color: #0ea5e9;"></i>
+                            <span data-i18n="oauth.kiro.awsNodeConfigTitle">${t('oauth.kiro.awsNodeConfigTitle')}</span>
+                        </div>
+                        <label style="display: inline-flex; align-items: center; gap: 8px; user-select: none;">
+                            <input type="checkbox" class="aws-wiz-create-node" checked />
+                            <span data-i18n="oauth.kiro.awsNodeConfigEnabled">${t('oauth.kiro.awsNodeConfigEnabled')}</span>
+                        </label>
+                    </div>
+                    <small class="form-text" style="margin-top: 6px; color: #6b7280;" data-i18n="oauth.kiro.awsNodeConfigHint">${t('oauth.kiro.awsNodeConfigHint')}</small>
+
+                    <div class="aws-wiz-node-fields" style="margin-top: 12px;">
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                <span data-i18n="modal.provider.kiroWizard.accountId">${t('modal.provider.kiroWizard.accountId')}</span>
+                            </label>
+                            <input type="text" class="form-control aws-wiz-account-id"
+                                placeholder="acct-001"
+                                style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                            />
+                            <small class="form-text" data-i18n="modal.provider.kiroWizard.accountIdHint">${t('modal.provider.kiroWizard.accountIdHint')}</small>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                ${t('modal.provider.customName')} <span class="optional-tag">${t('config.optional')}</span>
+                            </label>
+                            <input type="text" class="form-control aws-wiz-custom-name"
+                                placeholder="acct-001"
+                                style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                            />
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                <span data-i18n="modal.provider.kiroWizard.machineId">${t('modal.provider.kiroWizard.machineId')}</span>
+                                <span class="optional-tag">${t('config.optional')}</span>
+                            </label>
+                            <input type="text" class="form-control aws-wiz-machine-id"
+                                placeholder="${t('modal.provider.field.machineId.placeholder')}"
+                                style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                            />
+                            <small class="form-text" data-i18n="modal.provider.kiroWizard.machineIdHint">${t('modal.provider.kiroWizard.machineIdHint')}</small>
+                        </div>
+
+                        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: white;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                                <div style="font-weight: 700; color: #374151;">
+                                    <i class="fas fa-network-wired" style="color: #6b7280;"></i>
+                                    <span data-i18n="modal.provider.kiroWizard.proxyTitle">${t('modal.provider.kiroWizard.proxyTitle')}</span>
+                                </div>
+                                <label style="display: inline-flex; align-items: center; gap: 8px; user-select: none;">
+                                    <input type="checkbox" class="aws-wiz-proxy-enabled" checked />
+                                    <span data-i18n="modal.provider.kiroWizard.proxyEnabled">${t('modal.provider.kiroWizard.proxyEnabled')}</span>
+                                </label>
+                            </div>
+
+                            <div class="aws-wiz-proxy-fields" style="margin-top: 10px;">
+                                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                    <span data-i18n="modal.provider.kiroWizard.proxyUrl">${t('modal.provider.kiroWizard.proxyUrl')}</span>
+                                </label>
+                                <input type="password" class="form-control aws-wiz-proxy-url"
+                                    placeholder="socks5://user:pass@host:port"
+                                    style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                                />
+                                <small class="form-text" data-i18n="modal.provider.kiroWizard.proxyUrlHint">${t('modal.provider.kiroWizard.proxyUrlHint')}</small>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: white;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                                <div style="font-weight: 700; color: #374151;">
+                                    <i class="fas fa-user-shield" style="color: #6b7280;"></i>
+                                    <span data-i18n="oauth.kiro.awsBitbrowserTitle">${t('oauth.kiro.awsBitbrowserTitle')}</span>
+                                </div>
+                                <label style="display: inline-flex; align-items: center; gap: 8px; user-select: none;">
+                                    <input type="checkbox" class="aws-wiz-bitbrowser-enabled" />
+                                    <span data-i18n="oauth.kiro.awsBitbrowserEnabled">${t('oauth.kiro.awsBitbrowserEnabled')}</span>
+                                </label>
+                            </div>
+                            <small class="form-text" style="margin-top: 6px; color: #6b7280;" data-i18n="oauth.kiro.awsBitbrowserHint">${t('oauth.kiro.awsBitbrowserHint')}</small>
+
+                            <div class="aws-wiz-bitbrowser-fields" style="margin-top: 10px; display: none;">
+                                <div class="form-group" style="margin-top: 8px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                        <span data-i18n="modal.provider.kiroWizard.bitbrowserApiUrl">${t('modal.provider.kiroWizard.bitbrowserApiUrl')}</span>
+                                    </label>
+                                    <input type="text" class="form-control aws-wiz-bitbrowser-api-url"
+                                        placeholder="http://127.0.0.1:54345"
+                                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                                    />
+                                </div>
+
+                                <div class="form-group" style="margin-top: 10px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                        <span data-i18n="modal.provider.kiroWizard.bitbrowserCoreVersion">${t('modal.provider.kiroWizard.bitbrowserCoreVersion')}</span>
+                                    </label>
+                                    <input type="text" class="form-control aws-wiz-bitbrowser-core-version"
+                                        placeholder="124"
+                                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- 输入模式切换 -->
@@ -1863,7 +2000,21 @@ function showKiroAwsImportModal() {
     `;
     
     document.body.appendChild(modal);
-    
+
+    // Provider node config (recommended)
+    const createNodeEl = modal.querySelector('.aws-wiz-create-node');
+    const nodeFieldsEl = modal.querySelector('.aws-wiz-node-fields');
+    const nodeAccountIdEl = modal.querySelector('.aws-wiz-account-id');
+    const nodeCustomNameEl = modal.querySelector('.aws-wiz-custom-name');
+    const nodeMachineIdEl = modal.querySelector('.aws-wiz-machine-id');
+    const nodeProxyEnabledEl = modal.querySelector('.aws-wiz-proxy-enabled');
+    const nodeProxyFieldsEl = modal.querySelector('.aws-wiz-proxy-fields');
+    const nodeProxyUrlEl = modal.querySelector('.aws-wiz-proxy-url');
+    const nodeBitbrowserEnabledEl = modal.querySelector('.aws-wiz-bitbrowser-enabled');
+    const nodeBitbrowserFieldsEl = modal.querySelector('.aws-wiz-bitbrowser-fields');
+    const nodeBitbrowserApiUrlEl = modal.querySelector('.aws-wiz-bitbrowser-api-url');
+    const nodeBitbrowserCoreVersionEl = modal.querySelector('.aws-wiz-bitbrowser-core-version');
+
     const fileInput = modal.querySelector('#awsFilesInput');
     const uploadArea = modal.querySelector('.aws-file-upload-area');
     const filesListDiv = modal.querySelector('#awsFilesList');
@@ -1883,6 +2034,56 @@ function showKiroAwsImportModal() {
     let uploadedFiles = [];
     let mergedCredentials = null;
     let currentMode = 'file';
+
+    const syncNodeVisibility = () => {
+        if (!createNodeEl || !nodeFieldsEl) return;
+        nodeFieldsEl.style.display = createNodeEl.checked ? '' : 'none';
+    };
+
+    const syncNodeProxyVisibility = () => {
+        if (!nodeProxyEnabledEl || !nodeProxyFieldsEl) return;
+        nodeProxyFieldsEl.style.display = nodeProxyEnabledEl.checked ? '' : 'none';
+        if (!nodeProxyEnabledEl.checked && nodeProxyUrlEl) {
+            nodeProxyUrlEl.value = '';
+        }
+    };
+
+    const syncNodeBitbrowserVisibility = () => {
+        if (!nodeBitbrowserEnabledEl || !nodeBitbrowserFieldsEl) return;
+        nodeBitbrowserFieldsEl.style.display = nodeBitbrowserEnabledEl.checked ? '' : 'none';
+    };
+
+    createNodeEl?.addEventListener?.('change', syncNodeVisibility);
+    nodeProxyEnabledEl?.addEventListener?.('change', syncNodeProxyVisibility);
+    nodeBitbrowserEnabledEl?.addEventListener?.('change', syncNodeBitbrowserVisibility);
+
+    // Defaults: BitBrowser global config -> prefill wizard fields
+    try {
+        const cfg = await window.apiClient.get('/config');
+        if (nodeBitbrowserApiUrlEl) {
+            nodeBitbrowserApiUrlEl.value = cfg?.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
+        }
+        if (nodeBitbrowserCoreVersionEl) {
+            nodeBitbrowserCoreVersionEl.value = cfg?.BITBROWSER_CORE_VERSION || '124';
+        }
+    } catch {}
+
+    // Defaults: suggest sequential accountId for node creation
+    try {
+        const data = await window.apiClient.get(`/providers/${encodeURIComponent(providerType)}`);
+        const suggested = suggestNextSequentialAccountId(data?.providers || []);
+        if (nodeAccountIdEl) nodeAccountIdEl.value = suggested;
+        if (nodeCustomNameEl) nodeCustomNameEl.value = suggested;
+    } catch {
+        const fallback = `acct-${String(Date.now()).slice(-3)}`;
+        if (nodeAccountIdEl) nodeAccountIdEl.value = fallback;
+        if (nodeCustomNameEl) nodeCustomNameEl.value = fallback;
+    }
+
+    // Initial visibility
+    syncNodeVisibility();
+    syncNodeProxyVisibility();
+    syncNodeBitbrowserVisibility();
     
     // 清空文件按钮事件
     clearFilesBtn.addEventListener('click', () => {
@@ -2133,6 +2334,17 @@ function showKiroAwsImportModal() {
         
         // 检查是否为批量导入（数组）
         const isBatchImport = Array.isArray(mergedCredentials);
+
+        // Batch import does not support "create node + attach" (one uuid for many creds)
+        if (createNodeEl) {
+            if (isBatchImport) {
+                createNodeEl.checked = false;
+                createNodeEl.disabled = true;
+            } else {
+                createNodeEl.disabled = false;
+            }
+            syncNodeVisibility();
+        }
         
         if (isBatchImport) {
             // 批量导入模式：验证数组中的每个对象
@@ -2344,6 +2556,11 @@ function showKiroAwsImportModal() {
         }
         
         let importSuccess = false; // 标记是否导入成功
+        let createdProviderUuid = null;
+        let createdNodeProxyUrlOverride = undefined;
+        let shouldEnsureBitbrowser = false;
+        let ensureBitbrowserApiUrl = '';
+        let ensureBitbrowserCoreVersion = '';
         
         try {
             if (isBatchImport) {
@@ -2497,29 +2714,169 @@ function showKiroAwsImportModal() {
                 if (!mergedCredentials.authMethod) {
                     mergedCredentials.authMethod = 'builder-id';
                 }
-                
-                const response = await window.apiClient.post('/kiro/import-aws-credentials', {
+
+                const shouldCreateNode = createNodeEl?.checked === true && createNodeEl?.disabled !== true;
+
+                if (shouldCreateNode) {
+                    const accountId = normalizeNonEmptyString(nodeAccountIdEl?.value);
+                    const customName = normalizeNonEmptyString(nodeCustomNameEl?.value) || accountId;
+                    const machineId = normalizeNonEmptyString(nodeMachineIdEl?.value);
+                    const proxyEnabled = nodeProxyEnabledEl?.checked === true;
+                    const proxyUrl = proxyEnabled ? normalizeNonEmptyString(nodeProxyUrlEl?.value) : '';
+                    const useBitbrowser = nodeBitbrowserEnabledEl?.checked === true;
+                    const bbApiUrl = normalizeNonEmptyString(nodeBitbrowserApiUrlEl?.value) || 'http://127.0.0.1:54345';
+                    const bbCoreVersion = normalizeNonEmptyString(nodeBitbrowserCoreVersionEl?.value) || '124';
+
+                    if (!accountId) {
+                        showToast(t('common.warning'), `${t('modal.provider.kiroWizard.accountId')} ${t('common.required') || 'required'}`, 'warning');
+                        nodeAccountIdEl?.focus?.();
+                        return;
+                    }
+                    if (proxyEnabled && !proxyUrl) {
+                        showToast(t('common.warning'), `${t('modal.provider.kiroWizard.proxyUrl')} ${t('common.required') || 'required'}`, 'warning');
+                        nodeProxyUrlEl?.focus?.();
+                        return;
+                    }
+                    if (machineId && !validateMachineId(machineId)) {
+                        showToast(t('common.warning'), `${t('modal.provider.kiroWizard.machineId')} ${t('common.invalid') || 'invalid'}`, 'warning');
+                        nodeMachineIdEl?.focus?.();
+                        return;
+                    }
+                    if (useBitbrowser && !bbApiUrl) {
+                        showToast(t('common.warning'), `${t('modal.provider.kiroWizard.bitbrowserApiUrl')} ${t('common.required') || 'required'}`, 'warning');
+                        nodeBitbrowserApiUrlEl?.focus?.();
+                        return;
+                    }
+
+                    if (useBitbrowser) {
+                        // Persist BitBrowser config so backend can ensure profiles.
+                        await window.apiClient.post('/config', {
+                            BITBROWSER_ENABLED: true,
+                            BITBROWSER_API_URL: bbApiUrl,
+                            BITBROWSER_CORE_VERSION: bbCoreVersion
+                        });
+                        shouldEnsureBitbrowser = true;
+                        ensureBitbrowserApiUrl = bbApiUrl;
+                        ensureBitbrowserCoreVersion = bbCoreVersion;
+                    }
+
+                    const providerConfig = {
+                        accountId,
+                        customName,
+                        authMethod: 'builder-id',
+                        ...(machineId ? { machineId, KIRO_MACHINE_ID: machineId } : {}),
+                        // Explicit per-node proxy override semantics:
+                        // - if proxy enabled: set URL
+                        // - if proxy disabled: set empty string to disable global proxy inheritance
+                        PROXY_URL: proxyEnabled ? proxyUrl : ''
+                    };
+
+                    createdNodeProxyUrlOverride = providerConfig.PROXY_URL;
+
+                    const createRes = await window.apiClient.post('/providers', {
+                        providerType,
+                        providerConfig
+                    });
+
+                    if (createRes?.error) {
+                        throw new Error(createRes.error.message || createRes.error);
+                    }
+                    if (createRes?.success !== true) {
+                        throw new Error(createRes?.message || 'Failed to create provider node');
+                    }
+
+                    createdProviderUuid = createRes?.provider?.uuid || providerConfig.uuid;
+                    if (!createdProviderUuid) {
+                        throw new Error('Provider node created but uuid missing');
+                    }
+
+                    // Ensure runtime picks up new node (and BitBrowser config if enabled).
+                    await window.apiClient.post('/reload-config');
+                }
+
+                const importBody = {
                     credentials: mergedCredentials
-                });
-                
+                };
+                if (createdProviderUuid) {
+                    importBody.attachToProviderUuid = createdProviderUuid;
+                    importBody.proxyUrlOverride = createdNodeProxyUrlOverride;
+                }
+
+                const response = await window.apiClient.post('/kiro/import-aws-credentials', importBody);
+
                 if (response.success) {
                     importSuccess = true;
+
+                    if (createdProviderUuid && shouldEnsureBitbrowser) {
+                        try {
+                            const ensured = await window.apiClient.post(
+                                `/providers/${encodeURIComponent(providerType)}/${encodeURIComponent(createdProviderUuid)}/browser-profile/ensure`,
+                                {}
+                            );
+                            if (ensured?.success && ensured?.profileId) {
+                                showToast(t('common.success'), `${t('oauth.kiro.awsBitbrowserTitle')}: ${ensured.profileId}`, 'success');
+                            }
+                        } catch (bbErr) {
+                            // Non-fatal: node + creds imported successfully, profile binding failed.
+                            showToast(t('common.warning'), `${t('oauth.kiro.awsBitbrowserTitle')}: ${bbErr.message}`, 'warning');
+                        }
+                    }
+
                     showToast(t('common.success'), t('oauth.kiro.awsImportSuccess'), 'success');
                     modal.remove();
-                    
+
                     // 刷新提供商列表和配置列表
                     loadProviders();
                     loadConfigList();
                 } else if (response.error === 'duplicate') {
-                    // 显示重复凭据警告
                     const existingPath = response.existingPath || '';
-                    showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + (existingPath ? ` (${existingPath})` : ''), 'warning');
+
+                    if (createdProviderUuid && existingPath) {
+                        // Attach existing credential to the newly-created node (logical default).
+                        await window.apiClient.put(
+                            `/providers/${encodeURIComponent(providerType)}/${encodeURIComponent(createdProviderUuid)}`,
+                            { providerConfig: { KIRO_OAUTH_CREDS_FILE_PATH: existingPath } }
+                        );
+                        importSuccess = true;
+
+                        if (shouldEnsureBitbrowser) {
+                            try {
+                                const ensured = await window.apiClient.post(
+                                    `/providers/${encodeURIComponent(providerType)}/${encodeURIComponent(createdProviderUuid)}/browser-profile/ensure`,
+                                    {}
+                                );
+                                if (ensured?.success && ensured?.profileId) {
+                                    showToast(t('common.success'), `${t('oauth.kiro.awsBitbrowserTitle')}: ${ensured.profileId}`, 'success');
+                                }
+                            } catch (bbErr) {
+                                showToast(t('common.warning'), `${t('oauth.kiro.awsBitbrowserTitle')}: ${bbErr.message}`, 'warning');
+                            }
+                        }
+
+                        showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + ` (${existingPath})`, 'warning');
+                        modal.remove();
+                        loadProviders();
+                        loadConfigList();
+                    } else {
+                        // No node to attach, keep modal open.
+                        showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + (existingPath ? ` (${existingPath})` : ''), 'warning');
+                    }
                 } else {
-                    showToast(t('common.error'), response.error || t('oauth.kiro.awsImportFailed'), 'error');
+                    throw new Error(response.error || t('oauth.kiro.awsImportFailed'));
                 }
             }
         } catch (error) {
             console.error('AWS import failed:', error);
+
+            // Cleanup: avoid leaving orphan nodes when "create node" is enabled.
+            try {
+                if (createdProviderUuid && !importSuccess) {
+                    await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${encodeURIComponent(createdProviderUuid)}`);
+                    await window.apiClient.post('/reload-config');
+                }
+            } catch (cleanupError) {
+                console.warn('Cleanup created provider node failed:', cleanupError);
+            }
             
             // 更新错误显示
             validationResult.style.cssText = 'display: block; margin-top: 16px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;';

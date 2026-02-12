@@ -152,6 +152,9 @@ function attachCredentialToProviderNode(providerType, uuid, credPath, extraPatch
         KIRO_OAUTH_CREDS_FILE_PATH: credPath,
         ...extraPatch
     });
+    if (!updatedConfig) {
+        return false;
+    }
 
     // Let the UI refresh the provider modal automatically.
     try {
@@ -1547,10 +1550,31 @@ export async function batchImportKiroRefreshTokensStream(refreshTokens, region =
  * 导入 AWS SSO 凭据用于 Kiro (Builder ID 模式)
  * 从用户上传的 AWS SSO cache 文件中导入凭据
  * @param {Object} credentials - 合并后的凭据对象，需包含 clientId 和 clientSecret
- * @param {boolean} skipDuplicateCheck - 是否跳过重复检查 (默认: false)
+ * @param {boolean|Object} skipDuplicateCheckOrOptions - 是否跳过重复检查 (默认: false) 或 options
+ * @param {Object} [optionsMaybe]
+ * @param {string} [optionsMaybe.attachToProviderUuid] - If set, attach the imported credential file to this provider node (instead of auto-linking).
+ * @param {Object} [optionsMaybe.attachPatch] - Optional extra patch for provider node when attaching (non-sensitive fields only).
+ * @param {string} [optionsMaybe.proxyUrlOverride] - Proxy URL override for refresh attempt ('' disables proxy).
  * @returns {Promise<Object>} 导入结果
  */
-export async function importAwsCredentials(credentials, skipDuplicateCheck = false) {
+export async function importAwsCredentials(credentials, skipDuplicateCheckOrOptions = false, optionsMaybe = {}) {
+    const skipDuplicateCheck = typeof skipDuplicateCheckOrOptions === 'boolean'
+        ? skipDuplicateCheckOrOptions
+        : false;
+    const options = (skipDuplicateCheckOrOptions && typeof skipDuplicateCheckOrOptions === 'object')
+        ? skipDuplicateCheckOrOptions
+        : (optionsMaybe || {});
+
+    const attachToProviderUuid =
+        options?.attachToProviderUuid ||
+        options?.attachToUuid ||
+        options?.targetProviderUuid ||
+        null;
+
+    const attachPatch = (options?.attachPatch && typeof options.attachPatch === 'object')
+        ? options.attachPatch
+        : null;
+
     try {
         // 验证必需字段 - 需要四个字段都存在
         const missingFields = [];
@@ -1579,6 +1603,11 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         }
         
         logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Importing AWS credentials...`);
+
+        const idcRegion =
+            credentials.idcRegion ||
+            credentials.region ||
+            KIRO_REFRESH_CONSTANTS.IDC_REGION;
         
         // 准备凭据数据 - 四个字段都是必需的
         const credentialsData = {
@@ -1588,7 +1617,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             refreshToken: credentials.refreshToken,
             authMethod: credentials.authMethod || 'builder-id',
             // region: credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION,
-            idcRegion: credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION
+            idcRegion
         };
         
         // 可选字段
@@ -1606,7 +1635,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         try {
             logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Attempting to refresh token with provided credentials...`);
             
-            const refreshRegion = credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION;
+            const refreshRegion = idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION;
             const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', refreshRegion);
             
             const refreshResponse = await fetchWithProxy(refreshUrl, {
@@ -1619,7 +1648,8 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
                     clientId: credentials.clientId,
                     clientSecret: credentials.clientSecret,
                     grantType: 'refresh_token'
-                })
+                }),
+                proxyUrlOverride: options?.proxyUrlOverride
             }, 'claude-kiro-oauth');
             
             if (refreshResponse.ok) {
@@ -1650,6 +1680,36 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         
         logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials saved to: ${relativePath}`);
         
+        if (attachToProviderUuid) {
+            const attached = attachCredentialToProviderNode(
+                'claude-kiro-oauth',
+                attachToProviderUuid,
+                relativePath,
+                attachPatch || {}
+            );
+
+            if (!attached) {
+                return {
+                    success: false,
+                    error: `Failed to attach credential to provider node: ${attachToProviderUuid}`
+                };
+            }
+
+            // 广播事件 (include target node so the UI can refresh it)
+            broadcastEvent('oauth_success', {
+                provider: 'claude-kiro-oauth',
+                relativePath: relativePath,
+                targetProviderUuid: attachToProviderUuid,
+                timestamp: new Date().toISOString()
+            });
+
+            return {
+                success: true,
+                path: relativePath,
+                attachedToProviderUuid: attachToProviderUuid
+            };
+        }
+
         // 广播事件
         broadcastEvent('oauth_success', {
             provider: 'claude-kiro-oauth',

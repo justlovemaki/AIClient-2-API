@@ -416,7 +416,12 @@ export async function handleBatchImportGeminiTokens(req, res) {
 export async function handleImportAwsCredentials(req, res) {
     try {
         const body = await getRequestBody(req);
-        const { credentials } = body;
+        const {
+            credentials,
+            attachToProviderUuid = null,
+            attachPatch = null,
+            proxyUrlOverride = undefined
+        } = body;
         
         if (!credentials) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -572,7 +577,11 @@ export async function handleImportAwsCredentials(req, res) {
             
             logger.info('[Kiro AWS Import] Starting AWS credentials import...');
             
-            const result = await importAwsCredentials(credentials);
+            const result = await importAwsCredentials(credentials, {
+                attachToProviderUuid,
+                attachPatch,
+                proxyUrlOverride
+            });
             
             if (result.success) {
                 logger.info(`[Kiro AWS Import] Successfully imported credentials to: ${result.path}`);
@@ -580,6 +589,7 @@ export async function handleImportAwsCredentials(req, res) {
                 res.end(JSON.stringify({
                     success: true,
                     path: result.path,
+                    attachedToProviderUuid: result.attachedToProviderUuid || null,
                     message: 'AWS credentials imported successfully'
                 }));
             } else {
