@@ -5,6 +5,8 @@ import logger from '../utils/logger.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { getProviderModels } from './provider-models.js';
 import axios from 'axios';
+import { getRiskManager } from '../risk/risk-manager.js';
+import { RISK_SIGNAL } from '../risk/constants.js';
 
 /**
  * Manages a pool of API service providers, handling their health and selection.
@@ -68,12 +70,23 @@ export class ProviderPoolManager {
         
         this.warmupTarget = options.globalConfig?.WARMUP_TARGET || 0; // 默认预热0个节点
         this.refreshingUuids = new Set(); // 正在刷新的节点 UUID 集合
-        
+        this.refreshingAccountKeys = new Set(); // 按账号级别去重刷新任务
+
         this.refreshQueues = {}; // 按 providerType 分组的队列
         // 缓冲队列机制：延迟5秒，去重后再执行刷新
         this.refreshBufferQueues = {}; // 按 providerType 分组的缓冲队列
         this.refreshBufferTimers = {}; // 按 providerType 分组的定时器
         this.bufferDelay = options.globalConfig?.REFRESH_BUFFER_DELAY ?? 5000; // 默认5秒缓冲延迟
+
+        // Phase 2: account-aware rotation/refresh policy
+        this.accountRotationPolicyEnabled = options.globalConfig?.ACCOUNT_ROTATION_POLICY_ENABLED !== false;
+        this.accountRefreshPolicyEnabled = options.globalConfig?.ACCOUNT_REFRESH_POLICY_ENABLED !== false;
+        this.defaultRateLimitCooldownMs = Number.isFinite(options.globalConfig?.ACCOUNT_RATE_LIMIT_COOLDOWN_MS)
+            ? options.globalConfig.ACCOUNT_RATE_LIMIT_COOLDOWN_MS
+            : 30000;
+        this.defaultQuotaCooldownMs = Number.isFinite(options.globalConfig?.ACCOUNT_QUOTA_COOLDOWN_MS)
+            ? options.globalConfig.ACCOUNT_QUOTA_COOLDOWN_MS
+            : 3600000;
         
         // 用于并发选点时的原子排序辅助（自增序列）
         this._selectionSequence = 0;
@@ -361,6 +374,18 @@ export class ProviderPoolManager {
      */
     async _refreshNodeToken(providerType, providerStatus, force = false) {
         const config = providerStatus.config;
+        const accountRefreshKey = this._buildAccountRefreshKey(providerType, config);
+
+        if (this.accountRefreshPolicyEnabled && this.refreshingAccountKeys.has(accountRefreshKey)) {
+            this._log('info', `Skip refresh for ${providerStatus.uuid} (${providerType}). Account-level refresh already in progress: ${accountRefreshKey}`);
+            config.needsRefresh = false;
+            config.lastRefreshAttemptAt = new Date().toISOString();
+            this._debouncedSave(providerType);
+            return;
+        }
+        if (this.accountRefreshPolicyEnabled) {
+            this.refreshingAccountKeys.add(accountRefreshKey);
+        }
         
         // 检查刷新次数是否已达上限（最大5次）
         const currentRefreshCount = config.refreshCount || 0;
@@ -368,6 +393,9 @@ export class ProviderPoolManager {
             this._log('warn', `Node ${providerStatus.uuid} has reached maximum refresh count (3), marking as unhealthy`);
             // 标记为不健康
             this.markProviderUnhealthyImmediately(providerType, config, 'Maximum refresh count (3) reached');
+            if (this.accountRefreshPolicyEnabled) {
+                this.refreshingAccountKeys.delete(accountRefreshKey);
+            }
             return;
         }
         
@@ -379,6 +407,7 @@ export class ProviderPoolManager {
         try {
             // 增加刷新计数
             config.refreshCount = currentRefreshCount + 1;
+            config.lastRefreshAttemptAt = new Date().toISOString();
 
             // 使用适配器进行刷新
             const tempConfig = {
@@ -386,22 +415,55 @@ export class ProviderPoolManager {
                 ...config,
                 MODEL_PROVIDER: providerType
             };
+            if (Object.prototype.hasOwnProperty.call(config, 'PROXY_URL')) {
+                tempConfig.NODE_PROXY_URL_PRESENT = true;
+                tempConfig.NODE_PROXY_URL = config.PROXY_URL;
+            }
             const serviceAdapter = getServiceAdapter(tempConfig);
             
             // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
-            if (typeof serviceAdapter.refreshToken === 'function') {
-                const startTime = Date.now();
-                force ? await serviceAdapter.forceRefreshToken() : await serviceAdapter.refreshToken() 
-                const duration = Date.now() - startTime;
-                this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
+            const startTime = Date.now();
+            if (typeof serviceAdapter.refreshCredential === 'function') {
+                const refreshResult = await serviceAdapter.refreshCredential({
+                    force,
+                    providerType,
+                    uuid: providerStatus.uuid
+                });
+                if (refreshResult?.ok === false) {
+                    throw new Error(refreshResult.errorMessage || 'refreshCredential failed');
+                }
+                if (refreshResult?.credentialPatch && typeof refreshResult.credentialPatch === 'object') {
+                    Object.assign(config, refreshResult.credentialPatch);
+                }
+            } else if (typeof serviceAdapter.refreshToken === 'function') {
+                force ? await serviceAdapter.forceRefreshToken() : await serviceAdapter.refreshToken();
             } else {
                 throw new Error(`refreshToken method not implemented for ${providerType}`);
             }
 
+            const duration = Date.now() - startTime;
+            config.needsRefresh = false;
+            config.refreshCount = 0;
+            config.authFailureStreak = 0;
+            config.isHealthy = true;
+            config.lastSuccessAt = new Date().toISOString();
+            config.lastErrorTime = null;
+            config.lastErrorMessage = null;
+            this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_MARKED_HEALTHY, providerType, config, {
+                reasonCode: 'REFRESH_SUCCESS'
+            });
+            this._debouncedSave(providerType);
+
         } catch (error) {
             this._log('error', `Token refresh failed for node ${providerStatus.uuid}: ${error.message}`);
+            config.authFailureStreak = (config.authFailureStreak || 0) + 1;
             this.markProviderUnhealthyImmediately(providerType, config, `Refresh failed: ${error.message}`);
             throw error;
+        } finally {
+            if (this.accountRefreshPolicyEnabled) {
+                this.refreshingAccountKeys.delete(accountRefreshKey);
+            }
         }
     }
 
@@ -415,6 +477,13 @@ export class ProviderPoolManager {
         
         // 1. 基础健康分：不健康的排最后
         if (!config.isHealthy || config.isDisabled) return 1e18;
+
+        // Phase 2: 在评分阶段再次兜底排除冷却中的账号
+        if (this.accountRotationPolicyEnabled && this._isNodeCoolingDown(config, now)) {
+            const cooldownTs = this._normalizeTimestamp(this._resolveNodeCooldownUntil(config));
+            const remaining = cooldownTs ? Math.max(0, cooldownTs - now) : 0;
+            return 9e17 + remaining;
+        }
         
         // 2. 预热/刷新分：60秒内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
         const lastHealthCheckTime = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
@@ -428,6 +497,9 @@ export class ProviderPoolManager {
         const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 86400000); // 没用过的视为 24 小时前用过（更旧）
         const usageCount = config.usageCount || 0;
         const lastSelectionSeq = config._lastSelectionSeq || 0;
+        const authFailureStreak = Number.isFinite(config.authFailureStreak) ? config.authFailureStreak : 0;
+        const errorCount = Number.isFinite(config.errorCount) ? config.errorCount : 0;
+        const lastSuccessTs = this._normalizeTimestamp(config.lastSuccessAt);
         
         // 核心目标：选分最小的。
         // - lastUsedTime 越久，分越小。
@@ -439,8 +511,11 @@ export class ProviderPoolManager {
         // 这样可以确保在毫秒级并发下，刚被选中的节点会立刻排到队列末尾
         const baseScore = lastUsedTime + (usageCount * 10000);
         const sequenceScore = lastSelectionSeq * 1000;
+        const authPenalty = authFailureStreak * 30000;
+        const errorPenalty = errorCount * 8000;
+        const staleSuccessPenalty = lastSuccessTs ? Math.min(now - lastSuccessTs, 24 * 60 * 60 * 1000) / 1000 : 60000;
         
-        return baseScore + sequenceScore;
+        return baseScore + sequenceScore + authPenalty + errorPenalty + staleSuccessPenalty;
     }
 
     /**
@@ -481,6 +556,50 @@ export class ProviderPoolManager {
         }
     }
 
+    _emitRiskSignal(signalType, providerType, providerConfig, extra = {}) {
+        if (!providerType || !providerConfig?.uuid) return;
+        const riskManager = getRiskManager();
+        if (!riskManager?.isEnabled?.()) return;
+
+        riskManager.observeSignal(signalType, {
+            providerType,
+            uuid: providerConfig.uuid,
+            customName: providerConfig.customName || null,
+            source: 'provider-pool-manager',
+            ...extra
+        });
+    }
+
+    _isBlockedByRiskPolicy(providerType, providerConfig) {
+        if (!providerType || !providerConfig?.uuid) return false;
+        const riskManager = getRiskManager();
+        if (!riskManager?.isEnabled?.()) return false;
+
+        const admission = riskManager.getAdmissionDecision(providerType, providerConfig.uuid);
+        if (admission.blocked) {
+            this._log('warn', `RiskPolicy blocked provider ${providerType}/${providerConfig.uuid} (state=${admission.lifecycleState}, mode=${admission.mode})`);
+            return true;
+        }
+        return false;
+    }
+
+    _recordControlPlaneAction(action, providerType, providerConfig, extra = {}) {
+        if (!action) return null;
+        const riskManager = getRiskManager();
+        if (!riskManager?.isEnabled?.()) return null;
+
+        return riskManager.recordControlPlaneAction(action, {
+            providerType: providerType || null,
+            uuid: providerConfig?.uuid || null,
+            customName: providerConfig?.customName || null,
+            source: extra.source || 'provider-pool-manager.control-plane',
+            requestId: extra.requestId || null,
+            metadata: {
+                ...(extra.metadata || {})
+            }
+        });
+    }
+
     /**
      * 查找指定的 provider
      * @private
@@ -494,11 +613,524 @@ export class ProviderPoolManager {
         return pool?.find(p => p.uuid === uuid) || null;
     }
 
+    _normalizeTimestamp(value) {
+        if (!value) return null;
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : null;
+    }
+
+    _resolveNodeCooldownUntil(config) {
+        return config?.cooldownUntil || config?.quotaExhaustedUntil || config?.scheduledRecoveryTime || null;
+    }
+
+    _isNodeCoolingDown(config, now = Date.now()) {
+        const cooldownTs = this._normalizeTimestamp(this._resolveNodeCooldownUntil(config));
+        return cooldownTs !== null && cooldownTs > now;
+    }
+
+    _buildAccountRefreshKey(providerType, config = {}) {
+        const accountId = config.accountId || config.profileArn || null;
+        const authMethod = config.authMethod || null;
+        const credPath =
+            config.KIRO_OAUTH_CREDS_FILE_PATH ||
+            config.GEMINI_OAUTH_CREDS_FILE_PATH ||
+            config.ANTIGRAVITY_OAUTH_CREDS_FILE_PATH ||
+            config.QWEN_OAUTH_CREDS_FILE_PATH ||
+            config.IFLOW_OAUTH_CREDS_FILE_PATH ||
+            config.CODEX_OAUTH_CREDS_FILE_PATH ||
+            config.accessToken ||
+            null;
+        const clientId = config.clientId || config.client_id || null;
+        const fallback = config.uuid || 'unknown';
+        const keyCore = accountId || credPath || clientId || fallback;
+        return `${providerType}:${authMethod || 'default'}:${keyCore}`;
+    }
+
+    _resolveCooldownTimestamp(cooldownUntil = null, durationMs = null) {
+        if (cooldownUntil !== undefined && cooldownUntil !== null && cooldownUntil !== '') {
+            const parsed = new Date(cooldownUntil);
+            if (!Number.isFinite(parsed.getTime())) {
+                return null;
+            }
+            return parsed.toISOString();
+        }
+
+        const parsedDuration = Number(durationMs);
+        if (Number.isFinite(parsedDuration) && parsedDuration >= 0) {
+            return new Date(Date.now() + parsedDuration).toISOString();
+        }
+
+        return null;
+    }
+
+    _normalizeMachineId(rawMachineId) {
+        if (rawMachineId === undefined || rawMachineId === null) return null;
+        const candidate = String(rawMachineId).trim();
+        if (!candidate) return null;
+        const isValidLength = candidate.length >= 8 && candidate.length <= 128;
+        const isValidCharset = /^[A-Za-z0-9._:-]+$/.test(candidate);
+        if (!isValidLength || !isValidCharset) {
+            return null;
+        }
+        return candidate;
+    }
+
+    _buildKiroAccountKey(providerConfig = {}) {
+        const candidates = [
+            ['accountId', providerConfig.accountId || providerConfig.KIRO_ACCOUNT_ID],
+            ['profileArn', providerConfig.profileArn || providerConfig.KIRO_PROFILE_ARN],
+            ['credsFile', providerConfig.KIRO_OAUTH_CREDS_FILE_PATH],
+            ['clientId', providerConfig.clientId || providerConfig.KIRO_CLIENT_ID || providerConfig.client_id],
+            ['uuid', providerConfig.uuid],
+        ];
+
+        for (const [kind, value] of candidates) {
+            if (value === undefined || value === null) continue;
+            const normalized = String(value).trim();
+            if (!normalized) continue;
+            return `${kind}:${normalized}`;
+        }
+
+        // Extremely rare: malformed config without uuid. Still ensure deterministic key within this process.
+        return `uuid:${crypto.randomUUID()}`;
+    }
+
+    _buildKiroMachineIdentityContext(providerConfigs = []) {
+        const accountKeyToMachineId = new Map();
+        const machineIdOwners = new Map();
+
+        for (const providerConfig of providerConfigs) {
+            const explicitMachineId = this._normalizeMachineId(
+                providerConfig.machineId || providerConfig.KIRO_MACHINE_ID
+            );
+            if (!explicitMachineId) continue;
+
+            const accountKey = this._buildKiroAccountKey(providerConfig);
+            const existingAccountMachineId = accountKeyToMachineId.get(accountKey);
+            if (existingAccountMachineId && existingAccountMachineId !== explicitMachineId) {
+                this._log(
+                    'warn',
+                    `Kiro machineId mismatch for ${accountKey} (uuid=${providerConfig.uuid}). Keeping first=${existingAccountMachineId}, ignoring configured=${explicitMachineId}.`
+                );
+                continue;
+            }
+
+            const existingOwner = machineIdOwners.get(explicitMachineId);
+            if (existingOwner && existingOwner !== accountKey) {
+                // Soft-enforcement only: warn. We do not block on collisions here.
+                this._log(
+                    'warn',
+                    `Kiro machineId collision detected: machineId=${explicitMachineId} used by both ${existingOwner} and ${accountKey}.`
+                );
+                // Keep the first owner to preserve determinism.
+                continue;
+            }
+
+            accountKeyToMachineId.set(accountKey, explicitMachineId);
+            machineIdOwners.set(explicitMachineId, accountKey);
+        }
+
+        return {
+            accountKeyToMachineId,
+            machineIdOwners,
+        };
+    }
+
+    _generateKiroMachineId(providerConfig = {}, salt = '', seedOverride = null) {
+        const accountSeed =
+            seedOverride ||
+            providerConfig.accountId ||
+            providerConfig.KIRO_ACCOUNT_ID ||
+            providerConfig.profileArn ||
+            providerConfig.KIRO_PROFILE_ARN ||
+            providerConfig.KIRO_OAUTH_CREDS_FILE_PATH ||
+            providerConfig.clientId ||
+            providerConfig.KIRO_CLIENT_ID ||
+            providerConfig.uuid ||
+            crypto.randomUUID();
+
+        const hash = crypto
+            .createHash('sha256')
+            .update(`kiro-machine-id:${accountSeed}:${salt}`)
+            .digest('hex')
+            .slice(0, 32);
+        return `kiro-${hash}`;
+    }
+
+    _ensureKiroMachineId(providerType, providerConfig, identityCtx = null) {
+        if (providerType !== MODEL_PROVIDER.KIRO_API) {
+            return {
+                changed: false,
+                machineId: null,
+                source: null
+            };
+        }
+
+        const accountKey = this._buildKiroAccountKey(providerConfig);
+        const ctx = identityCtx || this._buildKiroMachineIdentityContext([]);
+        const { accountKeyToMachineId, machineIdOwners } = ctx;
+
+        const explicitMachineId = this._normalizeMachineId(
+            providerConfig.machineId || providerConfig.KIRO_MACHINE_ID
+        );
+
+        const mappedMachineId = accountKeyToMachineId.get(accountKey) || null;
+        if (explicitMachineId) {
+            const canonical = mappedMachineId || explicitMachineId;
+            const changed = providerConfig.machineId !== canonical || providerConfig.KIRO_MACHINE_ID !== canonical;
+
+            const existingOwner = machineIdOwners.get(canonical);
+            if (existingOwner && existingOwner !== accountKey) {
+                this._log(
+                    'warn',
+                    `Kiro machineId collision detected: machineId=${canonical} used by both ${existingOwner} and ${accountKey}.`
+                );
+            } else if (!existingOwner) {
+                machineIdOwners.set(canonical, accountKey);
+            }
+
+            if (!mappedMachineId) {
+                accountKeyToMachineId.set(accountKey, canonical);
+            } else if (explicitMachineId !== mappedMachineId) {
+                this._log(
+                    'warn',
+                    `Kiro machineId mismatch for ${accountKey} (uuid=${providerConfig.uuid}). Using canonical=${mappedMachineId}, ignoring configured=${explicitMachineId}.`
+                );
+            }
+
+            providerConfig.machineId = canonical;
+            providerConfig.KIRO_MACHINE_ID = canonical;
+            return {
+                changed,
+                machineId: canonical,
+                source: 'configured'
+            };
+        }
+
+        if (mappedMachineId) {
+            const changed = providerConfig.machineId !== mappedMachineId || providerConfig.KIRO_MACHINE_ID !== mappedMachineId;
+            providerConfig.machineId = mappedMachineId;
+            providerConfig.KIRO_MACHINE_ID = mappedMachineId;
+            return {
+                changed,
+                machineId: mappedMachineId,
+                source: 'account-mapped'
+            };
+        }
+
+        let generated = this._generateKiroMachineId(providerConfig, '', accountKey);
+        let sequence = 0;
+        while (
+            machineIdOwners.has(generated) &&
+            machineIdOwners.get(generated) !== accountKey &&
+            sequence < 20
+        ) {
+            sequence += 1;
+            generated = this._generateKiroMachineId(providerConfig, String(sequence), accountKey);
+        }
+
+        providerConfig.machineId = generated;
+        providerConfig.KIRO_MACHINE_ID = generated;
+        accountKeyToMachineId.set(accountKey, generated);
+        if (!machineIdOwners.has(generated)) {
+            machineIdOwners.set(generated, accountKey);
+        }
+        this._log('info', `Auto-assigned machineId for ${providerType}/${providerConfig.uuid}: ${generated.slice(0, 12)}...`);
+
+        return {
+            changed: true,
+            machineId: generated,
+            source: 'auto-generated'
+        };
+    }
+
+    /**
+     * 手动设置节点 drain 状态（drain 节点不会被 selectProvider 选中）
+     * @param {string} providerType - 提供商类型
+     * @param {string} uuid - 节点 UUID
+     * @param {boolean} isDraining - 是否开启 drain
+     * @param {object} [options] - 扩展参数
+     * @returns {object}
+     */
+    setProviderDrainMode(providerType, uuid, isDraining, options = {}) {
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) {
+            return {
+                success: false,
+                error: `Provider not found for ${providerType}/${uuid}`
+            };
+        }
+
+        provider.config.isDraining = isDraining === true;
+        this._debouncedSave(providerType);
+        this._recordControlPlaneAction(
+            provider.config.isDraining ? 'set_drain_on' : 'set_drain_off',
+            providerType,
+            provider.config,
+            {
+                source: options.source || 'provider-pool-manager.set-drain',
+                requestId: options.requestId || null,
+                metadata: {
+                    isDraining: provider.config.isDraining,
+                    operator: options.operator || null,
+                    reason: options.reason || null
+                }
+            }
+        );
+
+        return {
+            success: true,
+            providerType,
+            uuid: provider.config.uuid,
+            isDraining: provider.config.isDraining
+        };
+    }
+
+    /**
+     * 手动设置节点 cooldown 窗口
+     * @param {string} providerType - 提供商类型
+     * @param {string} uuid - 节点 UUID
+     * @param {object} [options] - 扩展参数
+     * @returns {object}
+     */
+    applyProviderCooldown(providerType, uuid, options = {}) {
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) {
+            return {
+                success: false,
+                error: `Provider not found for ${providerType}/${uuid}`
+            };
+        }
+
+        const cooldownUntil = this._resolveCooldownTimestamp(
+            options.cooldownUntil,
+            options.durationMs
+        );
+        if (!cooldownUntil) {
+            return {
+                success: false,
+                error: 'cooldownUntil or durationMs must be provided with a valid timestamp.'
+            };
+        }
+
+        provider.config.cooldownUntil = cooldownUntil;
+        provider.config.quotaExhaustedUntil = cooldownUntil;
+        this._debouncedSave(providerType);
+
+        this._emitRiskSignal(RISK_SIGNAL.QUOTA_EXCEEDED, providerType, provider.config, {
+            source: options.source || 'provider-pool-manager.manual-cooldown',
+            reasonCode: options.reasonCode || 'CONTROL_PLANE_MANUAL_COOLDOWN',
+            rawMessage: options.reason || null,
+            cooldownUntil,
+            metadata: {
+                operator: options.operator || null
+            }
+        });
+
+        this._recordControlPlaneAction('apply_cooldown', providerType, provider.config, {
+            source: options.source || 'provider-pool-manager.apply-cooldown',
+            requestId: options.requestId || null,
+            metadata: {
+                cooldownUntil,
+                durationMs: Number.isFinite(Number(options.durationMs)) ? Number(options.durationMs) : null,
+                operator: options.operator || null,
+                reason: options.reason || null
+            }
+        });
+
+        return {
+            success: true,
+            providerType,
+            uuid: provider.config.uuid,
+            cooldownUntil
+        };
+    }
+
+    /**
+     * 清除节点 cooldown 标记
+     * @param {string} providerType - 提供商类型
+     * @param {string} uuid - 节点 UUID
+     * @param {object} [options] - 扩展参数
+     * @returns {object}
+     */
+    clearProviderCooldown(providerType, uuid, options = {}) {
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) {
+            return {
+                success: false,
+                error: `Provider not found for ${providerType}/${uuid}`
+            };
+        }
+
+        provider.config.cooldownUntil = null;
+        provider.config.quotaExhaustedUntil = null;
+        provider.config.scheduledRecoveryTime = null;
+        this._debouncedSave(providerType);
+
+        this._recordControlPlaneAction('clear_cooldown', providerType, provider.config, {
+            source: options.source || 'provider-pool-manager.clear-cooldown',
+            requestId: options.requestId || null,
+            metadata: {
+                operator: options.operator || null,
+                reason: options.reason || null
+            }
+        });
+
+        return {
+            success: true,
+            providerType,
+            uuid: provider.config.uuid,
+            cooldownUntil: null
+        };
+    }
+
+    /**
+     * 强制触发节点刷新任务（去重 + 并发限制仍生效）
+     * @param {string} providerType - 提供商类型
+     * @param {string} uuid - 节点 UUID
+     * @param {object} [options] - 扩展参数
+     * @returns {object}
+     */
+    forceRefreshProviderCredential(providerType, uuid, options = {}) {
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) {
+            return {
+                success: false,
+                error: `Provider not found for ${providerType}/${uuid}`
+            };
+        }
+
+        provider.config.needsRefresh = true;
+        provider.config.lastRefreshAttemptAt = new Date().toISOString();
+        this._enqueueRefresh(providerType, provider, true);
+        this._debouncedSave(providerType);
+
+        this._emitRiskSignal(RISK_SIGNAL.PROVIDER_NEEDS_REFRESH, providerType, provider.config, {
+            source: options.source || 'provider-pool-manager.force-refresh',
+            reasonCode: options.reasonCode || 'CONTROL_PLANE_FORCE_REFRESH',
+            rawMessage: options.reason || null
+        });
+
+        this._recordControlPlaneAction('force_refresh', providerType, provider.config, {
+            source: options.source || 'provider-pool-manager.force-refresh',
+            requestId: options.requestId || null,
+            metadata: {
+                operator: options.operator || null,
+                reason: options.reason || null
+            }
+        });
+
+        return {
+            success: true,
+            providerType,
+            uuid: provider.config.uuid,
+            enqueued: true
+        };
+    }
+
+    /**
+     * 返回一次不改变运行态计数的 provider 选点预览结果
+     * @param {string} providerType - 提供商类型
+     * @param {string|null} requestedModel - 目标模型
+     * @param {object} [options] - 预览参数
+     * @returns {object}
+     */
+    getSelectionPreview(providerType, requestedModel = null, options = {}) {
+        if (!providerType || typeof providerType !== 'string') {
+            return {
+                providerType,
+                requestedModel,
+                selected: null,
+                candidates: [],
+                reason: 'invalid_provider_type'
+            };
+        }
+
+        this._checkAndRecoverScheduledProviders(providerType);
+        const now = Date.now();
+        const availableProviders = this.providerStatus[providerType] || [];
+        const maxCandidates = Number.isFinite(Number(options.maxCandidates))
+            ? Math.max(1, Math.min(50, Number(options.maxCandidates)))
+            : 20;
+
+        let candidates = availableProviders.filter((p) => {
+            if (!p.config.isHealthy || p.config.isDisabled || p.config.needsRefresh || p.config.isDraining === true) {
+                return false;
+            }
+            if (this.accountRotationPolicyEnabled && this._isNodeCoolingDown(p.config, now)) {
+                return false;
+            }
+            return true;
+        });
+
+        const beforeRiskFilterCount = candidates.length;
+        candidates = candidates.filter((provider) => !this._isBlockedByRiskPolicy(providerType, provider.config));
+        const blockedByRiskPolicyCount = beforeRiskFilterCount - candidates.length;
+
+        if (requestedModel) {
+            candidates = candidates.filter((provider) => {
+                if (!provider.config.notSupportedModels || !Array.isArray(provider.config.notSupportedModels)) {
+                    return true;
+                }
+                return !provider.config.notSupportedModels.includes(requestedModel);
+            });
+        }
+
+        if (candidates.length > 0) {
+            const minPriority = Math.min(...candidates.map((provider) => this._getProviderPriority(provider.config)));
+            candidates = candidates.filter((provider) => this._getProviderPriority(provider.config) === minPriority);
+        }
+
+        const sorted = [...candidates].sort((a, b) => {
+            const scoreA = this._calculateNodeScore(a, now);
+            const scoreB = this._calculateNodeScore(b, now);
+            if (scoreA !== scoreB) return scoreA - scoreB;
+            return a.uuid < b.uuid ? -1 : 1;
+        });
+
+        const top = sorted[0] || null;
+        const riskManager = getRiskManager();
+        const toCandidate = (providerStatus) => {
+            const config = providerStatus.config;
+            const admission = riskManager?.isEnabled?.()
+                ? riskManager.getAdmissionDecision(providerType, config.uuid)
+                : { blocked: false, lifecycleState: 'unknown', mode: null, reason: null };
+
+            return {
+                uuid: config.uuid,
+                customName: config.customName || null,
+                priority: this._getProviderPriority(config),
+                score: this._calculateNodeScore(providerStatus, now),
+                usageCount: Number.isFinite(config.usageCount) ? config.usageCount : 0,
+                lastUsed: config.lastUsed || null,
+                authFailureStreak: Number.isFinite(config.authFailureStreak) ? config.authFailureStreak : 0,
+                cooldownUntil: this._resolveNodeCooldownUntil(config),
+                accountId: config.accountId || null,
+                authMethod: config.authMethod || null,
+                isDraining: config.isDraining === true,
+                lifecycleState: admission.lifecycleState || null,
+                blockedByRiskPolicy: admission.blocked === true
+            };
+        };
+
+        return {
+            providerType,
+            requestedModel: requestedModel || null,
+            generatedAt: new Date(now).toISOString(),
+            totalProviders: availableProviders.length,
+            candidateCount: sorted.length,
+            blockedByRiskPolicyCount,
+            selected: top ? toCandidate(top) : null,
+            candidates: sorted.slice(0, maxCandidates).map(toCandidate)
+        };
+    }
+
     /**
      * Initializes the status for each provider in the pools.
      * Initially, all providers are considered healthy and have zero usage.
      */
     initializeProviderStatus() {
+        const providerTypesNeedPersist = new Set();
         for (const providerType in this.providerPools) {
             this.providerStatus[providerType] = [];
             this.roundRobinIndex[providerType] = 0; // Initialize round-robin index for each type
@@ -506,7 +1138,16 @@ export class ProviderPoolManager {
             if (!this._selectionLocks[providerType]) {
                 this._selectionLocks[providerType] = Promise.resolve();
             }
+            const identityCtx =
+                providerType === MODEL_PROVIDER.KIRO_API
+                    ? this._buildKiroMachineIdentityContext(this.providerPools[providerType])
+                    : null;
             this.providerPools[providerType].forEach((providerConfig) => {
+                const machineIdentityResult = this._ensureKiroMachineId(providerType, providerConfig, identityCtx);
+                if (machineIdentityResult.changed) {
+                    providerTypesNeedPersist.add(providerType);
+                }
+
                 // Ensure initial health and usage stats are present in the config
                 providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
                 providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
@@ -518,6 +1159,14 @@ export class ProviderPoolManager {
                 // --- V2: 刷新监控字段 ---
                 providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
                 providerConfig.refreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
+                providerConfig.authFailureStreak = Number.isFinite(providerConfig.authFailureStreak)
+                    ? providerConfig.authFailureStreak
+                    : 0;
+                providerConfig.lastSuccessAt = providerConfig.lastSuccessAt || null;
+                providerConfig.lastRefreshAttemptAt = providerConfig.lastRefreshAttemptAt || null;
+                providerConfig.cooldownUntil = providerConfig.cooldownUntil || null;
+                providerConfig.quotaExhaustedUntil = providerConfig.quotaExhaustedUntil || providerConfig.scheduledRecoveryTime || null;
+                providerConfig.isDraining = providerConfig.isDraining === true;
                 
                 // 优化2: 简化 lastErrorTime 处理逻辑
                 providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
@@ -535,6 +1184,13 @@ export class ProviderPoolManager {
                     uuid: providerConfig.uuid, // Still keep uuid at the top level for easy access
                 });
             });
+        }
+        const riskManager = getRiskManager();
+        if (riskManager?.isEnabled?.()) {
+            riskManager.syncProviderPools(this.providerPools);
+        }
+        for (const providerType of providerTypesNeedPersist) {
+            this._debouncedSave(providerType);
         }
         this._log('info', `Initialized provider statuses: ok (maxErrorCount: ${this.maxErrorCount})`);
     }
@@ -586,9 +1242,27 @@ export class ProviderPoolManager {
         // 获取固定时间戳，确保排序过程中一致
         const now = Date.now();
         
-        let availableAndHealthyProviders = availableProviders.filter(p =>
-            p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh
+        let availableAndHealthyProviders = availableProviders.filter((p) => {
+            if (!p.config.isHealthy || p.config.isDisabled || p.config.needsRefresh || p.config.isDraining === true) {
+                return false;
+            }
+            if (this.accountRotationPolicyEnabled && this._isNodeCoolingDown(p.config, now)) {
+                return false;
+            }
+            return true;
+        });
+
+        // RiskPolicy admission guard:
+        // - enforce-soft: block suspended/banned
+        // - enforce-strict: also block quarantined/disabled
+        const beforeRiskPolicyCount = availableAndHealthyProviders.length;
+        availableAndHealthyProviders = availableAndHealthyProviders.filter((provider) =>
+            !this._isBlockedByRiskPolicy(providerType, provider.config)
         );
+        const blockedByPolicyCount = beforeRiskPolicyCount - availableAndHealthyProviders.length;
+        if (blockedByPolicyCount > 0) {
+            this._log('warn', `RiskPolicy filtered ${blockedByPolicyCount} provider(s) for type ${providerType}`);
+        }
 
         // 如果指定了模型，则排除不支持该模型的提供商
         if (requestedModel) {
@@ -611,6 +1285,9 @@ export class ProviderPoolManager {
         }
 
         if (availableAndHealthyProviders.length === 0) {
+            if (blockedByPolicyCount > 0) {
+                this._log('warn', `No selectable providers for ${providerType}: all available candidates are blocked by risk policy`);
+            }
             this._log('warn', `No available and healthy providers for type: ${providerType}`);
             return null;
         }
@@ -897,7 +1574,11 @@ export class ProviderPoolManager {
         const provider = this._findProvider(providerType, providerConfig.uuid);
         if (provider) {
             provider.config.needsRefresh = true;
+            provider.config.authFailureStreak = (provider.config.authFailureStreak || 0) + 1;
             this._log('info', `Marked provider ${providerConfig.uuid} as needsRefresh. Enqueuing...`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_NEEDS_REFRESH, providerType, provider.config, {
+                reasonCode: 'PROVIDER_SIGNAL'
+            });
             
             // 推入异步刷新队列
             this._enqueueRefresh(providerType, provider, true);
@@ -944,6 +1625,16 @@ export class ProviderPoolManager {
                 provider.config.isHealthy = false;
                 this._log('warn', `Marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Total errors: ${provider.config.errorCount}`);
             } 
+            provider.config.authFailureStreak = (provider.config.authFailureStreak || 0) + 1;
+
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_MARKED_UNHEALTHY, providerType, provider.config, {
+                reasonCode: 'PROVIDER_SIGNAL',
+                errorMessage,
+                metadata: {
+                    errorCount: provider.config.errorCount,
+                    isHealthy: provider.config.isHealthy
+                }
+            });
 
             this._debouncedSave(providerType);
         }
@@ -966,6 +1657,7 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.isHealthy = false;
             provider.config.errorCount = this.maxErrorCount; // Set to max to indicate definitive failure
+            provider.config.authFailureStreak = (provider.config.authFailureStreak || 0) + 1;
             provider.config.lastErrorTime = new Date().toISOString();
             provider.config.lastUsed = new Date().toISOString();
 
@@ -974,6 +1666,10 @@ export class ProviderPoolManager {
             }
 
             this._log('warn', `Immediately marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Authentication error'}`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_MARKED_UNHEALTHY, providerType, provider.config, {
+                reasonCode: 'PROVIDER_SIGNAL',
+                errorMessage
+            });
            
             this._debouncedSave(providerType);
         }
@@ -997,6 +1693,7 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.isHealthy = false;
             provider.config.errorCount = this.maxErrorCount; // Set to max to indicate definitive failure
+            provider.config.authFailureStreak = (provider.config.authFailureStreak || 0) + 1;
             provider.config.lastErrorTime = new Date().toISOString();
             provider.config.lastUsed = new Date().toISOString();
 
@@ -1008,9 +1705,20 @@ export class ProviderPoolManager {
             if (recoveryTime) {
                 const recoveryDate = recoveryTime instanceof Date ? recoveryTime : new Date(recoveryTime);
                 provider.config.scheduledRecoveryTime = recoveryDate.toISOString();
+                provider.config.cooldownUntil = recoveryDate.toISOString();
+                provider.config.quotaExhaustedUntil = recoveryDate.toISOString();
                 this._log('warn', `Marked provider as unhealthy with recovery time: ${providerConfig.uuid} for type ${providerType}. Recovery at: ${recoveryDate.toISOString()}. Reason: ${errorMessage || 'Quota exhausted'}`);
+                this._emitRiskSignal(RISK_SIGNAL.QUOTA_EXCEEDED, providerType, provider.config, {
+                    reasonCode: 'PROVIDER_SIGNAL',
+                    errorMessage,
+                    cooldownUntil: recoveryDate.toISOString()
+                });
             } else {
                 this._log('warn', `Marked provider as unhealthy: ${providerConfig.uuid} for type ${providerType}. Reason: ${errorMessage || 'Quota exhausted'}`);
+                this._emitRiskSignal(RISK_SIGNAL.QUOTA_EXCEEDED, providerType, provider.config, {
+                    reasonCode: 'PROVIDER_SIGNAL',
+                    errorMessage
+                });
             }
 
             this._debouncedSave(providerType);
@@ -1023,8 +1731,10 @@ export class ProviderPoolManager {
      * @param {object} providerConfig - The configuration of the provider to mark.
      * @param {boolean} resetUsageCount - Whether to reset usage count (optional, default: false).
      * @param {string} [healthCheckModel] - Optional model name used for health check.
+     * @param {object} [options] - Additional behavior controls.
+     * @param {boolean} [options.preserveUsageCount] - Keep usage count unchanged when setting healthy state.
      */
-    markProviderHealthy(providerType, providerConfig, resetUsageCount = false, healthCheckModel = null) {
+    markProviderHealthy(providerType, providerConfig, resetUsageCount = false, healthCheckModel = null, options = {}) {
         if (!providerConfig?.uuid) {
             this._log('error', 'Invalid providerConfig in markProviderHealthy');
             return;
@@ -1032,12 +1742,18 @@ export class ProviderPoolManager {
 
         const provider = this._findProvider(providerType, providerConfig.uuid);
         if (provider) {
+            const preserveUsageCount = options?.preserveUsageCount === true;
             provider.config.isHealthy = true;
             provider.config.errorCount = 0;
             provider.config.refreshCount = 0;
+            provider.config.authFailureStreak = 0;
             provider.config.needsRefresh = false;
             provider.config.lastErrorTime = null;
             provider.config.lastErrorMessage = null;
+            provider.config.scheduledRecoveryTime = null;
+            provider.config.cooldownUntil = null;
+            provider.config.quotaExhaustedUntil = null;
+            provider.config.lastSuccessAt = new Date().toISOString();
             
             // 更新健康检测信息
             if (healthCheckModel) {
@@ -1048,11 +1764,14 @@ export class ProviderPoolManager {
             // 只有在明确要求重置使用计数时才重置
             if (resetUsageCount) {
                 provider.config.usageCount = 0;
-            }else{
+            } else if (!preserveUsageCount) {
                 provider.config.usageCount++;
                 provider.config.lastUsed = new Date().toISOString();
             }
             this._log('info', `Marked provider as healthy: ${provider.config.uuid} for type ${providerType}${resetUsageCount ? ' (usage count reset)' : ''}`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_MARKED_HEALTHY, providerType, provider.config, {
+                reasonCode: 'SUCCESS'
+            });
             
             this._debouncedSave(providerType);
         }
@@ -1074,10 +1793,14 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.needsRefresh = false;
             provider.config.refreshCount = 0;
+            provider.config.authFailureStreak = 0;
             // 更新为可用
             provider.config.lastHealthCheckTime = new Date().toISOString();
             // 标记为健康，以便立即投入使用
             this._log('info', `Reset refresh status and marked healthy for provider ${uuid} (${providerType})`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_MARKED_HEALTHY, providerType, provider.config, {
+                reasonCode: 'SUCCESS'
+            });
 
             this._debouncedSave(providerType);
         }
@@ -1119,6 +1842,9 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.isDisabled = true;
             this._log('info', `Disabled provider: ${providerConfig.uuid} for type ${providerType}`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_DISABLED, providerType, provider.config, {
+                reasonCode: 'PROVIDER_SIGNAL'
+            });
             this._debouncedSave(providerType);
         }
     }
@@ -1138,8 +1864,71 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.isDisabled = false;
             this._log('info', `Enabled provider: ${providerConfig.uuid} for type ${providerType}`);
+            this._emitRiskSignal(RISK_SIGNAL.PROVIDER_ENABLED, providerType, provider.config, {
+                reasonCode: 'PROVIDER_SIGNAL'
+            });
             this._debouncedSave(providerType);
         }
+    }
+
+    /**
+     * Control-plane helper: patch a node's persisted config in-place.
+     * This is used by UI/ops workflows (e.g. binding browser profile IDs, attaching OAuth creds, etc.)
+     * without rebuilding providerStatus from scratch.
+     *
+     * @param {string} providerType
+     * @param {string} uuid
+     * @param {object} patch
+     * @param {object} [options]
+     * @param {boolean} [options.persist] - Default true; when false, only patches in-memory.
+     * @returns {object|null} Updated config or null if not found.
+     */
+    patchProviderConfig(providerType, uuid, patch = {}, options = {}) {
+        if (!providerType || !uuid || !patch || typeof patch !== 'object') {
+            this._log('error', 'Invalid parameters in patchProviderConfig');
+            return null;
+        }
+
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) {
+            this._log('warn', `Provider not found for patch: ${providerType}/${uuid}`);
+            return null;
+        }
+
+        const before = provider.config || {};
+        const updated = {
+            ...before,
+            ...patch,
+            uuid: before.uuid // never allow patching uuid here
+        };
+
+        provider.config = updated;
+
+        // Keep providerPools in sync (best-effort; providerStatus is source of truth for persistence)
+        const poolArray = this.providerPools?.[providerType];
+        if (Array.isArray(poolArray)) {
+            const idx = poolArray.findIndex((p) => p?.uuid === uuid);
+            if (idx !== -1) {
+                poolArray[idx] = {
+                    ...poolArray[idx],
+                    ...patch,
+                    uuid
+                };
+            }
+        }
+
+        this._recordControlPlaneAction('patch-provider-config', providerType, updated, {
+            source: 'provider-pool-manager.patch',
+            metadata: {
+                keys: Object.keys(patch).slice(0, 50)
+            }
+        });
+
+        if (options.persist !== false) {
+            this._debouncedSave(providerType);
+        }
+
+        return updated;
     }
 
     /**
@@ -1211,9 +2000,13 @@ export class ProviderPoolManager {
                         // 恢复健康状态
                         config.isHealthy = true;
                         config.errorCount = 0;
+                        config.authFailureStreak = 0;
                         config.lastErrorTime = null;
                         config.lastErrorMessage = null;
                         config.scheduledRecoveryTime = null; // 清除恢复时间
+                        config.cooldownUntil = null;
+                        config.quotaExhaustedUntil = null;
+                        config.lastSuccessAt = new Date().toISOString();
                         
                         // 保存更改
                         this._debouncedSave(type);
@@ -1376,6 +2169,11 @@ export class ProviderPoolManager {
             ...providerConfig,
             MODEL_PROVIDER: providerType
         };
+        // Allow node proxy override during health checks without global enablement.
+        if (Object.prototype.hasOwnProperty.call(providerConfig, 'PROXY_URL')) {
+            tempConfig.NODE_PROXY_URL_PRESENT = true;
+            tempConfig.NODE_PROXY_URL = providerConfig.PROXY_URL;
+        }
         const serviceAdapter = getServiceAdapter(tempConfig);
 
         // 获取所有可能的请求格式

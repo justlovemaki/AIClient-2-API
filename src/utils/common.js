@@ -6,6 +6,7 @@ import logger from './logger.js';
 import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
+import { getRiskManager } from '../risk/risk-manager.js';
 
 // ==================== 网络错误处理 ====================
 
@@ -193,6 +194,165 @@ export function getRequestBody(req) {
     });
 }
 
+function _getHeaderValue(req, key) {
+    const value = req?.headers?.[key];
+    if (Array.isArray(value)) return value[0] || '';
+    return typeof value === 'string' ? value : '';
+}
+
+function _extractClientIp(req) {
+    const forwardedFor = _getHeaderValue(req, 'x-forwarded-for');
+    if (forwardedFor) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    const realIp = _getHeaderValue(req, 'x-real-ip');
+    if (realIp) {
+        return realIp.trim();
+    }
+    return req?.socket?.remoteAddress || req?.connection?.remoteAddress || '';
+}
+
+function _resolveIdentityContext(req) {
+    if (!req) {
+        return {
+            identityProfileId: null,
+            clientIp: null,
+            machineCode: null,
+            userAgent: null
+        };
+    }
+
+    const explicitProfile = _getHeaderValue(req, 'x-identity-profile');
+    const clientIp = _extractClientIp(req) || '';
+    const machineCode = (
+        _getHeaderValue(req, 'x-machine-code') ||
+        _getHeaderValue(req, 'x-machine-id') ||
+        _getHeaderValue(req, 'x-device-id') ||
+        _getHeaderValue(req, 'x-client-machine-id')
+    );
+    const userAgent = _getHeaderValue(req, 'user-agent') || '';
+
+    const rawIdentity = explicitProfile
+        ? `explicit:${explicitProfile}`
+        : `ip:${clientIp}|machine:${machineCode || 'none'}|ua:${userAgent}`;
+
+    const identityProfileId = crypto.createHash('sha256').update(rawIdentity).digest('hex').slice(0, 24);
+
+    return {
+        identityProfileId,
+        clientIp: clientIp || null,
+        machineCode: machineCode || null,
+        userAgent: userAgent || null
+    };
+}
+
+function _classifyRuntimeError(service, error, context = {}) {
+    const fallback = {
+        signalType: 'UNKNOWN',
+        reasonCode: 'UNKNOWN',
+        statusCode: error?.response?.status ?? error?.statusCode ?? error?.status ?? null,
+        action: 'none',
+        shouldSwitchCredential: error?.shouldSwitchCredential === true,
+        shouldRefreshCredential: false,
+        skipErrorCount: error?.skipErrorCount === true,
+        markNeedRefresh: false,
+        markUnhealthy: false,
+        markUnhealthyImmediately: false,
+        cooldownUntil: null,
+        retryable: false,
+        alreadyMarkedUnhealthy: error?.credentialMarkedUnhealthy === true,
+        rawMessage: error?.message || null
+    };
+
+    if (!service || typeof service.classifyError !== 'function') {
+        return fallback;
+    }
+
+    try {
+        const classified = service.classifyError(error, context);
+        if (!classified || typeof classified !== 'object') {
+            return fallback;
+        }
+        return {
+            ...fallback,
+            ...classified,
+            shouldSwitchCredential: classified.shouldSwitchCredential === true || fallback.shouldSwitchCredential,
+            skipErrorCount: classified.skipErrorCount === true || fallback.skipErrorCount,
+            alreadyMarkedUnhealthy: classified.alreadyMarkedUnhealthy === true || fallback.alreadyMarkedUnhealthy
+        };
+    } catch (classifyError) {
+        logger.warn(`[RiskPolicy] Failed to classify error via adapter: ${classifyError.message}`);
+        return fallback;
+    }
+}
+
+function _applyPoolRecoveryPolicy({
+    providerPoolManager,
+    providerType,
+    pooluuid,
+    error,
+    classification,
+    flowTag
+}) {
+    const status = error?.response?.status;
+    const skipErrorCount = classification.skipErrorCount === true;
+    const shouldSwitchCredential = classification.shouldSwitchCredential === true;
+    let credentialMarkedUnhealthy =
+        error?.credentialMarkedUnhealthy === true || classification.alreadyMarkedUnhealthy === true;
+
+    if (credentialMarkedUnhealthy || !providerPoolManager || !pooluuid) {
+        return {
+            status,
+            skipErrorCount,
+            shouldSwitchCredential,
+            credentialMarkedUnhealthy
+        };
+    }
+
+    const providerRef = { uuid: pooluuid };
+    const reasonMessage = classification.rawMessage || error?.message || 'Provider error';
+
+    if (classification.markNeedRefresh === true) {
+        logger.info(`[Provider Pool] Marking ${providerType} as needsRefresh (${flowTag})`);
+        providerPoolManager.markProviderNeedRefresh(providerType, providerRef);
+        credentialMarkedUnhealthy = true;
+    } else if (classification.markUnhealthyImmediately === true) {
+        logger.info(`[Provider Pool] Marking ${providerType} as unhealthy immediately (${flowTag})`);
+        providerPoolManager.markProviderUnhealthyImmediately(providerType, providerRef, reasonMessage);
+        credentialMarkedUnhealthy = true;
+    } else if (classification.cooldownUntil) {
+        logger.info(`[Provider Pool] Applying cooldown for ${providerType} until ${classification.cooldownUntil} (${flowTag})`);
+        providerPoolManager.markProviderUnhealthyWithRecoveryTime(
+            providerType,
+            providerRef,
+            reasonMessage,
+            classification.cooldownUntil
+        );
+        credentialMarkedUnhealthy = true;
+    } else if (!skipErrorCount) {
+        // 400 报错通常是请求参数问题，不记为提供商错误
+        if (status === 400 || error?.code === 400) {
+            logger.info(`[Provider Pool] Skipping unhealthy marking for ${providerType} (${pooluuid}) due to status 400 (client error)`);
+        } else {
+            logger.info(`[Provider Pool] Marking ${providerType} as unhealthy (${flowTag}, status: ${status || 'unknown'})`);
+            providerPoolManager.markProviderUnhealthy(providerType, providerRef, reasonMessage);
+            credentialMarkedUnhealthy = true;
+        }
+    }
+
+    // 对于“仅切换凭证”的策略，仍触发上层切换逻辑
+    if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
+        credentialMarkedUnhealthy = true;
+    }
+
+    return {
+        status,
+        skipErrorCount,
+        shouldSwitchCredential,
+        credentialMarkedUnhealthy
+    };
+}
+
 export async function logConversation(type, content, logMode, logFilename) {
     if (logMode === 'none') return;
     if (!content) return;
@@ -284,7 +444,34 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     const maxRetries = retryContext?.maxRetries ?? 5;
     const currentRetry = retryContext?.currentRetry ?? 0;
     const CONFIG = retryContext?.CONFIG;
+    const identityProfileId = retryContext?.identityProfileId || null;
+    const identityClientIp = retryContext?.identityClientIp || null;
+    const identityMachineCode = retryContext?.identityMachineCode || null;
+    const identityUserAgent = retryContext?.identityUserAgent || null;
     const isRetry = currentRetry > 0;
+    const riskManager = getRiskManager();
+    const providerIdentityContext = typeof service?.buildIdentityContext === 'function'
+        ? service.buildIdentityContext({
+            identityProfileId,
+            clientIp: identityClientIp,
+            machineCode: identityMachineCode,
+            userAgent: identityUserAgent
+        })
+        : null;
+
+    if (riskManager?.isEnabled?.() && pooluuid && identityProfileId) {
+        riskManager.observeIdentityClaim({
+            providerType: toProvider,
+            uuid: pooluuid,
+            customName: customName || null,
+            identityProfileId: providerIdentityContext?.identityProfileId || identityProfileId,
+            clientIp: providerIdentityContext?.clientIp || identityClientIp,
+            machineCode: providerIdentityContext?.machineCode || identityMachineCode,
+            userAgent: providerIdentityContext?.userAgent || identityUserAgent,
+            requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+            source: 'common.stream.admission'
+        });
+    }
     
     // 使用共享的 clientDisconnected 状态（如果是重试，继承上层的状态）
     let clientDisconnected = retryContext?.clientDisconnected || { value: false };
@@ -453,6 +640,20 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             });
         }
 
+        if (riskManager?.isEnabled?.() && pooluuid) {
+            riskManager.observeSuccess({
+                providerType: toProvider,
+                uuid: pooluuid,
+                customName: customName || null,
+                source: 'common.stream',
+                model,
+                stream: true,
+                requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+                retryAttempt: currentRetry,
+                identityProfileId
+            });
+        }
+
     }  catch (error) {
         logger.error('\n[Server] Error during stream processing:', error.stack);
         
@@ -480,39 +681,48 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             return;
         }
         
-        // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
-        
-        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
-        const skipErrorCount = error.skipErrorCount === true;
-        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
-        const shouldSwitchCredential = error.shouldSwitchCredential === true;
-        
-        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
-        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
-        
-        // 如果底层未标记，且不跳过错误计数，则在此处标记
-        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.code === 400) {
-                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
-            } else {
-                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
-                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-                providerPoolManager.markProviderUnhealthy(toProvider, {
-                    uuid: pooluuid
-                }, error.message);
-                credentialMarkedUnhealthy = true;
-            }
-        } else if (credentialMarkedUnhealthy) {
+        const classification = _classifyRuntimeError(service, error, {
+            providerType: toProvider,
+            providerConfig: service?.nodeConfig || {},
+            retryAttempt: currentRetry,
+            defaultRateLimitCooldownMs: CONFIG?.ACCOUNT_RATE_LIMIT_COOLDOWN_MS,
+            defaultQuotaCooldownMs: CONFIG?.ACCOUNT_QUOTA_COOLDOWN_MS
+        });
+        const skipErrorCount = classification.skipErrorCount === true;
+        const shouldSwitchCredential = classification.shouldSwitchCredential === true;
+        if (riskManager?.isEnabled?.() && pooluuid) {
+            riskManager.observeError(error, {
+                providerType: toProvider,
+                uuid: pooluuid,
+                customName: customName || null,
+                source: 'common.stream',
+                model,
+                stream: true,
+                requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+                retryAttempt: currentRetry,
+                shouldSwitchCredential,
+                skipErrorCount,
+                identityProfileId,
+                signalType: classification.signalType,
+                cooldownUntil: classification.cooldownUntil
+            });
+        }
+
+        const recoveryDecision = _applyPoolRecoveryPolicy({
+            providerPoolManager,
+            providerType: toProvider,
+            pooluuid,
+            error,
+            classification,
+            flowTag: 'stream'
+        });
+
+        let credentialMarkedUnhealthy = recoveryDecision.credentialMarkedUnhealthy;
+
+        if (credentialMarkedUnhealthy && classification.alreadyMarkedUnhealthy) {
             logger.info(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
             logger.info(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
-        }
-        
-        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
-        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
-            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
         }
         
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
@@ -634,6 +844,33 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
     const maxRetries = retryContext?.maxRetries ?? 5;
     const currentRetry = retryContext?.currentRetry ?? 0;
     const CONFIG = retryContext?.CONFIG;
+    const identityProfileId = retryContext?.identityProfileId || null;
+    const identityClientIp = retryContext?.identityClientIp || null;
+    const identityMachineCode = retryContext?.identityMachineCode || null;
+    const identityUserAgent = retryContext?.identityUserAgent || null;
+    const riskManager = getRiskManager();
+    const providerIdentityContext = typeof service?.buildIdentityContext === 'function'
+        ? service.buildIdentityContext({
+            identityProfileId,
+            clientIp: identityClientIp,
+            machineCode: identityMachineCode,
+            userAgent: identityUserAgent
+        })
+        : null;
+
+    if (riskManager?.isEnabled?.() && pooluuid && identityProfileId) {
+        riskManager.observeIdentityClaim({
+            providerType: toProvider,
+            uuid: pooluuid,
+            customName: customName || null,
+            identityProfileId: providerIdentityContext?.identityProfileId || identityProfileId,
+            clientIp: providerIdentityContext?.clientIp || identityClientIp,
+            machineCode: providerIdentityContext?.machineCode || identityMachineCode,
+            userAgent: providerIdentityContext?.userAgent || identityUserAgent,
+            requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+            source: 'common.unary.admission'
+        });
+    }
     
     try{
         // The service returns the response in its native format (toProvider).
@@ -678,42 +915,65 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 uuid: pooluuid
             });
         }
+
+        if (riskManager?.isEnabled?.() && pooluuid) {
+            riskManager.observeSuccess({
+                providerType: toProvider,
+                uuid: pooluuid,
+                customName: customName || null,
+                source: 'common.unary',
+                model,
+                stream: false,
+                requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+                retryAttempt: currentRetry,
+                identityProfileId
+            });
+        }
     } catch (error) {
         logger.error('\n[Server] Error during unary processing:', error.stack);
         
-        // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
-        
-        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
-        const skipErrorCount = error.skipErrorCount === true;
-        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
-        const shouldSwitchCredential = error.shouldSwitchCredential === true;
-        
-        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
-        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
-        
-        // 如果底层未标记，且不跳过错误计数，则在此处标记
-        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.code === 400) {
-                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
-            } else {
-                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
-                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-                providerPoolManager.markProviderUnhealthy(toProvider, {
-                    uuid: pooluuid
-                }, error.message);
-                credentialMarkedUnhealthy = true;
-            }
-        } else if (credentialMarkedUnhealthy) {
+        const classification = _classifyRuntimeError(service, error, {
+            providerType: toProvider,
+            providerConfig: service?.nodeConfig || {},
+            retryAttempt: currentRetry,
+            defaultRateLimitCooldownMs: CONFIG?.ACCOUNT_RATE_LIMIT_COOLDOWN_MS,
+            defaultQuotaCooldownMs: CONFIG?.ACCOUNT_QUOTA_COOLDOWN_MS
+        });
+        const skipErrorCount = classification.skipErrorCount === true;
+        const shouldSwitchCredential = classification.shouldSwitchCredential === true;
+        if (riskManager?.isEnabled?.() && pooluuid) {
+            riskManager.observeError(error, {
+                providerType: toProvider,
+                uuid: pooluuid,
+                customName: customName || null,
+                source: 'common.unary',
+                model,
+                stream: false,
+                requestId: CONFIG?._monitorRequestId || logger.getCurrentRequestId?.(),
+                retryAttempt: currentRetry,
+                shouldSwitchCredential,
+                skipErrorCount,
+                identityProfileId,
+                signalType: classification.signalType,
+                cooldownUntil: classification.cooldownUntil
+            });
+        }
+
+        const recoveryDecision = _applyPoolRecoveryPolicy({
+            providerPoolManager,
+            providerType: toProvider,
+            pooluuid,
+            error,
+            classification,
+            flowTag: 'unary'
+        });
+
+        let credentialMarkedUnhealthy = recoveryDecision.credentialMarkedUnhealthy;
+
+        if (credentialMarkedUnhealthy && classification.alreadyMarkedUnhealthy) {
             logger.info(`[Provider Pool] Credential ${pooluuid} already marked as unhealthy by lower layer, skipping duplicate marking`);
         } else if (skipErrorCount) {
             logger.info(`[Provider Pool] Skipping error count for ${toProvider} (${pooluuid}) - will switch credential without marking unhealthy`);
-        }
-        
-        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
-        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
-            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
         }
         
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
@@ -859,6 +1119,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error("Could not determine the model from the request.");
     }
     logger.info(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
+    const identityContext = _resolveIdentityContext(req);
 
     let actualCustomName = CONFIG.customName;
 
@@ -923,7 +1184,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // - 凭证切换重试：凭证被标记不健康后切换到其他凭证
     // 当没有不同的健康凭证可用时，重试会自动停止
     const credentialSwitchMaxRetries = CONFIG.CREDENTIAL_SWITCH_MAX_RETRIES || 5;
-    const retryContext = providerPoolManager ? { CONFIG, currentRetry: 0, maxRetries: credentialSwitchMaxRetries } : null;
+    const retryContext = {
+        CONFIG,
+        currentRetry: 0,
+        maxRetries: credentialSwitchMaxRetries,
+        identityProfileId: identityContext.identityProfileId,
+        identityClientIp: identityContext.clientIp,
+        identityMachineCode: identityContext.machineCode,
+        identityUserAgent: identityContext.userAgent
+    };
     
     if (isStream) {
         await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);

@@ -66,14 +66,25 @@ const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
 /**
  * 根据当前配置生成唯一的机器码（Machine ID）
- * 确保每个配置对应一个唯一且不变的 ID
- * @param {Object} credentials - 当前凭证信息
+ * 回退路径：uuid > profileArn > clientId > KIRO_DEFAULT_MACHINE
+ * @param {Object} credentials - 当前凭证/节点信息
  * @returns {string} SHA256 格式的机器码
  */
 function generateMachineIdFromConfig(credentials) {
-    // 优先级：节点UUID > profileArn > clientId > fallback
+    // 兼容历史行为：优先使用 uuid，其次 profileArn，再其次 clientId
     const uniqueKey = credentials.uuid || credentials.profileArn || credentials.clientId || "KIRO_DEFAULT_MACHINE";
     return crypto.createHash('sha256').update(uniqueKey).digest('hex');
+}
+
+function pickFirstDefined(config = {}, keys = []) {
+    for (const key of keys) {
+        if (!(key in config)) continue;
+        const value = config[key];
+        if (value === undefined || value === null) continue;
+        if (typeof value === 'string' && value.trim() === '') continue;
+        return value;
+    }
+    return undefined;
 }
 
 /**
@@ -351,15 +362,24 @@ export class KiroApiService {
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_KIRO ?? false;
         this.uuid = config?.uuid; // 获取多节点配置的 uuid
+        this.accountId = pickFirstDefined(config, ['accountId', 'KIRO_ACCOUNT_ID']);
+
+        // 支持从 provider_pools.json 显式配置身份/刷新字段（优先于凭证文件）
+        this.accessToken = pickFirstDefined(config, ['accessToken', 'KIRO_ACCESS_TOKEN']);
+        this.refreshToken = pickFirstDefined(config, ['refreshToken', 'KIRO_REFRESH_TOKEN']);
+        this.clientId = pickFirstDefined(config, ['clientId', 'KIRO_CLIENT_ID']);
+        this.clientSecret = pickFirstDefined(config, ['clientSecret', 'KIRO_CLIENT_SECRET']);
+        this.authMethod = pickFirstDefined(config, ['authMethod', 'KIRO_AUTH_METHOD']);
+        this.profileArn = pickFirstDefined(config, ['profileArn', 'KIRO_PROFILE_ARN']);
+
+        this._configuredMachineIdRaw = pickFirstDefined(config, ['machineId', 'KIRO_MACHINE_ID']);
+        this._credentialMachineIdRaw = null;
+        this.machineId = null;
+        this.machineIdSource = null;
+        this._machineIdSourceLogged = false;
+        this._runtimeInfo = null;
+
         logger.info(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
-        // this.accessToken = config.KIRO_ACCESS_TOKEN;
-        // this.refreshToken = config.KIRO_REFRESH_TOKEN;
-        // this.clientId = config.KIRO_CLIENT_ID;
-        // this.clientSecret = config.KIRO_CLIENT_SECRET;
-        // this.authMethod = KIRO_CONSTANTS.AUTH_METHOD_SOCIAL;
-        // this.refreshUrl = KIRO_CONSTANTS.REFRESH_URL;
-        // this.refreshIDCUrl = KIRO_CONSTANTS.REFRESH_IDC_URL;
-        // this.baseUrl = KIRO_CONSTANTS.BASE_URL;
 
         // Add kiro-oauth-creds-base64 and kiro-oauth-creds-file to config
         if (config.KIRO_OAUTH_CREDS_BASE64) {
@@ -380,6 +400,80 @@ export class KiroApiService {
         this.axiosInstance = null; // Initialize later in async method
         this.axiosSocialRefreshInstance = null;
     }
+
+    _maskMachineId(machineId) {
+        if (!machineId) return 'n/a';
+        if (machineId.length <= 12) return `${machineId.slice(0, 4)}***`;
+        return `${machineId.slice(0, 8)}...${machineId.slice(-4)}`;
+    }
+
+    _normalizeMachineId(value, source) {
+        if (value === undefined || value === null) return null;
+        const candidate = String(value).trim();
+        if (!candidate) return null;
+        const isValidLength = candidate.length >= 8 && candidate.length <= 128;
+        const isValidCharset = /^[A-Za-z0-9._:-]+$/.test(candidate);
+        if (!isValidLength || !isValidCharset) {
+            logger.warn(`[Kiro Identity] Ignoring invalid machineId from ${source}. Expected 8-128 chars and [A-Za-z0-9._:-].`);
+            return null;
+        }
+        return candidate;
+    }
+
+    _resolveMachineIdentity({ logSource = false } = {}) {
+        const configMachineId = this._normalizeMachineId(this._configuredMachineIdRaw, 'config');
+        const credentialMachineId = this._normalizeMachineId(this._credentialMachineIdRaw, 'credentials');
+
+        let machineId = configMachineId;
+        let source = 'config';
+        if (!machineId) {
+            machineId = credentialMachineId;
+            source = 'creds';
+        }
+        if (!machineId) {
+            machineId = generateMachineIdFromConfig({
+                uuid: this.uuid,
+                profileArn: this.profileArn,
+                clientId: this.clientId
+            });
+            source = 'derived';
+        }
+
+        this.machineId = machineId;
+        this.machineIdSource = source;
+
+        if (logSource && !this._machineIdSourceLogged) {
+            const accountLabel = this.accountId ? ` accountId=${this.accountId}` : '';
+            logger.info(`[Kiro Identity] machineId source=${source} value=${this._maskMachineId(machineId)}${accountLabel}`);
+            this._machineIdSourceLogged = true;
+        }
+
+        return machineId;
+    }
+
+    _getMachineId() {
+        return this.machineId || this._resolveMachineIdentity({ logSource: false });
+    }
+
+    _buildKiroUserAgentHeaders() {
+        const machineId = this._getMachineId();
+        const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
+        const { osName, nodeVersion } = this._runtimeInfo || getSystemRuntimeInfo();
+        return {
+            'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
+            'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`
+        };
+    }
+
+    _buildAuthorizedRequestHeaders(token = this.accessToken) {
+        return {
+            ...this._buildKiroUserAgentHeaders(),
+            'Authorization': `Bearer ${token}`,
+            'amz-sdk-invocation-id': uuidv4(),
+            'amz-sdk-request': 'attempt=1; max=1',
+            'Connection': 'close'
+        };
+    }
  
     async initialize() {
         if (this.isInitialized) return;
@@ -387,15 +481,8 @@ export class KiroApiService {
         // 注意：V2 读写分离架构下，初始化不再执行同步认证/刷新逻辑
         // 仅执行基础的凭证加载
         await this.loadCredentials();
-        
-        // 根据当前加载的凭证生成唯一的 Machine ID
-        const machineId = generateMachineIdFromConfig({
-            uuid: this.uuid,
-            profileArn: this.profileArn,
-            clientId: this.clientId
-        });
-        const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
-        const { osName, nodeVersion } = getSystemRuntimeInfo();
+        this._runtimeInfo = getSystemRuntimeInfo();
+        this._resolveMachineIdentity({ logSource: true });
 
         // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
         const httpAgent = new http.Agent({
@@ -416,12 +503,11 @@ export class KiroApiService {
             httpAgent,
             httpsAgent,
             headers: {
+                ...this._buildKiroUserAgentHeaders(),
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
                 'amz-sdk-request': 'attempt=1; max=1',
                 'x-amzn-kiro-agent-mode': 'vibe',
-                'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
-                'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
                 'Connection': 'close'
             },
         };
@@ -532,8 +618,13 @@ async loadCredentials() {
         this.authMethod = this.authMethod || mergedCredentials.authMethod;
         this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
         this.profileArn = this.profileArn || mergedCredentials.profileArn;
+        this.accountId = this.accountId || mergedCredentials.accountId || mergedCredentials.accountID;
         this.region = this.region || mergedCredentials.region;
         this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
+        this._credentialMachineIdRaw = this._credentialMachineIdRaw
+            || mergedCredentials.machineId
+            || mergedCredentials.machineID
+            || mergedCredentials.machine_id;
 
         if (!this.region) {
             logger.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
@@ -1409,10 +1500,7 @@ async saveCredentialsToFile(filePath, newData) {
 
         try {
             const token = this.accessToken; // Use the already initialized token
-            const headers = {
-                'Authorization': `Bearer ${token}`,
-                'amz-sdk-invocation-id': `${uuidv4()}`,
-            };
+            const headers = this._buildAuthorizedRequestHeaders(token);
 
             // 当 model 以 kiro-amazonq 开头时，使用 amazonQUrl，否则使用 baseUrl
             const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
@@ -1523,6 +1611,10 @@ async saveCredentialsToFile(filePath, newData) {
             const newUuid = poolManager.refreshProviderUuid(MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             });
+            if (newUuid && this.machineIdSource === 'derived') {
+                this.machineId = null;
+                this._resolveMachineIdentity({ logSource: false });
+            }
             return newUuid;
         } else {
             logger.warn(`[Kiro] Cannot refresh UUID: poolManager=${!!poolManager}, uuid=${this.uuid}`);
@@ -1894,10 +1986,7 @@ async saveCredentialsToFile(filePath, newData) {
         const requestData = await this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
 
         const token = this.accessToken;
-        const headers = {
-            'Authorization': `Bearer ${token}`,
-            'amz-sdk-invocation-id': `${uuidv4()}`,
-        };
+        const headers = this._buildAuthorizedRequestHeaders(token);
 
         const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
 
@@ -2797,28 +2886,12 @@ async saveCredentialsToFile(filePath, newData) {
             origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
             resourceType: resourceType
         });
-         if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL && this.profileArn) {
+        if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL && this.profileArn) {
             params.append('profileArn', this.profileArn);
         }
         const fullUrl = `${usageLimitsUrl}?${params.toString()}`;
 
-        // 动态生成 headers
-        const machineId = generateMachineIdFromConfig({
-            uuid: this.uuid,
-            profileArn: this.profileArn,
-            clientId: this.clientId
-        });
-        const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
-        const { osName, nodeVersion } = getSystemRuntimeInfo();
-
-        const headers = {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
-            'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
-            'amz-sdk-invocation-id': uuidv4(),
-            'amz-sdk-request': 'attempt=1; max=1',
-            'Connection': 'close'
-        };
+        const headers = this._buildAuthorizedRequestHeaders(this.accessToken);
 
         try {
             const response = await this.axiosInstance.get(fullUrl, { headers });
@@ -2876,4 +2949,3 @@ async saveCredentialsToFile(filePath, newData) {
         }
     }
 }
-

@@ -16,3 +16,6 @@ api-potluck-data.json
 # Codex credentials
 configs/codex/
 
+# Runtime artifacts (should never be committed)
+logs/
+configs/risk-lifecycle*.json

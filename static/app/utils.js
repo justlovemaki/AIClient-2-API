@@ -72,6 +72,7 @@ function getFieldLabel(key) {
         'customName': t('modal.provider.customName') + ' ' + t('config.optional'),
         'checkModelName': t('modal.provider.checkModelName') + ' ' + t('config.optional'),
         'checkHealth': t('modal.provider.healthCheckLabel'),
+        'PROXY_URL': t('modal.provider.field.proxyUrl'),
         'OPENAI_API_KEY': 'OpenAI API Key',
         'OPENAI_BASE_URL': 'OpenAI Base URL',
         'CLAUDE_API_KEY': 'Claude API Key',
@@ -79,6 +80,20 @@ function getFieldLabel(key) {
         'PROJECT_ID': t('modal.provider.field.projectId'),
         'GEMINI_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
         'KIRO_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
+        'machineId': t('modal.provider.field.machineId'),
+        'accountId': t('modal.provider.field.accountId'),
+        'authMethod': t('modal.provider.field.authMethod'),
+        'profileArn': t('modal.provider.field.profileArn'),
+        'refreshToken': t('modal.provider.field.refreshToken'),
+        'clientId': t('modal.provider.field.clientId'),
+        'clientSecret': t('modal.provider.field.clientSecret'),
+        'KIRO_MACHINE_ID': t('modal.provider.field.machineId'),
+        'KIRO_ACCOUNT_ID': t('modal.provider.field.accountId'),
+        'KIRO_AUTH_METHOD': t('modal.provider.field.authMethod'),
+        'KIRO_PROFILE_ARN': t('modal.provider.field.profileArn'),
+        'KIRO_REFRESH_TOKEN': t('modal.provider.field.refreshToken'),
+        'KIRO_CLIENT_ID': t('modal.provider.field.clientId'),
+        'KIRO_CLIENT_SECRET': t('modal.provider.field.clientSecret'),
         'QWEN_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
         'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
         'IFLOW_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
@@ -177,6 +192,60 @@ function getProviderTypeFields(providerType) {
                 label: t('modal.provider.field.oauthPath'),
                 type: 'text',
                 placeholder: t('modal.provider.field.oauthPath.kiro.placeholder')
+            },
+            {
+                id: 'PROXY_URL',
+                label: `${t('modal.provider.field.proxyUrl')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'password',
+                placeholder: t('modal.provider.field.proxyUrl.placeholder')
+            },
+            {
+                id: 'BITBROWSER_PROFILE_ID',
+                label: `${t('modal.provider.field.bitbrowserProfileId')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.bitbrowserProfileId.placeholder')
+            },
+            {
+                id: 'machineId',
+                label: `${t('modal.provider.field.machineId')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.machineId.placeholder')
+            },
+            {
+                id: 'accountId',
+                label: `${t('modal.provider.field.accountId')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.accountId.placeholder')
+            },
+            {
+                id: 'authMethod',
+                label: `${t('modal.provider.field.authMethod')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.authMethod.placeholder')
+            },
+            {
+                id: 'profileArn',
+                label: `${t('modal.provider.field.profileArn')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.profileArn.placeholder')
+            },
+            {
+                id: 'refreshToken',
+                label: `${t('modal.provider.field.refreshToken')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'password',
+                placeholder: t('modal.provider.field.refreshToken.placeholder')
+            },
+            {
+                id: 'clientId',
+                label: `${t('modal.provider.field.clientId')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'text',
+                placeholder: t('modal.provider.field.clientId.placeholder')
+            },
+            {
+                id: 'clientSecret',
+                label: `${t('modal.provider.field.clientSecret')} <span class="optional-tag">${t('config.optional')}</span>`,
+                type: 'password',
+                placeholder: t('modal.provider.field.clientSecret.placeholder')
             },
             {
                 id: 'KIRO_BASE_URL',

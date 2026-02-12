@@ -258,7 +258,13 @@ export async function handleLoginRequest(req, res) {
     return true;
 }
 
-// 定时清理过期token
-setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
+// 定时清理过期 token
+// Jest/CI: avoid keeping the event loop alive with a global interval.
+// (Node test runner sets JEST_WORKER_ID; CI also commonly sets NODE_ENV=test.)
+const _shouldStartTokenCleanupInterval =
+    !(process.env.JEST_WORKER_ID || process.env.NODE_ENV === 'test');
 
+if (_shouldStartTokenCleanupInterval) {
+    setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
+}
 

@@ -122,6 +122,30 @@
                 </div>
             </div>
 
+            <!-- 隔离浏览器 (BitBrowser) -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.bitbrowser.title"><i class="fas fa-user-shield"></i> 隔离浏览器 (BitBrowser)</h3>
+                <div class="config-row">
+                    <div class="form-group">
+                        <label data-i18n="config.bitbrowser.enabled">启用 BitBrowser</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="bitbrowserEnabled">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="bitbrowserCoreVersion" data-i18n="config.bitbrowser.coreVersion">内核版本</label>
+                        <input type="text" id="bitbrowserCoreVersion" class="form-control" data-i18n-placeholder="config.bitbrowser.coreVersionPlaceholder" placeholder="124">
+                        <small class="form-text" data-i18n="config.bitbrowser.coreVersionNote">部分系统不支持过高内核版本，请按 BitBrowser 文档设置</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bitbrowserApiUrl" data-i18n="config.bitbrowser.apiUrl">API 地址</label>
+                    <input type="text" id="bitbrowserApiUrl" class="form-control" data-i18n-placeholder="config.bitbrowser.apiUrlPlaceholder" placeholder="http://127.0.0.1:54345">
+                    <small class="form-text" data-i18n="config.bitbrowser.apiUrlNote">BitBrowser 本地服务地址，必须可从 AIClient 主机访问</small>
+                </div>
+            </div>
+
             <!-- 服务治理与高可用 -->
             <div class="config-group-section">
                 <h3 data-i18n="config.governance.title"><i class="fas fa-shield-alt"></i> 服务治理</h3>

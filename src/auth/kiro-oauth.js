@@ -5,9 +5,10 @@ import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
 import { broadcastEvent } from '../services/ui-manager.js';
-import { autoLinkProviderConfigs } from '../services/service-manager.js';
+import { autoLinkProviderConfigs, getProviderPoolManager } from '../services/service-manager.js';
 import { CONFIG } from '../core/config-manager.js';
-import { getProxyConfigForProvider } from '../utils/proxy-utils.js';
+import { getProxyConfigForProvider, parseProxyUrl } from '../utils/proxy-utils.js';
+import { serviceInstances } from '../providers/adapter.js';
 
 /**
  * Kiro OAuth 配置（支持多种认证方式）
@@ -35,8 +36,8 @@ const KIRO_OAUTH_CONFIG = {
         'codewhisperer:completions',
         'codewhisperer:analysis',
         'codewhisperer:conversations',
-        // 'codewhisperer:transformations',
-        // 'codewhisperer:taskassist'
+        'codewhisperer:transformations',
+        'codewhisperer:taskassist'
     ],
     
     // 凭据存储（符合现有规范）
@@ -66,7 +67,27 @@ const activeKiroPollingTasks = new Map();
  * @returns {Promise<Object>} 返回类似 fetch Response 的对象
  */
 async function fetchWithProxy(url, options = {}, providerType) {
-    const proxyConfig = getProxyConfigForProvider(CONFIG, providerType);
+    const proxyOverride = options?.proxyUrlOverride;
+    const hasOverride = proxyOverride !== undefined;
+    const overrideTrimmed = hasOverride ? String(proxyOverride || '').trim() : '';
+    const proxyConfig = hasOverride
+        ? (overrideTrimmed ? parseProxyUrl(overrideTrimmed) : null)
+        : getProxyConfigForProvider(CONFIG, providerType);
+
+    const maskedProxyUrl = (() => {
+        const raw = hasOverride ? overrideTrimmed : (CONFIG?.PROXY_URL || '');
+        if (!raw) return '';
+        try {
+            const u = new URL(String(raw).trim());
+            if (u.username || u.password) {
+                u.username = u.username ? '***' : '';
+                u.password = u.password ? '***' : '';
+            }
+            return u.toString();
+        } catch {
+            return '[invalid proxy url]';
+        }
+    })();
 
     // 构建 axios 配置
     const axiosConfig = {
@@ -86,7 +107,7 @@ async function fetchWithProxy(url, options = {}, providerType) {
         axiosConfig.httpAgent = proxyConfig.httpAgent;
         axiosConfig.httpsAgent = proxyConfig.httpsAgent;
         axiosConfig.proxy = false; // 禁用 axios 内置代理，使用我们的 agent
-        logger.info(`[OAuth] Using proxy for ${providerType}: ${CONFIG.PROXY_URL}`);
+        logger.info(`[OAuth] Using proxy for ${providerType}: ${maskedProxyUrl || '[set]'}`);
     }
 
     try {
@@ -118,6 +139,39 @@ async function fetchWithProxy(url, options = {}, providerType) {
         // 网络错误或其他错误
         throw error;
     }
+}
+
+function attachCredentialToProviderNode(providerType, uuid, credPath, extraPatch = {}) {
+    if (!providerType || !uuid || !credPath) return false;
+    const ppm = getProviderPoolManager();
+    if (!ppm || typeof ppm.patchProviderConfig !== 'function') {
+        return false;
+    }
+
+    const updatedConfig = ppm.patchProviderConfig(providerType, uuid, {
+        KIRO_OAUTH_CREDS_FILE_PATH: credPath,
+        ...extraPatch
+    });
+
+    // Let the UI refresh the provider modal automatically.
+    try {
+        broadcastEvent('provider_update', {
+            action: 'update',
+            providerType,
+            providerConfig: updatedConfig,
+            timestamp: new Date().toISOString()
+        });
+    } catch {}
+
+    // Ensure next request re-reads the updated credential path.
+    try {
+        const key = `${providerType}${uuid}`;
+        if (serviceInstances[key]) {
+            delete serviceInstances[key];
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Cleared cached service adapter for ${providerType}/${uuid}`);
+        }
+    } catch {}
+    return true;
 }
 
 /**
@@ -168,7 +222,7 @@ function generateCodeChallenge(codeVerifier) {
  * 处理 Kiro OAuth 授权（统一入口）
  * @param {Object} currentConfig - 当前配置对象
  * @param {Object} options - 额外选项
- *   - method: 'google' | 'github' | 'builder-id'
+ *   - method: 'google' | 'github' | 'builder-id' | 'iam-identity-center'
  *   - saveToConfigs: boolean
  * @returns {Promise<Object>} 返回授权URL和相关信息
  */
@@ -184,6 +238,12 @@ export async function handleKiroOAuth(currentConfig, options = {}) {
             return handleKiroSocialAuth('Github', currentConfig, options);
         case 'builder-id':
             return handleKiroBuilderIDDeviceCode(currentConfig, options);
+        case 'iam-identity-center':
+        case 'iam-sso':
+        case 'iamsso':
+        case 'idc':
+        case 'enterprise':
+            return handleKiroIamIdentityCenterPKCE(currentConfig, options);
         default:
             throw new Error(`不支持的认证方式: ${method}`);
     }
@@ -222,7 +282,28 @@ async function handleKiroSocialAuth(provider, currentConfig, options = {}) {
         `code_challenge_method=S256&` +
         `state=${state}&` +
         `prompt=select_account`;
-    
+
+    // Only return non-sensitive options back to the UI.
+    const safeOptions = (() => {
+        const allow = [
+            'saveToConfigs',
+            'providerDir',
+            'method',
+            'authMethod',
+            'port',
+            'openInIsolatedBrowser',
+            'useIsolatedBrowser',
+            'targetProviderUuid'
+        ];
+        const out = {};
+        for (const key of allow) {
+            if (options && Object.prototype.hasOwnProperty.call(options, key)) {
+                out[key] = options[key];
+            }
+        }
+        return out;
+    })();
+
     return {
         authUrl,
         authInfo: {
@@ -232,7 +313,8 @@ async function handleKiroSocialAuth(provider, currentConfig, options = {}) {
             port: handlerPort,
             redirectUri: redirectUri,
             state: state,
-            ...options
+            targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
+            ...safeOptions
         }
     };
 }
@@ -266,8 +348,10 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             clientName: 'Kiro IDE',
             clientType: 'public',
             scopes: KIRO_OAUTH_CONFIG.scopes,
-            // grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token']
-        })
+            grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],
+            issuerUrl: builderIDStartURL
+        }),
+        proxyUrlOverride: options.proxyUrlOverride
     }, 'claude-kiro-oauth');
     
     if (!regResponse.ok) {
@@ -286,7 +370,8 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             clientId: regData.clientId,
             clientSecret: regData.clientSecret,
             startUrl: builderIDStartURL
-        })
+        }),
+        proxyUrlOverride: options.proxyUrlOverride
     }, 'claude-kiro-oauth');
     
     if (!authResponse.ok) {
@@ -317,6 +402,28 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
         });
     });
     
+    // Only return non-sensitive options back to the UI.
+    const safeOptions = (() => {
+        const allow = [
+            'saveToConfigs',
+            'providerDir',
+            'method',
+            'authMethod',
+            'region',
+            'builderIDStartURL',
+            'openInIsolatedBrowser',
+            'useIsolatedBrowser',
+            'targetProviderUuid'
+        ];
+        const out = {};
+        for (const key of allow) {
+            if (options && Object.prototype.hasOwnProperty.call(options, key)) {
+                out[key] = options[key];
+            }
+        }
+        return out;
+    })();
+
     return {
         authUrl: deviceAuth.verificationUriComplete,
         authInfo: {
@@ -328,7 +435,143 @@ async function handleKiroBuilderIDDeviceCode(currentConfig, options = {}) {
             verificationUriComplete: deviceAuth.verificationUriComplete,
             expiresIn: deviceAuth.expiresIn,
             interval: deviceAuth.interval,
-            ...options
+            targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
+            ...safeOptions
+        }
+    };
+}
+
+/**
+ * Kiro IAM Identity Center (Enterprise) - Authorization Code + PKCE
+ * Mirrors Kiro-account-manager behavior:
+ *   - OIDC dynamic client registration with authorization_code + refresh_token
+ *   - Local loopback callback server
+ *   - Exchange code for tokens on /token endpoint
+ */
+async function handleKiroIamIdentityCenterPKCE(currentConfig, options = {}) {
+    // Determine Start URL (IAM Identity Center).
+    // Accept aliases for backward compatibility with earlier UI attempts.
+    const startUrl = String(
+        options.startUrl ||
+        options.startURL ||
+        options.idcStartUrl ||
+        options.issuerUrl ||
+        options.builderIDStartURL ||
+        ''
+    ).trim();
+
+    if (!startUrl || !startUrl.startsWith('https://')) {
+        throw new Error('SSO Start URL 必须以 https:// 开头');
+    }
+
+    const region = String(options.region || 'us-east-1').trim() || 'us-east-1';
+    const ssoOIDCEndpoint = KIRO_OAUTH_CONFIG.ssoOIDCEndpoint.replace('{{region}}', region);
+
+    // 1) Register OIDC client (authorization_code grant)
+    const regResponse = await fetchWithProxy(`${ssoOIDCEndpoint}/client/register`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'KiroIDE'
+        },
+        body: JSON.stringify({
+            clientName: 'Kiro IDE',
+            clientType: 'public',
+            scopes: KIRO_OAUTH_CONFIG.scopes,
+            grantTypes: ['authorization_code', 'refresh_token'],
+            // NOTE: AWS SSO OIDC allows loopback redirects with dynamic ports; Kiro-account-manager registers without port.
+            redirectUris: ['http://127.0.0.1/oauth/callback'],
+            issuerUrl: startUrl
+        }),
+        proxyUrlOverride: options.proxyUrlOverride
+    }, 'claude-kiro-oauth');
+
+    if (!regResponse.ok) {
+        const errText = await regResponse.text();
+        logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO client registration failed: ${regResponse.status} ${errText}`);
+
+        // Match kiro-account-manager's more helpful error for orgs without Q Developer access.
+        if (String(errText).includes('UnauthorizedException') || String(errText).toLowerCase().includes('access denied')) {
+            throw new Error('授权失败：您的组织可能未配置 Amazon Q Developer 访问权限。请联系组织管理员在 IAM Identity Center 中启用相关权限。');
+        }
+
+        throw new Error(`注册客户端失败: ${errText || regResponse.status}`);
+    }
+
+    const regData = await regResponse.json();
+    const clientId = regData.clientId;
+    const clientSecret = regData.clientSecret;
+    if (!clientId || !clientSecret) {
+        throw new Error('OIDC client registration returned no clientId/clientSecret');
+    }
+
+    // 2) Generate PKCE + state
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+    const state = crypto.randomUUID();
+
+    // 3) Start local callback server
+    const requestedPort = options.port ? Number.parseInt(String(options.port), 10) : 0;
+    const { port: callbackPort } = await startKiroIamSsoCallbackServer({
+        port: Number.isFinite(requestedPort) && requestedPort > 0 ? requestedPort : 0,
+        expectedState: state,
+        codeVerifier,
+        startUrl,
+        region,
+        clientId,
+        clientSecret,
+        registrationExpiresAt: regData.clientSecretExpiresAt || regData.registrationExpiresAt || null,
+        options
+    });
+
+    const redirectUri = `http://127.0.0.1:${callbackPort}/oauth/callback`;
+
+    // 4) Build authorize URL
+    const authorizeParams = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scopes: KIRO_OAUTH_CONFIG.scopes.join(','),
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+    });
+    const authorizeUrl = `${ssoOIDCEndpoint}/authorize?${authorizeParams.toString()}`;
+
+    // Only return non-sensitive options back to the UI.
+    const safeOptions = (() => {
+        const allow = [
+            'saveToConfigs',
+            'providerDir',
+            'method',
+            'authMethod',
+            'region',
+            'startUrl',
+            'openInIsolatedBrowser',
+            'useIsolatedBrowser',
+            'targetProviderUuid'
+        ];
+        const out = {};
+        for (const key of allow) {
+            if (options && Object.prototype.hasOwnProperty.call(options, key)) {
+                out[key] = options[key];
+            }
+        }
+        return out;
+    })();
+
+    return {
+        authUrl: authorizeUrl,
+        authInfo: {
+            provider: 'claude-kiro-oauth',
+            authMethod: 'iam-identity-center',
+            startUrl,
+            region,
+            port: callbackPort,
+            redirectUri,
+            state,
+            targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
+            ...safeOptions
         }
     };
 }
@@ -372,7 +615,8 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                     clientSecret,
                     deviceCode,
                     grantType: 'urn:ietf:params:oauth:grant-type:device_code'
-                })
+                }),
+                proxyUrlOverride: options.proxyUrlOverride
             }, 'claude-kiro-oauth');
             
             const data = await response.json();
@@ -409,14 +653,27 @@ async function pollKiroBuilderIDToken(clientId, clientSecret, deviceCode, interv
                     provider: 'claude-kiro-oauth',
                     credPath,
                     relativePath: path.relative(process.cwd(), credPath),
+                    targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
                     timestamp: new Date().toISOString()
                 });
-                
-                // 自动关联新生成的凭据到 Pools
-                await autoLinkProviderConfigs(CONFIG, {
-                    onlyCurrentCred: true,
-                    credPath: path.relative(process.cwd(), credPath)
-                });
+
+                const relativePath = path.relative(process.cwd(), credPath);
+                const attached = attachCredentialToProviderNode(
+                    'claude-kiro-oauth',
+                    options.attachToProviderUuid || options.targetProviderUuid,
+                    relativePath,
+                    {
+                        authMethod: 'builder-id'
+                    }
+                );
+
+                if (!attached) {
+                    // 自动关联新生成的凭据到 Pools
+                    await autoLinkProviderConfigs(CONFIG, {
+                        onlyCurrentCred: true,
+                        credPath: relativePath
+                    });
+                }
                 
                 return tokenData;
             }
@@ -458,24 +715,289 @@ function stopKiroPollingTask(taskId) {
 }
 
 /**
+ * 启动 IAM Identity Center (Enterprise) OAuth 回调服务器 (Authorization Code + PKCE)
+ * 注意：为了支持 WSL -> Windows BitBrowser 的 loopback 回调，这里默认绑定 0.0.0.0，
+ * 但 redirect_uri 仍然使用 127.0.0.1:{port}（与 kiro-account-manager 一致）。
+ */
+async function startKiroIamSsoCallbackServer({
+    port = 0,
+    expectedState,
+    codeVerifier,
+    startUrl,
+    region,
+    clientId,
+    clientSecret,
+    registrationExpiresAt = null,
+    options = {}
+} = {}) {
+    const providerKey = 'claude-kiro-oauth';
+    await closeKiroServer(providerKey);
+
+    let listeningPort = null;
+    const ssoOIDCEndpoint = KIRO_OAUTH_CONFIG.ssoOIDCEndpoint.replace('{{region}}', region);
+
+    const createServer = () => http.createServer(async (req, res) => {
+            try {
+                const effectivePort = listeningPort || port;
+                const base = `http://127.0.0.1:${effectivePort || 0}`;
+                const url = new URL(req.url || '/', base);
+
+                if (url.pathname !== '/oauth/callback') {
+                    res.writeHead(404);
+                    res.end('Not Found');
+                    return;
+                }
+
+                const code = url.searchParams.get('code');
+                const state = url.searchParams.get('state');
+                const errorParam = url.searchParams.get('error');
+
+                if (errorParam) {
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
+                    broadcastEvent('oauth_error', {
+                        provider: providerKey,
+                        error: `授权失败: ${errorParam}`,
+                        timestamp: new Date().toISOString()
+                    });
+                    server.close(() => activeKiroServers.delete(providerKey));
+                    return;
+                }
+
+                if (state !== expectedState) {
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(false, 'State 验证失败'));
+                    broadcastEvent('oauth_error', {
+                        provider: providerKey,
+                        error: 'State mismatch',
+                        timestamp: new Date().toISOString()
+                    });
+                    server.close(() => activeKiroServers.delete(providerKey));
+                    return;
+                }
+
+                if (!code) {
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(false, '未收到授权码'));
+                    broadcastEvent('oauth_error', {
+                        provider: providerKey,
+                        error: 'Missing authorization code',
+                        timestamp: new Date().toISOString()
+                    });
+                    server.close(() => activeKiroServers.delete(providerKey));
+                    return;
+                }
+
+                // Tell the user the browser can be closed.
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(generateResponsePage(true, '授权成功！正在获取令牌，请稍候...'));
+
+                const redirectUri = `http://127.0.0.1:${effectivePort}/oauth/callback`;
+
+                // Exchange code for token
+                const tokenResponse = await fetchWithProxy(`${ssoOIDCEndpoint}/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'KiroIDE'
+                    },
+                    body: JSON.stringify({
+                        clientId,
+                        clientSecret,
+                        grantType: 'authorization_code',
+                        redirectUri,
+                        code,
+                        codeVerifier
+                    }),
+                    proxyUrlOverride: options.proxyUrlOverride
+                }, providerKey);
+
+                if (!tokenResponse.ok) {
+                    const errText = await tokenResponse.text();
+                    logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO token exchange failed: ${tokenResponse.status} ${errText}`);
+                    broadcastEvent('oauth_error', {
+                        provider: providerKey,
+                        error: `获取 Token 失败: ${errText || tokenResponse.status}`,
+                        timestamp: new Date().toISOString()
+                    });
+                    server.close(() => activeKiroServers.delete(providerKey));
+                    return;
+                }
+
+                const tokenData = await tokenResponse.json();
+                if (!tokenData?.accessToken || !tokenData?.refreshToken) {
+                    broadcastEvent('oauth_error', {
+                        provider: providerKey,
+                        error: 'Token response missing accessToken/refreshToken',
+                        timestamp: new Date().toISOString()
+                    });
+                    server.close(() => activeKiroServers.delete(providerKey));
+                    return;
+                }
+
+                // Save tokens (same convention as other Kiro flows)
+                let credPath = path.join(os.homedir(), KIRO_OAUTH_CONFIG.credentialsDir, KIRO_OAUTH_CONFIG.credentialsFile);
+                if (options.saveToConfigs) {
+                    const timestamp = Date.now();
+                    const folderName = `${timestamp}_kiro-auth-token`;
+                    const targetDir = path.join(process.cwd(), 'configs', 'kiro', folderName);
+                    await fs.promises.mkdir(targetDir, { recursive: true });
+                    credPath = path.join(targetDir, `${folderName}.json`);
+                }
+
+                const expiresIn = tokenData.expiresIn || 3600;
+                const saveData = {
+                    accessToken: tokenData.accessToken,
+                    refreshToken: tokenData.refreshToken,
+                    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+                    authMethod: 'iam-identity-center',
+                    clientId,
+                    clientSecret,
+                    idcRegion: region,
+                    startUrl
+                };
+                if (registrationExpiresAt) {
+                    saveData.registrationExpiresAt = registrationExpiresAt;
+                }
+
+                await fs.promises.mkdir(path.dirname(credPath), { recursive: true });
+                await fs.promises.writeFile(credPath, JSON.stringify(saveData, null, 2));
+
+                const relativePath = path.relative(process.cwd(), credPath);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO token saved: ${relativePath}`);
+
+                broadcastEvent('oauth_success', {
+                    provider: providerKey,
+                    credPath,
+                    relativePath,
+                    targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
+                    timestamp: new Date().toISOString()
+                });
+
+                const attached = attachCredentialToProviderNode(
+                    providerKey,
+                    options.attachToProviderUuid || options.targetProviderUuid,
+                    relativePath,
+                    {
+                        authMethod: 'iam-identity-center',
+                        startUrl,
+                        idcRegion: region
+                    }
+                );
+
+                if (!attached) {
+                    await autoLinkProviderConfigs(CONFIG, {
+                        onlyCurrentCred: true,
+                        credPath: relativePath
+                    });
+                }
+
+                server.close(() => activeKiroServers.delete(providerKey));
+            } catch (error) {
+                logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO callback error:`, error);
+                try {
+                    broadcastEvent('oauth_error', {
+                        provider: 'claude-kiro-oauth',
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    });
+                } catch {}
+                try {
+                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
+                } catch {}
+                try {
+                    server.close(() => activeKiroServers.delete(providerKey));
+                } catch {}
+            }
+        });
+
+    const candidatePorts = [];
+    const requested = Number.isFinite(Number(port)) ? Number(port) : 0;
+    if (requested > 0) {
+        candidatePorts.push(requested);
+    } else {
+        // Prefer the configured callback range (already exposed in Docker).
+        for (let p = KIRO_OAUTH_CONFIG.callbackPortStart; p <= KIRO_OAUTH_CONFIG.callbackPortEnd; p++) {
+            candidatePorts.push(p);
+        }
+        // Fallback to an ephemeral port if range is exhausted.
+        candidatePorts.push(0);
+    }
+
+    let lastErr = null;
+    for (const p of candidatePorts) {
+        const server = createServer();
+        try {
+            await new Promise((resolve, reject) => {
+                const onError = (err) => {
+                    server.off('listening', onListening);
+                    reject(err);
+                };
+                const onListening = () => {
+                    server.off('error', onError);
+                    resolve();
+                };
+
+                server.once('error', onError);
+                server.once('listening', onListening);
+
+                // WSL/host compatibility: listen on all interfaces.
+                server.listen(p || 0, '0.0.0.0');
+            });
+
+            const addr = server.address();
+            listeningPort = addr && typeof addr === 'object' ? addr.port : p;
+            activeKiroServers.set(providerKey, { server, port: listeningPort });
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO callback server listening on ${listeningPort}`);
+
+            // Timeout auto close
+            setTimeout(() => {
+                try {
+                    if (server.listening) {
+                        server.close(() => activeKiroServers.delete(providerKey));
+                    }
+                } catch {}
+            }, KIRO_OAUTH_CONFIG.authTimeout);
+
+            return { server, port: listeningPort };
+        } catch (err) {
+            lastErr = err;
+            try {
+                server.close();
+            } catch {}
+
+            if (requested > 0) {
+                // Explicit port requested: fail fast.
+                throw err;
+            }
+            // Try next port in the range.
+        }
+    }
+
+    throw new Error(lastErr?.message || 'All IAM SSO callback ports are in use');
+}
+
+/**
  * 启动 Kiro 回调服务器（用于 Social Auth HTTP 回调）
  */
 async function startKiroCallbackServer(codeVerifier, expectedState, options = {}) {
     const portStart = KIRO_OAUTH_CONFIG.callbackPortStart;
     const portEnd = KIRO_OAUTH_CONFIG.callbackPortEnd;
+    const providerKey = 'claude-kiro-oauth';
+
+    // Close any previous callback server for this provider (avoid port contention / stale handlers).
+    await closeKiroServer(providerKey);
     
     for (let port = portStart; port <= portEnd; port++) {
-    // 关闭已存在的服务器
-    await closeKiroServer(port);
-    
-    try {
-        const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
-        activeKiroServers.set('claude-kiro-oauth', { server, port });
-        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
-        return port;
-    } catch (err) {
+        try {
+            const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
+            activeKiroServers.set(providerKey, { server, port });
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
+            return port;
+        } catch (err) {
             logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用，尝试下一个...`);
-    }
+        }
     }
     
     throw new Error('所有端口都被占用');
@@ -550,7 +1072,8 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                             code,
                             code_verifier: codeVerifier,
                             redirect_uri: redirectUri
-                        })
+                        }),
+                        proxyUrlOverride: options.proxyUrlOverride
                     }, 'claude-kiro-oauth');
                     
                     if (!tokenResponse.ok) {
@@ -593,14 +1116,28 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                         provider: 'claude-kiro-oauth',
                         credPath,
                         relativePath: path.relative(process.cwd(), credPath),
+                        targetProviderUuid: options.targetProviderUuid || options.attachToProviderUuid || null,
                         timestamp: new Date().toISOString()
                     });
-                    
-                    // 自动关联新生成的凭据到 Pools
-                    await autoLinkProviderConfigs(CONFIG, {
-                        onlyCurrentCred: true,
-                        credPath: path.relative(process.cwd(), credPath)
-                    });
+
+                    const relativePath = path.relative(process.cwd(), credPath);
+                    const attached = attachCredentialToProviderNode(
+                        'claude-kiro-oauth',
+                        options.attachToProviderUuid || options.targetProviderUuid,
+                        relativePath,
+                        {
+                            authMethod: 'social',
+                            profileArn: saveData.profileArn || null
+                        }
+                    );
+
+                    if (!attached) {
+                        // 自动关联新生成的凭据到 Pools
+                        await autoLinkProviderConfigs(CONFIG, {
+                            onlyCurrentCred: true,
+                            credPath: relativePath
+                        });
+                    }
                     
                     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                     res.end(generateResponsePage(true, '授权成功！您可以关闭此页面'));
@@ -1139,5 +1676,3 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         };
     }
 }
-
-

@@ -90,7 +90,17 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             LOG_INCLUDE_REQUEST_ID: true,
             LOG_INCLUDE_TIMESTAMP: true,
             LOG_MAX_FILE_SIZE: 10485760,
-            LOG_MAX_FILES: 10
+            LOG_MAX_FILES: 10,
+            RISK_POLICY_ENABLED: true,
+            RISK_POLICY_MODE: 'enforce-strict',
+            RISK_LIFECYCLE_FILE_PATH: 'configs/risk-lifecycle.json',
+            RISK_MAX_EVENTS: 5000,
+            RISK_FLUSH_DEBOUNCE_MS: 500,
+            RISK_IDENTITY_COLLISION_WINDOW_MS: 300000,
+            ACCOUNT_ROTATION_POLICY_ENABLED: true,
+            ACCOUNT_REFRESH_POLICY_ENABLED: true,
+            ACCOUNT_RATE_LIMIT_COOLDOWN_MS: 30000,
+            ACCOUNT_QUOTA_COOLDOWN_MS: 3600000
         };
         logger.info('[Config] Using default configuration.');
     }
@@ -191,10 +201,128 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             } else {
                 logger.warn(`[Config Warning] --max-error-count flag requires a value.`);
             }
+        } else if (args[i] === '--risk-policy-enabled') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_POLICY_ENABLED = args[i + 1].toLowerCase() === 'true';
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-policy-enabled flag requires a value.`);
+            }
+        } else if (args[i] === '--risk-policy-mode') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_POLICY_MODE = args[i + 1];
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-policy-mode flag requires a value.`);
+            }
+        } else if (args[i] === '--risk-lifecycle-file') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_LIFECYCLE_FILE_PATH = args[i + 1];
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-lifecycle-file flag requires a value.`);
+            }
+        } else if (args[i] === '--risk-max-events') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_MAX_EVENTS = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-max-events flag requires a value.`);
+            }
+        } else if (args[i] === '--risk-flush-debounce-ms') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_FLUSH_DEBOUNCE_MS = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-flush-debounce-ms flag requires a value.`);
+            }
+        } else if (args[i] === '--risk-identity-collision-window-ms') {
+            if (i + 1 < args.length) {
+                currentConfig.RISK_IDENTITY_COLLISION_WINDOW_MS = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --risk-identity-collision-window-ms flag requires a value.`);
+            }
+        } else if (args[i] === '--account-rotation-policy-enabled') {
+            if (i + 1 < args.length) {
+                currentConfig.ACCOUNT_ROTATION_POLICY_ENABLED = args[i + 1].toLowerCase() === 'true';
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --account-rotation-policy-enabled flag requires a value.`);
+            }
+        } else if (args[i] === '--account-refresh-policy-enabled') {
+            if (i + 1 < args.length) {
+                currentConfig.ACCOUNT_REFRESH_POLICY_ENABLED = args[i + 1].toLowerCase() === 'true';
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --account-refresh-policy-enabled flag requires a value.`);
+            }
+        } else if (args[i] === '--account-rate-limit-cooldown-ms') {
+            if (i + 1 < args.length) {
+                currentConfig.ACCOUNT_RATE_LIMIT_COOLDOWN_MS = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --account-rate-limit-cooldown-ms flag requires a value.`);
+            }
+        } else if (args[i] === '--account-quota-cooldown-ms') {
+            if (i + 1 < args.length) {
+                currentConfig.ACCOUNT_QUOTA_COOLDOWN_MS = parseInt(args[i + 1], 10);
+                i++;
+            } else {
+                logger.warn(`[Config Warning] --account-quota-cooldown-ms flag requires a value.`);
+            }
         }
     }
 
     normalizeConfiguredProviders(currentConfig);
+
+    // Risk policy defaults
+    if (currentConfig.RISK_POLICY_ENABLED === undefined) {
+        currentConfig.RISK_POLICY_ENABLED = true;
+    }
+    if (!currentConfig.RISK_POLICY_MODE) {
+        currentConfig.RISK_POLICY_MODE = 'enforce-strict';
+    }
+    const allowedRiskModes = ['observe', 'enforce-soft', 'enforce-strict', 'protective-emergency'];
+    if (!allowedRiskModes.includes(currentConfig.RISK_POLICY_MODE)) {
+        logger.warn(`[Config Warning] Invalid RISK_POLICY_MODE '${currentConfig.RISK_POLICY_MODE}', fallback to 'enforce-strict'.`);
+        currentConfig.RISK_POLICY_MODE = 'enforce-strict';
+    }
+    if (!currentConfig.RISK_LIFECYCLE_FILE_PATH) {
+        currentConfig.RISK_LIFECYCLE_FILE_PATH = 'configs/risk-lifecycle.json';
+    }
+    if (!Number.isFinite(currentConfig.RISK_MAX_EVENTS)) {
+        currentConfig.RISK_MAX_EVENTS = 5000;
+    }
+    if (!Number.isFinite(currentConfig.RISK_FLUSH_DEBOUNCE_MS)) {
+        currentConfig.RISK_FLUSH_DEBOUNCE_MS = 500;
+    }
+    if (!Number.isFinite(currentConfig.RISK_IDENTITY_COLLISION_WINDOW_MS)) {
+        currentConfig.RISK_IDENTITY_COLLISION_WINDOW_MS = 300000;
+    }
+    if (currentConfig.ACCOUNT_ROTATION_POLICY_ENABLED === undefined) {
+        currentConfig.ACCOUNT_ROTATION_POLICY_ENABLED = true;
+    }
+    if (currentConfig.ACCOUNT_REFRESH_POLICY_ENABLED === undefined) {
+        currentConfig.ACCOUNT_REFRESH_POLICY_ENABLED = true;
+    }
+    if (!Number.isFinite(currentConfig.ACCOUNT_RATE_LIMIT_COOLDOWN_MS)) {
+        currentConfig.ACCOUNT_RATE_LIMIT_COOLDOWN_MS = 30000;
+    }
+    if (!Number.isFinite(currentConfig.ACCOUNT_QUOTA_COOLDOWN_MS)) {
+        currentConfig.ACCOUNT_QUOTA_COOLDOWN_MS = 3600000;
+    }
+
+    // BitBrowser (isolated browser profiles)
+    if (currentConfig.BITBROWSER_ENABLED === undefined) {
+        currentConfig.BITBROWSER_ENABLED = false;
+    }
+    if (!currentConfig.BITBROWSER_API_URL) {
+        currentConfig.BITBROWSER_API_URL = 'http://127.0.0.1:54345';
+    }
+    if (!currentConfig.BITBROWSER_CORE_VERSION) {
+        currentConfig.BITBROWSER_CORE_VERSION = '124';
+    }
 
     if (!currentConfig.SYSTEM_PROMPT_FILE_PATH) {
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;
@@ -280,4 +408,3 @@ export async function getSystemPromptFileContent(filePath) {
 }
 
 export { ALL_MODEL_PROVIDERS };
-

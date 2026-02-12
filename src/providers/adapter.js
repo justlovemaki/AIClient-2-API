@@ -10,14 +10,17 @@ import { CodexApiService } from './openai/codex-core.js';
 import { ForwardApiService } from './forward/forward-core.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 import logger from '../utils/logger.js';
+import { buildProviderIdentityContext, classifyProviderError } from '../risk/provider-account-policy.js';
 
 // 定义AI服务适配器接口
 // 所有的服务适配器都应该实现这些方法
 export class ApiServiceAdapter {
-    constructor() {
+    constructor(providerType = 'unknown', nodeConfig = {}) {
         if (new.target === ApiServiceAdapter) {
             throw new TypeError("Cannot construct ApiServiceAdapter instances directly");
         }
+        this.providerType = providerType;
+        this.nodeConfig = nodeConfig || {};
     }
 
     /**
@@ -71,12 +74,59 @@ export class ApiServiceAdapter {
     isExpiryDateNear() {
         throw new Error("Method 'isExpiryDateNear()' must be implemented.");
     }
+
+    /**
+     * 统一错误分类入口（Phase 2）
+     * @param {unknown} error
+     * @param {object} runtimeContext
+     * @returns {object}
+     */
+    classifyError(error, runtimeContext = {}) {
+        return classifyProviderError(error, {
+            providerType: this.providerType,
+            providerConfig: this.nodeConfig,
+            retryAttempt: runtimeContext.retryAttempt,
+            defaultRateLimitCooldownMs: runtimeContext.defaultRateLimitCooldownMs,
+            defaultQuotaCooldownMs: runtimeContext.defaultQuotaCooldownMs
+        });
+    }
+
+    /**
+     * 构建统一身份上下文（Phase 2）
+     * @param {object} runtimeContext
+     * @returns {object}
+     */
+    buildIdentityContext(runtimeContext = {}) {
+        return buildProviderIdentityContext(this.providerType, this.nodeConfig, runtimeContext);
+    }
+
+    /**
+     * 统一刷新执行入口（Phase 2）
+     * @param {object} runtimeContext
+     * @returns {Promise<object>}
+     */
+    async refreshCredential(runtimeContext = {}) {
+        const force = runtimeContext?.force === true;
+        try {
+            if (force) {
+                await this.forceRefreshToken();
+            } else {
+                await this.refreshToken();
+            }
+            return { ok: true };
+        } catch (error) {
+            return {
+                ok: false,
+                errorMessage: error?.message || String(error)
+            };
+        }
+    }
 }
 
 // Gemini API 服务适配器
 export class GeminiApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.GEMINI_CLI, config);
         this.geminiApiService = new GeminiApiService(config);
         // this.geminiApiService.initialize().catch(error => {
         //     logger.error("Failed to initialize geminiApiService:", error);
@@ -147,7 +197,7 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 // Antigravity API 服务适配器
 export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.ANTIGRAVITY, config);
         this.antigravityApiService = new AntigravityApiService(config);
     }
 
@@ -214,7 +264,7 @@ export class AntigravityApiServiceAdapter extends ApiServiceAdapter {
 // OpenAI API 服务适配器
 export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.OPENAI_CUSTOM, config);
         this.openAIApiService = new OpenAIApiService(config);
     }
 
@@ -254,7 +304,7 @@ export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
 // OpenAI Responses API 服务适配器
 export class OpenAIResponsesApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES, config);
         this.openAIResponsesApiService = new OpenAIResponsesApiService(config);
     }
 
@@ -292,7 +342,7 @@ export class OpenAIResponsesApiServiceAdapter extends ApiServiceAdapter {
 // Claude API 服务适配器
 export class ClaudeApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.CLAUDE_CUSTOM, config);
         this.claudeApiService = new ClaudeApiService(config);
     }
 
@@ -328,7 +378,7 @@ export class ClaudeApiServiceAdapter extends ApiServiceAdapter {
 // Kiro API 服务适配器
 export class KiroApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.KIRO_API, config);
         this.kiroApiService = new KiroApiService(config);
         // this.kiroApiService.initialize().catch(error => {
         //     logger.error("Failed to initialize kiroApiService:", error);
@@ -411,7 +461,7 @@ export class KiroApiServiceAdapter extends ApiServiceAdapter {
 // Qwen API 服务适配器
 export class QwenApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.QWEN_API, config);
         this.qwenApiService = new QwenApiService(config);
     }
 
@@ -466,7 +516,7 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
 // iFlow API 服务适配器
 export class IFlowApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.IFLOW_API, config);
         this.iflowApiService = new IFlowApiService(config);
     }
 
@@ -522,7 +572,7 @@ export class IFlowApiServiceAdapter extends ApiServiceAdapter {
 // Codex API 服务适配器
 export class CodexApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.CODEX_API, config);
         this.codexApiService = new CodexApiService(config);
     }
 
@@ -585,7 +635,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
 // Forward API 服务适配器
 export class ForwardApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
-        super();
+        super(MODEL_PROVIDER.FORWARD_API, config);
         this.forwardApiService = new ForwardApiService(config);
     }
 
@@ -661,4 +711,3 @@ export function getServiceAdapter(config) {
     }
     return serviceInstances[providerKey];
 }
-

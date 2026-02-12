@@ -1,3 +1,9 @@
+import { jest } from '@jest/globals';
+
+jest.mock('open', () => ({
+    default: jest.fn()
+}));
+
 import { ProviderPoolManager } from '../src/providers/provider-pool-manager.js';
 
 function createProvider(uuid, overrides = {}) {
@@ -25,6 +31,11 @@ function createManager(providers) {
     );
 
     // Tests only validate selection logic; do not write provider_pools.json.
+    if (manager.saveTimer) {
+        clearTimeout(manager.saveTimer);
+        manager.saveTimer = null;
+    }
+    manager.pendingSaves?.clear?.();
     manager._debouncedSave = () => {};
     return manager;
 }

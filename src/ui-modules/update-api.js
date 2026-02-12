@@ -20,7 +20,19 @@ function getUpdateProxyConfig() {
     
     const proxyConfig = parseProxyUrl(CONFIG.PROXY_URL);
     if (proxyConfig) {
-        logger.info(`[Update] Using ${proxyConfig.proxyType} proxy for update check: ${CONFIG.PROXY_URL}`);
+        const maskedUrl = (() => {
+            try {
+                const url = new URL(String(CONFIG.PROXY_URL).trim());
+                if (url.username || url.password) {
+                    url.username = url.username ? '***' : '';
+                    url.password = url.password ? '***' : '';
+                }
+                return url.toString();
+            } catch {
+                return '[invalid proxy url]';
+            }
+        })();
+        logger.info(`[Update] Using ${proxyConfig.proxyType} proxy for update check: ${maskedUrl}`);
     }
     return proxyConfig;
 }

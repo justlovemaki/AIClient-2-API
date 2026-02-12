@@ -13,9 +13,22 @@ import {
     getFileName,
     formatSystemPath
 } from '../utils/provider-utils.js';
+import { getRiskManager, initializeRiskManager } from '../risk/risk-manager.js';
 
 // 存储 ProviderPoolManager 实例
 let providerPoolManager = null;
+
+function assertRiskAdmission(providerType, serviceConfig) {
+    if (!providerType || !serviceConfig?.uuid) return;
+    const riskManager = getRiskManager();
+    if (!riskManager?.isEnabled?.()) return;
+
+    const admission = riskManager.getAdmissionDecision(providerType, serviceConfig.uuid);
+    if (admission.blocked) {
+        const detail = `${providerType}/${serviceConfig.uuid} state=${admission.lifecycleState} mode=${admission.mode}`;
+        throw new Error(`[RiskPolicy] Credential admission denied: ${detail}`);
+    }
+}
 
 /**
  * 扫描 configs 目录并自动关联未关联的配置文件到对应的提供商
@@ -267,6 +280,7 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
  * @returns {Promise<Object>} The initialized services
  */
 export async function initApiService(config, isReady = false) {
+    initializeRiskManager(config, config.providerPools || {});
 
     if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         providerPoolManager = new ProviderPoolManager(config.providerPools, {
@@ -323,12 +337,21 @@ export async function initApiService(config, isReady = false) {
                 }
                 
                 try {
+                    const nodeProxyOverridePresent = Object.prototype.hasOwnProperty.call(providerConfig, 'PROXY_URL');
+                    const providerForMerge = nodeProxyOverridePresent ? { ...providerConfig } : providerConfig;
+                    const nodeProxyUrl = nodeProxyOverridePresent ? providerConfig.PROXY_URL : undefined;
+                    if (nodeProxyOverridePresent) {
+                        delete providerForMerge.PROXY_URL;
+                    }
+
                     // 合并全局配置和节点配置
                     const nodeConfig = deepmerge(config, {
-                        ...providerConfig,
+                        ...providerForMerge,
                         MODEL_PROVIDER: providerType
                     });
                     delete nodeConfig.providerPools; // 移除 providerPools 避免递归
+                    nodeConfig.NODE_PROXY_URL_PRESENT = nodeProxyOverridePresent;
+                    nodeConfig.NODE_PROXY_URL = nodeProxyUrl;
                     
                     // 初始化服务适配器
                     getServiceAdapter(nodeConfig);
@@ -366,11 +389,22 @@ export async function getApiService(config, requestedModel = null, options = {})
         // selectProvider 现在是异步的，使用链式锁确保并发安全
         const selectedProviderConfig = await providerPoolManager.selectProvider(config.MODEL_PROVIDER, requestedModel, { skipUsageCount: true });
         if (selectedProviderConfig) {
+            // Allow per-node proxy override without requiring global PROXY_ENABLED_PROVIDERS.
+            // Keep global PROXY_URL intact and pass node override separately.
+            const nodeProxyOverridePresent = Object.prototype.hasOwnProperty.call(selectedProviderConfig, 'PROXY_URL');
+            const nodeProxyUrl = nodeProxyOverridePresent ? selectedProviderConfig.PROXY_URL : undefined;
+            const selectedForMerge = nodeProxyOverridePresent ? { ...selectedProviderConfig } : selectedProviderConfig;
+            if (nodeProxyOverridePresent) {
+                delete selectedForMerge.PROXY_URL;
+            }
+
             // 合并选中的提供者配置到当前请求的 config 中
-            serviceConfig = deepmerge(config, selectedProviderConfig);
+            serviceConfig = deepmerge(config, selectedForMerge);
             delete serviceConfig.providerPools; // 移除 providerPools 属性
             config.uuid = serviceConfig.uuid;
             config.customName = serviceConfig.customName;
+            serviceConfig.NODE_PROXY_URL_PRESENT = nodeProxyOverridePresent;
+            serviceConfig.NODE_PROXY_URL = nodeProxyUrl;
             const customNameDisplay = serviceConfig.customName ? ` (${serviceConfig.customName})` : '';
             logger.info(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
         } else {
@@ -379,6 +413,7 @@ export async function getApiService(config, requestedModel = null, options = {})
             throw new Error(errorMsg);
         }
     }
+    assertRiskAdmission(serviceConfig.MODEL_PROVIDER || config.MODEL_PROVIDER, serviceConfig);
     return getServiceAdapter(serviceConfig);
 }
 
@@ -407,9 +442,18 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
         if (selectedResult) {
             const { config: selectedProviderConfig, actualProviderType: selectedType, isFallback: fallbackUsed, actualModel: fallbackModel } = selectedResult;
             
+            const nodeProxyOverridePresent = Object.prototype.hasOwnProperty.call(selectedProviderConfig || {}, 'PROXY_URL');
+            const nodeProxyUrl = nodeProxyOverridePresent ? selectedProviderConfig.PROXY_URL : undefined;
+            const selectedForMerge = nodeProxyOverridePresent ? { ...selectedProviderConfig } : selectedProviderConfig;
+            if (nodeProxyOverridePresent) {
+                delete selectedForMerge.PROXY_URL;
+            }
+
             // 合并选中的提供者配置到当前请求的 config 中
-            serviceConfig = deepmerge(config, selectedProviderConfig);
+            serviceConfig = deepmerge(config, selectedForMerge);
             delete serviceConfig.providerPools;
+            serviceConfig.NODE_PROXY_URL_PRESENT = nodeProxyOverridePresent;
+            serviceConfig.NODE_PROXY_URL = nodeProxyUrl;
             
             actualProviderType = selectedType;
             isFallback = fallbackUsed;
@@ -426,6 +470,7 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
             throw new Error(errorMsg);
         }
     }
+    assertRiskAdmission(actualProviderType || serviceConfig.MODEL_PROVIDER || config.MODEL_PROVIDER, serviceConfig);
     
     const service = getServiceAdapter(serviceConfig);
     

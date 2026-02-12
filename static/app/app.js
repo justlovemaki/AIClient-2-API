@@ -41,6 +41,7 @@ import {
     openProviderManager,
     showAuthModal,
     executeGenerateAuthUrl,
+    showKiroEnterpriseWizard,
     handleGenerateAuthUrl
 } from './provider-manager.js';
 
@@ -228,6 +229,7 @@ window.fileUploadHandler = fileUploadHandler;
 window.showAuthModal = showAuthModal;
 window.executeGenerateAuthUrl = executeGenerateAuthUrl;
 window.handleGenerateAuthUrl = handleGenerateAuthUrl;
+window.showKiroEnterpriseWizard = showKiroEnterpriseWizard;
 
 // 配置管理相关全局函数
 window.viewConfig = viewConfig;

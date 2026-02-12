@@ -78,13 +78,53 @@ export function isProxyEnabledForProvider(config, providerType) {
  * @returns {Object|null} 代理配置对象或 null
  */
 export function getProxyConfigForProvider(config, providerType) {
+    // Node-level override: if explicitly present, it takes precedence and does NOT require
+    // PROXY_ENABLED_PROVIDERS to include providerType.
+    if (config?.NODE_PROXY_URL_PRESENT === true) {
+        const raw = config.NODE_PROXY_URL;
+        const trimmed = raw === undefined || raw === null ? '' : String(raw).trim();
+        if (!trimmed) {
+            return null; // explicit disable
+        }
+
+        const proxyConfig = parseProxyUrl(trimmed);
+        if (proxyConfig) {
+            const maskedUrl = (() => {
+                try {
+                    const url = new URL(trimmed);
+                    if (url.username || url.password) {
+                        url.username = url.username ? '***' : '';
+                        url.password = url.password ? '***' : '';
+                    }
+                    return url.toString();
+                } catch {
+                    return '[invalid proxy url]';
+                }
+            })();
+            logger.info(`[Proxy] Using node ${proxyConfig.proxyType} proxy for ${providerType}: ${maskedUrl}`);
+        }
+        return proxyConfig;
+    }
+
     if (!isProxyEnabledForProvider(config, providerType)) {
         return null;
     }
 
     const proxyConfig = parseProxyUrl(config.PROXY_URL);
     if (proxyConfig) {
-        logger.info(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${config.PROXY_URL}`);
+        const maskedUrl = (() => {
+            try {
+                const url = new URL(String(config.PROXY_URL).trim());
+                if (url.username || url.password) {
+                    url.username = url.username ? '***' : '';
+                    url.password = url.password ? '***' : '';
+                }
+                return url.toString();
+            } catch {
+                return '[invalid proxy url]';
+            }
+        })();
+        logger.info(`[Proxy] Using ${proxyConfig.proxyType} proxy for ${providerType}: ${maskedUrl}`);
     }
     return proxyConfig;
 }

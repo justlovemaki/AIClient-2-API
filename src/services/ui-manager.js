@@ -11,7 +11,9 @@ import * as uploadConfigApi from '../ui-modules/upload-config-api.js';
 import * as systemApi from '../ui-modules/system-api.js';
 import * as updateApi from '../ui-modules/update-api.js';
 import * as oauthApi from '../ui-modules/oauth-api.js';
+import * as browserProfileApi from '../ui-modules/browser-profile-api.js';
 import * as eventBroadcast from '../ui-modules/event-broadcast.js';
+import * as riskApi from '../ui-modules/risk-api.js';
 
 // Re-export from event-broadcast module
 export { broadcastEvent, initializeUIManagement, handleUploadOAuthCredentials, upload } from '../ui-modules/event-broadcast.js';
@@ -106,6 +108,65 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Get system information
     if (method === 'GET' && pathParam === '/api/system') {
         return await systemApi.handleGetSystem(req, res);
+    }
+
+    // Risk policy summary
+    if (method === 'GET' && pathParam === '/api/risk/summary') {
+        return await riskApi.handleGetRiskSummary(req, res);
+    }
+
+    // Risk policy runtime configuration
+    if (method === 'GET' && pathParam === '/api/risk/policy') {
+        return await riskApi.handleGetRiskPolicyConfig(req, res);
+    }
+    if (method === 'POST' && pathParam === '/api/risk/policy') {
+        return await riskApi.handleUpdateRiskPolicyConfig(req, res);
+    }
+
+    // Risk policy credential states
+    if (method === 'GET' && pathParam === '/api/risk/credentials') {
+        return await riskApi.handleGetRiskCredentials(req, res);
+    }
+
+    // Risk policy manual release details for a credential
+    const riskCredentialReleaseInfoMatch = pathParam.match(/^\/api\/risk\/credentials\/([^\/]+)\/([^\/]+)\/release-info$/);
+    if (method === 'GET' && riskCredentialReleaseInfoMatch) {
+        const providerType = decodeURIComponent(riskCredentialReleaseInfoMatch[1]);
+        const uuid = decodeURIComponent(riskCredentialReleaseInfoMatch[2]);
+        return await riskApi.handleGetRiskCredentialReleaseInfo(req, res, providerType, uuid);
+    }
+
+    // Risk policy manual release execution for a credential
+    const riskCredentialReleaseMatch = pathParam.match(/^\/api\/risk\/credentials\/([^\/]+)\/([^\/]+)\/release$/);
+    if (method === 'POST' && riskCredentialReleaseMatch) {
+        const providerType = decodeURIComponent(riskCredentialReleaseMatch[1]);
+        const uuid = decodeURIComponent(riskCredentialReleaseMatch[2]);
+        return await riskApi.handleReleaseRiskCredential(req, res, providerPoolManager, providerType, uuid);
+    }
+
+    // Risk policy runtime control actions for a credential
+    const riskCredentialActionMatch = pathParam.match(/^\/api\/risk\/credentials\/([^\/]+)\/([^\/]+)\/actions$/);
+    if (method === 'POST' && riskCredentialActionMatch) {
+        const providerType = decodeURIComponent(riskCredentialActionMatch[1]);
+        const uuid = decodeURIComponent(riskCredentialActionMatch[2]);
+        return await riskApi.handleRiskCredentialAction(req, res, providerPoolManager, providerType, uuid);
+    }
+
+    // Risk policy provider selection preview
+    const riskSelectionPreviewMatch = pathParam.match(/^\/api\/risk\/providers\/([^\/]+)\/selection-preview$/);
+    if (method === 'GET' && riskSelectionPreviewMatch) {
+        const providerType = decodeURIComponent(riskSelectionPreviewMatch[1]);
+        return await riskApi.handleRiskProviderSelectionPreview(req, res, providerPoolManager, providerType);
+    }
+
+    // Risk policy events
+    if (method === 'GET' && pathParam === '/api/risk/events') {
+        return await riskApi.handleGetRiskEvents(req, res);
+    }
+
+    // Flush risk lifecycle store
+    if (method === 'POST' && pathParam === '/api/risk/flush') {
+        return await riskApi.handleFlushRiskStore(req, res);
     }
 
     // Download today's log file
@@ -216,7 +277,22 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     const generateAuthUrlMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/generate-auth-url$/);
     if (method === 'POST' && generateAuthUrlMatch) {
         const providerType = decodeURIComponent(generateAuthUrlMatch[1]);
-        return await oauthApi.handleGenerateAuthUrl(req, res, currentConfig, providerType);
+        return await oauthApi.handleGenerateAuthUrl(req, res, currentConfig, providerPoolManager, providerType);
+    }
+
+    // BitBrowser / isolated browser profile actions (per node)
+    const ensureBrowserProfileMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/browser-profile\/ensure$/);
+    if (method === 'POST' && ensureBrowserProfileMatch) {
+        const providerType = decodeURIComponent(ensureBrowserProfileMatch[1]);
+        const uuid = decodeURIComponent(ensureBrowserProfileMatch[2]);
+        return await browserProfileApi.handleEnsureBrowserProfile(req, res, currentConfig, providerPoolManager, providerType, uuid);
+    }
+
+    const openBrowserProfileMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/browser-profile\/open$/);
+    if (method === 'POST' && openBrowserProfileMatch) {
+        const providerType = decodeURIComponent(openBrowserProfileMatch[1]);
+        const uuid = decodeURIComponent(openBrowserProfileMatch[2]);
+        return await browserProfileApi.handleOpenBrowserProfile(req, res, currentConfig, providerPoolManager, providerType, uuid);
     }
 
     // Handle manual OAuth callback

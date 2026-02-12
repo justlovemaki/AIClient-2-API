@@ -527,6 +527,13 @@ function showKiroAuthMethodSelector(providerType) {
                             <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.awsBuilderDesc">${t('oauth.kiro.awsBuilderDesc')}</div>
                         </div>
                     </button>
+                    <button class="auth-method-btn" data-method="iam-identity-center" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-building" style="font-size: 24px; color: #0ea5e9;"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.idc">${t('oauth.kiro.idc')}</div>
+                            <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.idcDesc">${t('oauth.kiro.idcDesc')}</div>
+                        </div>
+                    </button>
                     <button class="auth-method-btn" data-method="aws-import" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fas fa-cloud-upload-alt" style="font-size: 24px; color: #ff9900;"></i>
                         <div style="text-align: left;">
@@ -579,9 +586,482 @@ function showKiroAuthMethodSelector(providerType) {
                 showKiroBatchImportModal();
             } else if (method === 'aws-import') {
                 showKiroAwsImportModal();
+            } else if (method === 'iam-identity-center') {
+                showKiroEnterpriseWizard(providerType);
             } else {
                 await executeGenerateAuthUrl(providerType, { method });
             }
+        });
+    });
+}
+
+function suggestNextSequentialAccountId(existingProviders = []) {
+    const usedLower = new Set();
+    let maxNumeric = 0;
+
+    for (const p of Array.isArray(existingProviders) ? existingProviders : []) {
+        const raw = p?.accountId;
+        if (raw === undefined || raw === null) continue;
+        const id = String(raw).trim();
+        if (!id) continue;
+        usedLower.add(id.toLowerCase());
+        const m = id.match(/^acct-(\d+)$/i);
+        if (m) {
+            const n = Number(m[1]);
+            if (Number.isFinite(n)) {
+                maxNumeric = Math.max(maxNumeric, n);
+            }
+        }
+    }
+
+    let next = maxNumeric + 1;
+    for (let i = 0; i < 10000; i++) {
+        const candidate = `acct-${String(next).padStart(3, '0')}`;
+        if (!usedLower.has(candidate.toLowerCase())) {
+            return candidate;
+        }
+        next += 1;
+    }
+
+    // Fallback (extremely unlikely)
+    return `acct-${Date.now()}`;
+}
+
+function normalizeNonEmptyString(value) {
+    if (value === undefined || value === null) return '';
+    const s = String(value).trim();
+    return s ? s : '';
+}
+
+function validateHttpUrl(value) {
+    try {
+        const url = new URL(String(value).trim());
+        return url && (url.protocol === 'http:' || url.protocol === 'https:');
+    } catch {
+        return false;
+    }
+}
+
+async function showKiroEnterpriseWizard(providerType) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-building"></i> <span data-i18n="modal.provider.kiroWizard.title">${t('modal.provider.kiroWizard.title')}</span></h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 14px; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; color: #1e40af;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>${t('modal.provider.kiroWizard.bitbrowserHint')}</span>
+                    </div>
+                    <div style="margin-top: 6px; font-size: 12px; opacity: 0.95;">
+                        ${t('modal.provider.kiroWizard.wslHint')}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                        <span data-i18n="modal.provider.kiroWizard.accountId">${t('modal.provider.kiroWizard.accountId')}</span>
+                    </label>
+                    <input type="text" class="form-control kiro-wiz-account-id"
+                        placeholder="acct-001"
+                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                    />
+                    <small class="form-text" data-i18n="modal.provider.kiroWizard.accountIdHint">${t('modal.provider.kiroWizard.accountIdHint')}</small>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                        ${t('modal.provider.customName')} <span class="optional-tag">${t('config.optional')}</span>
+                    </label>
+                    <input type="text" class="form-control kiro-wiz-custom-name"
+                        placeholder="acct-001"
+                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                    />
+                </div>
+
+                <div style="margin-top: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="font-weight: 800;">
+                            <i class="fas fa-network-wired"></i>
+                            <span data-i18n="modal.provider.kiroWizard.proxyTitle">${t('modal.provider.kiroWizard.proxyTitle')}</span>
+                        </div>
+                        <label style="display: inline-flex; align-items: center; gap: 8px; user-select: none;">
+                            <input type="checkbox" class="kiro-wiz-proxy-enabled" checked />
+                            <span data-i18n="modal.provider.kiroWizard.proxyEnabled">${t('modal.provider.kiroWizard.proxyEnabled')}</span>
+                        </label>
+                    </div>
+
+                    <div class="kiro-wiz-proxy-fields" style="margin-top: 10px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                            <span data-i18n="modal.provider.kiroWizard.proxyUrl">${t('modal.provider.kiroWizard.proxyUrl')}</span>
+                        </label>
+                        <input type="password" class="form-control kiro-wiz-proxy-url"
+                            placeholder="socks5://user:pass@host:port"
+                            style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                        />
+                        <small class="form-text" data-i18n="modal.provider.kiroWizard.proxyUrlHint">${t('modal.provider.kiroWizard.proxyUrlHint')}</small>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="font-weight: 800;">
+                            <i class="fas fa-user-shield"></i>
+                            <span data-i18n="modal.provider.kiroWizard.bitbrowserTitle">${t('modal.provider.kiroWizard.bitbrowserTitle')}</span>
+                        </div>
+                        <label style="display: inline-flex; align-items: center; gap: 8px; user-select: none;">
+                            <input type="checkbox" class="kiro-wiz-use-bitbrowser" checked />
+                            <span data-i18n="modal.provider.kiroWizard.useBitbrowser">${t('modal.provider.kiroWizard.useBitbrowser')}</span>
+                        </label>
+                    </div>
+
+                    <div class="kiro-wiz-bitbrowser-fields" style="margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 700;">
+                            <input type="checkbox" class="kiro-wiz-bitbrowser-enabled" />
+                            <span data-i18n="modal.provider.kiroWizard.bitbrowserEnabled">${t('modal.provider.kiroWizard.bitbrowserEnabled')}</span>
+                        </label>
+
+                        <div class="form-group" style="margin-top: 8px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                                <span data-i18n="modal.provider.kiroWizard.bitbrowserApiUrl">${t('modal.provider.kiroWizard.bitbrowserApiUrl')}</span>
+                            </label>
+                            <input type="text" class="form-control kiro-wiz-bitbrowser-api-url"
+                                placeholder="http://127.0.0.1:54345"
+                                style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                            />
+                        </div>
+
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                                <span data-i18n="modal.provider.kiroWizard.bitbrowserCoreVersion">${t('modal.provider.kiroWizard.bitbrowserCoreVersion')}</span>
+                            </label>
+                            <input type="text" class="form-control kiro-wiz-bitbrowser-core-version"
+                                placeholder="124"
+                                style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
+                    <div style="font-weight: 800;">
+                        <i class="fas fa-building"></i>
+                        <span data-i18n="modal.provider.kiroWizard.idcTitle">${t('modal.provider.kiroWizard.idcTitle')}</span>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                            <span data-i18n="modal.provider.kiroWizard.startUrl">${t('modal.provider.kiroWizard.startUrl')}</span>
+                        </label>
+                        <input type="text" class="form-control kiro-wiz-idc-start-url"
+                            placeholder="https://d-xxxxxxxxxx.awsapps.com/start"
+                            style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                        />
+                        <small class="form-text" data-i18n="oauth.kiro.builderIDStartURLHint">${t('oauth.kiro.builderIDStartURLHint')}</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 700;">
+                            <span data-i18n="modal.provider.kiroWizard.region">${t('modal.provider.kiroWizard.region')}</span>
+                        </label>
+                        <input type="text" class="form-control kiro-wiz-idc-region"
+                            value="us-east-1"
+                            placeholder="us-east-1"
+                            style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 10px;"
+                        />
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                <button class="btn btn-primary kiro-wiz-create-btn">
+                    <i class="fas fa-user-shield"></i>
+                    <span data-i18n="modal.provider.kiroWizard.createAndLogin">${t('modal.provider.kiroWizard.createAndLogin')}</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    const createBtn = modal.querySelector('.kiro-wiz-create-btn');
+    const proxyEnabledEl = modal.querySelector('.kiro-wiz-proxy-enabled');
+    const proxyFieldsEl = modal.querySelector('.kiro-wiz-proxy-fields');
+    const proxyUrlEl = modal.querySelector('.kiro-wiz-proxy-url');
+    const useBitbrowserEl = modal.querySelector('.kiro-wiz-use-bitbrowser');
+    const bitbrowserFieldsEl = modal.querySelector('.kiro-wiz-bitbrowser-fields');
+    const bitbrowserEnabledEl = modal.querySelector('.kiro-wiz-bitbrowser-enabled');
+    const bitbrowserApiUrlEl = modal.querySelector('.kiro-wiz-bitbrowser-api-url');
+    const bitbrowserCoreVersionEl = modal.querySelector('.kiro-wiz-bitbrowser-core-version');
+    const accountIdEl = modal.querySelector('.kiro-wiz-account-id');
+    const customNameEl = modal.querySelector('.kiro-wiz-custom-name');
+    const startUrlEl = modal.querySelector('.kiro-wiz-idc-start-url');
+    const regionEl = modal.querySelector('.kiro-wiz-idc-region');
+
+    const closeModal = () => modal.remove();
+    [closeBtn, cancelBtn].forEach((btn) => btn?.addEventListener?.('click', closeModal));
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    const syncProxyVisibility = () => {
+        if (!proxyEnabledEl || !proxyFieldsEl) return;
+        proxyFieldsEl.style.display = proxyEnabledEl.checked ? '' : 'none';
+        if (!proxyEnabledEl.checked && proxyUrlEl) {
+            proxyUrlEl.value = '';
+        }
+    };
+
+    const syncBitbrowserVisibility = () => {
+        if (!useBitbrowserEl || !bitbrowserFieldsEl) return;
+        bitbrowserFieldsEl.style.display = useBitbrowserEl.checked ? '' : 'none';
+        if (bitbrowserEnabledEl) {
+            if (useBitbrowserEl.checked) {
+                // Using isolated login requires BitBrowser to be enabled.
+                bitbrowserEnabledEl.checked = true;
+                bitbrowserEnabledEl.disabled = true;
+            } else {
+                bitbrowserEnabledEl.disabled = false;
+            }
+        }
+    };
+
+    proxyEnabledEl?.addEventListener?.('change', syncProxyVisibility);
+    useBitbrowserEl?.addEventListener?.('change', syncBitbrowserVisibility);
+
+    // Load defaults
+    try {
+        const cfg = await window.apiClient.get('/config');
+        if (bitbrowserEnabledEl) bitbrowserEnabledEl.checked = cfg?.BITBROWSER_ENABLED === true;
+        if (bitbrowserApiUrlEl) bitbrowserApiUrlEl.value = cfg?.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
+        if (bitbrowserCoreVersionEl) bitbrowserCoreVersionEl.value = cfg?.BITBROWSER_CORE_VERSION || '124';
+    } catch (e) {
+        // leave defaults
+    }
+
+    try {
+        const data = await window.apiClient.get(`/providers/${encodeURIComponent(providerType)}`);
+        const suggested = suggestNextSequentialAccountId(data?.providers || []);
+        if (accountIdEl) accountIdEl.value = suggested;
+        if (customNameEl) customNameEl.value = suggested;
+    } catch (e) {
+        const fallback = `acct-${String(Date.now()).slice(-3)}`;
+        if (accountIdEl) accountIdEl.value = fallback;
+        if (customNameEl) customNameEl.value = fallback;
+    }
+
+    syncProxyVisibility();
+    syncBitbrowserVisibility();
+
+    createBtn.addEventListener('click', async () => {
+        const accountId = normalizeNonEmptyString(accountIdEl?.value);
+        const customName = normalizeNonEmptyString(customNameEl?.value) || accountId;
+        const proxyEnabled = proxyEnabledEl?.checked === true;
+        const proxyUrl = proxyEnabled ? normalizeNonEmptyString(proxyUrlEl?.value) : '';
+        const builderIDStartURL = normalizeNonEmptyString(startUrlEl?.value);
+        const region = normalizeNonEmptyString(regionEl?.value) || 'us-east-1';
+        const useBitbrowser = useBitbrowserEl?.checked === true;
+        const bbApiUrl = normalizeNonEmptyString(bitbrowserApiUrlEl?.value) || 'http://127.0.0.1:54345';
+        const bbCoreVersion = normalizeNonEmptyString(bitbrowserCoreVersionEl?.value) || '124';
+
+        if (!accountId) {
+            showToast(t('common.warning'), `${t('modal.provider.kiroWizard.accountId')} ${t('common.required') || 'required'}`, 'warning');
+            accountIdEl?.focus?.();
+            return;
+        }
+        if (!builderIDStartURL) {
+            showToast(t('common.warning'), t('oauth.kiro.idcStartUrlRequired'), 'warning');
+            startUrlEl?.focus?.();
+            return;
+        }
+        if (!validateHttpUrl(builderIDStartURL)) {
+            showToast(t('common.warning'), t('oauth.kiro.idcStartUrlInvalid'), 'warning');
+            startUrlEl?.focus?.();
+            return;
+        }
+        if (proxyEnabled && !proxyUrl) {
+            showToast(t('common.warning'), `${t('modal.provider.kiroWizard.proxyUrl')} ${t('common.required') || 'required'}`, 'warning');
+            proxyUrlEl?.focus?.();
+            return;
+        }
+        if (useBitbrowser && !bbApiUrl) {
+            showToast(t('common.warning'), `${t('modal.provider.kiroWizard.bitbrowserApiUrl')} ${t('common.required') || 'required'}`, 'warning');
+            bitbrowserApiUrlEl?.focus?.();
+            return;
+        }
+
+        const oldBtnHtml = createBtn.innerHTML;
+        createBtn.disabled = true;
+        createBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>${t('modal.provider.kiroWizard.creating')}</span>`;
+        showToast(t('common.info'), t('modal.provider.kiroWizard.creating'), 'info');
+
+        try {
+            if (useBitbrowser) {
+                // Persist BitBrowser config (wizard-driven), so backend APIs can use it.
+                await window.apiClient.post('/config', {
+                    BITBROWSER_ENABLED: true,
+                    BITBROWSER_API_URL: bbApiUrl,
+                    BITBROWSER_CORE_VERSION: bbCoreVersion
+                });
+            }
+
+            const providerConfig = {
+                accountId,
+                customName,
+                authMethod: 'iam-identity-center',
+                // Explicit per-node proxy override semantics:
+                // - if proxy enabled: set URL
+                // - if proxy disabled: set empty string to disable global proxy inheritance
+                PROXY_URL: proxyEnabled ? proxyUrl : ''
+            };
+
+            const createRes = await window.apiClient.post('/providers', {
+                providerType,
+                providerConfig
+            });
+
+            if (createRes?.error) {
+                throw new Error(createRes.error.message || createRes.error);
+            }
+            if (createRes?.success !== true) {
+                throw new Error(createRes?.message || 'Failed to create provider node');
+            }
+
+            const uuid = createRes?.provider?.uuid || providerConfig.uuid;
+            if (!uuid) {
+                throw new Error('Provider node created but uuid missing');
+            }
+
+            // Ensure runtime picks up new provider + auto machineId assignment, etc.
+            await window.apiClient.post('/reload-config');
+            if (typeof window.refreshProviderConfig === 'function') {
+                await window.refreshProviderConfig(providerType);
+            }
+            if (typeof window.loadProviders === 'function') {
+                await window.loadProviders();
+            }
+
+            // Start node-scoped OAuth and auto-open BitBrowser (if enabled).
+            await executeGenerateAuthUrl(providerType, {
+                method: 'iam-identity-center',
+                startUrl: builderIDStartURL,
+                region,
+                targetProviderUuid: uuid,
+                openInIsolatedBrowser: useBitbrowser
+            });
+
+            closeModal();
+        } catch (error) {
+            console.error('Kiro enterprise wizard failed:', error);
+            showToast(t('common.error'), `${t('common.error')}: ${error.message}`, 'error');
+            createBtn.disabled = false;
+            createBtn.innerHTML = oldBtnHtml;
+        }
+    });
+}
+
+function showKiroIdentityCenterModal(providerType) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-building"></i> <span data-i18n="oauth.kiro.idcTitle">${t('oauth.kiro.idcTitle')}</span></h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 12px; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span data-i18n="oauth.kiro.idcHint">${t('oauth.kiro.idcHint')}</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">
+                        Start URL
+                    </label>
+                    <input type="text" class="form-control idc-start-url"
+                        placeholder="https://d-xxxxxxxxxx.awsapps.com/start"
+                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                    />
+                    <small class="form-text" data-i18n="oauth.kiro.builderIDStartURLHint">${t('oauth.kiro.builderIDStartURLHint')}</small>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">
+                        AWS Region
+                    </label>
+                    <input type="text" class="form-control idc-region"
+                        value="us-east-1"
+                        placeholder="us-east-1"
+                        style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;"
+                    />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                <button class="btn btn-primary idc-generate-btn">
+                    <i class="fas fa-key"></i>
+                    <span data-i18n="providers.auth.generate">${t('providers.auth.generate')}</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    const generateBtn = modal.querySelector('.idc-generate-btn');
+    const startUrlEl = modal.querySelector('.idc-start-url');
+    const regionEl = modal.querySelector('.idc-region');
+
+    const closeModal = () => modal.remove();
+    [closeBtn, cancelBtn].forEach((btn) => btn.addEventListener('click', closeModal));
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    generateBtn.addEventListener('click', async () => {
+        const builderIDStartURL = startUrlEl?.value?.trim() || '';
+        const region = regionEl?.value?.trim() || 'us-east-1';
+
+        if (!builderIDStartURL) {
+            showToast(t('common.warning'), t('oauth.kiro.idcStartUrlRequired'), 'warning');
+            startUrlEl?.focus?.();
+            return;
+        }
+
+        try {
+            // Best-effort validation (do not over-restrict; only ensure it looks like a URL).
+            // Example: https://d-xxxxxxxxxx.awsapps.com/start
+            const url = new URL(builderIDStartURL);
+            if (!/^https?:$/.test(url.protocol)) {
+                throw new Error('invalid protocol');
+            }
+        } catch {
+            showToast(t('common.warning'), t('oauth.kiro.idcStartUrlInvalid'), 'warning');
+            startUrlEl?.focus?.();
+            return;
+        }
+
+        closeModal();
+        await executeGenerateAuthUrl(providerType, {
+            method: 'iam-identity-center',
+            startUrl: builderIDStartURL,
+            region
         });
     });
 }
@@ -2112,7 +2592,7 @@ async function executeGenerateAuthUrl(providerType, extraOptions = {}) {
             }
 
             // 显示授权信息模态框
-            showAuthModal(response.authUrl, response.authInfo);
+            showAuthModal(response.authUrl, response.authInfo, response.isolatedBrowser || null);
         } else {
             showToast(t('common.error'), t('modal.provider.auth.failed'), 'error');
         }
@@ -2138,12 +2618,22 @@ function getAuthFilePath(provider) {
     return authFilePaths[provider] || (getCurrentLanguage() === 'en-US' ? 'Unknown Path' : '未知路径');
 }
 
+function escapeHtml(value) {
+    if (value === undefined || value === null) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 /**
  * 显示授权信息模态框
  * @param {string} authUrl - 授权URL
  * @param {Object} authInfo - 授权信息
  */
-function showAuthModal(authUrl, authInfo) {
+function showAuthModal(authUrl, authInfo, isolatedBrowser = null) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.style.display = 'flex';
@@ -2154,6 +2644,50 @@ function showAuthModal(authUrl, authInfo) {
     // 获取需要开放的端口号（从 authInfo 或当前页面 URL）
     const requiredPort = authInfo.callbackPort || authInfo.port || window.location.port || '3000';
     const isDeviceFlow = authInfo.provider === 'openai-qwen-oauth' || (authInfo.provider === 'claude-kiro-oauth' && authInfo.authMethod === 'builder-id');
+    const targetProviderUuid = authInfo?.targetProviderUuid || null;
+
+    const isolatedBrowserHtml = (() => {
+        if (!isolatedBrowser) return '';
+        if (isolatedBrowser.error) {
+            return `
+                <div class="isolated-browser-section" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-user-shield"></i>
+                        <strong>${t('modal.provider.bitbrowser.badge.on')}</strong>
+                    </div>
+                    <div style="margin-top: 6px; font-size: 12px;">
+                        ${escapeHtml(isolatedBrowser.error)}
+                    </div>
+                </div>
+            `;
+        }
+
+        const profileId = isolatedBrowser.profileId ? String(isolatedBrowser.profileId) : '-';
+        const openedUrl = isolatedBrowser.openedUrl === true ? t('common.enabled') : t('common.disabled');
+        const openUrlError = isolatedBrowser.openUrlError ? String(isolatedBrowser.openUrlError) : '';
+        return `
+            <div class="isolated-browser-section" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-user-shield" style="color: #2563eb;"></i>
+                    <strong>${t('modal.provider.bitbrowser.badge.on')}</strong>
+                </div>
+                <div style="margin-top: 6px; font-size: 12px; color: #1e40af;">
+                    Provider: ${escapeHtml(isolatedBrowser.provider || 'bitbrowser')}
+                </div>
+                <div style="font-size: 12px; color: #1e40af;">
+                    Profile: <code style="background: rgba(255,255,255,0.7); padding: 2px 6px; border-radius: 6px;">${escapeHtml(profileId)}</code>
+                </div>
+                <div style="font-size: 12px; color: #1e40af;">
+                    URL opened: <strong>${escapeHtml(openedUrl)}</strong>
+                </div>
+                ${openUrlError ? `
+                <div style="margin-top: 8px; font-size: 12px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.7); border: 1px solid rgba(59,130,246,0.35); color: #1e40af;">
+                    ${escapeHtml(openUrlError)}
+                </div>
+                ` : ''}
+            </div>
+        `;
+    })();
 
     let instructionsHtml = '';
     if (authInfo.provider === 'openai-qwen-oauth') {
@@ -2169,20 +2703,40 @@ function showAuthModal(authUrl, authInfo) {
             </div>
         `;
     } else if (authInfo.provider === 'claude-kiro-oauth') {
-        const methodDisplay = authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : `Social (${authInfo.socialProvider || 'Google'})`;
-        const methodAccount = authInfo.authMethod === 'builder-id' ? 'AWS Builder ID' : authInfo.socialProvider || 'Google';
-        instructionsHtml = `
-            <div class="auth-instructions">
-                <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
-                <p><strong data-i18n="oauth.kiro.authMethodLabel">${t('oauth.kiro.authMethodLabel')}</strong> ${methodDisplay}</p>
-                <ol>
-                    <li data-i18n="oauth.kiro.step1">${t('oauth.kiro.step1')}</li>
-                    <li data-i18n="oauth.kiro.step2" data-i18n-params='{"method":"${methodAccount}"}'>${t('oauth.kiro.step2', { method: methodAccount })}</li>
-                    <li data-i18n="oauth.kiro.step3">${t('oauth.kiro.step3')}</li>
-                    <li data-i18n="oauth.kiro.step4">${t('oauth.kiro.step4')}</li>
-                </ol>
-            </div>
-        `;
+        const method = authInfo.authMethod || 'unknown';
+        if (method === 'iam-identity-center') {
+            instructionsHtml = `
+                <div class="auth-instructions">
+                    <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
+                    <p><strong data-i18n="oauth.kiro.authMethodLabel">${t('oauth.kiro.authMethodLabel')}</strong> IAM Identity Center (SSO)</p>
+                    <ol>
+                        <li>Open the authorization URL in the isolated browser (recommended) or your normal browser.</li>
+                        <li>Complete the IAM Identity Center sign-in for your organization.</li>
+                        <li>After login, you will be redirected to a local callback page. Keep the browser open until you see “success”.</li>
+                        <li>AIClient will automatically exchange the code for tokens, save them, and attach them to this node.</li>
+                    </ol>
+                </div>
+            `;
+        } else {
+            const methodDisplay = method === 'builder-id'
+                ? 'AWS Builder ID (Device Code)'
+                : `Social (${authInfo.socialProvider || 'Google'})`;
+            const methodAccount = method === 'builder-id'
+                ? 'AWS Builder ID'
+                : authInfo.socialProvider || 'Google';
+            instructionsHtml = `
+                <div class="auth-instructions">
+                    <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
+                    <p><strong data-i18n="oauth.kiro.authMethodLabel">${t('oauth.kiro.authMethodLabel')}</strong> ${methodDisplay}</p>
+                    <ol>
+                        <li data-i18n="oauth.kiro.step1">${t('oauth.kiro.step1')}</li>
+                        <li data-i18n="oauth.kiro.step2" data-i18n-params='{"method":"${methodAccount}"}'>${t('oauth.kiro.step2', { method: methodAccount })}</li>
+                        <li data-i18n="oauth.kiro.step3">${t('oauth.kiro.step3')}</li>
+                        <li data-i18n="oauth.kiro.step4">${t('oauth.kiro.step4')}</li>
+                    </ol>
+                </div>
+            `;
+        }
     } else if (authInfo.provider === 'openai-iflow') {
         instructionsHtml = `
             <div class="auth-instructions">
@@ -2282,10 +2836,17 @@ function showAuthModal(authUrl, authInfo) {
                             </button>
                         </div>
                     </div>
+                    ${isolatedBrowserHtml}
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-cancel" data-i18n="modal.provider.cancel">${t('modal.provider.cancel')}</button>
+                ${(authInfo.provider === 'claude-kiro-oauth' && targetProviderUuid) ? `
+                <button class="open-isolated-btn" title="${t('modal.provider.bitbrowser.openBtn')}">
+                    <i class="fas fa-user-shield"></i>
+                    <span>${t('modal.provider.bitbrowser.openBtn')}</span>
+                </button>
+                ` : ''}
                 <button class="open-auth-btn">
                     <i class="fas fa-external-link-alt"></i>
                     <span data-i18n="oauth.modal.openInBrowser">${t('oauth.modal.openInBrowser')}</span>
@@ -2503,6 +3064,36 @@ function showAuthModal(authUrl, authInfo) {
             showToast(t('common.error'), t('oauth.window.blocked'), 'error');
         }
     });
+
+    // Open in isolated browser profile (BitBrowser)
+    const openIsolatedBtn = modal.querySelector('.open-isolated-btn');
+    if (openIsolatedBtn && authInfo.provider === 'claude-kiro-oauth' && targetProviderUuid) {
+        openIsolatedBtn.addEventListener('click', async () => {
+            try {
+                showToast(t('common.info'), t('modal.provider.bitbrowser.opening'), 'info');
+                const response = await window.apiClient.post(
+                    `/providers/${encodeURIComponent(authInfo.provider)}/${encodeURIComponent(targetProviderUuid)}/browser-profile/open`,
+                    { url: authUrl }
+                );
+
+                if (response.success) {
+                    showToast(
+                        t('common.success'),
+                        t('modal.provider.bitbrowser.opened', { id: response.profileId || '-' }),
+                        'success'
+                    );
+                    if (response.openedUrl === false) {
+                        const hint = response.openUrlError ? String(response.openUrlError) : 'URL was not opened automatically';
+                        showToast(t('common.warning'), hint, 'warning');
+                    }
+                } else {
+                    throw new Error(response.error || 'BitBrowser open failed');
+                }
+            } catch (e) {
+                showToast(t('common.error'), t('modal.provider.bitbrowser.openFailed') + ': ' + e.message, 'error');
+            }
+        });
+    }
     
 }
 
@@ -2710,6 +3301,7 @@ export {
     openProviderManager,
     showAuthModal,
     executeGenerateAuthUrl,
+    showKiroEnterpriseWizard,
     handleGenerateAuthUrl,
     checkUpdate,
     performUpdate

@@ -443,7 +443,46 @@ Support deterministic account ordering through a per-node `priority` field in `p
 - If the whole highest-priority tier becomes unavailable, the next priority tier is used automatically
 - If `priority` is omitted or invalid, default `100` is applied (backward compatible behavior)
 
-#### 4. Cross-Type Fallback Configuration
+#### 4. Kiro Account Identity Binding (Machine ID / Account Fields)
+
+For `claude-kiro-oauth` nodes, you can now bind account identity directly in `provider_pools.json` to improve multi-account isolation and deterministic behavior.
+
+**Supported optional per-node fields**:
+- `machineId`: explicit machine fingerprint for this node/account
+- `accountId`: operator-facing account identity tag (for logs/ops)
+- `authMethod`: e.g. `social` or `builder-id`
+- `profileArn`: explicit profile context for social auth requests
+- refresh credentials override: `refreshToken`, `clientId`, `clientSecret`
+
+**Example**:
+
+```json
+{
+  "claude-kiro-oauth": [
+    {
+      "uuid": "kiro-node-1",
+      "KIRO_OAUTH_CREDS_FILE_PATH": "./kiro_creds_1.json",
+      "machineId": "kiro_machine_node_01",
+      "accountId": "kiro-account-01",
+      "authMethod": "social",
+      "profileArn": "arn:aws:iam::123456789012:user/kiro-account-01"
+    }
+  ]
+}
+```
+
+**Machine ID precedence (deterministic)**:
+1. `provider_pools.json` node field `machineId`
+2. credential file field `machineId`
+3. derived fallback hash (backward compatible path)
+
+**Auto-assignment (recommended default)**:
+- If a `claude-kiro-oauth` node has no `machineId`, the server will auto-generate and persist one back into `provider_pools.json`.
+- Generation is stable when `accountId` (or `profileArn`) is stable, so **each account gets a sticky machineId** by default.
+
+The same resolved machine ID is now used consistently for Kiro chat, stream, and usage-limit requests.
+
+#### 5. Cross-Type Fallback Configuration
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 
@@ -476,6 +515,53 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 **Notes**:
 - Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
 - The system automatically checks if the target Provider Type supports the requested model
+
+#### 6. Ban-Risk Control Plane (Phase 3 / Strict Admission + Manual Release)
+
+Phase 2 runtime policy is enabled by default and works together with Phase 3:
+- Centralized provider error classification (`classifyError`) for stream/unary retry decisions
+- Account-aware selection scoring (`cooldownUntil`, `quotaExhaustedUntil`, `authFailureStreak`, `lastSuccessAt`)
+- Per-account refresh lock/dedup (`refreshCredential`) to prevent refresh storms for shared identities
+- Cooldown-aware routing: credentials in active cooldown windows are excluded from admission
+
+Phase 3 enables enterprise-style **strict enforcement**:
+- Canonical signal normalization: `AUTH_INVALID`, `QUOTA_EXCEEDED`, `RATE_LIMITED`, `SUSPENDED`, `BANNED`, `NETWORK_TRANSIENT`
+- Persistent lifecycle store per credential/account (JSON file)
+- Deterministic state projection (`healthy`, `needs_refresh`, `cooldown`, `quarantined`, `suspended`, `banned`, `disabled`)
+- Admission guard in `enforce-strict` blocks `quarantined`, `suspended`, `banned`, and `disabled`
+- Controlled manual release flow in UI/API with force-gated transitions for high-risk states (`suspended` / `banned`)
+- Operator risk actions in UI/API: drain toggle, manual cooldown apply/clear, force refresh, and deterministic selection preview
+- Identity collision guard emits warnings/events when different credentials share the same identity profile within the configured window
+- Identity profile source: `x-identity-profile` header (preferred), otherwise derived from IP + machine headers + User-Agent hash
+
+**Configuration**:
+
+```json
+{
+  "RISK_POLICY_ENABLED": true,
+  "RISK_POLICY_MODE": "enforce-strict",
+  "RISK_LIFECYCLE_FILE_PATH": "configs/risk-lifecycle.json",
+  "RISK_MAX_EVENTS": 5000,
+  "RISK_FLUSH_DEBOUNCE_MS": 500,
+  "RISK_IDENTITY_COLLISION_WINDOW_MS": 300000,
+  "ACCOUNT_ROTATION_POLICY_ENABLED": true,
+  "ACCOUNT_REFRESH_POLICY_ENABLED": true,
+  "ACCOUNT_RATE_LIMIT_COOLDOWN_MS": 30000,
+  "ACCOUNT_QUOTA_COOLDOWN_MS": 3600000
+}
+```
+
+**UI APIs** (authenticated):
+- `GET /api/risk/summary`: lifecycle aggregate and event counters
+- `GET /api/risk/policy`: current runtime policy config (`enabled`, `mode`, `identityCollisionWindowMs`)
+- `POST /api/risk/policy`: update runtime policy config
+- `GET /api/risk/credentials`: per-credential lifecycle state (`providerType`, `lifecycleState` filters)
+- `GET /api/risk/credentials/{providerType}/{uuid}/release-info`: release eligibility, force requirements, and allowed targets
+- `POST /api/risk/credentials/{providerType}/{uuid}/release`: controlled manual release (`confirmCredentialId`, `reason` required; `force=true` required for `suspended` / `banned`)
+- `POST /api/risk/credentials/{providerType}/{uuid}/actions`: control-plane actions (`set-drain`, `clear-drain`, `apply-cooldown`, `clear-cooldown`, `force-refresh`)
+- `GET /api/risk/providers/{providerType}/selection-preview`: deterministic provider selection preview (candidate list + selected node)
+- `GET /api/risk/events`: recent normalized events (`limit`, `providerType`, `uuid`, `signalType`, includes `IDENTITY_COLLISION`)
+- `POST /api/risk/flush`: force flush lifecycle store to disk
 
 </details>
 

@@ -11,11 +11,19 @@ import {
     batchImportKiroRefreshTokensStream,
     importAwsCredentials
 } from '../auth/oauth-handlers.js';
+import { openBitBrowserProfileForCredential } from '../services/browser-profile-manager.js';
+
+function findNodeConfig(providerPoolManager, providerType, uuid) {
+    const list = providerPoolManager?.providerStatus?.[providerType];
+    if (!Array.isArray(list)) return null;
+    const entry = list.find((p) => p?.config?.uuid === uuid);
+    return entry?.config || null;
+}
 
 /**
  * 生成 OAuth 授权 URL
  */
-export async function handleGenerateAuthUrl(req, res, currentConfig, providerType) {
+export async function handleGenerateAuthUrl(req, res, currentConfig, providerPoolManager, providerType) {
     try {
         let authUrl = '';
         let authInfo = {};
@@ -26,6 +34,25 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
             options = await getRequestBody(req);
         } catch (e) {
             // 如果没有请求体，使用默认空对象
+        }
+
+        // Optional: node-scoped OAuth (bind to an existing provider node)
+        const targetProviderUuid =
+            options?.targetProviderUuid ||
+            options?.providerUuid ||
+            options?.uuid ||
+            null;
+        const targetNodeConfig = targetProviderUuid
+            ? findNodeConfig(providerPoolManager, providerType, targetProviderUuid)
+            : null;
+
+        if (targetProviderUuid && !targetNodeConfig) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: `Provider node not found: ${providerType}/${targetProviderUuid}`
+            }));
+            return true;
         }
 
         // 根据提供商类型生成授权链接并启动回调服务器
@@ -44,6 +71,16 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
         } else if (providerType === 'claude-kiro-oauth') {
             // Kiro OAuth 支持多种认证方式
             // options.method 可以是: 'google' | 'github' | 'builder-id'
+            if (targetNodeConfig) {
+                options.targetProviderType = providerType;
+                options.targetProviderUuid = targetProviderUuid;
+                options.attachToProviderType = providerType;
+                options.attachToProviderUuid = targetProviderUuid;
+                // Explicitly use this node's proxy for OAuth server-side calls (even if global proxy is off)
+                if (Object.prototype.hasOwnProperty.call(targetNodeConfig, 'PROXY_URL')) {
+                    options.proxyUrlOverride = targetNodeConfig.PROXY_URL;
+                }
+            }
             const result = await handleKiroOAuth(currentConfig, options);
             authUrl = result.authUrl;
             authInfo = result.authInfo;
@@ -66,12 +103,40 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
             }));
             return true;
         }
+
+        // Optionally open in isolated browser profile (BitBrowser)
+        let isolatedBrowser = null;
+        const shouldOpenIsolated = options?.openInIsolatedBrowser === true || options?.useIsolatedBrowser === true;
+        if (shouldOpenIsolated && targetProviderUuid) {
+            try {
+                const openResult = await openBitBrowserProfileForCredential({
+                    appConfig: currentConfig,
+                    providerPoolManager,
+                    providerType,
+                    uuid: targetProviderUuid,
+                    url: authUrl
+                });
+                isolatedBrowser = {
+                    provider: 'bitbrowser',
+                    profileId: openResult.profileId,
+                    openedUrl: openResult.openedUrl === true,
+                    openInfo: openResult.openInfo || null,
+                    openUrlError: openResult.openUrlError || null
+                };
+            } catch (e) {
+                isolatedBrowser = {
+                    provider: 'bitbrowser',
+                    error: e.message
+                };
+            }
+        }
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: true,
             authUrl: authUrl,
-            authInfo: authInfo
+            authInfo: authInfo,
+            isolatedBrowser
         }));
         return true;
         

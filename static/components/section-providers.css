@@ -635,6 +635,215 @@
     opacity: 0.7;
 }
 
+.provider-proxy-meta {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.provider-browser-meta {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.browser-profile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+    border-color: var(--neutral-300);
+}
+
+.browser-profile-on {
+    color: var(--primary-color);
+    border-color: var(--primary-20);
+    background: var(--primary-10);
+}
+
+.browser-profile-off {
+    color: var(--neutral-600);
+    border-color: var(--neutral-300);
+    background: var(--neutral-100);
+}
+
+.browser-profile-hint {
+    font-size: 11px;
+    color: var(--neutral-600);
+}
+
+.proxy-state-badge,
+.proxy-source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+}
+
+.proxy-state-badge {
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+    border-color: var(--neutral-300);
+}
+
+.proxy-state-loading {
+    color: var(--primary-color);
+    border-color: var(--primary-20);
+    background: var(--primary-10);
+}
+
+.proxy-state-on {
+    color: var(--success-text);
+    border-color: var(--success-text-light);
+    background: var(--success-10);
+}
+
+.proxy-state-off {
+    color: var(--neutral-600);
+    border-color: var(--neutral-300);
+    background: var(--neutral-100);
+}
+
+.proxy-state-misconfigured {
+    color: var(--warning-text-dark);
+    border-color: var(--warning-40);
+    background: var(--warning-15);
+}
+
+.proxy-state-shared {
+    color: var(--danger-text-dark);
+    border-color: var(--danger-border-light);
+    background: var(--danger-bg-light);
+}
+
+.proxy-state-unknown {
+    color: var(--neutral-600);
+    border-color: var(--neutral-300);
+    background: var(--neutral-100);
+}
+
+.proxy-source-badge {
+    background: var(--neutral-200);
+    color: var(--neutral-700);
+    border-color: var(--neutral-300);
+}
+
+.proxy-hint {
+    font-size: 11px;
+    color: var(--neutral-600);
+}
+
+.provider-risk-meta {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.risk-state-badge,
+.risk-admission-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+}
+
+.risk-state-badge {
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+    border-color: var(--neutral-300);
+}
+
+.risk-state-loading {
+    color: var(--primary-color);
+    border-color: var(--primary-20);
+    background: var(--primary-10);
+}
+
+.risk-state-healthy {
+    color: var(--success-text);
+    border-color: var(--success-text-light);
+    background: var(--success-10);
+}
+
+.risk-state-needs_refresh {
+    color: var(--warning-text-dark);
+    border-color: var(--warning-40);
+    background: var(--warning-15);
+}
+
+.risk-state-cooldown {
+    color: var(--warning-text-dark);
+    border-color: var(--warning-40);
+    background: var(--warning-15);
+}
+
+.risk-state-quarantined {
+    color: var(--danger-text-dark);
+    border-color: var(--danger-border-light);
+    background: var(--danger-bg-light);
+}
+
+.risk-state-suspended {
+    color: var(--danger-text-dark);
+    border-color: var(--danger-border-light);
+    background: var(--danger-bg-light);
+}
+
+.risk-state-banned {
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+    background: var(--danger-bg-light);
+}
+
+.risk-state-disabled {
+    color: var(--neutral-500);
+    border-color: var(--neutral-400);
+    background: var(--neutral-200);
+}
+
+.risk-state-unknown {
+    color: var(--neutral-600);
+    border-color: var(--neutral-300);
+    background: var(--neutral-100);
+}
+
+.risk-admission-badge.is-blocked {
+    color: var(--danger-text-dark);
+    border-color: var(--danger-border-light);
+    background: var(--danger-bg-light);
+}
+
+.risk-admission-badge.is-allowed {
+    color: var(--success-text);
+    border-color: var(--success-text-light);
+    background: var(--success-10);
+}
+
+.risk-hint {
+    font-size: 11px;
+    color: var(--neutral-600);
+}
+
 .provider-error-info {
     margin-top: 8px;
     padding: 8px 12px;
@@ -670,6 +879,39 @@
     display: flex;
     gap: 8px;
     align-items: center;
+}
+
+.btn-risk-info {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+    box-shadow: 0 2px 8px var(--primary-30);
+}
+
+.btn-risk-info:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--primary-40);
+}
+
+.btn-risk-release {
+    background: linear-gradient(135deg, var(--warning-color) 0%, var(--warning-text-dark) 100%);
+    color: var(--white);
+    box-shadow: 0 2px 8px var(--warning-40);
+}
+
+.btn-risk-release:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--warning-50);
+}
+
+.btn-risk-ops {
+    background: linear-gradient(135deg, var(--btn-info) 0%, var(--secondary-color) 100%);
+    color: var(--white);
+    box-shadow: 0 2px 8px var(--primary-30);
+}
+
+.btn-risk-ops:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--primary-40);
 }
 
 .btn-edit {
@@ -756,6 +998,224 @@
     display: none;
     border-top: 1px solid var(--neutral-200);
     background: var(--bg-primary);
+}
+
+.risk-release-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1101;
+}
+
+.risk-ops-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1101;
+}
+
+.risk-ops-modal-card {
+    width: min(860px, 96vw);
+    max-height: 90vh;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-xl);
+    display: flex;
+    flex-direction: column;
+}
+
+.risk-release-modal-card {
+    width: min(760px, 95vw);
+    max-height: 90vh;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-xl);
+    display: flex;
+    flex-direction: column;
+}
+
+.risk-release-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.risk-release-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--neutral-700);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.risk-release-close {
+    border: none;
+    background: transparent;
+    color: var(--neutral-500);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transition: var(--transition);
+}
+
+.risk-release-close:hover {
+    background: var(--neutral-200);
+    color: var(--neutral-700);
+}
+
+.risk-release-modal-body {
+    padding: 18px 20px;
+    overflow-y: auto;
+}
+
+.risk-release-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.risk-summary-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.risk-summary-row span {
+    font-size: 12px;
+    color: var(--neutral-600);
+}
+
+.risk-summary-row strong {
+    font-size: 13px;
+    color: var(--neutral-700);
+    word-break: break-word;
+}
+
+.risk-release-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.risk-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.risk-form-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.risk-form-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.risk-form-item label {
+    font-size: 12px;
+    color: var(--neutral-600);
+    font-weight: 600;
+}
+
+.risk-form-item textarea {
+    resize: vertical;
+    min-height: 76px;
+}
+
+.risk-form-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.risk-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--neutral-700);
+}
+
+.risk-hint.force-required {
+    font-size: 12px;
+    color: var(--warning-text-dark);
+    margin-left: 24px;
+}
+
+.risk-release-status {
+    min-height: 18px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.risk-release-status.error {
+    color: var(--danger-color);
+}
+
+.risk-release-status.warning {
+    color: var(--warning-text-dark);
+}
+
+.risk-release-status.info {
+    color: var(--primary-color);
+}
+
+.risk-release-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.risk-ops-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 6px 0 10px;
+}
+
+.risk-preview-box {
+    width: 100%;
+    min-height: 160px;
+    max-height: 300px;
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .provider-item-content.expanded {

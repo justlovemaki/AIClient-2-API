@@ -157,6 +157,14 @@ async function loadConfiguration() {
                 });
             });
         }
+
+        // BitBrowser (isolated browser profiles)
+        const bitbrowserEnabledEl = document.getElementById('bitbrowserEnabled');
+        const bitbrowserApiUrlEl = document.getElementById('bitbrowserApiUrl');
+        const bitbrowserCoreVersionEl = document.getElementById('bitbrowserCoreVersion');
+        if (bitbrowserEnabledEl) bitbrowserEnabledEl.checked = data.BITBROWSER_ENABLED === true;
+        if (bitbrowserApiUrlEl) bitbrowserApiUrlEl.value = data.BITBROWSER_API_URL || 'http://127.0.0.1:54345';
+        if (bitbrowserCoreVersionEl) bitbrowserCoreVersionEl.value = data.BITBROWSER_CORE_VERSION || '124';
         
         // 加载日志配置
         const logEnabledEl = document.getElementById('logEnabled');
@@ -264,6 +272,11 @@ async function saveConfiguration() {
     } else {
         config.PROXY_ENABLED_PROVIDERS = [];
     }
+
+    // BitBrowser (isolated browser profiles)
+    config.BITBROWSER_ENABLED = document.getElementById('bitbrowserEnabled')?.checked === true;
+    config.BITBROWSER_API_URL = document.getElementById('bitbrowserApiUrl')?.value?.trim() || 'http://127.0.0.1:54345';
+    config.BITBROWSER_CORE_VERSION = document.getElementById('bitbrowserCoreVersion')?.value?.trim() || '124';
     
     // 保存日志配置
     config.LOG_ENABLED = document.getElementById('logEnabled')?.checked !== false;

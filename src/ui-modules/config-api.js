@@ -99,6 +99,11 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.PROXY_URL !== undefined) currentConfig.PROXY_URL = newConfig.PROXY_URL;
         if (newConfig.PROXY_ENABLED_PROVIDERS !== undefined) currentConfig.PROXY_ENABLED_PROVIDERS = newConfig.PROXY_ENABLED_PROVIDERS;
 
+        // BitBrowser (isolated browser profiles)
+        if (newConfig.BITBROWSER_ENABLED !== undefined) currentConfig.BITBROWSER_ENABLED = newConfig.BITBROWSER_ENABLED;
+        if (newConfig.BITBROWSER_API_URL !== undefined) currentConfig.BITBROWSER_API_URL = newConfig.BITBROWSER_API_URL;
+        if (newConfig.BITBROWSER_CORE_VERSION !== undefined) currentConfig.BITBROWSER_CORE_VERSION = newConfig.BITBROWSER_CORE_VERSION;
+
         // Log settings
         if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
         if (newConfig.LOG_OUTPUT_MODE !== undefined) currentConfig.LOG_OUTPUT_MODE = newConfig.LOG_OUTPUT_MODE;
@@ -158,6 +163,9 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 modelFallbackMapping: currentConfig.modelFallbackMapping,
                 PROXY_URL: currentConfig.PROXY_URL,
                 PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS,
+                BITBROWSER_ENABLED: currentConfig.BITBROWSER_ENABLED,
+                BITBROWSER_API_URL: currentConfig.BITBROWSER_API_URL,
+                BITBROWSER_CORE_VERSION: currentConfig.BITBROWSER_CORE_VERSION,
                 LOG_ENABLED: currentConfig.LOG_ENABLED,
                 LOG_OUTPUT_MODE: currentConfig.LOG_OUTPUT_MODE,
                 LOG_LEVEL: currentConfig.LOG_LEVEL,

@@ -46,6 +46,9 @@
             "gemini-cli-oauth",
             "gemini-antigravity"
     ],
+    "BITBROWSER_ENABLED": false,
+    "BITBROWSER_API_URL": "http://127.0.0.1:54345",
+    "BITBROWSER_CORE_VERSION": "124",
     "LOG_ENABLED": true,
     "LOG_OUTPUT_MODE": "all",
     "LOG_LEVEL": "info",
@@ -53,5 +56,15 @@
     "LOG_INCLUDE_REQUEST_ID": true,
     "LOG_INCLUDE_TIMESTAMP": true,
     "LOG_MAX_FILE_SIZE": 10485760,
-    "LOG_MAX_FILES": 10
+    "LOG_MAX_FILES": 10,
+    "RISK_POLICY_ENABLED": true,
+    "RISK_POLICY_MODE": "enforce-strict",
+    "RISK_LIFECYCLE_FILE_PATH": "configs/risk-lifecycle.json",
+    "RISK_MAX_EVENTS": 5000,
+    "RISK_FLUSH_DEBOUNCE_MS": 500,
+    "RISK_IDENTITY_COLLISION_WINDOW_MS": 300000,
+    "ACCOUNT_ROTATION_POLICY_ENABLED": true,
+    "ACCOUNT_REFRESH_POLICY_ENABLED": true,
+    "ACCOUNT_RATE_LIMIT_COOLDOWN_MS": 30000,
+    "ACCOUNT_QUOTA_COOLDOWN_MS": 3600000
 }

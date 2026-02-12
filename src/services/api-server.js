@@ -116,6 +116,7 @@ import 'dotenv/config'; // Import dotenv and configure it
 import '../converters/register-converters.js'; // 注册所有转换器
 import { getProviderPoolManager } from './service-manager.js';
 import { isRetryableNetworkError } from '../utils/common.js';
+import { getRiskManager } from '../risk/risk-manager.js';
 
 // 检测是否作为子进程运行
 const IS_WORKER_PROCESS = process.env.IS_WORKER_PROCESS === 'true';
@@ -177,6 +178,10 @@ function setupWorkerCommunication() {
  */
 async function gracefulShutdown() {
     logger.info('[Server] Initiating graceful shutdown...');
+    const riskManager = getRiskManager();
+    if (riskManager?.isEnabled?.()) {
+        riskManager.flush();
+    }
 
     if (serverInstance) {
         serverInstance.close(() => {
