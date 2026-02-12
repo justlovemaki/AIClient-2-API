@@ -37,6 +37,52 @@ function splitCommandLineArgs(value) {
     return raw.split(/\s+/).filter(Boolean);
 }
 
+function normalizeProxyInput(value) {
+    let raw = normalizeString(value);
+    if (!raw) return '';
+
+    // Accept shorthand like: "http host:port:user:pass"
+    raw = raw.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*)\s+/, (_, scheme) => `${scheme}://`);
+
+    // Accept shorthand like: "host:port:user:pass" (defaults to http)
+    if (!raw.includes('://') && /^[^:\s]+:\d+:[^:\s]+:[^:\s]+$/.test(raw)) {
+        const [host, port, username, password] = raw.split(':');
+        return `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}`;
+    }
+
+    // Accept shorthand like: "host:port" (defaults to http)
+    if (!raw.includes('://') && /^[^:\s]+:\d+$/.test(raw)) {
+        return `http://${raw}`;
+    }
+
+    return raw;
+}
+
+function buildChromiumProxyServer(proxyUrl) {
+    const normalized = normalizeProxyInput(proxyUrl);
+    if (!normalized) {
+        return { proxyServer: '', hadCredentials: false };
+    }
+
+    try {
+        const parsed = new URL(normalized);
+        const protocol = (parsed.protocol || 'http:').replace(/:$/, '');
+        const host = parsed.hostname;
+        const port = parsed.port ? `:${parsed.port}` : '';
+        const hadCredentials = Boolean(parsed.username || parsed.password);
+        if (!host) {
+            return { proxyServer: normalized, hadCredentials: false };
+        }
+        return {
+            proxyServer: `${protocol}://${host}${port}`,
+            hadCredentials
+        };
+    } catch {
+        // Keep best-effort behavior for uncommon proxy formats.
+        return { proxyServer: normalized, hadCredentials: false };
+    }
+}
+
 function findBrowserExecutable(explicitBinary = '') {
     const explicit = normalizeString(explicitBinary);
     const candidates = explicit ? [explicit] : DEFAULT_BROWSER_BINARIES;
@@ -126,6 +172,8 @@ export async function openLocalBrowser({
         throw new Error('profileDir is required');
     }
 
+    const chromiumProxy = buildChromiumProxyServer(normalizedProxyUrl);
+
     if (normalizedTemplate) {
         const command = buildCommandFromTemplate(normalizedTemplate, {
             providerType,
@@ -162,8 +210,15 @@ export async function openLocalBrowser({
         '--proxy-bypass-list=<-loopback>'
     ];
 
-    if (normalizedProxyUrl) {
-        args.push(`--proxy-server=${normalizedProxyUrl}`);
+    if (chromiumProxy.proxyServer) {
+        args.push(`--proxy-server=${chromiumProxy.proxyServer}`);
+    }
+
+    if (chromiumProxy.hadCredentials) {
+        logger.warn(
+            '[IsolatedBrowser] Chromium does not accept proxy credentials in --proxy-server. ' +
+            'Using host:port; browser may prompt for proxy auth.'
+        );
     }
 
     args.push(...splitCommandLineArgs(extraArgs));
@@ -177,6 +232,8 @@ export async function openLocalBrowser({
         mode: 'direct',
         executable,
         args,
+        proxyServer: chromiumProxy.proxyServer || '',
+        proxyCredentialsStripped: chromiumProxy.hadCredentials === true,
         pid: child.pid || null
     };
 }

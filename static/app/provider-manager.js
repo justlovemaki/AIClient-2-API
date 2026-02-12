@@ -3025,12 +3025,19 @@ function showAuthModal(authUrl, authInfo, isolatedBrowser = null) {
 
     const isolatedBrowserHtml = (() => {
         if (!isolatedBrowser) return '';
+        const providerRaw = String(isolatedBrowser.provider || '').trim().toLowerCase();
+        const providerLabel = providerRaw === 'local-chromium'
+            ? 'Local Chromium'
+            : (providerRaw === 'bitbrowser'
+                ? 'BitBrowser'
+                : (String(isolatedBrowser.provider || '').trim() || 'BitBrowser'));
+        const badgeLabel = `${t('modal.provider.bitbrowser.badge.on')} (${providerLabel})`;
         if (isolatedBrowser.error) {
             return `
                 <div class="isolated-browser-section" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-user-shield"></i>
-                        <strong>${t('modal.provider.bitbrowser.badge.on')}</strong>
+                        <strong>${escapeHtml(badgeLabel)}</strong>
                     </div>
                     <div style="margin-top: 6px; font-size: 12px;">
                         ${escapeHtml(isolatedBrowser.error)}
@@ -3046,7 +3053,7 @@ function showAuthModal(authUrl, authInfo, isolatedBrowser = null) {
             <div class="isolated-browser-section" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-user-shield" style="color: #2563eb;"></i>
-                    <strong>${t('modal.provider.bitbrowser.badge.on')}</strong>
+                    <strong>${escapeHtml(badgeLabel)}</strong>
                 </div>
                 <div style="margin-top: 6px; font-size: 12px; color: #1e40af;">
                     Provider: ${escapeHtml(isolatedBrowser.provider || 'bitbrowser')}
