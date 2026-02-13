@@ -58,10 +58,10 @@ function normalizeProxyInput(value) {
     return raw;
 }
 
-function buildChromiumProxyServer(proxyUrl) {
+function parseProxyForChromium(proxyUrl) {
     const normalized = normalizeProxyInput(proxyUrl);
     if (!normalized) {
-        return { proxyServer: '', hadCredentials: false };
+        return { proxyServer: '', hadCredentials: false, username: '', password: '' };
     }
 
     try {
@@ -69,17 +69,21 @@ function buildChromiumProxyServer(proxyUrl) {
         const protocol = (parsed.protocol || 'http:').replace(/:$/, '');
         const host = parsed.hostname;
         const port = parsed.port ? `:${parsed.port}` : '';
-        const hadCredentials = Boolean(parsed.username || parsed.password);
+        const username = parsed.username || '';
+        const password = parsed.password || '';
+        const hadCredentials = Boolean(username || password);
         if (!host) {
-            return { proxyServer: normalized, hadCredentials: false };
+            return { proxyServer: normalized, hadCredentials: false, username: '', password: '' };
         }
         return {
             proxyServer: `${protocol}://${host}${port}`,
-            hadCredentials
+            hadCredentials,
+            username,
+            password
         };
     } catch {
         // Keep best-effort behavior for uncommon proxy formats.
-        return { proxyServer: normalized, hadCredentials: false };
+        return { proxyServer: normalized, hadCredentials: false, username: '', password: '' };
     }
 }
 
@@ -115,6 +119,56 @@ function buildCommandFromTemplate(template, vars) {
         .replaceAll('{uuid_raw}', vars.uuid || '');
 
     return render.trim();
+}
+
+async function ensureProxyAuthExtension(profileDir, username, password) {
+    const safeProfileDir = normalizeString(profileDir);
+    if (!safeProfileDir) {
+        throw new Error('profileDir is required for proxy auth extension');
+    }
+    if (!username || !password) {
+        throw new Error('username/password required for proxy auth extension');
+    }
+
+    const extDir = path.join(safeProfileDir, '.aiclient-proxy-auth-ext');
+    await fs.mkdir(extDir, { recursive: true, mode: 0o700 });
+
+    const manifest = {
+        manifest_version: 2,
+        name: 'AIClient Proxy Auth',
+        version: '1.0.0',
+        permissions: [
+            'webRequest',
+            'webRequestBlocking',
+            '<all_urls>'
+        ],
+        background: {
+            scripts: ['background.js']
+        }
+    };
+
+    // NOTE: Chromium does not accept credentials in --proxy-server, so we provide them via onAuthRequired.
+    // This is intentionally scoped to the isolated profile directory, and never logged.
+    const backgroundJs = `
+chrome.webRequest.onAuthRequired.addListener(
+  function(details) {
+    return { authCredentials: { username: ${JSON.stringify(username)}, password: ${JSON.stringify(password)} } };
+  },
+  { urls: ["<all_urls>"] },
+  ["blocking"]
+);
+`.trimStart();
+
+    await fs.writeFile(path.join(extDir, 'manifest.json'), JSON.stringify(manifest, null, 2), {
+        encoding: 'utf8',
+        mode: 0o600
+    });
+    await fs.writeFile(path.join(extDir, 'background.js'), backgroundJs, {
+        encoding: 'utf8',
+        mode: 0o600
+    });
+
+    return extDir;
 }
 
 async function spawnDetachedViaShell(command) {
@@ -173,7 +227,7 @@ export async function openLocalBrowser({
         throw new Error('profileDir is required');
     }
 
-    const chromiumProxy = buildChromiumProxyServer(normalizedProxyUrl);
+    const chromiumProxy = parseProxyForChromium(normalizedProxyUrl);
 
     if (normalizedTemplate) {
         const command = buildCommandFromTemplate(normalizedTemplate, {
@@ -228,11 +282,24 @@ export async function openLocalBrowser({
         args.push(`--proxy-server=${chromiumProxy.proxyServer}`);
     }
 
+    let proxyAuthInjected = false;
     if (chromiumProxy.hadCredentials) {
-        logger.warn(
-            '[IsolatedBrowser] Chromium does not accept proxy credentials in --proxy-server. ' +
-            'Using host:port; browser may prompt for proxy auth.'
-        );
+        try {
+            const extDir = await ensureProxyAuthExtension(
+                normalizedProfileDir,
+                chromiumProxy.username,
+                chromiumProxy.password
+            );
+            args.push(`--disable-extensions-except=${extDir}`);
+            args.push(`--load-extension=${extDir}`);
+            proxyAuthInjected = true;
+            logger.info('[IsolatedBrowser] Proxy credentials detected; injected proxy-auth extension for Chromium profile.');
+        } catch (e) {
+            logger.warn(
+                '[IsolatedBrowser] Chromium proxy credentials detected, but proxy-auth extension setup failed. ' +
+                `Browser may prompt for proxy auth. (${e.message})`
+            );
+        }
     }
 
     args.push(...splitCommandLineArgs(extraArgs));
@@ -248,6 +315,7 @@ export async function openLocalBrowser({
         args,
         proxyServer: chromiumProxy.proxyServer || '',
         proxyCredentialsStripped: chromiumProxy.hadCredentials === true,
+        proxyAuthInjected,
         pid: child.pid || null
     };
 }

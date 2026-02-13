@@ -169,8 +169,20 @@ export async function handleManualOAuthCallback(req, res) {
             return true;
         }
 
+        const safeCallbackLog = (() => {
+            try {
+                const parsed = new URL(String(callbackUrl));
+                const keys = [...parsed.searchParams.keys()];
+                parsed.search = '';
+                const keyLabel = keys.length ? `?{${keys.join(',')}}` : '';
+                return `${parsed.origin}${parsed.pathname}${keyLabel}`;
+            } catch {
+                return '[invalid callbackUrl]';
+            }
+        })();
+
         logger.info(`[OAuth Manual Callback] Processing manual callback for ${provider}`);
-        logger.info(`[OAuth Manual Callback] Callback URL: ${callbackUrl}`);
+        logger.info(`[OAuth Manual Callback] Callback URL (redacted): ${safeCallbackLog}`);
 
         // 解析回调URL
         const url = new URL(callbackUrl);
@@ -204,24 +216,51 @@ export async function handleManualOAuthCallback(req, res) {
         localUrl.protocol = 'http:';
 
         try {
-            const response = await fetch(localUrl.href);
+            const response = await fetch(localUrl.href, {
+                method: 'GET',
+                headers: {
+                    // Manual-callback relies on a machine-readable response to avoid false positives.
+                    'Accept': 'application/json'
+                }
+            });
 
-            if (response.ok) {
+            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            const isJson = contentType.includes('application/json');
+            const payload = isJson ? await response.json().catch(() => null) : null;
+
+            if (response.ok && payload && payload.success === true) {
                 logger.info(`[OAuth Manual Callback] Successfully processed callback for ${provider}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
-                    message: 'OAuth callback processed successfully'
+                    message: payload.message || 'OAuth callback processed successfully'
                 }));
-            } else {
-                const errorText = await response.text();
-                logger.error(`[OAuth Manual Callback] Callback processing failed:`, errorText);
+                return true;
+            }
+
+            if (!isJson) {
+                // Avoid misleading UI states: HTML 200 responses can represent failures (e.g. state mismatch).
+                const text = await response.text().catch(() => '');
+                logger.warn(`[OAuth Manual Callback] Callback server returned non-JSON response (${response.status}).`);
+                if (text) {
+                    logger.warn(`[OAuth Manual Callback] Callback response preview (first 120 chars): ${text.slice(0, 120)}`);
+                }
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: false,
-                    error: `Callback processing failed: ${response.status}`
+                    error: 'Callback server did not return JSON; cannot verify success. Please update server/provider callback handler.',
+                    status: response.status
                 }));
+                return true;
             }
+
+            const errorMsg = payload?.error || payload?.message || `Callback processing failed: ${response.status}`;
+            logger.error(`[OAuth Manual Callback] Callback processing failed: ${errorMsg}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: errorMsg
+            }));
         } catch (fetchError) {
             logger.error(`[OAuth Manual Callback] Failed to process callback:`, fetchError);
             res.writeHead(500, { 'Content-Type': 'application/json' });

@@ -1,8 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
+import axios from 'axios';
 import logger from '../utils/logger.js';
 import { getRequestBody } from '../utils/common.js';
 import { getAllProviderModels, getProviderModels } from '../providers/provider-models.js';
 import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFromPath, addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
+import { parseProxyUrl, isProxyEnabledForProvider } from '../utils/proxy-utils.js';
 import { broadcastEvent } from './event-broadcast.js';
 
 /**
@@ -1030,6 +1035,280 @@ export async function handleRefreshProviderUuid(req, res, currentConfig, provide
         }));
         return true;
     } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
+        return true;
+    }
+}
+
+function maskSecret(value) {
+    const raw = value === undefined || value === null ? '' : String(value);
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    if (trimmed.length <= 12) {
+        return `${trimmed.slice(0, 4)}***`;
+    }
+    return `${trimmed.slice(0, 8)}...${trimmed.slice(-4)}`;
+}
+
+function maskProxyUrl(value) {
+    const raw = value === undefined || value === null ? '' : String(value).trim();
+    if (!raw) return '';
+    try {
+        const url = new URL(raw);
+        const protocol = url.protocol || 'http:';
+        const host = url.hostname;
+        const port = url.port ? `:${url.port}` : '';
+        if (!host) return '';
+        return `${protocol}//${host}${port}`;
+    } catch {
+        return '';
+    }
+}
+
+function redactInlineCredentials(text) {
+    const raw = text === undefined || text === null ? '' : String(text);
+    if (!raw) return '';
+    // Redact any userinfo portion of URLs: scheme://userinfo@host -> scheme://***@host
+    return raw.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^\s/]+)@/g, (_m, prefix) => `${prefix}***@`);
+}
+
+function resolveAbsoluteConfigPath(candidatePath) {
+    const raw = candidatePath === undefined || candidatePath === null ? '' : String(candidatePath).trim();
+    if (!raw) return '';
+    return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw);
+}
+
+function getKiroUsageLimitsUrl(region, authMethod, profileArn) {
+    const safeRegion = String(region || 'us-east-1').trim() || 'us-east-1';
+    const base = `https://q.${safeRegion}.amazonaws.com/getUsageLimits`;
+    const params = new URLSearchParams({
+        isEmailRequired: 'true',
+        origin: 'AI_EDITOR',
+        resourceType: 'AGENTIC_REQUEST'
+    });
+    if (String(authMethod || '').toLowerCase() === 'social' && profileArn) {
+        params.append('profileArn', String(profileArn).trim());
+    }
+    return `${base}?${params.toString()}`;
+}
+
+function buildKiroUsageHeaders(accessToken, machineId) {
+    const osPlatform = os.platform();
+    const osRelease = os.release();
+    const nodeVersion = process.version.replace('v', '');
+
+    let osName = osPlatform;
+    if (osPlatform === 'win32') osName = `windows#${osRelease}`;
+    else if (osPlatform === 'darwin') osName = `macos#${osRelease}`;
+    else osName = `${osPlatform}#${osRelease}`;
+
+    const kiroVersion = '0.8.140';
+    const safeMachineId = String(machineId || '').trim() || crypto.randomUUID();
+    const userAgentSuffix = `KiroIDE-${kiroVersion}-${safeMachineId}`;
+
+    return {
+        'Authorization': `Bearer ${accessToken}`,
+        'x-amz-user-agent': `aws-sdk-js/1.0.0 ${userAgentSuffix}`,
+        'User-Agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E ${userAgentSuffix}`,
+        'amz-sdk-invocation-id': crypto.randomUUID(),
+        'amz-sdk-request': 'attempt=1; max=1',
+        'Accept': 'application/json',
+        'Connection': 'close'
+    };
+}
+
+function selectProviderConfig(providerPoolManager, providerType, uuid, currentConfig) {
+    if (providerPoolManager?.providerPools?.[providerType]) {
+        const list = providerPoolManager.providerPools[providerType];
+        const found = Array.isArray(list) ? list.find((p) => p && p.uuid === uuid) : null;
+        if (found) return found;
+    }
+
+    // Fallback: load from file (matches handleGetProviderType behavior)
+    const filePath = currentConfig?.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+    if (filePath && existsSync(filePath)) {
+        try {
+            const pools = JSON.parse(readFileSync(filePath, 'utf-8'));
+            const list = pools?.[providerType];
+            const found = Array.isArray(list) ? list.find((p) => p && p.uuid === uuid) : null;
+            if (found) return found;
+        } catch {}
+    }
+    return null;
+}
+
+function resolveNodeProxyUrl(providerConfig, currentConfig, providerType) {
+    const hasNodeOverride = providerConfig && Object.prototype.hasOwnProperty.call(providerConfig, 'PROXY_URL');
+    if (hasNodeOverride) {
+        // Explicit override semantics: '' disables proxy inheritance.
+        return providerConfig.PROXY_URL;
+    }
+    if (isProxyEnabledForProvider(currentConfig, providerType)) {
+        return currentConfig?.PROXY_URL;
+    }
+    return undefined;
+}
+
+/**
+ * Provider inspection endpoint (safe metadata only; never returns raw tokens).
+ * Today this is implemented for claude-kiro-oauth to mirror Kiro-account-manager visibility.
+ */
+export async function handleInspectProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
+    try {
+        if (providerType !== 'claude-kiro-oauth') {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: { message: `Inspect is only supported for claude-kiro-oauth (got ${providerType})` }
+            }));
+            return true;
+        }
+
+        const providerConfig = selectProviderConfig(providerPoolManager, providerType, providerUuid, currentConfig);
+        if (!providerConfig) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+            return true;
+        }
+
+        const credsPathRaw = providerConfig.KIRO_OAUTH_CREDS_FILE_PATH || '';
+        const credsPathAbs = resolveAbsoluteConfigPath(credsPathRaw);
+        if (!credsPathAbs) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: { message: 'No KIRO_OAUTH_CREDS_FILE_PATH bound to this provider node.' }
+            }));
+            return true;
+        }
+        if (!existsSync(credsPathAbs)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: { message: `Credential file not found: ${credsPathRaw}` }
+            }));
+            return true;
+        }
+
+        let credentials = null;
+        try {
+            credentials = JSON.parse(readFileSync(credsPathAbs, 'utf-8'));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: { message: `Failed to parse credential file: ${e.message}` }
+            }));
+            return true;
+        }
+
+        const accessToken = credentials?.accessToken || '';
+        const refreshToken = credentials?.refreshToken || '';
+        const clientId = credentials?.clientId || '';
+        const profileArn = credentials?.profileArn || '';
+        const authMethod = credentials?.authMethod || providerConfig.authMethod || '';
+        const idcRegion = credentials?.idcRegion || credentials?.region || providerConfig.idcRegion || providerConfig.region || 'us-east-1';
+        const startUrl = credentials?.startUrl || providerConfig.startUrl || '';
+
+        const machineId =
+            providerConfig.machineId ||
+            providerConfig.KIRO_MACHINE_ID ||
+            credentials?.machineId ||
+            credentials?.KIRO_MACHINE_ID ||
+            providerUuid;
+
+        const nodeProxyUrl = resolveNodeProxyUrl(providerConfig, currentConfig, providerType);
+        const proxyMasked = maskProxyUrl(nodeProxyUrl);
+
+        const expiresAt = credentials?.expiresAt || '';
+        const expiresAtMs = expiresAt ? Date.parse(String(expiresAt)) : NaN;
+        const now = Date.now();
+        const expiresInMs = Number.isFinite(expiresAtMs) ? Math.max(0, expiresAtMs - now) : null;
+
+        const result = {
+            providerType,
+            uuid: providerUuid,
+            node: {
+                uuid: providerConfig.uuid,
+                customName: providerConfig.customName || '',
+                accountId: providerConfig.accountId || providerConfig.KIRO_ACCOUNT_ID || credentials?.accountId || credentials?.accountID || '',
+                authMethod: providerConfig.authMethod || '',
+                isHealthy: providerConfig.isHealthy !== false,
+                needsRefresh: providerConfig.needsRefresh === true,
+                isDisabled: providerConfig.isDisabled === true,
+                lastError: providerConfig.lastError
+                    ? redactInlineCredentials(String(providerConfig.lastError)).slice(0, 240)
+                    : '',
+                proxy: proxyMasked || '',
+                machineId: machineId ? maskSecret(machineId) : ''
+            },
+            credentials: {
+                path: credsPathRaw,
+                authMethod: authMethod ? String(authMethod) : '',
+                region: idcRegion ? String(idcRegion) : '',
+                startUrl: startUrl ? String(startUrl) : '',
+                profileArn: profileArn ? maskSecret(profileArn) : '',
+                clientId: clientId ? maskSecret(clientId) : '',
+                accessToken: accessToken ? maskSecret(accessToken) : '',
+                refreshToken: refreshToken ? maskSecret(refreshToken) : '',
+                expiresAt: expiresAt ? String(expiresAt) : '',
+                expiresInMs
+            },
+            usageLimits: {
+                ok: false,
+                statusCode: null,
+                error: null,
+                userInfo: null,
+                usedCount: null,
+                limitCount: null,
+                nextDateReset: null
+            }
+        };
+
+        // Enrich with usage limits/user info (best-effort, never fails the endpoint).
+        if (accessToken) {
+            try {
+                const url = getKiroUsageLimitsUrl(idcRegion, authMethod, profileArn);
+                const headers = buildKiroUsageHeaders(accessToken, machineId);
+
+                const proxyCandidate = nodeProxyUrl === undefined ? '' : String(nodeProxyUrl || '').trim();
+                const proxyConfig = proxyCandidate ? parseProxyUrl(proxyCandidate) : null;
+                const axiosConfig = {
+                    timeout: 15000,
+                    headers,
+                    proxy: false
+                };
+                if (proxyConfig) {
+                    axiosConfig.httpAgent = proxyConfig.httpAgent;
+                    axiosConfig.httpsAgent = proxyConfig.httpsAgent;
+                }
+
+                const response = await axios.get(url, axiosConfig);
+                const data = response?.data || {};
+                result.usageLimits.ok = true;
+                result.usageLimits.statusCode = response?.status || 200;
+                result.usageLimits.userInfo = data?.userInfo
+                    ? {
+                        email: data.userInfo.email || '',
+                        userId: data.userInfo.userId || '',
+                        status: data.userInfo.status || ''
+                    }
+                    : null;
+                result.usageLimits.usedCount = data?.usedCount ?? null;
+                result.usageLimits.limitCount = data?.limitCount ?? null;
+                result.usageLimits.nextDateReset = data?.nextDateReset ?? null;
+            } catch (e) {
+                const statusCode = e?.response?.status ?? null;
+                const msg = e?.message ? String(e.message) : 'Usage limits request failed';
+                result.usageLimits.ok = false;
+                result.usageLimits.statusCode = statusCode;
+                result.usageLimits.error = msg.slice(0, 240);
+            }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Provider inspect failed:', error.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: error.message } }));
         return true;

@@ -295,6 +295,14 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await browserProfileApi.handleOpenBrowserProfile(req, res, currentConfig, providerPoolManager, providerType, uuid);
     }
 
+    // Inspect provider node (safe metadata only)
+    const inspectProviderMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/inspect$/);
+    if (method === 'GET' && inspectProviderMatch) {
+        const providerType = decodeURIComponent(inspectProviderMatch[1]);
+        const providerUuid = decodeURIComponent(inspectProviderMatch[2]);
+        return await providerApi.handleInspectProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid);
+    }
+
     // Handle manual OAuth callback
     if (method === 'POST' && pathParam === '/api/oauth/manual-callback') {
         return await oauthApi.handleManualOAuthCallback(req, res);

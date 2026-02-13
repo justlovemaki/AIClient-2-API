@@ -739,11 +739,16 @@ async function startKiroIamSsoCallbackServer({
     let listeningPort = null;
     const ssoOIDCEndpoint = KIRO_OAUTH_CONFIG.ssoOIDCEndpoint.replace('{{region}}', region);
 
-    const createServer = () => http.createServer(async (req, res) => {
+    const createServer = () => {
+        const server = http.createServer(async (req, res) => {
+            let wantsJson = false;
             try {
                 const effectivePort = listeningPort || port;
                 const base = `http://127.0.0.1:${effectivePort || 0}`;
                 const url = new URL(req.url || '/', base);
+
+                wantsJson = String(req.headers?.accept || '').toLowerCase().includes('application/json') ||
+                    url.searchParams.get('__format') === 'json';
 
                 if (url.pathname !== '/oauth/callback') {
                     res.writeHead(404);
@@ -756,8 +761,13 @@ async function startKiroIamSsoCallbackServer({
                 const errorParam = url.searchParams.get('error');
 
                 if (errorParam) {
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
+                    if (wantsJson) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: `授权失败: ${errorParam}` }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
+                    }
                     broadcastEvent('oauth_error', {
                         provider: providerKey,
                         error: `授权失败: ${errorParam}`,
@@ -768,8 +778,13 @@ async function startKiroIamSsoCallbackServer({
                 }
 
                 if (state !== expectedState) {
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(generateResponsePage(false, 'State 验证失败'));
+                    if (wantsJson) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'State 验证失败' }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(generateResponsePage(false, 'State 验证失败'));
+                    }
                     broadcastEvent('oauth_error', {
                         provider: providerKey,
                         error: 'State mismatch',
@@ -780,8 +795,13 @@ async function startKiroIamSsoCallbackServer({
                 }
 
                 if (!code) {
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(generateResponsePage(false, '未收到授权码'));
+                    if (wantsJson) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: '未收到授权码' }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(generateResponsePage(false, '未收到授权码'));
+                    }
                     broadcastEvent('oauth_error', {
                         provider: providerKey,
                         error: 'Missing authorization code',
@@ -791,9 +811,11 @@ async function startKiroIamSsoCallbackServer({
                     return;
                 }
 
-                // Tell the user the browser can be closed.
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(generateResponsePage(true, '授权成功！正在获取令牌，请稍候...'));
+                if (!wantsJson) {
+                    // Tell the user the browser can be closed.
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(true, '授权成功！正在获取令牌，请稍候...'));
+                }
 
                 const redirectUri = `http://127.0.0.1:${effectivePort}/oauth/callback`;
 
@@ -823,6 +845,10 @@ async function startKiroIamSsoCallbackServer({
                         error: `获取 Token 失败: ${errText || tokenResponse.status}`,
                         timestamp: new Date().toISOString()
                     });
+                    if (wantsJson) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: `获取 Token 失败: ${tokenResponse.status}` }));
+                    }
                     server.close(() => activeKiroServers.delete(providerKey));
                     return;
                 }
@@ -834,6 +860,10 @@ async function startKiroIamSsoCallbackServer({
                         error: 'Token response missing accessToken/refreshToken',
                         timestamp: new Date().toISOString()
                     });
+                    if (wantsJson) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'Token response missing accessToken/refreshToken' }));
+                    }
                     server.close(() => activeKiroServers.delete(providerKey));
                     return;
                 }
@@ -895,6 +925,15 @@ async function startKiroIamSsoCallbackServer({
                     });
                 }
 
+                if (wantsJson) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        message: 'OAuth callback processed successfully',
+                        relativePath
+                    }));
+                }
+
                 server.close(() => activeKiroServers.delete(providerKey));
             } catch (error) {
                 logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} IAM SSO callback error:`, error);
@@ -906,14 +945,21 @@ async function startKiroIamSsoCallbackServer({
                     });
                 } catch {}
                 try {
-                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
+                    if (wantsJson) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: error.message }));
+                    } else {
+                        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
+                    }
                 } catch {}
                 try {
                     server.close(() => activeKiroServers.delete(providerKey));
                 } catch {}
             }
         });
+        return server;
+    };
 
     const candidatePorts = [];
     const requested = Number.isFinite(Number(port)) ? Number(port) : 0;
@@ -1044,8 +1090,11 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
     
     return new Promise((resolve, reject) => {
         const server = http.createServer(async (req, res) => {
+            let wantsJson = false;
             try {
                 const url = new URL(req.url, `http://127.0.0.1:${port}`);
+                wantsJson = String(req.headers?.accept || '').toLowerCase().includes('application/json') ||
+                    url.searchParams.get('__format') === 'json';
                 
                 if (url.pathname === '/oauth/callback') {
                     const code = url.searchParams.get('code');
@@ -1053,14 +1102,24 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     const errorParam = url.searchParams.get('error');
                     
                     if (errorParam) {
-                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
+                        if (wantsJson) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: `授权失败: ${errorParam}` }));
+                        } else {
+                            res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+                            res.end(generateResponsePage(false, `授权失败: ${errorParam}`));
+                        }
                         return;
                     }
                     
                     if (state !== expectedState) {
-                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(generateResponsePage(false, 'State 验证失败'));
+                        if (wantsJson) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'State 验证失败' }));
+                        } else {
+                            res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+                            res.end(generateResponsePage(false, 'State 验证失败'));
+                        }
                         return;
                     }
                     
@@ -1082,8 +1141,13 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     if (!tokenResponse.ok) {
                         const errorText = await tokenResponse.text();
                         logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} Token exchange failed:`, errorText);
-                        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(generateResponsePage(false, `获取令牌失败: ${tokenResponse.status}`));
+                        if (wantsJson) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: `获取令牌失败: ${tokenResponse.status}` }));
+                        } else {
+                            res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                            res.end(generateResponsePage(false, `获取令牌失败: ${tokenResponse.status}`));
+                        }
                         return;
                     }
                     
@@ -1142,8 +1206,17 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                         });
                     }
                     
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end(generateResponsePage(true, '授权成功！您可以关闭此页面'));
+                    if (wantsJson) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            success: true,
+                            message: 'OAuth callback processed successfully',
+                            relativePath
+                        }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(generateResponsePage(true, '授权成功！您可以关闭此页面'));
+                    }
                     
                     // 关闭服务器
                     server.close(() => {
@@ -1156,8 +1229,13 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                 }
             } catch (error) {
                 logger.error(`${KIRO_OAUTH_CONFIG.logPrefix} 处理回调出错:`, error);
-                res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
+                if (wantsJson) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: error.message }));
+                } else {
+                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
+                }
             }
         });
         

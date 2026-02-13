@@ -3461,17 +3461,36 @@ function showAuthModal(authUrl, authInfo, isolatedBrowser = null) {
                 );
 
                 if (response.success) {
+                    const providerLabel = (() => {
+                        const raw = String(response.provider || '').toLowerCase();
+                        if (raw === 'local-chromium') return 'Local Chromium';
+                        if (raw === 'bitbrowser') return 'BitBrowser';
+                        return response.provider || 'isolated-browser';
+                    })();
+
                     showToast(
                         t('common.success'),
-                        t('modal.provider.bitbrowser.opened', { id: response.profileId || '-' }),
+                        `${providerLabel} opened (Profile: ${response.profileId || '-'})`,
                         'success'
                     );
+
+                    // Local Chromium runs inside the server container. noVNC (if enabled) is the way to see the window.
+                    if (String(response.provider || '').toLowerCase() === 'local-chromium') {
+                        try {
+                            const noVncUrl = new URL(window.location.origin);
+                            noVncUrl.port = '6080';
+                            noVncUrl.pathname = '/vnc.html';
+                            noVncUrl.search = '';
+                            noVncUrl.hash = '';
+                            showToast(t('common.info'), `View Chromium via noVNC: ${noVncUrl.toString()}`, 'info');
+                        } catch {}
+                    }
                     if (response.openedUrl === false) {
                         const hint = response.openUrlError ? String(response.openUrlError) : 'URL was not opened automatically';
                         showToast(t('common.warning'), hint, 'warning');
                     }
                 } else {
-                    throw new Error(response.error || 'BitBrowser open failed');
+                    throw new Error(response.error || 'Isolated browser open failed');
                 }
             } catch (e) {
                 showToast(t('common.error'), t('modal.provider.bitbrowser.openFailed') + ': ' + e.message, 'error');

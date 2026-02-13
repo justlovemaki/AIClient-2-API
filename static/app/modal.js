@@ -955,6 +955,9 @@ function renderProviderList(providers) {
                         <button class="btn-small btn-bitbrowser-oauth" onclick="window.startKiroIsolatedOAuth('${provider.uuid}', event)" title="${t('modal.provider.bitbrowser.oauthBtn')}">
                             <i class="fas fa-user-shield"></i>
                         </button>
+                        <button class="btn-small btn-kiro-inspect" onclick="window.inspectKiroAccount('${provider.uuid}', event)" title="${t('modal.provider.kiro.inspectBtn')}">
+                            <i class="fas fa-id-card"></i>
+                        </button>
                         ` : ''}
                         <button class="btn-small btn-risk-info" onclick="window.showRiskReleaseInfo('${provider.uuid}', event)" title="${t('modal.provider.risk.infoBtn')}">
                             <i class="fas fa-shield-alt"></i> <span data-i18n="modal.provider.risk.infoBtn">${t('modal.provider.risk.infoBtn')}</span>
@@ -2067,13 +2070,31 @@ async function openBitBrowserProfile(uuid, event) {
         );
 
         if (response.success) {
+            const providerLabel = (() => {
+                const raw = String(response.provider || '').toLowerCase();
+                if (raw === 'local-chromium') return 'Local Chromium';
+                if (raw === 'bitbrowser') return 'BitBrowser';
+                return response.provider || 'isolated-browser';
+            })();
+
             showToast(
                 t('common.success'),
-                t('modal.provider.bitbrowser.opened', { id: response.profileId || '-' }),
+                `${providerLabel} opened (Profile: ${response.profileId || '-'})`,
                 'success'
             );
             if (response.openedUrl === false && response.openUrlError) {
                 showToast(t('common.warning'), String(response.openUrlError), 'warning');
+            }
+
+            if (String(response.provider || '').toLowerCase() === 'local-chromium') {
+                try {
+                    const noVncUrl = new URL(window.location.origin);
+                    noVncUrl.port = '6080';
+                    noVncUrl.pathname = '/vnc.html';
+                    noVncUrl.search = '';
+                    noVncUrl.hash = '';
+                    showToast(t('common.info'), `View Chromium via noVNC: ${noVncUrl.toString()}`, 'info');
+                } catch {}
             }
             await refreshProviderConfig(currentProviderType);
         } else {
@@ -2103,6 +2124,116 @@ async function startKiroIsolatedOAuth(uuid, event) {
     } catch (error) {
         console.error('Isolated OAuth start failed:', error);
         showToast(t('common.error'), t('modal.provider.bitbrowser.oauthFailed') + ': ' + error.message, 'error');
+    }
+}
+
+function formatDurationMs(ms) {
+    if (ms === undefined || ms === null || !Number.isFinite(Number(ms))) return '-';
+    const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+async function inspectKiroAccount(uuid, event) {
+    event.stopPropagation();
+
+    if (currentProviderType !== 'claude-kiro-oauth') {
+        showToast(t('common.error'), t('modal.provider.bitbrowser.unsupported'), 'error');
+        return;
+    }
+
+    try {
+        showToast(t('common.info'), t('modal.provider.kiro.inspectLoading'), 'info');
+        const data = await window.apiClient.get(
+            `/providers/${encodeURIComponent(currentProviderType)}/${encodeURIComponent(uuid)}/inspect`
+        );
+
+        if (data?.error) {
+            throw new Error(data.error.message || data.error);
+        }
+
+        const node = data?.node || data?.nodeInfo || data?.node || data?.nodeConfig || data?.node;
+        const cred = data?.credentials || {};
+        const usage = data?.usageLimits || {};
+        const userInfo = usage?.userInfo || {};
+
+        const expiresInText = cred.expiresInMs !== null && cred.expiresInMs !== undefined
+            ? formatDurationMs(cred.expiresInMs)
+            : '-';
+
+        const usageStatus = usage.ok === true
+            ? `OK${usage.statusCode ? ` (${usage.statusCode})` : ''}`
+            : `Error${usage.statusCode ? ` (${usage.statusCode})` : ''}`;
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 760px; width: 95%; max-height: 85vh; overflow: auto;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-id-card"></i> ${t('modal.provider.kiro.inspectTitle')}</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 16px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Node</div>
+                            <div><strong>UUID:</strong> ${escapeHtml(String(data?.uuid || uuid))}</div>
+                            <div><strong>Name:</strong> ${escapeHtml(String(node?.customName || ''))}</div>
+                            <div><strong>Account ID:</strong> ${escapeHtml(String(node?.accountId || ''))}</div>
+                            <div><strong>Machine ID:</strong> ${escapeHtml(String(node?.machineId || ''))}</div>
+                            <div><strong>Proxy:</strong> ${escapeHtml(String(node?.proxy || ''))}</div>
+                            <div><strong>Healthy:</strong> ${escapeHtml(String(node?.isHealthy))}</div>
+                            <div><strong>Needs Refresh:</strong> ${escapeHtml(String(node?.needsRefresh))}</div>
+                            ${node?.lastError ? `<div><strong>Last Error:</strong> <span title="${escapeHtml(String(node.lastError))}">${escapeHtml(String(node.lastError))}</span></div>` : ''}
+                        </div>
+                        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Credentials</div>
+                            <div><strong>Path:</strong> ${escapeHtml(String(cred.path || ''))}</div>
+                            <div><strong>Auth Method:</strong> ${escapeHtml(String(cred.authMethod || ''))}</div>
+                            <div><strong>Region:</strong> ${escapeHtml(String(cred.region || ''))}</div>
+                            <div><strong>Start URL:</strong> ${escapeHtml(String(cred.startUrl || ''))}</div>
+                            <div><strong>Expires At:</strong> ${escapeHtml(String(cred.expiresAt || ''))}</div>
+                            <div><strong>Expires In:</strong> ${escapeHtml(expiresInText)}</div>
+                            <div><strong>Access Token:</strong> ${escapeHtml(String(cred.accessToken || ''))}</div>
+                            <div><strong>Refresh Token:</strong> ${escapeHtml(String(cred.refreshToken || ''))}</div>
+                            <div><strong>Client ID:</strong> ${escapeHtml(String(cred.clientId || ''))}</div>
+                            <div><strong>Profile ARN:</strong> ${escapeHtml(String(cred.profileArn || ''))}</div>
+                        </div>
+                        <div style="grid-column: 1 / -1; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Usage / Identity</div>
+                            <div><strong>Status:</strong> ${escapeHtml(usageStatus)}</div>
+                            ${usage.error ? `<div><strong>Error:</strong> ${escapeHtml(String(usage.error))}</div>` : ''}
+                            <div><strong>Email:</strong> ${escapeHtml(String(userInfo.email || ''))}</div>
+                            <div><strong>User ID:</strong> ${escapeHtml(String(userInfo.userId || ''))}</div>
+                            <div><strong>User Status:</strong> ${escapeHtml(String(userInfo.status || ''))}</div>
+                            <div><strong>Used / Limit:</strong> ${escapeHtml(String(usage.usedCount ?? ''))} / ${escapeHtml(String(usage.limitCount ?? ''))}</div>
+                            <div><strong>Next Reset:</strong> ${escapeHtml(String(usage.nextDateReset ?? ''))}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn modal-close-btn"><i class="fas fa-times"></i> ${t('common.cancel')}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        const closeBtn = modal.querySelector('.modal-close');
+        const closeBtn2 = modal.querySelector('.modal-close-btn');
+        const close = () => modal.remove();
+        closeBtn?.addEventListener('click', close);
+        closeBtn2?.addEventListener('click', close);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+        });
+    } catch (error) {
+        console.error('Inspect Kiro account failed:', error);
+        showToast(t('common.error'), `${t('modal.provider.kiro.inspectFailed')}: ${error.message}`, 'error');
     }
 }
 
@@ -2792,7 +2923,8 @@ export {
     goToProviderPage,
     refreshProviderUuid,
     openBitBrowserProfile,
-    startKiroIsolatedOAuth
+    startKiroIsolatedOAuth,
+    inspectKiroAccount
 };
 
 // 将函数挂载到window对象
@@ -2816,3 +2948,4 @@ window.goToProviderPage = goToProviderPage;
 window.refreshProviderUuid = refreshProviderUuid;
 window.openBitBrowserProfile = openBitBrowserProfile;
 window.startKiroIsolatedOAuth = startKiroIsolatedOAuth;
+window.inspectKiroAccount = inspectKiroAccount;

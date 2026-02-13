@@ -20,3 +20,16 @@ configs/browser-profiles/
 # Runtime artifacts (should never be committed)
 logs/
 configs/risk-lifecycle*.json
+
+# Docker runtime configs (mounted volume; contains secrets/tokens)
+docker/configs/
+
+# BuildKit / docker build temp artifacts accidentally created under docker/
+docker/=
+docker/CACHED
+docker/FETCH_HEAD
+docker/[[]internal[]]
+docker/exporting
+docker/reading
+docker/resolve
+docker/transferring
