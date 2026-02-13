@@ -13,7 +13,6 @@ services:
       - "1455:1455"
       - "19876-19880:19876-19880"
       - "6080:6080" # noVNC (web)
-      - "5900:5900" # VNC (optional)
     volumes:
       - ./configs:/app/configs
     environment:
