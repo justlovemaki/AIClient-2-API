@@ -265,7 +265,7 @@ async function startServer() {
     initializeUIManagement(CONFIG);
     
     // Initialize API management and get heartbeat function
-    const heartbeatAndRefreshToken = initializeAPIManagement(services);
+    const heartbeatAndRefreshToken = initializeAPIManagement(services, CONFIG);
     
     // Create request handler
     const requestHandlerInstance = createRequestHandler(CONFIG, getProviderPoolManager());
