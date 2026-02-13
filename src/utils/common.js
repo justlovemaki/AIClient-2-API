@@ -25,6 +25,11 @@ export const RETRYABLE_NETWORK_ERRORS = [
     'EAI_AGAIN',       // DNS 临时失败
     'ECONNABORTED',    // 连接中止
     'ESOCKETTIMEDOUT', // Socket 超时
+    // Common proxy/tunneling failures (treat as retryable network flakiness)
+    'Proxy connection ended before receiving CONNECT response',
+    'Proxy connection timed out',
+    'tunneling socket could not be established',
+    'socket hang up',
 ];
 
 /**

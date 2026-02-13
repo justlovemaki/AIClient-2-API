@@ -99,6 +99,58 @@ export class ProviderPoolManager {
      */
     async checkAndRefreshExpiringNodes() {
         this._log('info', 'Checking nodes for approaching expiration dates using provider adapters...');
+
+        const now = Date.now();
+        const resolveNearMinutes = (providerType) => {
+            if (providerType.startsWith('claude-kiro')) return 30;
+            if (providerType.startsWith('gemini-cli')) return 20;
+            if (providerType.startsWith('gemini-antigravity')) return 20;
+            if (providerType.startsWith('openai-qwen')) return 20;
+            if (providerType.startsWith('openai-codex')) return 20;
+            if (providerType.startsWith('openai-iflow')) return 60 * 45; // token validity ~48h, refresh near ~45h
+            return 20;
+        };
+
+        const extractExpiryMs = (providerType, credentials = {}) => {
+            if (!credentials || typeof credentials !== 'object') return null;
+
+            // Provider-specific first (most reliable)
+            if (providerType.startsWith('claude-kiro') && credentials.expiresAt) {
+                const ms = new Date(credentials.expiresAt).getTime();
+                return Number.isFinite(ms) ? ms : null;
+            }
+
+            // Common OAuth-ish fields
+            if (credentials.expiry_date !== undefined && credentials.expiry_date !== null) {
+                const ms = Number(credentials.expiry_date);
+                return Number.isFinite(ms) ? ms : null;
+            }
+
+            if (credentials.expired) {
+                const ms = new Date(credentials.expired).getTime();
+                return Number.isFinite(ms) ? ms : null;
+            }
+
+            if (credentials.expiresAt) {
+                const ms = new Date(credentials.expiresAt).getTime();
+                return Number.isFinite(ms) ? ms : null;
+            }
+
+            if (credentials.expiryDate !== undefined && credentials.expiryDate !== null) {
+                const raw = credentials.expiryDate;
+                if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+                const s = String(raw).trim();
+                if (!s) return null;
+                if (/^\d+$/.test(s)) {
+                    const ms = Number.parseInt(s, 10);
+                    return Number.isFinite(ms) ? ms : null;
+                }
+                const ms = new Date(s).getTime();
+                return Number.isFinite(ms) ? ms : null;
+            }
+
+            return null;
+        };
         
         for (const providerType in this.providerStatus) {
             const providers = this.providerStatus[providerType];
@@ -122,14 +174,24 @@ export class ProviderPoolManager {
                 }
                 
                 // logger.info(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
-                // 排除不健康和禁用的节点
-                if (!config.isHealthy || config.isDisabled) continue;
+                // 排除禁用的节点
+                if (config.isDisabled) continue;
 
-                if (configPath && fs.existsSync(configPath)) {
+                const pathValue = configPath === undefined || configPath === null ? '' : String(configPath).trim();
+                if (pathValue && fs.existsSync(pathValue)) {
                     try {
-                        if (true) {
+                        const fileContent = await fs.promises.readFile(pathValue, 'utf8');
+                        const credentials = JSON.parse(fileContent);
+                        const expiryMs = extractExpiryMs(providerType, credentials);
+                        const nearMinutes = resolveNearMinutes(providerType);
+                        const thresholdMs = now + nearMinutes * 60 * 1000;
+                        const isNearExpiry = expiryMs === null ? true : expiryMs <= thresholdMs;
+
+                        if (isNearExpiry) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
+                        } else {
+                            this._log('debug', `Node ${providerStatus.uuid} (${providerType}) not near expiry (threshold: ${nearMinutes}m).`);
                         }
                     } catch (err) {
                         this._log('error', `Failed to check expiry for node ${providerStatus.uuid}: ${err.message}`);
@@ -1799,6 +1861,14 @@ export class ProviderPoolManager {
             provider.config.needsRefresh = false;
             provider.config.refreshCount = 0;
             provider.config.authFailureStreak = 0;
+            provider.config.isHealthy = true;
+            provider.config.errorCount = 0;
+            provider.config.lastErrorTime = null;
+            provider.config.lastErrorMessage = null;
+            provider.config.scheduledRecoveryTime = null;
+            provider.config.cooldownUntil = null;
+            provider.config.quotaExhaustedUntil = null;
+            provider.config.lastSuccessAt = new Date().toISOString();
             // 更新为可用
             provider.config.lastHealthCheckTime = new Date().toISOString();
             // 标记为健康，以便立即投入使用

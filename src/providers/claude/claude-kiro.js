@@ -720,61 +720,86 @@ async saveCredentialsToFile(filePath, newData) {
      * @param {string} tokenFilePath - 凭证文件路径
      */
     async _doTokenRefresh(saveCredentialsToFile, tokenFilePath) {
-        try {
-            const requestBody = {
-                refreshToken: this.refreshToken,
-            };
+        const maxRetries = Number.isFinite(Number(this.config?.KIRO_TOKEN_REFRESH_MAX_RETRIES))
+            ? Math.max(0, Number(this.config.KIRO_TOKEN_REFRESH_MAX_RETRIES))
+            : 2;
+        const baseDelayMs = Number.isFinite(Number(this.config?.KIRO_TOKEN_REFRESH_RETRY_BASE_DELAY_MS))
+            ? Math.max(0, Number(this.config.KIRO_TOKEN_REFRESH_RETRY_BASE_DELAY_MS))
+            : 500;
 
-            let refreshUrl = this.refreshUrl;
-            if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                refreshUrl = this.refreshIDCUrl;
-                requestBody.clientId = this.clientId;
-                requestBody.clientSecret = this.clientSecret;
-                requestBody.grantType = 'refresh_token';
-            }
-
-            let response = null;
-            // 使用更短的超时时间进行 token 刷新，避免阻塞其他请求
-            const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
-            if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody, refreshConfig);
-                logger.info('[Kiro Auth] Token refresh social response: ok');
-            } else {
-                response = await this.axiosInstance.post(refreshUrl, requestBody, refreshConfig);
-                logger.info('[Kiro Auth] Token refresh idc response: ok');
-            }
-
-            if (response.data && response.data.accessToken) {
-                this.accessToken = response.data.accessToken;
-                this.refreshToken = response.data.refreshToken;
-                this.profileArn = response.data.profileArn;
-                const expiresIn = response.data.expiresIn;
-                const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-                this.expiresAt = expiresAt;
-                logger.info('[Kiro Auth] Access token refreshed successfully');
-
-                const updatedTokenData = {
-                    accessToken: this.accessToken,
+        let lastError = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const requestBody = {
                     refreshToken: this.refreshToken,
-                    expiresAt: expiresAt,
                 };
-                if (this.profileArn) {
-                    updatedTokenData.profileArn = this.profileArn;
-                }
-                await saveCredentialsToFile(tokenFilePath, updatedTokenData);
 
-                // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
-                const poolManager = getProviderPoolManager();
-                if (poolManager && this.uuid) {
-                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.KIRO_API, this.uuid);
+                let refreshUrl = this.refreshUrl;
+                if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                    refreshUrl = this.refreshIDCUrl;
+                    requestBody.clientId = this.clientId;
+                    requestBody.clientSecret = this.clientSecret;
+                    requestBody.grantType = 'refresh_token';
                 }
-            } else {
+
+                let response = null;
+                // 使用更短的超时时间进行 token 刷新，避免阻塞其他请求
+                const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
+                if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+                    response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody, refreshConfig);
+                    logger.info('[Kiro Auth] Token refresh social response: ok');
+                } else {
+                    response = await this.axiosInstance.post(refreshUrl, requestBody, refreshConfig);
+                    logger.info('[Kiro Auth] Token refresh idc response: ok');
+                }
+
+                if (response.data && response.data.accessToken) {
+                    this.accessToken = response.data.accessToken;
+                    this.refreshToken = response.data.refreshToken;
+                    this.profileArn = response.data.profileArn;
+                    const expiresIn = response.data.expiresIn;
+                    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+                    this.expiresAt = expiresAt;
+                    logger.info('[Kiro Auth] Access token refreshed successfully');
+
+                    const updatedTokenData = {
+                        accessToken: this.accessToken,
+                        refreshToken: this.refreshToken,
+                        expiresAt: expiresAt,
+                    };
+                    if (this.profileArn) {
+                        updatedTokenData.profileArn = this.profileArn;
+                    }
+                    await saveCredentialsToFile(tokenFilePath, updatedTokenData);
+
+                    // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
+                    const poolManager = getProviderPoolManager();
+                    if (poolManager && this.uuid) {
+                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.KIRO_API, this.uuid);
+                    }
+                    return;
+                }
+
                 throw new Error('Invalid refresh response: Missing accessToken');
+            } catch (error) {
+                lastError = error;
+
+                const retryable = isRetryableNetworkError(error);
+                const shouldRetry = retryable && attempt < maxRetries;
+                if (!shouldRetry) {
+                    logger.error('[Kiro Auth] Token refresh failed:', error.message);
+                    throw new Error(`Token refresh failed: ${error.message}`);
+                }
+
+                const delayMs = baseDelayMs * (attempt + 1);
+                logger.warn(`[Kiro Auth] Token refresh attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}. Retrying in ${delayMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
             }
-        } catch (error) {
-            logger.error('[Kiro Auth] Token refresh failed:', error.message);
-            throw new Error(`Token refresh failed: ${error.message}`);
         }
+
+        const fallbackMessage = lastError?.message || 'unknown error';
+        logger.error('[Kiro Auth] Token refresh failed:', fallbackMessage);
+        throw new Error(`Token refresh failed: ${fallbackMessage}`);
     }
 
 
