@@ -46,9 +46,8 @@ RUN mkdir -p /app/logs \
   && chmod +x /app/docker/entrypoint.sh
 
 # 暴露端口
-# - 5900: VNC (optional; noVNC uses it internally)
-# - 6080: noVNC Web UI
-EXPOSE 3000 8085 8086 19876-19880 5900 6080
+# - 6080: noVNC Web UI (VNC 5900 is internal-only; do not expose by default)
+EXPOSE 3000 8085 8086 8087 19876-19880 6080
 
 # 添加健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
