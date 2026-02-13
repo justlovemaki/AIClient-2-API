@@ -10,10 +10,17 @@ services:
       - "8085-8087:8085-8087" 
       - "1455:1455"
       - "19876-19880:19876-19880"
+      - "6080:6080" # noVNC (web)
+      - "5900:5900" # VNC (optional)
     volumes:
       - ./configs:/app/configs
     environment:
       - ARGS=
+      # Enable GUI browser stack (Xvfb + x11vnc + noVNC) inside the container:
+      # - BROWSER_GUI_ENABLED=1
+      # - VNC_PASSWORD=change-me
+      # - BROWSER_DISPLAY=:99
+      # - BROWSER_SCREEN=1280x720x24
     healthcheck:
       test: ["CMD", "node", "healthcheck.js"]
       interval: 30s

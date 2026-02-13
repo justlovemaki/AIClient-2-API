@@ -15,6 +15,7 @@ api-potluck-keys.json
 api-potluck-data.json
 # Codex credentials
 configs/codex/
+configs/browser-profiles/
 
 # Runtime artifacts (should never be committed)
 logs/

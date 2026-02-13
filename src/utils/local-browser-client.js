@@ -118,7 +118,8 @@ function buildCommandFromTemplate(template, vars) {
 }
 
 async function spawnDetachedViaShell(command) {
-    const child = spawn('/bin/bash', ['-lc', command], {
+    // Use /bin/sh for compatibility (Alpine images don't ship bash by default).
+    const child = spawn('/bin/sh', ['-c', command], {
         detached: true,
         stdio: 'ignore',
         env: process.env
@@ -207,8 +208,21 @@ export async function openLocalBrowser({
         '--new-window',
         '--no-first-run',
         '--no-default-browser-check',
+        '--disable-dev-shm-usage',
         '--proxy-bypass-list=<-loopback>'
     ];
+
+    // Chromium sandbox won't start as root in containers unless additional kernel features
+    // are configured. Default to --no-sandbox when running as root on Linux.
+    try {
+        if (
+            process.platform === 'linux' &&
+            typeof process.getuid === 'function' &&
+            process.getuid() === 0
+        ) {
+            args.push('--no-sandbox');
+        }
+    } catch {}
 
     if (chromiumProxy.proxyServer) {
         args.push(`--proxy-server=${chromiumProxy.proxyServer}`);
