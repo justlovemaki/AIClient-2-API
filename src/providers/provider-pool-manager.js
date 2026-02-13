@@ -754,7 +754,12 @@ export class ProviderPoolManager {
             .update(`kiro-machine-id:${accountSeed}:${salt}`)
             .digest('hex')
             .slice(0, 32);
-        return `kiro-${hash}`;
+        const chars = hash.split('');
+        chars[12] = '4'; // RFC 4122 version 4
+        const variantNibble = Number.parseInt(chars[16], 16);
+        chars[16] = ['8', '9', 'a', 'b'][Number.isFinite(variantNibble) ? (variantNibble % 4) : 0];
+        const normalized = chars.join('');
+        return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20)}`;
     }
 
     _ensureKiroMachineId(providerType, providerConfig, identityCtx = null) {

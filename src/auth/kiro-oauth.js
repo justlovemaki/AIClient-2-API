@@ -1189,6 +1189,79 @@ const KIRO_REFRESH_CONSTANTS = {
     IDC_REGION: 'us-east-1'  // 用于 REFRESH_IDC_URL 的区域配置
 };
 
+const KIRO_IDENTITY_CONSTANTS = {
+    KIRO_VERSION: '0.8.140',
+    USAGE_LIMITS_URL: 'https://q.{{region}}.amazonaws.com/getUsageLimits',
+    ORIGIN: 'AI_EDITOR',
+    RESOURCE_TYPE: 'AGENTIC_REQUEST'
+};
+
+function normalizeMachineId(value) {
+    if (value === undefined || value === null) return '';
+    const candidate = String(value).trim();
+    if (!candidate) return '';
+    if (candidate.length < 8 || candidate.length > 128) return '';
+    if (!/^[A-Za-z0-9._:-]+$/.test(candidate)) return '';
+    return candidate;
+}
+
+function getKiroRuntimeInfo() {
+    const osPlatform = os.platform();
+    const osRelease = os.release();
+    const nodeVersion = process.version.replace('v', '');
+
+    let osName = osPlatform;
+    if (osPlatform === 'win32') osName = `windows#${osRelease}`;
+    else if (osPlatform === 'darwin') osName = `macos#${osRelease}`;
+    else osName = `${osPlatform}#${osRelease}`;
+
+    return { osName, nodeVersion };
+}
+
+function buildKiroUsageHeaders(accessToken, machineId) {
+    const runtimeInfo = getKiroRuntimeInfo();
+    const userAgentSuffix = `KiroIDE-${KIRO_IDENTITY_CONSTANTS.KIRO_VERSION}-${machineId}`;
+    return {
+        'Authorization': `Bearer ${accessToken}`,
+        'x-amz-user-agent': `aws-sdk-js/1.0.0 ${userAgentSuffix}`,
+        'User-Agent': `aws-sdk-js/1.0.0 ua/2.1 os/${runtimeInfo.osName} lang/js md/nodejs#${runtimeInfo.nodeVersion} api/codewhispererruntime#1.0.0 m/E ${userAgentSuffix}`,
+        'amz-sdk-invocation-id': crypto.randomUUID(),
+        'amz-sdk-request': 'attempt=1; max=1',
+        'Accept': 'application/json',
+        'Connection': 'close'
+    };
+}
+
+async function resolveKiroUserIdFromUsageLimits({ accessToken, region, machineId, proxyUrlOverride }) {
+    const safeRegion = String(region || KIRO_REFRESH_CONSTANTS.IDC_REGION).trim() || KIRO_REFRESH_CONSTANTS.IDC_REGION;
+    const baseUrl = KIRO_IDENTITY_CONSTANTS.USAGE_LIMITS_URL.replace('{{region}}', safeRegion);
+    const query = new URLSearchParams({
+        isEmailRequired: 'true',
+        origin: KIRO_IDENTITY_CONSTANTS.ORIGIN,
+        resourceType: KIRO_IDENTITY_CONSTANTS.RESOURCE_TYPE
+    }).toString();
+    const url = `${baseUrl}?${query}`;
+
+    const response = await fetchWithProxy(url, {
+        method: 'GET',
+        headers: buildKiroUsageHeaders(accessToken, machineId),
+        proxyUrlOverride
+    }, 'claude-kiro-oauth');
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`getUsageLimits failed: HTTP ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    const userId = String(data?.userInfo?.userId || data?.userId || '').trim();
+    const email = String(data?.userInfo?.email || data?.email || '').trim();
+    return {
+        userId: userId || null,
+        email: email || null
+    };
+}
+
 /**
  * 通过 refreshToken 获取 accessToken
  * @param {string} refreshToken - Kiro 的 refresh token
@@ -1575,6 +1648,10 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
         ? options.attachPatch
         : null;
 
+    const machineIdFromPatch = normalizeMachineId(attachPatch?.machineId || attachPatch?.KIRO_MACHINE_ID);
+    const machineIdFromCred = normalizeMachineId(credentials?.machineId || credentials?.KIRO_MACHINE_ID);
+    const importedMachineId = machineIdFromPatch || machineIdFromCred || crypto.randomUUID();
+
     try {
         // 验证必需字段 - 需要四个字段都存在
         const missingFields = [];
@@ -1617,7 +1694,8 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
             refreshToken: credentials.refreshToken,
             authMethod: credentials.authMethod || 'builder-id',
             // region: credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION,
-            idcRegion
+            idcRegion,
+            machineId: importedMachineId
         };
         
         // 可选字段
@@ -1629,6 +1707,9 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
         }
         if (credentials.registrationExpiresAt) {
             credentialsData.registrationExpiresAt = credentials.registrationExpiresAt;
+        }
+        if (credentials.accountId || credentials.accountID) {
+            credentialsData.accountId = String(credentials.accountId || credentials.accountID).trim();
         }
         
         // 尝试刷新获取最新的 accessToken
@@ -1666,6 +1747,24 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
             logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Token refresh error:`, refreshError.message);
             // 继续保存原始凭据
         }
+
+        // 尝试解析真实账号 ID（格式通常为 d-xxxxxxxxxx.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）
+        try {
+            const identity = await resolveKiroUserIdFromUsageLimits({
+                accessToken: credentialsData.accessToken,
+                region: idcRegion,
+                machineId: importedMachineId,
+                proxyUrlOverride: options?.proxyUrlOverride
+            });
+            if (identity?.userId) {
+                credentialsData.accountId = identity.userId;
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Resolved Kiro accountId from usage limits: ${identity.userId}`);
+            } else {
+                logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Usage limits response did not include userId; keep existing accountId`);
+            }
+        } catch (identityError) {
+            logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} Resolve accountId failed: ${identityError.message}`);
+        }
         
         // 生成文件路径: configs/kiro/{timestamp}_kiro-auth-token/{timestamp}_kiro-auth-token.json
         const timestamp = Date.now();
@@ -1681,11 +1780,23 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
         logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} AWS credentials saved to: ${relativePath}`);
         
         if (attachToProviderUuid) {
+            const effectiveAttachPatch = {
+                ...(attachPatch || {})
+            };
+            if (credentialsData.accountId) {
+                effectiveAttachPatch.accountId = credentialsData.accountId;
+                effectiveAttachPatch.KIRO_ACCOUNT_ID = credentialsData.accountId;
+            }
+            if ((machineIdFromPatch || machineIdFromCred) && importedMachineId) {
+                effectiveAttachPatch.machineId = importedMachineId;
+                effectiveAttachPatch.KIRO_MACHINE_ID = importedMachineId;
+            }
+
             const attached = attachCredentialToProviderNode(
                 'claude-kiro-oauth',
                 attachToProviderUuid,
                 relativePath,
-                attachPatch || {}
+                effectiveAttachPatch
             );
 
             if (!attached) {
@@ -1706,7 +1817,9 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
             return {
                 success: true,
                 path: relativePath,
-                attachedToProviderUuid: attachToProviderUuid
+                attachedToProviderUuid: attachToProviderUuid,
+                accountId: credentialsData.accountId || null,
+                machineId: importedMachineId
             };
         }
 
@@ -1725,7 +1838,9 @@ export async function importAwsCredentials(credentials, skipDuplicateCheckOrOpti
         
         return {
             success: true,
-            path: relativePath
+            path: relativePath,
+            accountId: credentialsData.accountId || null,
+            machineId: importedMachineId
         };
         
     } catch (error) {

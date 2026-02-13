@@ -68,12 +68,18 @@ const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
  * 根据当前配置生成唯一的机器码（Machine ID）
  * 回退路径：uuid > profileArn > clientId > KIRO_DEFAULT_MACHINE
  * @param {Object} credentials - 当前凭证/节点信息
- * @returns {string} SHA256 格式的机器码
+ * @returns {string} 稳定 UUID 格式机器码
  */
 function generateMachineIdFromConfig(credentials) {
     // 兼容历史行为：优先使用 uuid，其次 profileArn，再其次 clientId
     const uniqueKey = credentials.uuid || credentials.profileArn || credentials.clientId || "KIRO_DEFAULT_MACHINE";
-    return crypto.createHash('sha256').update(uniqueKey).digest('hex');
+    const hash = crypto.createHash('sha256').update(uniqueKey).digest('hex').slice(0, 32);
+    const chars = hash.split('');
+    chars[12] = '4'; // RFC 4122 version 4
+    const variantNibble = Number.parseInt(chars[16], 16);
+    chars[16] = ['8', '9', 'a', 'b'][Number.isFinite(variantNibble) ? (variantNibble % 4) : 0];
+    const normalized = chars.join('');
+    return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20)}`;
 }
 
 function pickFirstDefined(config = {}, keys = []) {

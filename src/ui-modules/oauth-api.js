@@ -590,6 +590,8 @@ export async function handleImportAwsCredentials(req, res) {
                     success: true,
                     path: result.path,
                     attachedToProviderUuid: result.attachedToProviderUuid || null,
+                    accountId: result.accountId || null,
+                    machineId: result.machineId || null,
                     message: 'AWS credentials imported successfully'
                 }));
             } else {
