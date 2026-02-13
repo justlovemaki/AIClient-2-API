@@ -1340,7 +1340,7 @@ export class OpenAIConverter extends BaseConverter {
      * OpenAI请求 -> Codex请求（委托给 CodexConverter）
      */
     toCodexRequest(openaiRequest) {
-        return this.codexConverter.toCodexRequest(openaiRequest);
+        return this.codexConverter.toOpenAIRequestToCodexRequest(openaiRequest);
     }
 
     /**

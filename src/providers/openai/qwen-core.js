@@ -35,7 +35,7 @@ const DEFAULT_LOCK_CONFIG = {
 };
 
 const DEFAULT_QWEN_OAUTH_BASE_URL = 'https://chat.qwen.ai';
-const DEFAULT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
+const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 const QWEN_OAUTH_CLIENT_ID = 'f0304373b74a44d2b584a3fb70ca9e56';
 const QWEN_OAUTH_SCOPE = 'openid profile email model.completion';
 const QWEN_OAUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -531,7 +531,7 @@ export class QwenApiService {
         const maxRetries = (this.config && this.config.REQUEST_MAX_RETRIES) || 3;
         const baseDelay = (this.config && this.config.REQUEST_BASE_DELAY) || 1000;
 
-        const version = "0.2.1";
+        const version = "0.10.1";
         const userAgent = `QwenCode/${version} (${process.platform}; ${process.arch})`;
         logger.info(`[QwenApiService] User-Agent: ${userAgent}`);
 

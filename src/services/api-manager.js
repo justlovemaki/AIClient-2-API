@@ -62,30 +62,14 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
  * @param {Object} services - The initialized services
  * @returns {Function} - The heartbeat and token refresh function
  */
-export function initializeAPIManagement(services, config = {}) {
+export function initializeAPIManagement(services) {
     const providerPoolManager = getProviderPoolManager();
-    const healthCheckInterval = config.HEALTH_CHECK_INTERVAL || 10 * 60 * 1000; // 默认10分钟
-    
     return async function heartbeatAndRefreshToken() {
         logger.info(`[Heartbeat] Server is running. Current time: ${new Date().toLocaleString()}`, Object.keys(services));
-        
-        // 定期执行健康检查
-        if (providerPoolManager) {
-            try {
-                logger.info('[HealthCheck] Starting periodic health check...');
-                await providerPoolManager.performHealthChecks();
-                const stats = {};
-                for (const providerType in providerPoolManager.providerStatus) {
-                    const providerStats = providerPoolManager.getProviderStats(providerType);
-                    stats[providerType] = providerStats;
-                }
-                logger.info('[HealthCheck] Health check completed. Stats:', JSON.stringify(stats));
-            } catch (error) {
-                logger.error('[HealthCheck] Health check failed:', error.message);
-            }
-        }
-        
         // 循环遍历所有已初始化的服务适配器，并尝试刷新令牌
+        // if (getProviderPoolManager()) {
+        //     await getProviderPoolManager().performHealthChecks(); // 定期执行健康检查
+        // }
         for (const providerKey in services) {
             const serviceAdapter = services[providerKey];
             try {

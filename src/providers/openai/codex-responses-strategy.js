@@ -74,8 +74,8 @@ class CodexResponsesAPIStrategy extends ProviderStrategy {
             if (typeof requestBody.input === 'string') {
                 // Convert to array format to add system message
                 requestBody.input = [
-                    { role: 'developer', content: filePromptContent },
-                    { role: 'user', content: requestBody.input }
+                    { type: 'message', role: 'developer', content: filePromptContent },
+                    { type: 'message', role: 'user', content: requestBody.input }
                 ];
             } else if (Array.isArray(requestBody.input)) {
                 // Check if system message already exists
@@ -86,11 +86,11 @@ class CodexResponsesAPIStrategy extends ProviderStrategy {
                 if (systemMessageIndex !== -1) {
                     requestBody.input[systemMessageIndex].content = filePromptContent;
                 } else {
-                    requestBody.input.unshift({ role: 'developer', content: filePromptContent });
+                    requestBody.input.unshift({ type: 'message', role: 'developer', content: filePromptContent });
                 }
             } else {
                 // If input is not defined, initialize with system message
-                requestBody.input = [{ role: 'developer', content: filePromptContent }];
+                requestBody.input = [{ type: 'message', role: 'developer', content: filePromptContent }];
             }
         } else if (requestBody.instructions) {
             // If system prompt mode is not append, then replace the instructions

@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { BaseConverter } from '../BaseConverter.js';
+import { CodexConverter } from './CodexConverter.js';
 import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import {
     extractAndProcessSystemMessages as extractSystemMessages,
@@ -31,6 +32,7 @@ import {
 export class OpenAIResponsesConverter extends BaseConverter {
     constructor() {
         super(MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES);
+        this.codexConverter = new CodexConverter();
     }
 
     // =============================================================================
@@ -165,9 +167,9 @@ export class OpenAIResponsesConverter extends BaseConverter {
                             content = item.content;
                         }
                         
-                        if (content || item.role === 'assistant') {
+                        if (content || (item.role === 'assistant' || item.role === 'developer')) {
                             openaiRequest.messages.push({
-                                role: item.role,
+                                role: item.role === 'developer' ? 'assistant' : item.role,
                                 content: content
                             });
                         }
@@ -210,19 +212,31 @@ export class OpenAIResponsesConverter extends BaseConverter {
 
         // 处理工具
         if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
-            openaiRequest.tools = responsesRequest.tools.map(tool => {
-                if (tool.type && tool.type !== 'function') {
-                    return tool;
-                }
-                return {
-                    type: 'function',
-                    function: {
-                        name: tool.name,
-                        description: tool.description,
-                        parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+            openaiRequest.tools = responsesRequest.tools
+                .map(tool => {
+                    if (tool.type && tool.type !== 'function') {
+                        return null;
                     }
-                };
-            });
+                    
+                    const name = tool.name || (tool.function && tool.function.name);
+                    const description = tool.description || (tool.function && tool.function.description);
+                    const parameters = tool.parameters || (tool.function && tool.function.parameters) || tool.parametersJsonSchema || { type: 'object', properties: {} };
+
+                    // 如果没有名称，则该工具无效，稍后过滤掉
+                    if (!name) {
+                        return null;
+                    }
+
+                    return {
+                        type: 'function',
+                        function: {
+                            name: name,
+                            description: description,
+                            parameters: parameters
+                        }
+                    };
+                })
+                .filter(tool => tool !== null);
         }
 
         if (responsesRequest.tool_choice) {
@@ -687,11 +701,13 @@ export class OpenAIResponsesConverter extends BaseConverter {
         // 处理工具
         if (responsesRequest.tools && Array.isArray(responsesRequest.tools)) {
             geminiRequest.tools = [{
-                functionDeclarations: responsesRequest.tools.map(tool => ({
-                    name: tool.name,
-                    description: tool.description,
-                    parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
-                }))
+                functionDeclarations: responsesRequest.tools
+                    .filter(tool => !tool.type || tool.type === 'function')
+                    .map(tool => ({
+                        name: tool.name,
+                        description: tool.description,
+                        parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
+                    }))
             }];
         }
 
@@ -780,6 +796,13 @@ export class OpenAIResponsesConverter extends BaseConverter {
         return null;
     }
 
+    /**
+     * OpenAI Responses → Codex 请求转换
+     */
+    toCodexRequest(responsesRequest) {
+        return this.codexConverter.toOpenAIResponsesToCodexRequest(responsesRequest);
+    }
+
     // =============================================================================
     // 辅助方法
     // =============================================================================
@@ -850,83 +873,6 @@ export class OpenAIResponsesConverter extends BaseConverter {
         };
     }
 
-    // =============================================================================
-    // 转换到 Codex 格式
-    // =============================================================================
-
-    /**
-     * OpenAI Responses → Codex 请求转换
-     */
-    toCodexRequest(responsesRequest) {
-        const codexRequest = {
-            model: responsesRequest.model,
-            instructions: responsesRequest.instructions || '',
-            input: [],
-            stream: responsesRequest.stream || false,
-            store: false,
-            reasoning: {
-                effort: responsesRequest.reasoning?.effort || 'medium',
-                summary: 'auto'
-            },
-            parallel_tool_calls: responsesRequest.parallel_tool_calls ?? true,
-            include: ['reasoning.encrypted_content']
-        };
-
-        // 处理 input
-        if (responsesRequest.input && Array.isArray(responsesRequest.input)) {
-            for (const item of responsesRequest.input) {
-                const itemType = item.type || (item.role ? 'message' : '');
-                
-                if (itemType === 'message') {
-                    const content = [];
-                    if (Array.isArray(item.content)) {
-                        item.content.forEach(c => {
-                            content.push({
-                                type: item.role === 'assistant' ? 'output_text' : 'input_text',
-                                text: c.text
-                            });
-                        });
-                    } else if (typeof item.content === 'string') {
-                        content.push({
-                            type: item.role === 'assistant' ? 'output_text' : 'input_text',
-                            text: item.content
-                        });
-                    }
-
-                    codexRequest.input.push({
-                        type: 'message',
-                        role: item.role === 'system' ? 'developer' : item.role,
-                        content: content
-                    });
-                } else if (itemType === 'function_call') {
-                    codexRequest.input.push({
-                        type: 'function_call',
-                        call_id: item.call_id,
-                        name: item.name,
-                        arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments)
-                    });
-                } else if (itemType === 'function_call_output') {
-                    codexRequest.input.push({
-                        type: 'function_call_output',
-                        call_id: item.call_id,
-                        output: item.output
-                    });
-                }
-            }
-        }
-
-        // 处理工具
-        if (responsesRequest.tools) {
-            codexRequest.tools = responsesRequest.tools.map(tool => ({
-                type: 'function',
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.parameters || tool.parametersJsonSchema || { type: 'object', properties: {} }
-            }));
-        }
-
-        return codexRequest;
-    }
 
     /**
      * OpenAI Responses → Codex 响应转换 (实际上是 Codex 转 OpenAI Responses)

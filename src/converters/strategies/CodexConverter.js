@@ -29,11 +29,6 @@ export class CodexConverter extends BaseConverter {
      * 转换请求
      */
     convertRequest(data, targetProtocol) {
-        if (targetProtocol === MODEL_PROTOCOL_PREFIX.CODEX) {
-            return this.toCodexRequest(data);
-        } else if (targetProtocol === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES) {
-            return this.toOpenAIResponsesRequest(data);
-        }
         throw new Error(`Unsupported target protocol: ${targetProtocol}`);
     }
 
@@ -58,14 +53,6 @@ export class CodexConverter extends BaseConverter {
     }
 
     /**
-     * OpenAI Responses → Codex 请求转换 (或处理已经转换好的数据)
-     */
-    toOpenAIResponsesRequest(data) {
-        // 如果输入已经是 OpenAI Responses 格式，将其转换为 Codex 格式
-        return this.toCodexRequest(data);
-    }
-
-    /**
      * 转换流式响应块
      */
     convertStreamChunk(chunk, targetProtocol, model) {
@@ -78,15 +65,85 @@ export class CodexConverter extends BaseConverter {
                 return this.toGeminiStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
                 return this.toClaudeStreamChunk(chunk, model);
+            case MODEL_PROTOCOL_PREFIX.CODEX:
+                return chunk; // Codex to Codex
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
     }
 
     /**
+     * 转换模型列表
+     */
+    convertModelList(data, targetProtocol) {
+        return data;
+    }
+
+    /**
+     * OpenAI Responses → Codex 请求转换
+     */
+    toOpenAIResponsesToCodexRequest(responsesRequest) {
+        let codexRequest = { ...responsesRequest };
+    
+        // 处理 input 字段，如果它是字符串，则转换为消息数组
+        if (codexRequest.input && typeof codexRequest.input === 'string') {
+            const inputText = codexRequest.input;
+            codexRequest.input = [{
+                type: "message",
+                role: "user",
+                content: [{
+                    type: "input_text",
+                    text: inputText
+                }]
+            }];
+        }
+    
+        // 设置Codex特定的字段
+        codexRequest.stream = true;
+        codexRequest.store = false;
+        codexRequest.parallel_tool_calls = true;
+        codexRequest.include = ['reasoning.encrypted_content'];
+    
+        // 删除Codex不支持的字段
+        delete codexRequest.max_output_tokens;
+        delete codexRequest.max_completion_tokens;
+        delete codexRequest.temperature;
+        delete codexRequest.top_p;
+        delete codexRequest.service_tier;
+        delete codexRequest.user;
+        delete codexRequest.reasoning;
+        
+        // 添加 reasoning 配置
+        codexRequest.reasoning = {
+          "effort": "medium",
+          "summary": "auto"
+        };
+        
+    
+        // 确保 input 数组中的每个项都有 type: "message"，并将系统角色转换为开发者角色
+        if (codexRequest.input && Array.isArray(codexRequest.input)) {
+            codexRequest.input = codexRequest.input.map(item => {
+                // 如果没有 type 或者 type 不是 message，则添加 type: "message"
+                if (!item.type || item.type !== 'message') {
+                    item = { type: "message", ...item };
+                }
+                
+                // 将系统角色转换为开发者角色
+                if (item.role === 'system') {
+                    item = { ...item, role: 'developer' };
+                }
+                
+                return item;
+            });
+        }
+    
+        return codexRequest;
+    }
+
+    /**
      * OpenAI → Codex 请求转换
      */
-    toCodexRequest(data) {
+    toOpenAIRequestToCodexRequest(data) {
         // 构建工具名称映射
         this.buildToolNameMap(data.tools || []);
 
@@ -537,6 +594,210 @@ export class CodexConverter extends BaseConverter {
     }
 
     /**
+     * Codex → OpenAI Responses 响应转换
+     */
+    toOpenAIResponsesResponse(rawJSON, model) {
+        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
+        if (root.type !== 'response.completed') {
+            return null;
+        }
+
+        const response = root.response;
+        const unixTimestamp = response.created_at || Math.floor(Date.now() / 1000);
+
+        const output = [];
+
+        if (response.output && Array.isArray(response.output)) {
+            for (const item of response.output) {
+                if (item.type === 'reasoning') {
+                    let reasoningText = '';
+                    if (Array.isArray(item.summary)) {
+                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
+                        if (summaryItem) reasoningText = summaryItem.text;
+                    }
+                    if (reasoningText) {
+                        output.push({
+                            id: `msg_${uuidv4().replace(/-/g, '')}`,
+                            type: "message",
+                            role: "assistant",
+                            status: "completed",
+                            content: [{
+                                type: "reasoning",
+                                text: reasoningText
+                            }]
+                        });
+                    }
+                } else if (item.type === 'message') {
+                    let contentText = '';
+                    if (Array.isArray(item.content)) {
+                        const contentItem = item.content.find(c => c.type === 'output_text');
+                        if (contentItem) contentText = contentItem.text;
+                    }
+                    if (contentText) {
+                        output.push({
+                            id: `msg_${uuidv4().replace(/-/g, '')}`,
+                            type: "message",
+                            role: "assistant",
+                            status: "completed",
+                            content: [{
+                                type: "output_text",
+                                text: contentText,
+                                annotations: []
+                            }]
+                        });
+                    }
+                } else if (item.type === 'function_call') {
+                    output.push({
+                        id: item.call_id || `call_${uuidv4().replace(/-/g, '')}`,
+                        type: "function_call",
+                        name: this.getOriginalToolName(item.name),
+                        arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments),
+                        status: "completed"
+                    });
+                }
+            }
+        }
+
+        return {
+            id: response.id || `resp_${uuidv4().replace(/-/g, '')}`,
+            object: "response",
+            created_at: unixTimestamp,
+            model: response.model || model,
+            status: "completed",
+            output: output,
+            incomplete_details: response.incomplete_details || null,
+            usage: {
+                input_tokens: response.usage?.input_tokens || 0,
+                output_tokens: response.usage?.output_tokens || 0,
+                total_tokens: response.usage?.total_tokens || 0,
+                output_tokens_details: {
+                    reasoning_tokens: response.usage?.output_tokens_details?.reasoning_tokens || 0
+                }
+            }
+        };
+    }
+
+    /**
+     * Codex → Gemini 响应转换
+     */
+    toGeminiResponse(rawJSON, model) {
+        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
+        if (root.type !== 'response.completed') {
+            return null;
+        }
+
+        const response = root.response;
+        const parts = [];
+
+        if (response.output && Array.isArray(response.output)) {
+            for (const item of response.output) {
+                if (item.type === 'reasoning') {
+                    let reasoningText = '';
+                    if (Array.isArray(item.summary)) {
+                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
+                        if (summaryItem) reasoningText = summaryItem.text;
+                    }
+                    if (reasoningText) {
+                        parts.push({ text: reasoningText, thought: true });
+                    }
+                } else if (item.type === 'message') {
+                    let contentText = '';
+                    if (Array.isArray(item.content)) {
+                        const contentItem = item.content.find(c => c.type === 'output_text');
+                        if (contentItem) contentText = contentItem.text;
+                    }
+                    if (contentText) {
+                        parts.push({ text: contentText });
+                    }
+                } else if (item.type === 'function_call') {
+                    parts.push({
+                        functionCall: {
+                            name: this.getOriginalToolName(item.name),
+                            args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                        }
+                    });
+                }
+            }
+        }
+
+        return {
+            candidates: [{
+                content: {
+                    role: "model",
+                    parts: parts
+                },
+                finishReason: "STOP"
+            }],
+            usageMetadata: {
+                promptTokenCount: response.usage?.input_tokens || 0,
+                candidatesTokenCount: response.usage?.output_tokens || 0,
+                totalTokenCount: response.usage?.total_tokens || 0
+            },
+            modelVersion: response.model || model,
+            responseId: response.id
+        };
+    }
+
+    /**
+     * Codex → Claude 响应转换
+     */
+    toClaudeResponse(rawJSON, model) {
+        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
+        if (root.type !== 'response.completed') {
+            return null;
+        }
+
+        const response = root.response;
+        const content = [];
+        let stopReason = "end_turn";
+
+        if (response.output && Array.isArray(response.output)) {
+            for (const item of response.output) {
+                if (item.type === 'reasoning') {
+                    let reasoningText = '';
+                    if (Array.isArray(item.summary)) {
+                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
+                        if (summaryItem) reasoningText = summaryItem.text;
+                    }
+                    if (reasoningText) {
+                        content.push({ type: "thinking", thinking: reasoningText });
+                    }
+                } else if (item.type === 'message') {
+                    let contentText = '';
+                    if (Array.isArray(item.content)) {
+                        const contentItem = item.content.find(c => c.type === 'output_text');
+                        if (contentItem) contentText = contentItem.text;
+                    }
+                    if (contentText) {
+                        content.push({ type: "text", text: contentText });
+                    }
+                } else if (item.type === 'function_call') {
+                    stopReason = "tool_use";
+                    content.push({
+                        type: "tool_use",
+                        id: item.call_id || `call_${uuidv4().replace(/-/g, '')}`,
+                        name: this.getOriginalToolName(item.name),
+                        input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
+                    });
+                }
+            }
+        }
+
+        return {
+            id: response.id || `msg_${uuidv4().replace(/-/g, '')}`,
+            type: "message",
+            role: "assistant",
+            model: response.model || model,
+            content: content,
+            stop_reason: stopReason,
+            usage: {
+                input_tokens: response.usage?.input_tokens || 0,
+                output_tokens: response.usage?.output_tokens || 0
+            }
+        };
+    }
+
+    /**
      * Codex → OpenAI 流式响应块转换
      */
     toOpenAIStreamChunk(chunk, model) {
@@ -700,221 +961,13 @@ export class CodexConverter extends BaseConverter {
     }
 
     /**
-     * 转换模型列表
-     */
-    convertModelList(data, targetProtocol) {
-        return data;
-    }
-
-    /**
-     * Codex → OpenAI Responses 响应转换
-     */
-    toOpenAIResponsesResponse(rawJSON, model) {
-        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
-        if (root.type !== 'response.completed') {
-            return null;
-        }
-
-        const response = root.response;
-        const unixTimestamp = response.created_at || Math.floor(Date.now() / 1000);
-
-        const output = [];
-        let hasToolCall = false;
-
-        if (response.output && Array.isArray(response.output)) {
-            for (const item of response.output) {
-                if (item.type === 'reasoning') {
-                    let reasoningText = '';
-                    if (Array.isArray(item.summary)) {
-                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
-                        if (summaryItem) reasoningText = summaryItem.text;
-                    }
-                    if (reasoningText) {
-                        output.push({
-                            id: `msg_${uuidv4().replace(/-/g, '')}`,
-                            type: "message",
-                            role: "assistant",
-                            status: "completed",
-                            content: [{
-                                type: "reasoning",
-                                text: reasoningText
-                            }]
-                        });
-                    }
-                } else if (item.type === 'message') {
-                    let contentText = '';
-                    if (Array.isArray(item.content)) {
-                        const contentItem = item.content.find(c => c.type === 'output_text');
-                        if (contentItem) contentText = contentItem.text;
-                    }
-                    if (contentText) {
-                        output.push({
-                            id: `msg_${uuidv4().replace(/-/g, '')}`,
-                            type: "message",
-                            role: "assistant",
-                            status: "completed",
-                            content: [{
-                                type: "output_text",
-                                text: contentText,
-                                annotations: []
-                            }]
-                        });
-                    }
-                } else if (item.type === 'function_call') {
-                    hasToolCall = true;
-                    output.push({
-                        id: item.call_id || `call_${uuidv4().replace(/-/g, '')}`,
-                        type: "function_call",
-                        name: this.getOriginalToolName(item.name),
-                        arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments),
-                        status: "completed"
-                    });
-                }
-            }
-        }
-
-        return {
-            id: response.id || `resp_${uuidv4().replace(/-/g, '')}`,
-            object: "response",
-            created_at: unixTimestamp,
-            model: response.model || model,
-            status: "completed",
-            output: output,
-            usage: {
-                input_tokens: response.usage?.input_tokens || 0,
-                output_tokens: response.usage?.output_tokens || 0,
-                total_tokens: response.usage?.total_tokens || 0,
-                output_tokens_details: {
-                    reasoning_tokens: response.usage?.output_tokens_details?.reasoning_tokens || 0
-                }
-            }
-        };
-    }
-
-    /**
-     * Codex → Gemini 响应转换
-     */
-    toGeminiResponse(rawJSON, model) {
-        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
-        if (root.type !== 'response.completed') {
-            return null;
-        }
-
-        const response = root.response;
-        const parts = [];
-
-        if (response.output && Array.isArray(response.output)) {
-            for (const item of response.output) {
-                if (item.type === 'reasoning') {
-                    let reasoningText = '';
-                    if (Array.isArray(item.summary)) {
-                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
-                        if (summaryItem) reasoningText = summaryItem.text;
-                    }
-                    if (reasoningText) {
-                        parts.push({ text: reasoningText, thought: true });
-                    }
-                } else if (item.type === 'message') {
-                    let contentText = '';
-                    if (Array.isArray(item.content)) {
-                        const contentItem = item.content.find(c => c.type === 'output_text');
-                        if (contentItem) contentText = contentItem.text;
-                    }
-                    if (contentText) {
-                        parts.push({ text: contentText });
-                    }
-                } else if (item.type === 'function_call') {
-                    parts.push({
-                        functionCall: {
-                            name: this.getOriginalToolName(item.name),
-                            args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
-                        }
-                    });
-                }
-            }
-        }
-
-        return {
-            candidates: [{
-                content: {
-                    role: "model",
-                    parts: parts
-                },
-                finishReason: "STOP"
-            }],
-            usageMetadata: {
-                promptTokenCount: response.usage?.input_tokens || 0,
-                candidatesTokenCount: response.usage?.output_tokens || 0,
-                totalTokenCount: response.usage?.total_tokens || 0
-            },
-            modelVersion: response.model || model,
-            responseId: response.id
-        };
-    }
-
-    /**
-     * Codex → Claude 响应转换
-     */
-    toClaudeResponse(rawJSON, model) {
-        const root = typeof rawJSON === 'string' ? JSON.parse(rawJSON) : rawJSON;
-        if (root.type !== 'response.completed') {
-            return null;
-        }
-
-        const response = root.response;
-        const content = [];
-        let stopReason = "end_turn";
-
-        if (response.output && Array.isArray(response.output)) {
-            for (const item of response.output) {
-                if (item.type === 'reasoning') {
-                    let reasoningText = '';
-                    if (Array.isArray(item.summary)) {
-                        const summaryItem = item.summary.find(s => s.type === 'summary_text');
-                        if (summaryItem) reasoningText = summaryItem.text;
-                    }
-                    if (reasoningText) {
-                        content.push({ type: "thinking", thinking: reasoningText });
-                    }
-                } else if (item.type === 'message') {
-                    let contentText = '';
-                    if (Array.isArray(item.content)) {
-                        const contentItem = item.content.find(c => c.type === 'output_text');
-                        if (contentItem) contentText = contentItem.text;
-                    }
-                    if (contentText) {
-                        content.push({ type: "text", text: contentText });
-                    }
-                } else if (item.type === 'function_call') {
-                    stopReason = "tool_use";
-                    content.push({
-                        type: "tool_use",
-                        id: item.call_id || `call_${uuidv4().replace(/-/g, '')}`,
-                        name: this.getOriginalToolName(item.name),
-                        input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
-                    });
-                }
-            }
-        }
-
-        return {
-            id: response.id || `msg_${uuidv4().replace(/-/g, '')}`,
-            type: "message",
-            role: "assistant",
-            model: response.model || model,
-            content: content,
-            stop_reason: stopReason,
-            usage: {
-                input_tokens: response.usage?.input_tokens || 0,
-                output_tokens: response.usage?.output_tokens || 0
-            }
-        };
-    }
-
-    /**
      * Codex → OpenAI Responses 流式响应转换
      */
     toOpenAIResponsesStreamChunk(chunk, model) {
+        if(true){
+            return chunk;
+        }
+
         const type = chunk.type;
         const resId = chunk.response?.id || 'default';
         
@@ -1162,10 +1215,4 @@ export class CodexConverter extends BaseConverter {
         return null;
     }
 
-    /**
-     * 转换模型列表
-     */
-    convertModelList(data, targetProtocol) {
-        return data;
-    }
 }
