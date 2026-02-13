@@ -1841,7 +1841,8 @@ async saveCredentialsToFile(filePath, newData) {
             const { responseText, toolCalls } = this._processApiResponse(response);
             return this.buildClaudeResponse(responseText, false, 'assistant', model, toolCalls, inputTokens);
         } catch (error) {
-            logger.error('[Kiro] Error in generateContent:', error);
+            // Never log raw error objects here: upstream errors (Axios) may contain headers (Authorization) and proxy URLs.
+            logger.error('[Kiro] Error in generateContent:', error?.message || String(error));
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
@@ -2168,7 +2169,8 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             return await this.callApi(method, model, body, isRetry, retryCount);
         } catch (error) {
-            logger.error('[Kiro] Error calling API:', error);
+            // Never log raw Axios errors: they may embed Authorization headers / proxy URLs in config/agents.
+            logger.error('[Kiro] Error calling API:', error?.message || String(error));
             throw error;
         }
     }
@@ -2546,7 +2548,8 @@ async saveCredentialsToFile(filePath, newData) {
             yield { type: "message_stop" };
 
         } catch (error) {
-            logger.error('[Kiro] Error in streaming generation:', error);
+            // Never log raw error objects: upstream errors (Axios) may contain headers (Authorization) and proxy URLs.
+            logger.error('[Kiro] Error in streaming generation:', error?.message || String(error));
             throw new Error(`Error processing response: ${error.message}`);
         }
     }
@@ -2975,7 +2978,8 @@ async saveCredentialsToFile(filePath, newData) {
                 throw formattedError;
             }
             
-            logger.error('[Kiro] Failed to fetch usage limits:', formattedError.message, error);
+            // Never log raw Axios errors here: they may include Authorization headers / proxy URLs.
+            logger.error('[Kiro] Failed to fetch usage limits:', formattedError.message);
             throw formattedError;
         }
     }
