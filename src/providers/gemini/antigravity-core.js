@@ -55,7 +55,7 @@ const DEFAULT_THINKING_MIN = 1024;
 const DEFAULT_THINKING_MAX = 100000;
 
 // 获取 Antigravity 模型列表
-const ANTIGRAVITY_MODELS = getProviderModels('gemini-antigravity');
+const ANTIGRAVITY_MODELS = getProviderModels(MODEL_PROVIDER.ANTIGRAVITY);
 
 // 模型别名映射 - 别名 -> 真实模型名
 const MODEL_ALIAS_MAP = {
@@ -1107,7 +1107,7 @@ export class AntigravityApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            logger.error(`[Antigravity API] Error calling ${method} on ${baseURL}:`, status, error.message);
+            logger.error(`[Antigravity API] Error calling (Status: ${status}, Code: ${errorCode}):`, error.message);
 
             if ((status === 400 || status === 401) && !isRetry) {
                 logger.info('[Antigravity API] Received 401/400. Triggering background refresh via PoolManager...');
@@ -1209,7 +1209,7 @@ export class AntigravityApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            logger.error(`[Antigravity API] Error during stream ${method} on ${baseURL}:`, status, error.message);
+            logger.error(`[Antigravity API] Error during stream (Status: ${status}, Code: ${errorCode}):`, error.message);
 
             if ((status === 400 || status === 401) && !isRetry) {
                 logger.info('[Antigravity API] Received 401/400 during stream. Triggering background refresh via PoolManager...');

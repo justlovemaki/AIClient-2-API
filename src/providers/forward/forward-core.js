@@ -87,7 +87,7 @@ export class ForwardApiService {
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            logger.error(`[Forward API] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[Forward API] Error calling API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }
@@ -139,6 +139,8 @@ export class ForwardApiService {
                 return;
             }
 
+            const errorMessage = error.message || '';
+            logger.error(`[Forward API] Error calling streaming API (Status: ${status || errorCode}):`, errorMessage);
             throw error;
         }
     }

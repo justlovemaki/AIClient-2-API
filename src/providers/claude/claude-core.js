@@ -122,7 +122,7 @@ export class ClaudeApiService {
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            logger.error(`[Claude API] Error calling API (Status: ${status}, Code: ${errorCode}):`, error.response ? error.response.data : error.message);
+            logger.error(`[Claude API] Error calling API (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         }
     }

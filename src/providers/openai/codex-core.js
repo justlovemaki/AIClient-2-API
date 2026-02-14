@@ -148,11 +148,12 @@ export class CodexApiService {
 
         const url = `${this.baseUrl}/responses`;
         const body = this.prepareRequestBody(model, requestBody, true);
-        const headers = this.buildHeaders(body.prompt_cache_key);
+        const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
             const config = {
                 headers,
+                responseType: 'text', // 确保以文本形式接收 SSE 流
                 timeout: 120000 // 2 分钟超时
             };
 
@@ -184,8 +185,10 @@ export class CodexApiService {
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
                 throw error;
+            } else {
+                logger.error(`[Codex] Error calling non-stream API (Status: ${error.response?.status}, Code: ${error.code || 'N/A'}):`, error.message);
+                throw error;
             }
-            throw error;
         }
     }
 
@@ -216,7 +219,7 @@ export class CodexApiService {
 
         const url = `${this.baseUrl}/responses`;
         const body = this.prepareRequestBody(model, requestBody, true);
-        const headers = this.buildHeaders(body.prompt_cache_key);
+        const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
             const config = {
@@ -254,6 +257,7 @@ export class CodexApiService {
                 error.skipErrorCount = true;
                 throw error;
             } else {
+                logger.error(`[Codex] Error calling streaming API (Status: ${error.response?.status}, Code: ${error.code || 'N/A'}):`, error.message);
                 throw error;
             }
         }
@@ -262,21 +266,34 @@ export class CodexApiService {
     /**
      * 构建请求头
      */
-    buildHeaders(cacheId) {
-        return {
-            'version': '0.98.0',
+    buildHeaders(cacheId, stream = true) {
+        const headers = {
+            'version': '0.101.0',
             'x-codex-beta-features': 'powershell_utf8',
             'x-oai-web-search-eligible': 'true',
-            'session_id': cacheId,
-            'accept': 'text/event-stream',
             'authorization': `Bearer ${this.accessToken}`,
             'chatgpt-account-id': this.accountId,
             'content-type': 'application/json',
-            'user-agent': 'codex_cli_rs/0.89.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
+            'user-agent': 'codex_cli_rs/0.101.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
             'originator': 'codex_cli_rs',
             'host': 'chatgpt.com',
-            'Connection': 'close'
+            'Connection': 'Keep-Alive'
         };
+
+        // 设置 Conversation_id 和 Session_id
+        if (cacheId) {
+            headers['Conversation_id'] = cacheId;
+            headers['Session_id'] = cacheId;
+        }
+
+        // 根据是否流式设置 Accept 头
+     if (stream) {
+            headers['accept'] = 'text/event-stream';
+        } else {
+            headers['accept'] = 'application/json';
+        }
+
+        return headers;
     }
 
     /**
@@ -438,22 +455,32 @@ export class CodexApiService {
      * 解析非流式响应
      */
     parseNonStreamResponse(data) {
+        // 确保 data 是字符串
+        const responseText = typeof data === 'string' ? data : String(data);
+        
         // 从 SSE 流中提取 response.completed 事件
-        const lines = data.split('\n');
+        const lines = responseText.split('\n');
         for (const line of lines) {
             if (line.startsWith('data: ')) {
                 const jsonData = line.slice(6).trim();
+                if (!jsonData || jsonData === '[DONE]') {
+                    continue;
+                }
                 try {
                     const parsed = JSON.parse(jsonData);
                     if (parsed.type === 'response.completed') {
                         return parsed;
                     }
                 } catch (e) {
-                    // 继续解析
+                    // 继续解析下一行
+                    logger.debug('[Codex] Failed to parse SSE line:', e.message);
                 }
             }
         }
-        throw new Error('No completed response found in Codex response');
+        
+        // 如果没有找到 response.completed，抛出错误
+        logger.error('[Codex] No completed response found in Codex response');
+        throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
     }
 
     /**
@@ -472,7 +499,8 @@ export class CodexApiService {
                 { id: 'gpt-5.1-codex-max', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.2', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
                 { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.3-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
+                { id: 'gpt-5.3-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
+                { id: 'gpt-5.3-codex-spark', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
             ]
         };
     }

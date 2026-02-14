@@ -66,8 +66,10 @@ export const PROVIDER_MODELS = {
         'deepseek-v3',
         // 手动定义
         'glm-4.7',
+        'glm-5',
         'kimi-k2.5',
         'minimax-m2.1',
+        'minimax-m2.5',
     ],
     'openai-codex-oauth': [
         'gpt-5',
@@ -79,7 +81,8 @@ export const PROVIDER_MODELS = {
         'gpt-5.1-codex-max',
         'gpt-5.2',
         'gpt-5.2-codex',
-        'gpt-5.3-codex'
+        'gpt-5.3-codex',
+        'gpt-5.3-codex-spark'
     ],
     'forward-api': []
 };

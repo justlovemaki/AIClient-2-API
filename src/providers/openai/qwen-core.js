@@ -19,7 +19,7 @@ import { getProviderPoolManager } from '../../services/service-manager.js';
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
 // 从 provider-models.js 获取支持的模型列表
-const QWEN_MODELS = getProviderModels('openai-qwen-oauth');
+const QWEN_MODELS = getProviderModels(MODEL_PROVIDER.QWEN_API);
 const QWEN_MODEL_LIST = QWEN_MODELS.map(id => ({
     id: id,
     name: id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
@@ -645,7 +645,7 @@ export class QwenApiService {
                 return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
             }
 
-            logger.error(`[QwenApiService] Error calling API (Status: ${status}, Code: ${errorCode}):`, data);
+            logger.error(`[QwenApiService] Error calling API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }

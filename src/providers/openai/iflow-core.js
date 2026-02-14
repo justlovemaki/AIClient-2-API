@@ -23,9 +23,11 @@ import * as https from 'https';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
+import { getProviderModels } from '../provider-models.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';
@@ -36,32 +38,10 @@ const IFLOW_OAUTH_CLIENT_ID = '10009311001';
 const IFLOW_OAUTH_CLIENT_SECRET = '4Z3YjXycVsQvyGF1etiNlIBB4RsqSDtW';
 
 // 默认模型列表
-const IFLOW_MODELS = [
-    // iFlow 特有模型
-    'iflow-rome-30ba3b',
-    // Qwen 模型
-    'qwen3-coder-plus',
-    'qwen3-max',
-    'qwen3-vl-plus',
-    'qwen3-max-preview',
-    'qwen3-32b',
-    'qwen3-235b-a22b-thinking-2507',
-    'qwen3-235b-a22b-instruct',
-    'qwen3-235b',
-    // Kimi 模型
-    'kimi-k2-0905',
-    'kimi-k2',
-    // GLM 模型
-    'glm-4.6',
-    'glm-4.7',
-    // DeepSeek 模型
-    'deepseek-v3.2',
-    'deepseek-r1',
-    'deepseek-v3'
-];
+const IFLOW_MODELS = getProviderModels(MODEL_PROVIDER.IFLOW_API);
 
 // 支持 thinking 的模型前缀
-const THINKING_MODEL_PREFIXES = ['glm-4', 'qwen3-235b-a22b-thinking', 'deepseek-r1'];
+const THINKING_MODEL_PREFIXES = ['glm-', 'qwen3-235b-a22b-thinking', 'deepseek-r1'];
 
 // ==================== Token 管理 ====================
 
@@ -295,6 +275,33 @@ async function fetchUserInfo(accessToken, axiosInstance = null) {
 // ==================== 请求处理工具函数 ====================
 
 /**
+ * 生成 UUID v4
+ * @returns {string} - UUID 字符串
+ */
+function generateUUID() {
+    return crypto.randomUUID();
+}
+
+/**
+ * 创建 iFlow 签名
+ * 签名格式: HMAC-SHA256(userAgent:sessionId:timestamp, apiKey)
+ * @param {string} userAgent - User-Agent
+ * @param {string} sessionID - Session ID
+ * @param {number} timestamp - 时间戳（毫秒）
+ * @param {string} apiKey - API Key
+ * @returns {string} - 十六进制签名
+ */
+function createIFlowSignature(userAgent, sessionID, timestamp, apiKey) {
+    if (!apiKey) {
+        return '';
+    }
+    const payload = `${userAgent}:${sessionID}:${timestamp}`;
+    const hmac = crypto.createHmac('sha256', apiKey);
+    hmac.update(payload);
+    return hmac.digest('hex');
+}
+
+/**
  * 检查模型是否支持 thinking 配置
  * @param {string} model - 模型名称
  * @returns {boolean}
@@ -359,6 +366,9 @@ function applyIFlowThinkingConfig(body, model) {
  * 保留消息历史中的 reasoning_content
  * 对于支持 thinking 的模型，保留 assistant 消息中的 reasoning_content
  *
+ * 对于 GLM-4.6/4.7 和 MiniMax M2/M2.1，建议在消息历史中包含完整的 assistant
+ * 响应（包括 reasoning_content）以保持更好的上下文连续性。
+ *
  * @param {Object} body - 请求体
  * @param {string} model - 模型名称
  * @returns {Object} - 处理后的请求体
@@ -368,11 +378,13 @@ function preserveReasoningContentInMessages(body, model) {
     
     const lowerModel = model.toLowerCase();
     
-    // 只对支持 thinking 的模型应用
+    // 只对支持 thinking 且需要历史保留的模型应用
     const needsPreservation = lowerModel.startsWith('glm-4') ||
-                              lowerModel.includes('thinking') ||
-                              lowerModel.startsWith('deepseek-r1');
-    if (!needsPreservation) return body;
+                              lowerModel.startsWith('minimax-m2');
+    
+    if (!needsPreservation) {
+        return body;
+    }
     
     const messages = body.messages;
     if (!Array.isArray(messages)) return body;
@@ -382,8 +394,10 @@ function preserveReasoningContentInMessages(body, model) {
         msg.role === 'assistant' && msg.reasoning_content && msg.reasoning_content !== ''
     );
     
+    // 如果 reasoning content 已经存在，说明消息格式正确
+    // 客户端已经正确地在历史中保留了推理内容
     if (hasReasoningContent) {
-        logger.info(`[iFlow] reasoning_content found in message history for ${model}`);
+        logger.debug(`[iFlow] reasoning_content found in message history for ${model}`);
     }
     
     return body;
@@ -735,11 +749,27 @@ export class IFlowApiService {
      * @returns {Object} - 请求头
      */
     _getHeaders(stream = false) {
+        // 生成 session-id
+        const sessionID = 'session-' + generateUUID();
+        
+        // 生成时间戳（毫秒）
+        const timestamp = Date.now();
+        
+        // 生成签名
+        const signature = createIFlowSignature(IFLOW_USER_AGENT, sessionID, timestamp, this.apiKey);
+        
         const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`,
             'User-Agent': IFLOW_USER_AGENT,
+            'session-id': sessionID,
+            'x-iflow-timestamp': timestamp.toString(),
         };
+        
+        // 只有在签名生成成功时才添加
+        if (signature) {
+            headers['x-iflow-signature'] = signature;
+        }
         
         if (stream) {
             headers['Accept'] = 'text/event-stream';
@@ -824,7 +854,7 @@ export class IFlowApiService {
                 return this.callApi(endpoint, body, model, isRetry, retryCount + 1);
             }
 
-            logger.error(`[iFlow] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[iFlow] Error calling API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }
@@ -985,7 +1015,7 @@ export class IFlowApiService {
                 return;
             }
 
-            logger.error(`[iFlow] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[iFlow] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }
@@ -1055,7 +1085,7 @@ export class IFlowApiService {
         }
         
         // 需要手动添加的模型列表
-        const manualModels = ['glm-4.7', 'kimi-k2.5', 'minimax-m2.1'];
+        const manualModels = ['glm-4.7', 'glm-5', 'kimi-k2.5', 'minimax-m2.1', 'minimax-m2.5'];
         
         try {
             const response = await this.axiosInstance.get('/models', {

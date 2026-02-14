@@ -36,7 +36,7 @@ const DEFAULT_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const DEFAULT_CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = getProviderModels('gemini-cli-oauth');
+const GEMINI_MODELS = getProviderModels(MODEL_PROVIDER.GEMINI_CLI);
 const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
 function is_anti_truncation_model(model) {
@@ -489,7 +489,7 @@ export class GeminiApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            logger.error(`[Gemini API] Error calling ${method}:`, status, error.message);
+            logger.error(`[Gemini API] Error calling (Status: ${status}, Code: ${errorCode}):`, errorMessage);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {
@@ -568,7 +568,7 @@ export class GeminiApiService {
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
             
-            logger.error(`[Gemini API] Error during stream ${method}:`, status, error.message);
+            logger.error(`[Gemini API] Error during stream (Status: ${status}, Code: ${errorCode}):`, errorMessage);
 
             // Handle 401 (Unauthorized) - refresh auth and retry once
             if ((status === 400 || status === 401) && !isRetry) {

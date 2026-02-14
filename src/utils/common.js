@@ -494,7 +494,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.code === 400) {
+            if (error.response?.status === 400) {
                 logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
             } else {
                 logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
@@ -692,7 +692,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.code === 400) {
+            if (error.response?.status === 400) {
                 logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
             } else {
                 logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);

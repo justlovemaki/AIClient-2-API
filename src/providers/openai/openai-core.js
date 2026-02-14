@@ -98,7 +98,7 @@ export class OpenAIApiService {
                 return this.callApi(endpoint, body, isRetry, retryCount + 1);
             }
 
-            logger.error(`[OpenAI API] Error calling API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[OpenAI API] Error calling API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }
@@ -183,7 +183,7 @@ export class OpenAIApiService {
                 return;
             }
 
-            logger.error(`[OpenAI API] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, data || error.message);
+            logger.error(`[OpenAI API] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
             throw error;
         }
     }
