@@ -432,11 +432,19 @@ export class ProviderPoolManager {
         // - usageCount 越多，分越大。
         // - lastSelectionSeq 越大（最近选过），分越大。
         
+        // --- 策略优化：相对序列号 ---
+        // 为了防止全局自增序列号导致的“老节点排挤新节点”或“重置节点排挤未重置节点”
+        // 我们计算节点序列号相对于当前池中最小序列号的偏移量，并对该偏移量进行封顶处理。
+        // 这样序列号只在打破“同一毫秒”的平局时起作用，而不会成为跨越长时间周期的惩罚。
+        const pool = this.providerStatus[providerStatus.type] || [];
+        const minSeqInPool = Math.min(...pool.map(p => p.config._lastSelectionSeq || 0));
+        const relativeSeq = Math.max(0, lastSelectionSeq - minSeqInPool);
+        const cappedRelativeSeq = Math.min(relativeSeq, 100); // 封顶偏移量，确保它只影响微观排序
+        
         // usageCount * 10000: 每多用一次，权重增加 10 秒
-        // lastSelectionSeq * 1000: 即使毫秒时间相同，序列号也会让分数产生差异（增加 1 秒权重）
-        // 这样可以确保在毫秒级并发下，刚被选中的节点会立刻排到队列末尾
+        // cappedRelativeSeq * 1000: 序列号偏移只在 100 秒（10次使用）范围内波动
         const baseScore = lastUsedTime + (usageCount * 10000);
-        const sequenceScore = lastSelectionSeq * 1000;
+        const sequenceScore = cappedRelativeSeq * 1000;
         
         return baseScore + sequenceScore;
     }
@@ -594,6 +602,7 @@ export class ProviderPoolManager {
                 this.providerStatus[providerType].push({
                     config: providerConfig,
                     uuid: providerConfig.uuid, // Still keep uuid at the top level for easy access
+                    type: providerType, // 保存 providerType 引用
                 });
             });
         }
@@ -1097,6 +1106,7 @@ export class ProviderPoolManager {
             provider.config.needsRefresh = false;
             provider.config.lastErrorTime = null;
             provider.config.lastErrorMessage = null;
+            provider.config._lastSelectionSeq = 0;
             
             // 更新健康检测信息
             if (healthCheckModel) {
@@ -1163,6 +1173,7 @@ export class ProviderPoolManager {
         if (provider) {
             provider.config.errorCount = 0;
             provider.config.usageCount = 0;
+            provider.config._lastSelectionSeq = 0;
             this._log('info', `Reset provider counters: ${provider.config.uuid} for type ${providerType}`);
             
             this._debouncedSave(providerType);
