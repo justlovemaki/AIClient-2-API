@@ -153,6 +153,7 @@ export class CodexConverter extends BaseConverter {
             input: this.convertMessages(data.messages || []),
             stream: true,
             store: false,
+            metadata: data.metadata || {},
             reasoning: {
                 effort: data.reasoning_effort || 'medium',
                 summary: 'auto'

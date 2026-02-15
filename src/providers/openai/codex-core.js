@@ -300,8 +300,25 @@ export class CodexApiService {
      * 准备请求体
      */
     prepareRequestBody(model, requestBody, stream) {
-        // 添加会话缓存 ID
-        const cacheKey = `${model}-${requestBody.metadata?.user_id || 'default'}`;
+        // 提取 metadata 并从请求体中移除，避免透传到上游
+        const metadata = requestBody.metadata || {};
+        
+        // 明确会话维度：优先使用 session_id 或 conversation_id，其次 user_id
+        const sessionId = metadata.session_id || metadata.conversation_id || metadata.user_id || 'default';
+        
+        const cleanedBody = { ...requestBody };
+        delete cleanedBody.metadata;
+
+        // 生成会话缓存键
+        // 默认弱化 model 依赖，以提升同会话跨模型的缓存命中率
+        // 如果 sessionId 为 'default'，则必须加上 model 以提供基础隔离
+        let cacheKey = sessionId;
+        if (sessionId === 'default') {
+            cacheKey = `${model}-default`;
+        } else {
+            cacheKey = `${model}-${sessionId}`;
+        }
+        
         let cache = this.conversationCache.get(cacheKey);
 
         if (!cache || cache.expire < Date.now()) {
@@ -312,10 +329,9 @@ export class CodexApiService {
             this.conversationCache.set(cacheKey, cache);
         }
 
-        // 注意：requestBody 已经是转换后的 Codex 格式
-        // 只需要添加 cache key 和 stream 参数
+        // 注意：requestBody 已经去除了 metadata
         return {
-            ...requestBody,
+            ...cleanedBody,
             stream,
             prompt_cache_key: cache.id
         };

@@ -1871,6 +1871,7 @@ export class ClaudeConverter extends BaseConverter {
             stream: true,
             store: false,
             parallel_tool_calls: true,
+            metadata: claudeRequest.metadata || {},
             reasoning: {
                 effort: claudeRequest.reasoning?.effort || 'medium',
                 summary: 'auto'
