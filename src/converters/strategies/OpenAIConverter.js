@@ -149,14 +149,10 @@ export class OpenAIConverter extends BaseConverter {
 
             if (message.role === 'tool') {
                 // 工具结果消息
-                let toolContent = message.content;
-                if (typeof toolContent === 'object' && toolContent !== null) {
-                    toolContent = JSON.stringify(toolContent);
-                }
                 content.push({
                     type: 'tool_result',
                     tool_use_id: message.tool_call_id,
-                    content: toolContent
+                    content: safeParseJSON(message.content)
                 });
                 claudeMessages.push({ role: 'user', content: content });
             } else if (message.role === 'assistant' && (message.tool_calls?.length || message.function_calls?.length)) {
@@ -276,6 +272,32 @@ export class OpenAIConverter extends BaseConverter {
                 input_schema: t.function.parameters || { type: 'object', properties: {} }
             }));
             claudeRequest.tool_choice = this.buildClaudeToolChoice(openaiRequest.tool_choice);
+        }
+
+        // Optional passthrough: request-side "thinking" controls for Claude/Kiro.
+        // OpenAI-compatible clients can provide these via `extra_body.anthropic.thinking`.
+        // We intentionally keep normalization minimal here; provider implementations
+        // (e.g. Kiro) clamp budgets and apply defaults.
+        const extThinking = openaiRequest?.extra_body?.anthropic?.thinking;
+        if (extThinking && typeof extThinking === 'object' && !Array.isArray(extThinking)) {
+            const type = String(extThinking.type || '').toLowerCase().trim();
+            if (type === 'enabled') {
+                const thinkingCfg = { type: 'enabled' };
+                if (extThinking.budget_tokens !== undefined) {
+                    const n = parseInt(extThinking.budget_tokens, 10);
+                    if (Number.isFinite(n)) {
+                        thinkingCfg.budget_tokens = n;
+                    }
+                }
+                claudeRequest.thinking = thinkingCfg;
+            } else if (type === 'adaptive') {
+                const effortRaw = typeof extThinking.effort === 'string' ? extThinking.effort : '';
+                const effort = effortRaw.toLowerCase().trim();
+                const normalizedEffort = (effort === 'low' || effort === 'medium' || effort === 'high') ? effort : 'high';
+                claudeRequest.thinking = { type: 'adaptive', effort: normalizedEffort };
+            } else if (type === 'disabled') {
+                // Explicitly disabled: omit thinking config.
+            }
         }
 
         return claudeRequest;

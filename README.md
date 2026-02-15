@@ -250,6 +250,46 @@ In the Web UI management interface, you can complete authorization configuration
 3. **Best Practice**: Recommended to use with **Claude Code** for optimal experience
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
+#### Kiro Extended Thinking (Claude Models)
+AIClient-2-API supports Kiro extended thinking when using Claude-compatible requests (`/v1/messages`) or OpenAI-compatible requests (`/v1/chat/completions`) routed to `claude-kiro-oauth`.
+
+**Claude-compatible (`/v1/messages`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "thinking": { "type": "enabled", "budget_tokens": 10000 },
+    "messages": [{ "role": "user", "content": "Solve this step by step." }]
+  }'
+```
+
+**OpenAI-compatible (`/v1/chat/completions`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "messages": [{ "role": "user", "content": "Solve this step by step." }],
+    "extra_body": {
+      "anthropic": {
+        "thinking": { "type": "enabled", "budget_tokens": 10000 }
+      }
+    }
+  }'
+```
+
+**Adaptive mode**:
+- Claude: `"thinking": { "type": "adaptive", "effort": "high" }`
+- OpenAI: `"extra_body.anthropic.thinking": { "type": "adaptive", "effort": "high" }`
+
+Notes:
+- `budget_tokens` is clamped to `[1024, 24576]` (default `20000` if omitted/invalid).
+- Token acquisition/refresh/pool rotation is unchanged.
+
 #### iFlow OAuth Configuration
 1. **First Authorization**: In Web UI's "Configuration" or "Provider Pools" page, click the "Generate Authorization" button for iFlow
 2. **Phone Login**: The system will open the iFlow authorization page, complete login verification using your phone number
@@ -414,7 +454,36 @@ Support excluding unsupported models through `notSupportedModels` configuration,
 - Some accounts cannot access specific models due to quota or permission restrictions
 - Need to assign different model access permissions to different accounts
 
-#### 3. Cross-Type Fallback Configuration
+#### 3. Provider Priority Configuration
+
+Support deterministic account ordering through a per-node `priority` field in `provider_pools.json`.
+
+**Configuration** (smaller number = higher priority):
+
+```json
+{
+  "claude-kiro-oauth": [
+    {
+      "uuid": "primary-node-uuid",
+      "priority": 1,
+      "checkHealth": true
+    },
+    {
+      "uuid": "backup-node-uuid",
+      "priority": 2,
+      "checkHealth": true
+    }
+  ]
+}
+```
+
+**How It Works**:
+- The pool manager first filters healthy/available nodes by the lowest `priority` value
+- Only nodes in that highest-priority tier participate in LRU/score-based balancing
+- If the whole highest-priority tier becomes unavailable, the next priority tier is used automatically
+- If `priority` is omitted or invalid, default `100` is applied (backward compatible behavior)
+
+#### 4. Cross-Type Fallback Configuration
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 

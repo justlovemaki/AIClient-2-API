@@ -394,9 +394,14 @@ export class OpenAIResponsesConverter extends BaseConverter {
 
         // 处理 reasoning effort
         if (responsesRequest.reasoning?.effort) {
+            const effort = String(responsesRequest.reasoning.effort || '').toLowerCase().trim();
+            let budgetTokens = 20000;
+            if (effort === 'low') budgetTokens = 2048;
+            else if (effort === 'medium') budgetTokens = 8192;
+            else if (effort === 'high') budgetTokens = 20000;
             claudeRequest.thinking = {
                 type: 'enabled',
-                budget_tokens: 1024 // 默认 budget
+                budget_tokens: budgetTokens
             };
         }
 
