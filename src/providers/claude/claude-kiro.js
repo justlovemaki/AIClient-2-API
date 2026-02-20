@@ -964,35 +964,62 @@ async saveCredentialsToFile(filePath, newData) {
                 };
                 toolsContext = { tools: [placeholderTool] };
             } else {
-            const MAX_DESCRIPTION_LENGTH = 9216;
+                const MAX_DESCRIPTION_LENGTH = 9216;
 
-            let truncatedCount = 0;
-            const kiroTools = filteredTools.map(tool => {
-                let desc = tool.description || "";
-                const originalLength = desc.length;
-                
-                if (desc.length > MAX_DESCRIPTION_LENGTH) {
-                    desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
-                    truncatedCount++;
-                    logger.info(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
-                }
-                
-                return {
-                    toolSpecification: {
-                        name: tool.name,
-                        description: desc,
-                        inputSchema: {
-                            json: tool.input_schema || {}
+                let truncatedCount = 0;
+                const kiroTools = filteredTools
+                    .filter(tool => {
+                        // 过滤掉描述为空的工具
+                        if (!tool.description || tool.description.trim() === '') {
+                            logger.info(`[Kiro] Ignoring tool with empty description: ${tool.name}`);
+                            return false;
                         }
-                    }
-                };
-            });
-            
-            if (truncatedCount > 0) {
-                logger.info(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
-            }
+                        return true;
+                    })
+                    .map(tool => {
+                        let desc = tool.description || "";
+                        const originalLength = desc.length;
+                        
+                        if (desc.length > MAX_DESCRIPTION_LENGTH) {
+                            desc = desc.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
+                            truncatedCount++;
+                            logger.info(`[Kiro] Truncated tool '${tool.name}' description: ${originalLength} -> ${desc.length} chars`);
+                        }
+                        
+                        return {
+                            toolSpecification: {
+                                name: tool.name,
+                                description: desc,
+                                inputSchema: {
+                                    json: tool.input_schema || {}
+                                }
+                            }
+                        };
+                    });
+                
+                if (truncatedCount > 0) {
+                    logger.info(`[Kiro] Truncated ${truncatedCount} tool description(s) to max ${MAX_DESCRIPTION_LENGTH} chars`);
+                }
 
-            toolsContext = { tools: kiroTools };
+                // 检查过滤后是否还有有效工具
+                if (kiroTools.length === 0) {
+                    logger.info('[Kiro] All tools were filtered out (empty descriptions), adding placeholder tool');
+                    const placeholderTool = {
+                        toolSpecification: {
+                            name: "no_tool_available",
+                            description: "This is a placeholder tool when no other tools are available. It does nothing.",
+                            inputSchema: {
+                                json: {
+                                    type: "object",
+                                    properties: {}
+                                }
+                            }
+                        }
+                    };
+                    toolsContext = { tools: [placeholderTool] };
+                } else {
+                    toolsContext = { tools: kiroTools };
+                }
             }
         } else {
             // tools 为空或长度为 0 时，自动添加一个占位工具
@@ -2778,7 +2805,13 @@ async saveCredentialsToFile(filePath, newData) {
                     });
                     outputTokens += this.countTextTokens(tc.function.arguments);
                 }
-                stopReason = "tool_use";
+                stopReason = "tool_use"; // Set stop_reason to "tool_use" when toolCalls exist
+            } else if (content) {
+                contentArray.push({
+                    type: "text",
+                    text: content
+                });
+                outputTokens += this.countTextTokens(content);
             }
 
             return {

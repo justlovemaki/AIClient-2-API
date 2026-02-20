@@ -249,6 +249,46 @@ docker compose up -d
 3. **最佳实践**：推荐配合 **Claude Code** 使用，可获得最优体验
 4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
 
+#### Kiro 扩展思考 (Claude 模型)
+AIClient-2-API 在使用路由到 `claude-kiro-oauth` 的 Claude 兼容请求 (`/v1/messages`) 或 OpenAI 兼容请求 (`/v1/chat/completions`) 时支持 Kiro 扩展思考。
+
+**Claude 兼容接口 (`/v1/messages`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "thinking": { "type": "enabled", "budget_tokens": 10000 },
+    "messages": [{ "role": "user", "content": "逐步解决这个问题。" }]
+  }'
+```
+
+**OpenAI 兼容接口 (`/v1/chat/completions`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "messages": [{ "role": "user", "content": "逐步解决这个问题。" }],
+    "extra_body": {
+      "anthropic": {
+        "thinking": { "type": "enabled", "budget_tokens": 10000 }
+      }
+    }
+  }'
+```
+
+**自适应模式**:
+- Claude: `"thinking": { "type": "adaptive", "effort": "high" }`
+- OpenAI: `"extra_body.anthropic.thinking": { "type": "adaptive", "effort": "high" }`
+
+注意：
+- `budget_tokens` 被限制在 `[1024, 24576]` 之间（如果省略或无效，默认值为 `20000`）。
+- Token 获取/刷新/池轮换机制保持不变。
+
 #### iFlow OAuth 配置
 1. **首次授权**：在 Web UI 的"配置管理"或"提供商池"页面，点击 iFlow 的"生成授权"按钮
 2. **手机登录**：系统将打开 iFlow 授权页面，使用手机号完成登录验证
@@ -413,7 +453,36 @@ curl http://localhost:3000/ollama/api/chat \
 - 某些账号因配额或权限限制无法访问特定模型
 - 需要为不同账号分配不同的模型访问权限
 
-#### 3. 跨类型 Fallback 配置
+#### 3. 提供商优先级配置
+
+支持通过 `provider_pools.json` 中每个节点的 `priority` 字段实现确定的账号排序。
+
+**配置方式**（数字越小，优先级越高）：
+
+```json
+{
+  "claude-kiro-oauth": [
+    {
+      "uuid": "primary-node-uuid",
+      "priority": 1,
+      "checkHealth": true
+    },
+    {
+      "uuid": "backup-node-uuid",
+      "priority": 2,
+      "checkHealth": true
+    }
+  ]
+}
+```
+
+**工作原理**：
+- 池管理器首先按最低 `priority` 值过滤健康/可用的节点
+- 只有处于该最高优先级层级的节点才会参与基于 LRU/评分的负载均衡
+- 如果整个最高优先级层级不可用，系统将自动使用下一个优先级层级
+- 如果省略 `priority` 或其无效，将应用默认值 `100`（向后兼容行为）
+
+#### 4. 跨类型 Fallback 配置
 
 当某一 Provider Type（如 `gemini-cli-oauth`）下的所有账号都因 429 配额耗尽或被标记为 unhealthy 时，系统能够自动 fallback 到另一个兼容的 Provider Type（如 `gemini-antigravity`），而不是直接返回错误。
 

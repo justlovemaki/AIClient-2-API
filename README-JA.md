@@ -250,6 +250,46 @@ Web UI管理インターフェースでは、極めて迅速に認証設定を�
 3. **ベストプラクティス**：**Claude Code**との併用を推奨、最適な体験を得られる
 4. **重要なお知らせ**：Kiroサービス使用ポリシーが更新されました、最新の使用制限と条件については公式ウェブサイトをご確認ください。
 
+#### Kiro 拡張思考 (Claude モデル)
+AIClient-2-API は、`claude-kiro-oauth` にルーティングされた Claude 互換リクエスト (`/v1/messages`) または OpenAI 互換リクエスト (`/v1/chat/completions`) を使用する場合、Kiro 拡張思考をサポートします。
+
+**Claude 互換インターフェース (`/v1/messages`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "thinking": { "type": "enabled", "budget_tokens": 10000 },
+    "messages": [{ "role": "user", "content": "この問題をステップバイステップで解決してください。" }]
+  }'
+```
+
+**OpenAI 互換インターフェース (`/v1/chat/completions`)**:
+```bash
+curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "messages": [{ "role": "user", "content": "この問題をステップバイステップで解決してください。" }],
+    "extra_body": {
+      "anthropic": {
+        "thinking": { "type": "enabled", "budget_tokens": 10000 }
+      }
+    }
+  }'
+```
+
+**アダプティブモード**:
+- Claude: `"thinking": { "type": "adaptive", "effort": "high" }`
+- OpenAI: `"extra_body.anthropic.thinking": { "type": "adaptive", "effort": "high" }`
+
+注意：
+- `budget_tokens` は `[1024, 24576]` の範囲に制限されます（省略または無効な場合はデフォルトの `20000` が適用されます）。
+- トークンの取得/リフレッシュ/プールローテーションメカニズムは変更されません。
+
 #### iFlow OAuth設定
 1. **初回認証**：Web UIの「設定管理」または「プロバイダープール」ページで、iFlowの「認証生成」ボタンをクリック
 2. **電話番号ログイン**：システムがiFlow認証ページを開き、電話番号でログイン認証を完了
@@ -414,7 +454,36 @@ curl http://localhost:3000/ollama/api/chat \
 - 一部のアカウントは割り当てまたは権限の制限により特定のモデルにアクセスできない
 - 異なるアカウントに異なるモデルアクセス権限を割り当てる必要がある
 
-#### 3. クロスタイプフォールバック設定
+#### 3. プロバイダー優先度設定
+
+`provider_pools.json` 内のノードごとの `priority` フィールドを通じて、確定的なアカウント順序をサポートします。
+
+**設定方法**（数値が小さいほど優先度が高くなります）：
+
+```json
+{
+  "claude-kiro-oauth": [
+    {
+      "uuid": "primary-node-uuid",
+      "priority": 1,
+      "checkHealth": true
+    },
+    {
+      "uuid": "backup-node-uuid",
+      "priority": 2,
+      "checkHealth": true
+    }
+  ]
+}
+```
+
+**動作原理**：
+- プールマネージャーはまず、最も低い `priority` 値によって健全/利用可能なノードをフィルタリングします
+- その最高優先度ティアのノードのみが LRU/スコアベースの負荷分散に参加します
+- 最高優先度ティア全体が利用不可になった場合、次の優先度ティアが自動的に使用されます
+- `priority` が省略されているか無効な場合、デフォルトの `100` が適用されます（後方互換性のある動作）
+
+#### 4. クロスタイプフォールバック設定
 
 あるProvider Type（例：`gemini-cli-oauth`）のすべてのアカウントが429割り当て制限により枯渇したり、unhealthyとマークされた場合、システムは直接エラーを返すのではなく、互換性のある別のProvider Type（例：`gemini-antigravity`）に自動的にフォールバックできます。
 
