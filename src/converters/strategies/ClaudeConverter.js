@@ -140,12 +140,7 @@ export class ClaudeConverter extends BaseConverter {
                         for (const item of msg.content) {
                             if (item && typeof item === 'object' && item.type === "tool_result") {
                                 const toolUseId = item.tool_use_id || item.id || "";
-                                let contentStr = item.content || "";
-                                if (typeof contentStr === 'object') {
-                                    contentStr = JSON.stringify(contentStr);
-                                } else {
-                                    contentStr = String(contentStr);
-                                }
+                                const contentStr = String(item.content || "");
                                 tempOpenAIMessages.push({
                                     role: "tool",
                                     tool_call_id: toolUseId,
@@ -310,6 +305,17 @@ export class ClaudeConverter extends BaseConverter {
             };
         }
 
+        // Extract thinking blocks into OpenAI-style `reasoning_content`.
+        let reasoningContent = '';
+        if (Array.isArray(claudeResponse.content)) {
+            for (const block of claudeResponse.content) {
+                if (!block || typeof block !== 'object') continue;
+                if (block.type === 'thinking') {
+                    reasoningContent += (block.thinking ?? block.text ?? '');
+                }
+            }
+        }
+
         // 检查是否包含 tool_use
         const hasToolUse = claudeResponse.content.some(block => block && block.type === 'tool_use');
         
@@ -347,6 +353,10 @@ export class ClaudeConverter extends BaseConverter {
         } else {
             // 处理普通文本响应
             message.content = this.processClaudeResponseContent(claudeResponse.content);
+        }
+
+        if (reasoningContent) {
+            message.reasoning_content = reasoningContent;
         }
 
         // 处理 finish_reason
