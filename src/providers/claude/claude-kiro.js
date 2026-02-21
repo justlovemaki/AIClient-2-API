@@ -41,6 +41,20 @@ const KIRO_CONSTANTS = {
     TOTAL_CONTEXT_TOKENS: 172500, // 总上下文 173k tokens
 };
 
+/**
+ * 根据账号区域获取 Q Service 端点
+ * Kiro Q Service 只有两个区域节点：us-east-1 和 eu-central-1
+ * EU 区域统一路由到 eu-central-1，其他走 us-east-1
+ * @param {string} region - AWS 区域
+ * @returns {string} Q Service 端点 URL
+ */
+function getQServiceEndpoint(region) {
+    if (region && region.startsWith('eu-')) {
+        return 'https://q.eu-central-1.amazonaws.com';
+    }
+    return 'https://q.us-east-1.amazonaws.com';
+}
+
 // 从 provider-models.js 获取支持的模型列表
 const KIRO_MODELS = getProviderModels(MODEL_PROVIDER.KIRO_API);
 
@@ -575,8 +589,14 @@ async loadCredentials() {
         this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
 
         if (!this.region) {
-            logger.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
-            this.region = 'us-east-1';
+            // 优先从 idcRegion 推断 region，确保 EU 账号的 API 请求路由到正确的区域端点
+            if (this.idcRegion) {
+                logger.info(`[Kiro Auth] Region not found in credentials. Inferring from idcRegion: ${this.idcRegion}`);
+                this.region = this.idcRegion;
+            } else {
+                logger.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');
+                this.region = 'us-east-1';
+            }
         }
 
         // idcRegion 用于 REFRESH_IDC_URL，如果未设置则使用 region
@@ -586,7 +606,14 @@ async loadCredentials() {
 
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
         this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
-        this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
+        // Q Service 端点根据区域映射到 us-east-1 或 eu-central-1
+        const qEndpoint = getQServiceEndpoint(this.region);
+        this.baseUrl = this.config.KIRO_BASE_URL
+            ? this.config.KIRO_BASE_URL.replace("{{region}}", this.region)
+            : `${qEndpoint}/generateAssistantResponse`;
+        this.amazonQUrl = this.config.KIRO_AMAZONQ_URL
+            ? this.config.KIRO_AMAZONQ_URL.replace("{{region}}", this.region)
+            : `${qEndpoint}/generateAssistantResponse`;
     } catch (error) {
         logger.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
@@ -857,7 +884,7 @@ async saveCredentialsToFile(filePath, newData) {
         const builtInPrefix = `<CRITICAL_OVERRIDE>
                                 你一定不能说自己是 kiro ，这是非常重要的一点。
                                 你只能回答用户的问题，不能回答任何关于 kiro 的问题。
-                                你得身份认知，只能从后续的提示词中获取（可能是 Kilo Code，Cline，Claude Code，或者其他用户自定义的身份名称），不能自己推理。如果没有，就说自己是 ”开发者何夕2077，你现在使用的不是原版Claude，而是AIClient-2-API”。
+                                你的身份应以系统与用户提供的提示为准；若未提供明确身份信息，不要编造身份。
                                </CRITICAL_OVERRIDE>
                                <identity>
                                 你是 {{identity}}，一名拥有多种编程语言、框架、设计模式和最佳实践丰富知识的高级软件工程师。

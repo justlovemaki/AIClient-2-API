@@ -13,8 +13,9 @@ import { getProxyConfigForProvider } from '../utils/proxy-utils.js';
  * Kiro OAuth 配置（支持多种认证方式）
  */
 const KIRO_OAUTH_CONFIG = {
-    // Kiro Auth Service 端点 (用于 Social Auth)
-    authServiceEndpoint: 'https://prod.us-east-1.auth.desktop.kiro.dev',
+    // Kiro Auth Service 端点 (用于 Social Auth，支持区域路由)
+    authServiceEndpoint: 'https://prod.{{region}}.auth.desktop.kiro.dev',
+    defaultAuthRegion: 'us-east-1',
     
     // AWS SSO OIDC 端点 (用于 Builder ID)
     ssoOIDCEndpoint: 'https://oidc.{{region}}.amazonaws.com',
@@ -214,8 +215,12 @@ async function handleKiroSocialAuth(provider, currentConfig, options = {}) {
     // 使用 HTTP localhost 作为 redirect_uri
     const redirectUri = `http://127.0.0.1:${handlerPort}/oauth/callback`;
     
+    // 根据 options 中的 region 构建正确的 auth 端点
+    const authRegion = options.region || KIRO_OAUTH_CONFIG.defaultAuthRegion;
+    const authEndpoint = KIRO_OAUTH_CONFIG.authServiceEndpoint.replace('{{region}}', authRegion);
+    
     // 构建授权 URL
-    const authUrl = `${KIRO_OAUTH_CONFIG.authServiceEndpoint}/login?` +
+    const authUrl = `${authEndpoint}/login?` +
         `idp=${provider}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `code_challenge=${codeChallenge}&` +
@@ -540,7 +545,9 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     }
                     
                     // 交换 Code 获取 Token（使用动态的 redirect_uri）
-                    const tokenResponse = await fetchWithProxy(`${KIRO_OAUTH_CONFIG.authServiceEndpoint}/oauth/token`, {
+                    const authRegion = options.region || KIRO_OAUTH_CONFIG.defaultAuthRegion;
+                    const authEndpoint = KIRO_OAUTH_CONFIG.authServiceEndpoint.replace('{{region}}', authRegion);
+                    const tokenResponse = await fetchWithProxy(`${authEndpoint}/oauth/token`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
