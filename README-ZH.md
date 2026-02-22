@@ -683,25 +683,6 @@ kill -9 <PID>
 
 [![Contributors](https://contrib.rocks/image?repo=justlovemaki/AIClient-2-API)](https://github.com/justlovemaki/AIClient-2-API/graphs/contributors)
 
-### 赞助者列表
-
-非常感谢以下赞助者对本项目的支持：
-
-- [**Cigarliu**](https://github.com/Cigarliu "9.9")
-- [**xianengqi**](https://github.com/xianengqi "9.9")
-- [**3831143avl**](https://github.com/3831143avl "10")
-- [**醉春风**](https://github.com/handsometong "28.8")
-- [**crazy**](https://github.com/404 "88")
-- [**清宵落了灯花**](https://github.com/Lanternmorning "16")
-- [**郭铁**](https://github.com/guotie "20")
-- [**落叶聚名**](https://github.com/mb5u88-debug "88")
-- [**匿名**](https://github.com/404 "8.88")
-
-### 扫码赞助
-
-您的赞助是项目持续发展的动力 ❤️
-
-<img src="static/sponsor.png" alt="扫码赞助" width="200">
 
 ### 🌟 Star History
 
