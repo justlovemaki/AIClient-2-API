@@ -657,6 +657,23 @@ const KIRO_REFRESH_CONSTANTS = {
 };
 
 /**
+ * 从 clientId 中解析区域信息
+ * clientId 是 base64url 编码，解码后尾部包含区域字符串（如 "eu-central-1"）
+ * @param {string} clientId - OAuth clientId
+ * @returns {string|null} 解析出的区域，或 null
+ */
+function parseRegionFromClientId(clientId) {
+    if (!clientId) return null;
+    try {
+        const decoded = Buffer.from(clientId, 'base64url').toString();
+        const match = decoded.match(/((?:us|eu|ap|sa|ca|me|af)-[a-z]+-\d+)$/);
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * 通过 refreshToken 获取 accessToken
  * @param {string} refreshToken - Kiro 的 refresh token
  * @param {string} region - AWS 区域 (默认: us-east-1)
@@ -1050,6 +1067,15 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         
         logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Importing AWS credentials...`);
         
+        const clientIdRegion = parseRegionFromClientId(credentials.clientId);
+        const inferredIdcRegion =
+            (credentials.idcRegion && clientIdRegion && credentials.idcRegion !== clientIdRegion)
+                ? clientIdRegion
+                : (credentials.idcRegion ||
+                    credentials.region ||
+                    clientIdRegion ||
+                    KIRO_REFRESH_CONSTANTS.IDC_REGION);
+
         // 准备凭据数据 - 四个字段都是必需的
         const credentialsData = {
             clientId: credentials.clientId,
@@ -1057,8 +1083,8 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             accessToken: credentials.accessToken,
             refreshToken: credentials.refreshToken,
             authMethod: credentials.authMethod || 'builder-id',
-            // region: credentials.region || KIRO_REFRESH_CONSTANTS.DEFAULT_REGION,
-            idcRegion: credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION
+            region: credentials.region || inferredIdcRegion,
+            idcRegion: inferredIdcRegion
         };
         
         // 可选字段
@@ -1076,7 +1102,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
         try {
             logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Attempting to refresh token with provided credentials...`);
             
-            const refreshRegion = credentials.idcRegion || KIRO_REFRESH_CONSTANTS.IDC_REGION;
+            const refreshRegion = inferredIdcRegion;
             const refreshUrl = KIRO_REFRESH_CONSTANTS.REFRESH_IDC_URL.replace('{{region}}', refreshRegion);
             
             const refreshResponse = await fetchWithProxy(refreshUrl, {
@@ -1095,7 +1121,7 @@ export async function importAwsCredentials(credentials, skipDuplicateCheck = fal
             if (refreshResponse.ok) {
                 const tokenData = await refreshResponse.json();
                 credentialsData.accessToken = tokenData.accessToken;
-                credentialsData.refreshToken = tokenData.refreshToken;
+                credentialsData.refreshToken = tokenData.refreshToken || credentialsData.refreshToken;
                 const expiresIn = tokenData.expiresIn || 3600;
                 credentialsData.expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
                 logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} Token refreshed successfully`);

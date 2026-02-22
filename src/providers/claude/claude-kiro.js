@@ -42,18 +42,38 @@ const KIRO_CONSTANTS = {
 };
 
 /**
- * 根据账号区域获取 Q Service 端点
+ * 从 clientId 中解析区域信息
+ * clientId 是 base64url 编码，解码后尾部包含区域字符串（如 "eu-central-1"）
+ * @param {string} clientId - OAuth clientId
+ * @returns {string|null} 解析出的区域，或 null
+ */
+function parseRegionFromClientId(clientId) {
+    if (!clientId) return null;
+    try {
+        const decoded = Buffer.from(clientId, 'base64url').toString();
+        const match = decoded.match(/((?:us|eu|ap|sa|ca|me|af)-[a-z]+-\d+)$/);
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 根据 clientId 获取 Q Service 端点
  * Kiro Q Service 只有两个区域节点：us-east-1 和 eu-central-1
- * EU 区域统一路由到 eu-central-1，其他走 us-east-1
- * @param {string} region - AWS 区域
+ * 仅从 clientId 解析出 eu-central-1 时路由到该端点，否则默认 us-east-1
+ * @param {string} clientId - OAuth clientId
  * @returns {string} Q Service 端点 URL
  */
-function getQServiceEndpoint(region) {
-    if (region && region.startsWith('eu-')) {
+function getQServiceEndpoint(clientId) {
+    const region = parseRegionFromClientId(clientId);
+    if (region === 'eu-central-1') {
         return 'https://q.eu-central-1.amazonaws.com';
     }
     return 'https://q.us-east-1.amazonaws.com';
 }
+
+
 
 // 从 provider-models.js 获取支持的模型列表
 const KIRO_MODELS = getProviderModels(MODEL_PROVIDER.KIRO_API);
@@ -588,9 +608,17 @@ async loadCredentials() {
         this.region = this.region || mergedCredentials.region;
         this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
 
+        // 从 clientId 解析区域信息，作为可靠的区域来源
+        const clientIdRegion = parseRegionFromClientId(this.clientId);
+        if (clientIdRegion) {
+            logger.info(`[Kiro Auth] Parsed region from clientId: ${clientIdRegion}`);
+        }
+
         if (!this.region) {
-            // 优先从 idcRegion 推断 region，确保 EU 账号的 API 请求路由到正确的区域端点
-            if (this.idcRegion) {
+            if (clientIdRegion) {
+                logger.info(`[Kiro Auth] Region not found in credentials. Using clientId region: ${clientIdRegion}`);
+                this.region = clientIdRegion;
+            } else if (this.idcRegion) {
                 logger.info(`[Kiro Auth] Region not found in credentials. Inferring from idcRegion: ${this.idcRegion}`);
                 this.region = this.idcRegion;
             } else {
@@ -599,15 +627,19 @@ async loadCredentials() {
             }
         }
 
-        // idcRegion 用于 REFRESH_IDC_URL，如果未设置则使用 region
+        // idcRegion 用于 REFRESH_IDC_URL，优先从 clientId 解析，确保 SSO 刷新请求路由到正确的区域
+        if (clientIdRegion && this.idcRegion && this.idcRegion !== clientIdRegion) {
+            logger.warn(`[Kiro Auth] idcRegion (${this.idcRegion}) mismatches clientId region (${clientIdRegion}), overriding to clientId region.`);
+            this.idcRegion = clientIdRegion;
+        }
         if (!this.idcRegion) {
-            this.idcRegion = this.region;
+            this.idcRegion = clientIdRegion || this.region;
         }
 
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
         this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
         // Q Service 端点根据区域映射到 us-east-1 或 eu-central-1
-        const qEndpoint = getQServiceEndpoint(this.region);
+        const qEndpoint = getQServiceEndpoint(this.clientId);
         this.baseUrl = this.config.KIRO_BASE_URL
             ? this.config.KIRO_BASE_URL.replace("{{region}}", this.region)
             : `${qEndpoint}/generateAssistantResponse`;
@@ -715,9 +747,9 @@ async saveCredentialsToFile(filePath, newData) {
 
             if (response.data && response.data.accessToken) {
                 this.accessToken = response.data.accessToken;
-                this.refreshToken = response.data.refreshToken;
+                this.refreshToken = response.data.refreshToken || this.refreshToken;
                 this.profileArn = response.data.profileArn;
-                const expiresIn = response.data.expiresIn;
+                const expiresIn = response.data.expiresIn || 3600;
                 const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
                 this.expiresAt = expiresAt;
                 logger.info('[Kiro Auth] Access token refreshed successfully');
