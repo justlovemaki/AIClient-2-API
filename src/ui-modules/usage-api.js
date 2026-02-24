@@ -123,6 +123,13 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
             }
         }
 
+        // 重新从 providerPoolManager 获取最新的健康状态（可能在 getAdapterUsage 中被更新）
+        const updatedProviders = providerPoolManager?.providerPools?.[providerType];
+        const updatedProvider = updatedProviders?.find(p => p.uuid === provider.uuid);
+        if (updatedProvider) {
+            instanceResult.isHealthy = updatedProvider.isHealthy !== false;
+        }
+
         result.instances.push(instanceResult);
     }
 

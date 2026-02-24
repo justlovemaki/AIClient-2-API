@@ -709,6 +709,9 @@ async saveCredentialsToFile(filePath, newData) {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.KIRO_API, this.uuid);
+                    // 恢复健康状态
+                    poolManager.markProviderHealthy(MODEL_PROVIDER.KIRO_API, { uuid: this.uuid });
+                    logger.info(`[Kiro Auth] Token refreshed successfully, restored healthy status for ${this.uuid}`);
                 }
             } else {
                 throw new Error('Invalid refresh response: Missing accessToken');
@@ -1777,8 +1780,13 @@ async saveCredentialsToFile(filePath, newData) {
             delete requestBody._monitorRequestId;
         }
         
-        // 检查 token 是否即将过期，如果是则推送到刷新队列
-        if (this.isExpiryDateNear()) {
+        // 检查 token 状态
+        if (this.isTokenExpired()) {
+            // 已过期 → 必须同步刷新后才能继续
+            logger.info('[Kiro] Token is expired, must refresh before generateContent...');
+            await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            // 即将过期 → 后台异步刷新，不阻塞当前请求
             logger.info('[Kiro] Token is near expiry, marking credential as need refresh...');
             this._markCredentialNeedRefresh('Token near expiry in generateContent');
         }
@@ -2146,8 +2154,13 @@ async saveCredentialsToFile(filePath, newData) {
             delete requestBody._monitorRequestId;
         }
         
-        // 检查 token 是否即将过期，如果是则推送到刷新队列
-        if (this.isExpiryDateNear()) {
+        // 检查 token 状态
+        if (this.isTokenExpired()) {
+            // 已过期 → 必须同步刷新后才能继续
+            logger.info('[Kiro] Token is expired, must refresh before generateContentStream...');
+            await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            // 即将过期 → 后台异步刷新，不阻塞当前请求
             logger.info('[Kiro] Token is near expiry, marking credential as need refresh...');
             this._markCredentialNeedRefresh('Token near expiry in generateContentStream');
         }
@@ -2950,13 +2963,13 @@ async saveCredentialsToFile(filePath, newData) {
         // Token 刷新策略：
         // 1. 已过期 → 必须等待刷新
         // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
-        // if (this.isTokenExpired()) {
-        //     logger.info('[Kiro] Token is expired, must refresh before getUsageLimits request...');
-        //     await this.initializeAuth(true);
-        // } else if (this.isExpiryDateNear()) {
-        //     logger.info('[Kiro] Token is near expiry, triggering background refresh...');
-        //     this.triggerBackgroundRefresh();
-        // }
+        if (this.isTokenExpired()) {
+            logger.info('[Kiro] Token is expired, must refresh before getUsageLimits request...');
+            await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            logger.info('[Kiro] Token is near expiry, triggering background refresh...');
+            this.triggerBackgroundRefresh();
+        }
         
         // 内部固定的资源类型
         const resourceType = 'AGENTIC_REQUEST';
@@ -2995,7 +3008,31 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             const response = await this.axiosInstance.get(fullUrl, { headers });
             logger.info('[Kiro] Usage limits fetched successfully');
-            return response.data;
+
+            const usageData = response.data;
+            // 原始 API 返回的字段是 usageBreakdownList
+            const usageBreakdown = usageData?.usageBreakdownList?.[0];
+            const currentUsage = usageBreakdown?.currentUsage ?? usageBreakdown?.currentUsageWithPrecision;
+            const usageLimit = usageBreakdown?.usageLimit ?? usageBreakdown?.usageLimitWithPrecision;
+            const isQuotaExhausted = currentUsage >= usageLimit;
+
+            logger.info(`[Kiro] Usage check for ${this.uuid}: ${currentUsage}/${usageLimit}, exhausted: ${isQuotaExhausted}`);
+
+            if (isQuotaExhausted) {
+                // 额度用尽，标记为不健康，设置恢复时间为下月1日
+                const nextMonth = this._getNextMonthFirstDay();
+                this._markCredentialUnhealthyWithRecovery('Quota Exhausted (detected in usage query)', null, nextMonth);
+                logger.info(`[Kiro] Quota exhausted for ${this.uuid}, marked as unhealthy with recovery at ${nextMonth.toISOString()}`);
+            } else {
+                // 额度未用尽，恢复健康状态
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    poolManager.markProviderHealthy(MODEL_PROVIDER.KIRO_API, { uuid: this.uuid });
+                    logger.info(`[Kiro] Usage query successful, restored healthy status for ${this.uuid}`);
+                }
+            }
+
+            return usageData;
         } catch (error) {
             const status = error.response?.status;
             
