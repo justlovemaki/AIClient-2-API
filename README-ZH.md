@@ -301,6 +301,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 2. **浏览器登录**：系统将打开 OpenAI Codex 授权页面，完成 OAuth 登录
 3. **自动保存**：授权成功后，系统会自动保存 Codex 的 OAuth 凭据文件
 4. **回调端口**：确保 OAuth 回调端口 `1455` 未被占用
+5. **Claude Code 的 setting.json Base URL**：请使用 `http://localhost:3000/openai-codex-oauth`（不要追加 `/v1/messages`）。Claude Code 会自动拼接 `/v1/messages`，手动添加会导致最终 URL 错误。
 
 #### 账号池管理配置
 1. **创建号池配置文件**：参考 [provider_pools.json.example](./configs/provider_pools.json.example) 创建配置文件

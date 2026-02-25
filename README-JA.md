@@ -302,6 +302,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 2. **ブラウザログイン**：システムがOpenAI Codex認証ページを開き、OAuthログインを完了
 3. **自動保存**：認証成功後、システムがCodexのOAuth認証情報ファイルを自動保存
 4. **コールバックポート**：OAuthコールバックポート `1455` が占有されていないことを確認
+5. **Claude Code の setting.json Base URL**：`http://localhost:3000/openai-codex-oauth` を使用してください（`/v1/messages` は付けないでください）。Claude Code 側で `/v1/messages` が自動付与されるため、手動で追加すると URL が不正になります。
 
 #### アカウントプール管理設定
 1. **プール設定ファイルの作成**：[provider_pools.json.example](./configs/provider_pools.json.example) を参考に設定ファイルを作成します

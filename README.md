@@ -302,6 +302,7 @@ Notes:
 2. **Browser Login**: The system opens the OpenAI Codex authorization page to complete OAuth login
 3. **Auto Save**: After successful authorization, the system automatically saves the Codex OAuth credential file
 4. **Callback Port**: Ensure the OAuth callback port `1455` is not occupied
+5. **Claude Code setting.json Base URL**: Use `http://localhost:3000/openai-codex-oauth` (do **not** append `/v1/messages`). Claude Code automatically appends `/v1/messages`; if you include it manually, the final URL will be incorrect.
 
 #### Account Pool Management Configuration
 1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./configs/provider_pools.json.example)
