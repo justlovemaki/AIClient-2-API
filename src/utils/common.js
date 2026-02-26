@@ -292,6 +292,66 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
     }
 }
 
+/**
+ * 处理凭证错误标记与切换重试的通用逻辑
+ * 从 handleStreamRequest 和 handleUnaryRequest 中提取的共享代码
+ * 
+ * @param {Object} params
+ * @param {Error} params.error - 错误对象
+ * @param {string} params.logTag - 日志标签（如 'Stream Retry' 或 'Unary Retry'）
+ * @param {string} params.toProvider - 后端提供商类型
+ * @param {string} params.pooluuid - 提供商池 UUID
+ * @param {Object} params.providerPoolManager - 提供商池管理器
+ * @param {number} params.currentRetry - 当前重试次数
+ * @param {number} params.maxRetries - 最大重试次数
+ * @param {Object} params.CONFIG - 配置对象
+ * @param {string} params.model - 模型名称
+ * @returns {Promise<{shouldRetry: boolean, result: Object|null}>} 是否应该重试及新服务信息
+ */
+async function handleCredentialErrorAndRetry({ error, logTag, toProvider, pooluuid, providerPoolManager, currentRetry, maxRetries, CONFIG, model }) {
+    const status = error.response?.status;
+    const skipErrorCount = error.skipErrorCount === true;
+    const shouldSwitchCredential = error.shouldSwitchCredential === true;
+    let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
+
+    // 如果底层未标记，且不跳过错误计数，则在此处标记
+    if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
+        if (error.response?.status === 400) {
+            logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
+        } else {
+            logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to ${logTag.toLowerCase()} error (status: ${status || 'unknown'})`);
+            providerPoolManager.markProviderUnhealthy(toProvider, { uuid: pooluuid }, error.message);
+            credentialMarkedUnhealthy = true;
+        }
+    }
+
+    if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
+        credentialMarkedUnhealthy = true;
+    }
+
+    if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
+        const randomDelay = Math.floor(Math.random() * 10000);
+        logger.info(`[${logTag}] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
+        await new Promise(resolve => setTimeout(resolve, randomDelay));
+
+        try {
+            const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+            const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
+
+            if (result && result.service) {
+                logger.info(`[${logTag}] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
+                return { shouldRetry: true, result };
+            } else {
+                logger.info(`[${logTag}] No healthy credential available for retry.`);
+            }
+        } catch (retryError) {
+            logger.error(`[${logTag}] Failed to get alternative service:`, retryError.message);
+        }
+    }
+
+    return { shouldRetry: false, result: null };
+}
+
 export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName, retryContext = null) {
     let fullResponseText = '';
     let fullResponseJson = '';
@@ -499,84 +559,25 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             return;
         }
         
-        // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
+        // 使用共享的凭证错误处理与重试逻辑
+        const { shouldRetry, result } = await handleCredentialErrorAndRetry({
+            error, logTag: 'Stream Retry', toProvider, pooluuid,
+            providerPoolManager, currentRetry, maxRetries, CONFIG, model
+        });
         
-        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
-        const skipErrorCount = error.skipErrorCount === true;
-        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
-        const shouldSwitchCredential = error.shouldSwitchCredential === true;
-        
-        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
-        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
-        
-        // 如果底层未标记，且不跳过错误计数，则在此处标记
-        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.response?.status === 400) {
-                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
-            } else {
-                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error (status: ${status || 'unknown'})`);
-                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-                providerPoolManager.markProviderUnhealthy(toProvider, {
-                    uuid: pooluuid
-                }, error.message);
-                credentialMarkedUnhealthy = true;
-            }
-        }
-        
-        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
-        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
-            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
-        }
-        
-        // 凭证已被标记为不健康后，尝试切换到新凭证重试
-        // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
-        if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
-            // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
-            const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
-            logger.info(`[Stream Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
-            await new Promise(resolve => setTimeout(resolve, randomDelay));
-            
-            try {
-                // 动态导入以避免循环依赖
-                const { getApiServiceWithFallback } = await import('../services/service-manager.js');
-                // 使用 acquireSlot: true 以占用新凭证的并发插槽
-                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
-                
-                if (result && result.service) {
-                    logger.info(`[Stream Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
-                    
-                    // 使用新服务重试
-                    const newRetryContext = {
-                        ...retryContext,
-                        CONFIG,
-                        currentRetry: currentRetry + 1,
-                        maxRetries,
-                        clientDisconnected  // 传递断开状态
-                    };
-                    
-                    // 递归调用，使用新的服务
-                    return await handleStreamRequest(
-                        res,
-                        result.service,
-                        result.actualModel || model,
-                        requestBody,
-                        fromProvider,
-                        result.actualProviderType || toProvider,
-                        PROMPT_LOG_MODE,
-                        PROMPT_LOG_FILENAME,
-                        providerPoolManager,
-                        result.uuid,
-                        result.serviceConfig?.customName || customName,
-                        newRetryContext
-                    );
-                } else {
-                    logger.info(`[Stream Retry] No healthy credential available for retry.`);
-                }
-            } catch (retryError) {
-                logger.error(`[Stream Retry] Failed to get alternative service:`, retryError.message);
-            }
+        if (shouldRetry && result) {
+            const newRetryContext = {
+                ...retryContext, CONFIG,
+                currentRetry: currentRetry + 1, maxRetries,
+                clientDisconnected
+            };
+            return await handleStreamRequest(
+                res, result.service, result.actualModel || model,
+                requestBody, fromProvider, result.actualProviderType || toProvider,
+                PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager,
+                result.uuid, result.serviceConfig?.customName || customName,
+                newRetryContext
+            );
         }
 
         // 使用新方法创建符合 fromProvider 格式的流式错误响应
@@ -699,83 +700,24 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
     } catch (error) {
         logger.error('\n[Server] Error during unary processing:', error.stack);
         
-        // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
+        // 使用共享的凭证错误处理与重试逻辑
+        const { shouldRetry, result } = await handleCredentialErrorAndRetry({
+            error, logTag: 'Unary Retry', toProvider, pooluuid,
+            providerPoolManager, currentRetry, maxRetries, CONFIG, model
+        });
         
-        // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
-        const skipErrorCount = error.skipErrorCount === true;
-        // 检查是否应该切换凭证（用于 429/5xx/402/403 等情况）
-        const shouldSwitchCredential = error.shouldSwitchCredential === true;
-        
-        // 检查凭证是否已在底层被标记为不健康（避免重复标记）
-        let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
-        
-        // 如果底层未标记，且不跳过错误计数，则在此处标记
-        if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
-            // 400 报错码通常是请求参数问题，不记录为提供商错误
-            if (error.response?.status === 400) {
-                logger.info(`[Provider Pool] Skipping unhealthy marking for ${toProvider} (${pooluuid}) due to status 400 (client error)`);
-            } else {
-                logger.info(`[Provider Pool] Marking ${toProvider} as unhealthy due to unary error (status: ${status || 'unknown'})`);
-                // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-                providerPoolManager.markProviderUnhealthy(toProvider, {
-                    uuid: pooluuid
-                }, error.message);
-                credentialMarkedUnhealthy = true;
-            }
-        }
-        
-        // 如果需要切换凭证（无论是否标记不健康），都设置标记以触发重试
-        if (shouldSwitchCredential && !credentialMarkedUnhealthy) {
-            credentialMarkedUnhealthy = true; // 触发下面的重试逻辑
-        }
-        
-        // 凭证已被标记为不健康后，尝试切换到新凭证重试
-        // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
-        if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
-            // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
-            const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
-            logger.info(`[Unary Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
-            await new Promise(resolve => setTimeout(resolve, randomDelay));
-            
-            try {
-                // 动态导入以避免循环依赖
-                const { getApiServiceWithFallback } = await import('../services/service-manager.js');
-                // 使用 acquireSlot: true 以占用新凭证的并发插槽
-                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
-                
-                if (result && result.service) {
-                    logger.info(`[Unary Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
-                    
-                    // 使用新服务重试
-                    const newRetryContext = {
-                        ...retryContext,
-                        CONFIG,
-                        currentRetry: currentRetry + 1,
-                        maxRetries
-                    };
-                    
-                    // 递归调用，使用新的服务
-                    return await handleUnaryRequest(
-                        res,
-                        result.service,
-                        result.actualModel || model,
-                        requestBody,
-                        fromProvider,
-                        result.actualProviderType || toProvider,
-                        PROMPT_LOG_MODE,
-                        PROMPT_LOG_FILENAME,
-                        providerPoolManager,
-                        result.uuid,
-                        result.serviceConfig?.customName || customName,
-                        newRetryContext
-                    );
-                } else {
-                    logger.info(`[Unary Retry] No healthy credential available for retry.`);
-                }
-            } catch (retryError) {
-                logger.error(`[Unary Retry] Failed to get alternative service:`, retryError.message);
-            }
+        if (shouldRetry && result) {
+            const newRetryContext = {
+                ...retryContext, CONFIG,
+                currentRetry: currentRetry + 1, maxRetries
+            };
+            return await handleUnaryRequest(
+                res, result.service, result.actualModel || model,
+                requestBody, fromProvider, result.actualProviderType || toProvider,
+                PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager,
+                result.uuid, result.serviceConfig?.customName || customName,
+                newRetryContext
+            );
         }
 
         // 使用新方法创建符合 fromProvider 格式的错误响应
