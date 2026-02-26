@@ -1344,6 +1344,34 @@ export function formatToLocal(dateInput) {
 
 
 /**
+ * 根据 HTTP 状态码映射错误类型（OpenAI / Claude 通用）
+ * @param {number} code - HTTP 状态码
+ * @returns {string} 错误类型字符串
+ */
+function getErrorType(code) {
+    if (code === 401) return 'authentication_error';
+    if (code === 403) return 'permission_error';
+    if (code === 429) return 'rate_limit_error';
+    if (code >= 500) return 'server_error';
+    return 'invalid_request_error';
+}
+
+/**
+ * 根据 HTTP 状态码映射 Gemini 的 status
+ * @param {number} code - HTTP 状态码
+ * @returns {string} Gemini 状态字符串
+ */
+function getGeminiStatus(code) {
+    if (code === 400) return 'INVALID_ARGUMENT';
+    if (code === 401) return 'UNAUTHENTICATED';
+    if (code === 403) return 'PERMISSION_DENIED';
+    if (code === 404) return 'NOT_FOUND';
+    if (code === 429) return 'RESOURCE_EXHAUSTED';
+    if (code >= 500) return 'INTERNAL';
+    return 'UNKNOWN';
+}
+
+/**
  * 创建符合 fromProvider 格式的错误响应（非流式）
  * @param {Error} error - 错误对象
  * @param {string} fromProvider - 客户端期望的提供商格式
@@ -1353,26 +1381,6 @@ function createErrorResponse(error, fromProvider) {
     const protocolPrefix = getProtocolPrefix(fromProvider);
     const statusCode = error.status || error.code || 500;
     const errorMessage = error.message || "An error occurred during processing.";
-    
-    // 根据 HTTP 状态码映射错误类型
-    const getErrorType = (code) => {
-        if (code === 401) return 'authentication_error';
-        if (code === 403) return 'permission_error';
-        if (code === 429) return 'rate_limit_error';
-        if (code >= 500) return 'server_error';
-        return 'invalid_request_error';
-    };
-    
-    // 根据 HTTP 状态码映射 Gemini 的 status
-    const getGeminiStatus = (code) => {
-        if (code === 400) return 'INVALID_ARGUMENT';
-        if (code === 401) return 'UNAUTHENTICATED';
-        if (code === 403) return 'PERMISSION_DENIED';
-        if (code === 404) return 'NOT_FOUND';
-        if (code === 429) return 'RESOURCE_EXHAUSTED';
-        if (code >= 500) return 'INTERNAL';
-        return 'UNKNOWN';
-    };
     
     switch (protocolPrefix) {
         case MODEL_PROTOCOL_PREFIX.OPENAI:
@@ -1437,26 +1445,6 @@ function createStreamErrorResponse(error, fromProvider) {
     const protocolPrefix = getProtocolPrefix(fromProvider);
     const statusCode = error.status || error.code || 500;
     const errorMessage = error.message || "An error occurred during streaming.";
-    
-    // 根据 HTTP 状态码映射错误类型
-    const getErrorType = (code) => {
-        if (code === 401) return 'authentication_error';
-        if (code === 403) return 'permission_error';
-        if (code === 429) return 'rate_limit_error';
-        if (code >= 500) return 'server_error';
-        return 'invalid_request_error';
-    };
-    
-    // 根据 HTTP 状态码映射 Gemini 的 status
-    const getGeminiStatus = (code) => {
-        if (code === 400) return 'INVALID_ARGUMENT';
-        if (code === 401) return 'UNAUTHENTICATED';
-        if (code === 403) return 'PERMISSION_DENIED';
-        if (code === 404) return 'NOT_FOUND';
-        if (code === 429) return 'RESOURCE_EXHAUSTED';
-        if (code >= 500) return 'INTERNAL';
-        return 'UNKNOWN';
-    };
     
     switch (protocolPrefix) {
         case MODEL_PROTOCOL_PREFIX.OPENAI:
