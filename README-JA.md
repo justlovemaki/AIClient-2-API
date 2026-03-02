@@ -38,8 +38,7 @@
 > - **2026.01.26** - Codexプロトコルサポートを追加：OpenAI Codex OAuth認証での接続に対応
 > - **2026.01.25** - AI 監視プラグインの強化：AI プロトコル変換前後のリクエストパラメータとレスポンスの監視をサポート。ログ管理の最適化：統一されたログ形式、ビジュアル設定
 > - **2026.01.15** - プロバイダープールマネージャーの最適化：非同期リフレッシュキューメカニズム、バッファキュー重複排除、グローバル並行制御、ノードウォームアップと自動期限切れ検出を追加
-> - **2026.01.07** - iFlowプロトコルサポートの追加、OAuth認証方式でQwen、Kimi、DeepSeek、GLMシリーズモデルにアクセス可能、自動トークンリフレッシュ機能をサポート
-> - **2026.01.03** - テーマ切替機能を追加し、プロバイダープール初期化を最適化、プロバイダーのデフォルト設定を使用するフォールバック戦略を削除
+> > - **2026.01.03** - テーマ切替機能を追加し、プロバイダープール初期化を最適化、プロバイダーのデフォルト設定を使用するフォールバック戦略を削除
 > - **2025.12.30** - メインプロセス管理と自動更新機能を追加
 > - **2025.12.25** - 設定ファイル統一管理：すべての設定を `configs/` ディレクトリに集約。Dockerユーザーはマウントパスを `-v "ローカルパス:/app/configs"` に更新が必要
 > - **2025.12.11** - Dockerイメージが自動的にビルドされ、Docker Hubで公開されました: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
@@ -111,12 +110,12 @@ AIClient-2-APIを使い始める最も推奨される方法は、自動起動ス
 #### 🐳 Docker クイックスタート (推奨)
 
 ```bash
-docker run -d -p 3000:3000 -p 8085-8087:8085-8087 -p 1455:1455 -p 19876-19880:19876-19880 --restart=always -v "指定パス:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+docker run -d -p 3000:3000 -p 8085-8086:8085-8086 -p 1455:1455 -p 19876-19880:19876-19880 --restart=always -v "指定パス:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
 ```
 
 **パラメータ説明**：
 - `-d`：バックグラウンドでコンテナを実行
-- `-p 3000:3000 ...`：ポートマッピング。3000はWeb UI用、その他はOAuthコールバック用（Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880）
+- `-p 3000:3000 ...`：ポートマッピング。3000はWeb UI用、その他はOAuthコールバック用（Gemini: 8085, Antigravity: 8086, Codex: 1455, Kiro: 19876-19880）
 - `--restart=always`：コンテナ自動再起動ポリシー
 - `-v "指定パス:/app/configs"`：設定ディレクトリをマウント（「指定パス」を実際のパスに置き換えてください、例：`/home/user/aiclient-configs`）
 - `--name aiclient2api`：コンテナ名
@@ -292,13 +291,6 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 - `budget_tokens` は `[1024, 24576]` の範囲に制限されます（省略または無効な場合はデフォルトの `20000` が適用されます）。
 - トークンの取得/リフレッシュ/プールローテーションメカニズムは変更されません。
 
-#### iFlow OAuth設定
-1. **初回認証**：Web UIの「設定管理」または「プロバイダープール」ページで、iFlowの「認証生成」ボタンをクリック
-2. **電話番号ログイン**：システムがiFlow認証ページを開き、電話番号でログイン認証を完了
-3. **自動保存**：認証成功後、システムは自動的にAPI Keyを取得し認証情報を保存
-4. **サポートモデル**：Qwen3シリーズ、Kimi K2、DeepSeek V3/R1、GLM-4.6/4.7など
-5. **自動リフレッシュ**：システムはトークンの期限切れが近づくと自動的にリフレッシュ、手動介入不要
-
 #### Codex OAuth設定
 1. **認証の生成**：Web UIの「プロバイダープール」または「設定管理」ページで、Codexの「認証生成」ボタンをクリック
 2. **ブラウザログイン**：システムがOpenAI Codex認証ページを開き、OAuthログインを完了
@@ -335,7 +327,6 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro認証トークン |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth認証情報 |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth認証情報 (Claude 4.5 Opus サポート) |
-| **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth認証情報 (Qwen、Kimi、DeepSeek、GLM サポート) |
 | **Codex** | `~/.codex/oauth_creds.json` | Codex OAuth認証情報 |
 
 > **説明**：`~`はユーザーホームディレクトリを表します（Windows: `C:\Users\ユーザー名`、Linux/macOS: `/home/ユーザー名`または`/Users/ユーザー名`）
@@ -545,7 +536,7 @@ curl http://localhost:3000/ollama/api/chat \
 
 **解決策**：
 - **ネットワーク接続を確認**：Google、アリババクラウドなどのサービスに正常にアクセスできることを確認
-- **ポート占有を確認**：OAuthコールバックには特定のポートが必要です（Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880）、これらのポートが占有されていないことを確認
+- **ポート占有を確認**：OAuthコールバックには特定のポートが必要です（Gemini: 8085, Antigravity: 8086, Codex: 1455, Kiro: 19876-19880）、これらのポートが占有されていないことを確認
 - **ブラウザキャッシュをクリア**：シークレットモードを使用するか、ブラウザキャッシュをクリアして再試行
 - **ファイアウォール設定を確認**：ファイアウォールがローカルコールバックポートへのアクセスを許可していることを確認
 - **Dockerユーザー**：すべてのOAuthコールバックポートが正しくマッピングされていることを確認

@@ -1120,15 +1120,15 @@ export class GrokConverter extends BaseConverter {
      * Grok模型列表 -> OpenAI模型列表
      */
     toOpenAIModelList(grokModels) {
-        const models = Array.isArray(grokModels) ? grokModels : (grokModels?.models || []);
+        const models = Array.isArray(grokModels) ? grokModels : (grokModels?.models || grokModels?.data || []);
         return {
             object: "list",
             data: models.map(m => ({
-                id: m.id || m.name,
+                id: m.id || m.name || (typeof m === 'string' ? m : ''),
                 object: "model",
                 created: Math.floor(Date.now() / 1000),
                 owned_by: "xai",
-                display_name: m.name || m.id,
+                display_name: m.display_name || m.name || m.id || (typeof m === 'string' ? m : ''),
             })),
         };
     }
@@ -1137,13 +1137,13 @@ export class GrokConverter extends BaseConverter {
      * Grok模型列表 -> Gemini模型列表
      */
     toGeminiModelList(grokModels) {
-        const models = Array.isArray(grokModels) ? grokModels : (grokModels?.models || []);
+        const models = Array.isArray(grokModels) ? grokModels : (grokModels?.models || grokModels?.data || []);
         return {
             models: models.map(m => ({
-                name: `models/${m.id || m.name}`,
+                name: `models/${m.id || m.name || (typeof m === 'string' ? m : '')}`,
                 version: "1.0",
-                displayName: m.name || m.id,
-                description: m.description || `Grok model: ${m.name || m.id}`,
+                displayName: m.display_name || m.name || m.id || (typeof m === 'string' ? m : ''),
+                description: m.description || `Grok model: ${m.name || m.id || (typeof m === 'string' ? m : '')}`,
                 inputTokenLimit: 131072,
                 outputTokenLimit: 8192,
                 supportedGenerationMethods: ["generateContent", "streamGenerateContent"]

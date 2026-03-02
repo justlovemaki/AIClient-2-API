@@ -174,6 +174,9 @@ func (rt *utlsRoundTripper) CloseIdleConnections() {
 // ──────────────── Main ────────────────
 
 func main() {
+	// 强制将日志输出到 Stdout，避免 Node.js 侧将其误判为 Error
+	log.SetOutput(os.Stdout)
+
 	port := defaultPort
 	if p := os.Getenv("TLS_SIDECAR_PORT"); p != "" {
 		if v, err := strconv.Atoi(p); err == nil {

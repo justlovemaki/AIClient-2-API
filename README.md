@@ -38,8 +38,7 @@
 > - **2026.01.26** - Added Codex protocol support: supports OpenAI Codex OAuth authorization access
 > - **2026.01.25** - Enhanced AI Monitor plugin: supports monitoring request parameters and responses before and after AI protocol conversion. Optimized log management: unified log format, visual configuration
 > - **2026.01.15** - Optimized provider pool manager: added async refresh queue mechanism, buffer queue deduplication, global concurrency control, node warmup and automatic expiry detection
-> - **2026.01.07** - Added iFlow protocol support, enabling access to Qwen, Kimi, DeepSeek, and GLM series models via OAuth authentication with automatic token refresh
-> - **2026.01.03** - Added theme switching functionality and optimized provider pool initialization, removed the fallback strategy of using provider default configuration
+> > - **2026.01.03** - Added theme switching functionality and optimized provider pool initialization, removed the fallback strategy of using provider default configuration
 > - **2025.12.30** - Added main process management and automatic update functionality
 > - **2025.12.25** - Unified configuration management: All configs centralized to `configs/` directory. Docker users need to update mount path to `-v "local_path:/app/configs"`
 > - **2025.12.11** - Automatically built Docker images are now available on Docker Hub: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
@@ -111,12 +110,12 @@ The most recommended way to use AIClient-2-API is to start it through an automat
 #### 🐳 Docker Quick Start (Recommended)
 
 ```bash
-docker run -d -p 3000:3000 -p 8085-8087:8085-8087 -p 1455:1455 -p 19876-19880:19876-19880 --restart=always -v "your_path:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
+docker run -d -p 3000:3000 -p 8085-8086:8085-8086 -p 1455:1455 -p 19876-19880:19876-19880 --restart=always -v "your_path:/app/configs" --name aiclient2api justlikemaki/aiclient-2-api
 ```
 
 **Parameter Description**:
 - `-d`: Run container in background
-- `-p 3000:3000 ...`: Port mapping. 3000 is for Web UI, others are for OAuth callbacks (Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880)
+- `-p 3000:3000 ...`: Port mapping. 3000 is for Web UI, others are for OAuth callbacks (Gemini: 8085, Antigravity: 8086, Codex: 1455, Kiro: 19876-19880)
 - `--restart=always`: Container auto-restart policy
 - `-v "your_path:/app/configs"`: Mount configuration directory (replace "your_path" with actual path, e.g., `/home/user/aiclient-configs`)
 - `--name aiclient2api`: Container name
@@ -292,13 +291,6 @@ Notes:
 - `budget_tokens` is clamped to `[1024, 24576]` (default `20000` if omitted/invalid).
 - Token acquisition/refresh/pool rotation is unchanged.
 
-#### iFlow OAuth Configuration
-1. **First Authorization**: In Web UI's "Configuration" or "Provider Pools" page, click the "Generate Authorization" button for iFlow
-2. **Phone Login**: The system will open the iFlow authorization page, complete login verification using your phone number
-3. **Auto Save**: After successful authorization, the system will automatically obtain the API Key and save credentials
-4. **Supported Models**: Qwen3 series, Kimi K2, DeepSeek V3/R1, GLM-4.6/4.7, etc.
-5. **Auto Refresh**: The system will automatically refresh tokens when they are about to expire, no manual intervention required
-
 #### Codex OAuth Configuration
 1. **Generate Authorization**: On the Web UI "Provider Pools" or "Configuration" page, click the "Generate Authorization" button for Codex
 2. **Browser Login**: The system opens the OpenAI Codex authorization page to complete OAuth login
@@ -335,7 +327,6 @@ Default storage locations for authorization credential files of each service:
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
 | **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
-| **iFlow** | `~/.iflow/oauth_creds.json` | iFlow OAuth credentials (supports Qwen, Kimi, DeepSeek, GLM) |
 | **Codex** | `~/.codex/oauth_creds.json` | Codex OAuth credentials |
 
 > **Note**: `~` represents the user home directory (Windows: `C:\Users\username`, Linux/macOS: `/home/username` or `/Users/username`)
@@ -545,7 +536,7 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 
 **Solutions**:
 - **Check Network Connection**: Ensure you can access Google, Alibaba Cloud, and other services normally
-- **Check Port Occupation**: OAuth callbacks require specific ports (Gemini: 8085, Antigravity: 8086, iFlow: 8087, Codex: 1455, Kiro: 19876-19880), ensure these ports are not occupied
+- **Check Port Occupation**: OAuth callbacks require specific ports (Gemini: 8085, Antigravity: 8086, Codex: 1455, Kiro: 19876-19880), ensure these ports are not occupied
 - **Clear Browser Cache**: Try using incognito mode or clearing browser cache and retry
 - **Check Firewall Settings**: Ensure the firewall allows access to local callback ports
 - **Docker Users**: Ensure all OAuth callback ports are correctly mapped

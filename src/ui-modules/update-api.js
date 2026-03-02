@@ -422,7 +422,8 @@ async function performTarballUpdate(localVersion, latestTag) {
             'configs',           // 用户配置目录
             'node_modules',      // 依赖目录
             '.update_temp',      // 临时更新目录
-            'logs'               // 日志目录
+            'logs',              // 日志目录
+            'tls-sidecar'        // TLS Sidecar 目录
         ];
         
         // 7. 复制新文件到应用目录
