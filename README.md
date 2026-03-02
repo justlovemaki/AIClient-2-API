@@ -30,10 +30,11 @@
 > - Thanks to Ruan Yifeng for the recommendation in [Weekly Issue 359](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html)
 >
 > **📅 Version Update Log**
->
+> 
 > <details>
 > <summary>Click to expand detailed version history</summary>
->
+> 
+> - **2026.03.02** - Added Grok protocol support, supporting access to xAI Grok series models (Grok 3/4) via Cookie/SSO, supporting multimodal input, image/video generation, automatic token refresh and streaming output
 > - **2026.01.26** - Added Codex protocol support: supports OpenAI Codex OAuth authorization access
 > - **2026.01.25** - Enhanced AI Monitor plugin: supports monitoring request parameters and responses before and after AI protocol conversion. Optimized log management: unified log format, visual configuration
 > - **2026.01.15** - Optimized provider pool manager: added async refresh queue mechanism, buffer queue deduplication, global concurrency control, node warmup and automatic expiry detection
@@ -61,7 +62,7 @@
 ## 💡 Core Advantages
 
 ### 🎯 Unified Access, One-Stop Management
-*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Qwen Code, Kimi K2, MiniMax M2
+*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Grok, Qwen Code, Kimi K2, MiniMax M2
 *   **Flexible Switching Mechanism**: Path routing, support dynamic model switching via startup parameters or environment variables to meet different scenario requirements
 *   **Zero-Cost Migration**: Fully compatible with OpenAI API specifications, tools like Cherry-Studio, NextChat, Cline can be used without modification
 *   **Multi-Protocol Intelligent Conversion**: Support intelligent conversion between OpenAI, Claude, and Gemini protocols for cross-protocol model invocation
@@ -203,6 +204,7 @@ Supports various input types such as images and documents, providing you with a 
 
 #### Latest Model Support
 Seamlessly support the following latest large models, just configure the corresponding endpoint in Web UI or [`configs/config.json`](./configs/config.json):
+*   **Grok 3 / Grok 4** - xAI's flagship models, now supported via Grok Cookie/SSO, supporting thinking models, image generation, and video generation
 *   **Claude 4.5 Opus** - Anthropic's strongest model ever, now supported via Kiro, Antigravity
 *   **Gemini 3 Pro** - Google's next-generation architecture preview, now supported via Gemini, Antigravity
 *   **Qwen3 Coder Plus** - Alibaba Tongyi Qianwen's latest code-specific model, now supported via Qwen Code
@@ -303,6 +305,15 @@ Notes:
 3. **Auto Save**: After successful authorization, the system automatically saves the Codex OAuth credential file
 4. **Callback Port**: Ensure the OAuth callback port `1455` is not occupied
 
+#### Grok Cookie/SSO Configuration
+1. **Obtain SSO Token**: Log in to the [Grok official website](https://grok.com/), copy the value of `sso` from Application -> Cookies in browser developer tools
+2. **Enter Configuration**: In the Web UI "Configuration" page or directly modify the configuration file, enter the token into `GROK_COOKIE_TOKEN`
+3. **Supported Features**:
+   - Chat and Thinking models (Grok 3 Thinking)
+   - Image generation (Grok Imagine)
+   - Video generation (Grok Video)
+4. **Notes**: Ensure `GROK_USER_AGENT` matches the browser used when obtaining the cookie to avoid being blocked
+
 #### Account Pool Management Configuration
 1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./configs/provider_pools.json.example)
 2. **Configure Pool Parameters**: Set `PROVIDER_POOLS_FILE_PATH` in `configs/config.json` to point to the pool configuration file
@@ -365,6 +376,7 @@ curl http://localhost:3000/ollama/api/chat \
 - `[Claude]` - Use official Claude API
 - `[Gemini CLI]` - Access via Gemini CLI OAuth
 - `[OpenAI]` - Use official OpenAI API
+- `[Grok]` - Access via Grok Cookie/SSO
 - `[Qwen CLI]` - Access via Qwen OAuth
 
 ---
@@ -394,12 +406,13 @@ This project supports flexible proxy configuration, allowing you to configure a 
    ```json
    {
      "PROXY_URL": "http://127.0.0.1:7890",
-     "PROXY_ENABLED_PROVIDERS": [
-       "gemini-cli-oauth",
-       "gemini-antigravity",
-       "claude-kiro-oauth"
-     ]
-   }
+      "PROXY_ENABLED_PROVIDERS": [
+        "gemini-cli-oauth",
+        "gemini-antigravity",
+        "claude-kiro-oauth",
+        "grok-custom"
+      ]
+}
    ```
 
 3. **Provider-Specific Proxied Endpoints**: Some providers (like OpenAI, Claude) support configuring proxied API endpoints

@@ -30,10 +30,11 @@
 > - 感谢阮一峰老师在 [周刊 359 期](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html) 的推荐
 >
 > **📅 版本更新日志**
->
+> 
 > <details>
 > <summary>点击展开查看详细版本历史</summary>
->
+> 
+> - **2026.03.02** - 新增 Grok 协议支持，支持通过 Cookie/SSO 方式访问 xAI Grok 系列模型（Grok 3/4），支持多模态输入、图片/视频生成、自动 token 刷新及流式输出
 > - **2026.01.26** - 新增 Codex 协议支持：支持 OpenAI Codex OAuth 授权接入
 > - **2026.01.25** - 增强 AI 监控插件：支持监控 AI 协议转换前后的请求参数和响应。优化日志管理：统一日志格式，可视化配置
 > - **2026.01.15** - 优化提供商池管理器：新增异步刷新队列机制、缓冲队列去重、全局并发控制，支持节点预热和自动过期检测
@@ -60,7 +61,7 @@
 ## 💡 核心优势
 
 ### 🎯 统一接入，一站式管理
-*   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、Qwen Code、Kimi K2、MiniMax M2 等主流大模型
+*   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、Grok、Qwen Code、Kimi K2、MiniMax M2 等主流大模型
 *   **灵活切换机制**：Path 路由、支持通过启动参数、环境变量三种方式动态切换模型，满足不同场景需求
 *   **零成本迁移**：完全兼容 OpenAI API 规范，Cherry-Studio、NextChat、Cline 等工具无需修改即可使用
 *   **多协议智能转换**：支持 OpenAI、Claude、Gemini 三大协议间的智能转换，实现跨协议模型调用
@@ -202,6 +203,7 @@ docker compose up -d
 
 #### 最新模型支持
 无缝支持以下最新大模型，仅需在 Web UI 或 [`configs/config.json`](./configs/config.json) 中配置相应的端点：
+*   **Grok 3 / Grok 4** - xAI 旗舰模型，现已通过 Grok Cookie/SSO 支持，支持思考模型、图片生成及视频生成
 *   **Claude 4.5 Opus** - Anthropic 史上最强模型，现已通过 Kiro, Antigravity 支持
 *   **Gemini 3 Pro** - Google 下一代架构预览版，现已通过 Gemini, Antigravity 支持
 *   **Qwen3 Coder Plus** - 阿里通义千问最新代码专用模型，现已通过Qwen Code 支持
@@ -302,6 +304,15 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 3. **自动保存**：授权成功后，系统会自动保存 Codex 的 OAuth 凭据文件
 4. **回调端口**：确保 OAuth 回调端口 `1455` 未被占用
 
+#### Grok Cookie/SSO 配置
+1. **获取 SSO 令牌**：登录 [Grok 官网](https://grok.com/)，在浏览器开发者工具的 Application -> Cookies 中复制 `sso` 的值
+2. **填入配置**：在 Web UI 的“配置管理”或直接修改配置文件，将令牌填入 `GROK_COOKIE_TOKEN`
+3. **支持功能**：
+   - 聊天与思考模型（Grok 3 Thinking）
+   - 图片生成（Grok Imagine）
+   - 视频生成（Grok Video）
+4. **注意事项**：确保 `GROK_USER_AGENT` 与您获取 Cookie 时使用的浏览器一致以避免被拦截
+
 #### 账号池管理配置
 1. **创建号池配置文件**：参考 [provider_pools.json.example](./configs/provider_pools.json.example) 创建配置文件
 2. **配置号池参数**：在 `configs/config.json` 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
@@ -364,6 +375,7 @@ curl http://localhost:3000/ollama/api/chat \
 - `[Claude]` - 使用 Claude 官方 API
 - `[Gemini CLI]` - 通过 Gemini CLI OAuth 访问
 - `[OpenAI]` - 使用 OpenAI 官方 API
+- `[Grok]` - 通过 Grok Cookie/SSO 访问
 - `[Qwen CLI]` - 通过 Qwen OAuth 访问
 
 ---
@@ -393,12 +405,13 @@ curl http://localhost:3000/ollama/api/chat \
    ```json
    {
      "PROXY_URL": "http://127.0.0.1:7890",
-     "PROXY_ENABLED_PROVIDERS": [
-       "gemini-cli-oauth",
-       "gemini-antigravity",
-       "claude-kiro-oauth"
-     ]
-   }
+      "PROXY_ENABLED_PROVIDERS": [
+        "gemini-cli-oauth",
+        "gemini-antigravity",
+        "claude-kiro-oauth",
+        "grok-custom"
+      ]
+}
    ```
 
 3. **提供商自带代理端点**：某些提供商（如 OpenAI、Claude）支持配置已代理的 API 端点

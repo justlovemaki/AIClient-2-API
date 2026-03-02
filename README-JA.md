@@ -30,10 +30,11 @@
 > - Ruan Yifeng先生による[週刊359号](https://www.ruanyifeng.com/blog/2025/08/weekly-issue-359.html)での推薦に感謝します
 >
 > **📅 バージョン更新ログ**
->
+> 
 > <details>
 > <summary>クリックして詳細なバージョン履歴を展開</summary>
->
+> 
+> - **2026.03.02** - Grokプロトコルサポートを追加：Cookie/SSO方式でxAI Grokシリーズモデル（Grok 3/4）へのアクセスに対応し、マルチモーダル入力、画像/動画生成、自動トークンリフレッシュ、ストリーミング出力をサポート
 > - **2026.01.26** - Codexプロトコルサポートを追加：OpenAI Codex OAuth認証での接続に対応
 > - **2026.01.25** - AI 監視プラグインの強化：AI プロトコル変換前後のリクエストパラメータとレスポンスの監視をサポート。ログ管理の最適化：統一されたログ形式、ビジュアル設定
 > - **2026.01.15** - プロバイダープールマネージャーの最適化：非同期リフレッシュキューメカニズム、バッファキュー重複排除、グローバル並行制御、ノードウォームアップと自動期限切れ検出を追加
@@ -61,7 +62,7 @@
 ## 💡 コアアドバンテージ
 
 ### 🎯 統一アクセス、ワンストップ管理
-*   **マルチモデル統一インターフェース**：標準OpenAI互換プロトコルを通じて、一度の設定でGemini、Claude、Qwen Code、Kimi K2、MiniMax M2などの主流大規模モデルにアクセス
+*   **マルチモデル統一インターフェース**：標準OpenAI互換プロトコルを通じて、一度の設定でGemini、Claude、Grok、Qwen Code、Kimi K2、MiniMax M2などの主流大規模モデルにアクセス
 *   **柔軟な切り替えメカニズム**：Pathルーティング、起動パラメータ、環境変数の3つの方法で動的にモデルを切り替え、異なるシナリオのニーズに対応
 *   **ゼロコスト移行**：OpenAI API仕様と完全互換、Cherry-Studio、NextChat、Clineなどのツールを変更なしで使用可能
 *   **マルチプロトコルインテリジェント変換**：OpenAI、Claude、Geminiの3大プロトコル間のインテリジェント変換をサポートし、クロスプロトコルモデル呼び出しを実現
@@ -203,6 +204,7 @@ docker compose up -d
 
 #### 最新モデルサポート
 以下の最新大規模モデルをシームレスにサポート、Web UIまたは[`config.json`](./configs/config.json)で対応するエンドポイントを設定するだけで使用可能：
+*   **Grok 3 / Grok 4** - xAIのフラッグシップモデル。Grok Cookie/SSO経由でサポートされ、思考モデル、画像生成、動画生成に対応
 *   **Claude 4.5 Opus** - Anthropic史上最強モデル、Kiro、Antigravity経由でサポート
 *   **Gemini 3 Pro** - Google次世代アーキテクチャプレビュー版、Gemini、Antigravity経由でサポート
 *   **Qwen3 Coder Plus** - アリババ通義千問の最新コード専用モデル、Qwen Code経由でサポート
@@ -303,6 +305,15 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 3. **自動保存**：認証成功後、システムがCodexのOAuth認証情報ファイルを自動保存
 4. **コールバックポート**：OAuthコールバックポート `1455` が占有されていないことを確認
 
+#### Grok Cookie/SSO 設定
+1. **SSOトークンの取得**: [Grok公式サイト](https://grok.com/)にログインし、ブラウザの開発者ツールの Application -> Cookies から `sso` の値をコピーします。
+2. **設定の入力**: Web UIの「設定管理」ページ、または設定ファイルを直接編集して、トークンを `GROK_COOKIE_TOKEN` に入力します。
+3. **サポート機能**:
+   - チャットおよび思考モデル (Grok 3 Thinking)
+   - 画像生成 (Grok Imagine)
+   - 動画生成 (Grok Video)
+4. **注意事項**: ブロックを避けるため、`GROK_USER_AGENT` がCookie取得時と同じブラウザのものであることを確認してください。
+
 #### アカウントプール管理設定
 1. **プール設定ファイルの作成**：[provider_pools.json.example](./configs/provider_pools.json.example) を参考に設定ファイルを作成します
 2. **プールパラメータの設定**：config.json で `PROVIDER_POOLS_FILE_PATH` を設定し、プール設定ファイルを指定します
@@ -365,6 +376,7 @@ curl http://localhost:3000/ollama/api/chat \
 - `[Claude]` - 公式Claude APIを使用
 - `[Gemini CLI]` - Gemini CLI OAuth経由でアクセス
 - `[OpenAI]` - 公式OpenAI APIを使用
+- `[Grok]` - Grok Cookie/SSO経由でアクセス
 - `[Qwen CLI]` - Qwen OAuth経由でアクセス
 
 ---
@@ -394,12 +406,13 @@ curl http://localhost:3000/ollama/api/chat \
    ```json
    {
      "PROXY_URL": "http://127.0.0.1:7890",
-     "PROXY_ENABLED_PROVIDERS": [
-       "gemini-cli-oauth",
-       "gemini-antigravity",
-       "claude-kiro-oauth"
-     ]
-   }
+      "PROXY_ENABLED_PROVIDERS": [
+        "gemini-cli-oauth",
+        "gemini-antigravity",
+        "claude-kiro-oauth",
+        "grok-custom"
+      ]
+}
    ```
 
 3. **プロバイダー独自のプロキシ済みエンドポイント**：一部のプロバイダー（OpenAI、Claudeなど）はプロキシ済みAPIエンドポイントの設定をサポートしています
