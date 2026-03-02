@@ -177,6 +177,8 @@ export class GeminiConverter extends BaseConverter {
                 return this.toOpenAIResponsesRequest(data);
             case MODEL_PROTOCOL_PREFIX.CODEX:
                 return this.toCodexRequest(data);
+            case MODEL_PROTOCOL_PREFIX.GROK:
+                return this.toGrokRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
         }
@@ -1414,6 +1416,18 @@ export class GeminiConverter extends BaseConverter {
         }
 
         return codexRequest;
+    }
+
+    /**
+     * Gemini请求 -> Grok请求
+     */
+    toGrokRequest(geminiRequest) {
+        // 先转换为 OpenAI 格式
+        const openaiRequest = this.toOpenAIRequest(geminiRequest);
+        return {
+            ...openaiRequest,
+            _isConverted: true
+        };
     }
 
     /**
