@@ -60,6 +60,15 @@ class TLSSidecar {
         logger.info(`[TLS-Sidecar] Starting: ${binaryPath} on port ${this.port}`);
 
         try {
+            // 确保 Linux/macOS 下有执行权限
+            if (process.platform !== 'win32') {
+                try {
+                    fs.chmodSync(binaryPath, 0o755);
+                } catch (e) {
+                    logger.warn(`[TLS-Sidecar] Failed to chmod binary: ${e.message}`);
+                }
+            }
+
             this.process = spawn(binaryPath, [], {
                 env: {
                     ...process.env,
@@ -211,7 +220,7 @@ class TLSSidecar {
 
         for (const p of candidates) {
             try {
-                if (fs.existsSync(p)) {
+                if (fs.existsSync(p) && fs.statSync(p).isFile()) {
                     return p;
                 }
             } catch { /* ignore */ }

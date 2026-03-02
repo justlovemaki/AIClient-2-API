@@ -22,10 +22,6 @@ LABEL description="Docker image for AIClient2API server"
 # 安装必要的系统工具（tar 用于更新功能，git 用于版本检查）
 RUN apk add --no-cache tar git
 
-# 从 sidecar 构建阶段复制二进制
-COPY --from=sidecar-builder /build/tls-sidecar /app/tls-sidecar/tls-sidecar
-RUN chmod +x /app/tls-sidecar/tls-sidecar
-
 # 设置工作目录
 WORKDIR /app
 
@@ -39,6 +35,11 @@ RUN npm install
 
 # 复制源代码
 COPY . .
+
+# 从 sidecar 构建阶段复制二进制
+# 放在 COPY . . 之后是为了确保不会被本地的空目录或旧二进制文件覆盖
+COPY --from=sidecar-builder /build/tls-sidecar /app/tls-sidecar/tls-sidecar
+RUN chmod +x /app/tls-sidecar/tls-sidecar
 
 USER root
 
