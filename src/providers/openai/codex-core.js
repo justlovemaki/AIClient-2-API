@@ -21,6 +21,8 @@ export class CodexApiService {
         this.accountId = null;
         this.email = null;
         this.expiresAt = null;
+        this.idToken = null;
+        this.credsPath = null; // 记录本次加载/使用的凭据文件路径，确保刷新后写回同一文件
         this.uuid = config.uuid; // 保存 uuid 用于号池管理
         this.isInitialized = false;
 
@@ -51,10 +53,11 @@ export class CodexApiService {
 
         try {
             let creds;
+            let credsPath;
 
             // 如果指定了具体路径，直接读取
             if (this.config.CODEX_OAUTH_CREDS_FILE_PATH) {
-                const credsPath = this.config.CODEX_OAUTH_CREDS_FILE_PATH;
+                credsPath = this.config.CODEX_OAUTH_CREDS_FILE_PATH;
                 const exists = await this.fileExists(credsPath);
                 if (!exists) {
                     throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
@@ -74,10 +77,14 @@ export class CodexApiService {
                     throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
                 }
 
-                const credsPath = path.join(targetDir, matchingFile);
+                credsPath = path.join(targetDir, matchingFile);
                 creds = JSON.parse(await fs.readFile(credsPath, 'utf8'));
             }
 
+            // 记录凭据路径，确保 refresh 时写回同一文件。
+            this.credsPath = credsPath;
+
+            this.idToken = creds.id_token || this.idToken;
             this.accessToken = creds.access_token;
             this.refreshToken = creds.refresh_token;
             this.accountId = creds.account_id;
@@ -293,7 +300,7 @@ export class CodexApiService {
         }
 
         // 根据是否流式设置 Accept 头
-     if (stream) {
+        if (stream) {
             headers['accept'] = 'text/event-stream';
         } else {
             headers['accept'] = 'application/json';
@@ -348,11 +355,22 @@ export class CodexApiService {
         try {
             const newTokens = await refreshCodexTokensWithRetry(this.refreshToken, this.config);
 
+            this.idToken = newTokens.id_token || this.idToken;
             this.accessToken = newTokens.access_token;
             this.refreshToken = newTokens.refresh_token;
             this.accountId = newTokens.account_id;
             this.email = newTokens.email;
-            this.expiresAt = new Date(newTokens.expire);
+
+            // 关键修复：refreshCodexTokensWithRetry 返回字段名是 `expired`（ISO string），不是 `expire`
+            const expiredValue = newTokens.expired || newTokens.expire || newTokens.expires_at || newTokens.expiresAt;
+            const parsedExpiry = expiredValue ? new Date(expiredValue) : null;
+            if (!parsedExpiry || Number.isNaN(parsedExpiry.getTime())) {
+                // 如果上游没返回可解析的过期时间，保守处理：按 1h 有效期估算（避免 expiresAt 变成 NaN 导致永不刷新）
+                this.expiresAt = new Date(Date.now() + 3600 * 1000);
+                logger.warn('[Codex] Token refresh did not include a valid expiry time; falling back to 1h from now');
+            } else {
+                this.expiresAt = parsedExpiry;
+            }
 
             // 保存更新的凭据
             await this.saveCredentials();
@@ -375,6 +393,11 @@ export class CodexApiService {
     isExpiryDateNear() {
         if (!this.expiresAt) return true;
         const expiry = this.expiresAt.getTime();
+        // 如果 expiresAt 是 Invalid Date（NaN），必须视为“接近过期/已过期”，否则刷新永远不会触发
+        if (Number.isNaN(expiry)) {
+            logger.warn('[Codex] expiresAt is invalid (NaN). Treating as near expiry to force refresh');
+            return true;
+        }
         const nearMinutes = 20;
         const { message, isNearExpiry } = formatExpiryLog('Codex', expiry, nearMinutes);
         logger.info(message);
@@ -387,14 +410,19 @@ export class CodexApiService {
     getCredentialsPath() {
         const email = this.config.CODEX_EMAIL || this.email || 'default';
 
-        // 优先使用配置中指定的路径，否则使用项目目录
+        // 1) 优先使用配置中指定的路径（号池模式/显式配置）
         if (this.config.CODEX_OAUTH_CREDS_FILE_PATH) {
             return this.config.CODEX_OAUTH_CREDS_FILE_PATH;
         }
 
-        // 保存到项目目录的 .codex 文件夹
+        // 2) 如果本次是从 configs/codex 扫描加载的，务必写回同一文件
+        if (this.credsPath) {
+            return this.credsPath;
+        }
+
+        // 3) 兜底：写入 configs/codex（与 OAuth 保存默认目录保持一致，避免“读取 configs/codex、写入 .codex”导致永远读到旧 token）
         const projectDir = process.cwd();
-        return path.join(projectDir, '.codex', `codex-${email}.json`);
+        return path.join(projectDir, 'configs', 'codex', `${Date.now()}_codex-${email}.json`);
     }
 
     /**
@@ -404,17 +432,32 @@ export class CodexApiService {
         const credsPath = this.getCredentialsPath();
         const credsDir = path.dirname(credsPath);
 
+        if (!this.expiresAt || Number.isNaN(this.expiresAt.getTime())) {
+            throw new Error('Invalid expiresAt when saving Codex credentials');
+        }
+
         await fs.mkdir(credsDir, { recursive: true });
-        await fs.writeFile(credsPath, JSON.stringify({
-            id_token: this.idToken || '',
-            access_token: this.accessToken,
-            refresh_token: this.refreshToken,
-            account_id: this.accountId,
-            last_refresh: new Date().toISOString(),
-            email: this.email,
-            type: 'codex',
-            expired: this.expiresAt.toISOString()
-        }, null, 2), { mode: 0o600 });
+        await fs.writeFile(
+            credsPath,
+            JSON.stringify(
+                {
+                    id_token: this.idToken || '',
+                    access_token: this.accessToken,
+                    refresh_token: this.refreshToken,
+                    account_id: this.accountId,
+                    last_refresh: new Date().toISOString(),
+                    email: this.email,
+                    type: 'codex',
+                    expired: this.expiresAt.toISOString()
+                },
+                null,
+                2
+            ),
+            { mode: 0o600 }
+        );
+
+        // 更新缓存路径（例如首次无 credsPath 兜底生成了新文件）
+        this.credsPath = credsPath;
     }
 
     /**
