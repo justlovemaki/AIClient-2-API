@@ -2248,6 +2248,7 @@ async saveCredentialsToFile(filePath, newData) {
             let outputTokens = 0;
             const toolCalls = [];
             let currentToolCall = null; // 用于累积结构化工具调用
+            const toolUseBlockIndexes = new Map(); // toolUseId -> content block index
 
             const estimatedInputTokens = this.estimateInputTokens(requestBody);
 
@@ -2384,45 +2385,102 @@ async saveCredentialsToFile(filePath, newData) {
                     yield* pushEvents(events);
                 } else if (event.type === 'toolUse') {
                     const tc = event.toolUse;
+                    const toolEvents = [];
+
                     // 统计工具调用的内容到 totalContent（用于 token 计算）
-                    if (tc.name) {
-                        totalContent += tc.name;
-                    }
-                    if (tc.input) {
-                        totalContent += tc.input;
-                    }
+                    if (tc.name) totalContent += tc.name;
+                    if (tc.input) totalContent += tc.input;
+
                     // 工具调用事件（包含 name 和 toolUseId）
                     if (tc.name && tc.toolUseId) {
-                        // 检查是否是同一个工具调用的续传（相同 toolUseId）
+                        // 遇到工具调用时，立即关闭文本块，避免前端等待到流结束才看到 content_block_stop
+                        toolEvents.push(...stopBlock(streamState.textBlockIndex));
+
+                        // 同一工具调用续传
                         if (currentToolCall && currentToolCall.toolUseId === tc.toolUseId) {
-                            // 同一个工具调用，累积 input
                             currentToolCall.input += tc.input || '';
                         } else {
-                            // 不同的工具调用
-                            // 如果有未完成的工具调用，先保存它
+                            // 切换到新的工具调用前，先收尾旧调用
                             if (currentToolCall) {
+                                const prevBlockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
+                                let parsedInput = currentToolCall.input;
                                 try {
-                                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                                    parsedInput = JSON.parse(currentToolCall.input);
                                 } catch (e) {
                                     // input 不是有效 JSON，保持原样
                                 }
-                                toolCalls.push(currentToolCall);
+                                toolCalls.push({
+                                    toolUseId: currentToolCall.toolUseId,
+                                    name: currentToolCall.name,
+                                    input: parsedInput
+                                });
+                                if (prevBlockIndex != null) {
+                                    toolEvents.push({ type: "content_block_stop", index: prevBlockIndex });
+                                    toolUseBlockIndexes.delete(currentToolCall.toolUseId);
+                                }
                             }
-                            // 开始新的工具调用
+
+                            const blockIndex = streamState.nextBlockIndex++;
+                            toolUseBlockIndexes.set(tc.toolUseId, blockIndex);
+                            toolEvents.push({
+                                type: "content_block_start",
+                                index: blockIndex,
+                                content_block: {
+                                    type: "tool_use",
+                                    id: tc.toolUseId || `tool_${uuidv4()}`,
+                                    name: tc.name,
+                                    input: {}
+                                }
+                            });
+
                             currentToolCall = {
                                 toolUseId: tc.toolUseId,
                                 name: tc.name,
-                                input: tc.input || ''
+                                input: ''
                             };
+                            currentToolCall.input += tc.input || '';
                         }
-                        // 如果这个事件包含 stop，完成工具调用
-                        if (tc.stop) {
+
+                        // 实时向前端推送工具参数增量
+                        if (tc.input) {
+                            const blockIndex = toolUseBlockIndexes.get(tc.toolUseId);
+                            if (blockIndex != null) {
+                                toolEvents.push({
+                                    type: "content_block_delta",
+                                    index: blockIndex,
+                                    delta: {
+                                        type: "input_json_delta",
+                                        partial_json: tc.input
+                                    }
+                                });
+                            }
+                        }
+
+                        // 如果这个事件包含 stop，立即结束当前工具块
+                        if (tc.stop && currentToolCall) {
+                            let parsedInput = currentToolCall.input;
                             try {
-                                currentToolCall.input = JSON.parse(currentToolCall.input);
-                            } catch (e) {}
-                            toolCalls.push(currentToolCall);
+                                parsedInput = JSON.parse(currentToolCall.input);
+                            } catch (e) {
+                                // input 不是有效 JSON，保持原样
+                            }
+                            toolCalls.push({
+                                toolUseId: currentToolCall.toolUseId,
+                                name: currentToolCall.name,
+                                input: parsedInput
+                            });
+
+                            const blockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
+                            if (blockIndex != null) {
+                                toolEvents.push({ type: "content_block_stop", index: blockIndex });
+                                toolUseBlockIndexes.delete(currentToolCall.toolUseId);
+                            }
                             currentToolCall = null;
                         }
+                    }
+
+                    if (toolEvents.length > 0) {
+                        yield* pushEvents(toolEvents);
                     }
                 } else if (event.type === 'toolUseInput') {
                     // 工具调用的 input 续传事件
@@ -2432,16 +2490,38 @@ async saveCredentialsToFile(filePath, newData) {
                     }
                     if (currentToolCall) {
                         currentToolCall.input += event.input || '';
+                        const blockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
+                        if (blockIndex != null && event.input) {
+                            yield* pushEvents([{
+                                type: "content_block_delta",
+                                index: blockIndex,
+                                delta: {
+                                    type: "input_json_delta",
+                                    partial_json: event.input
+                                }
+                            }]);
+                        }
                     }
                 } else if (event.type === 'toolUseStop') {
                     // 工具调用结束事件
                     if (currentToolCall && event.stop) {
+                        let parsedInput = currentToolCall.input;
                         try {
-                            currentToolCall.input = JSON.parse(currentToolCall.input);
+                            parsedInput = JSON.parse(currentToolCall.input);
                         } catch (e) {
                             // input 不是有效 JSON，保持原样
                         }
-                        toolCalls.push(currentToolCall);
+                        toolCalls.push({
+                            toolUseId: currentToolCall.toolUseId,
+                            name: currentToolCall.name,
+                            input: parsedInput
+                        });
+
+                        const blockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
+                        if (blockIndex != null) {
+                            yield* pushEvents([{ type: "content_block_stop", index: blockIndex }]);
+                            toolUseBlockIndexes.delete(currentToolCall.toolUseId);
+                        }
                         currentToolCall = null;
                     }
                 }
@@ -2449,10 +2529,20 @@ async saveCredentialsToFile(filePath, newData) {
             
             // 处理未完成的工具调用（如果流提前结束）
             if (currentToolCall) {
+                let parsedInput = currentToolCall.input;
                 try {
-                    currentToolCall.input = JSON.parse(currentToolCall.input);
+                    parsedInput = JSON.parse(currentToolCall.input);
                 } catch (e) {}
-                toolCalls.push(currentToolCall);
+                toolCalls.push({
+                    toolUseId: currentToolCall.toolUseId,
+                    name: currentToolCall.name,
+                    input: parsedInput
+                });
+                const blockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
+                if (blockIndex != null) {
+                    yield* pushEvents([{ type: "content_block_stop", index: blockIndex }]);
+                    toolUseBlockIndexes.delete(currentToolCall.toolUseId);
+                }
                 currentToolCall = null;
             }
 
@@ -2501,36 +2591,7 @@ async saveCredentialsToFile(filePath, newData) {
                 }
             }
 
-            // 3. 处理工具调用（如果有）
-            if (toolCalls.length > 0) {
-                const baseIndex = streamState.nextBlockIndex;
-                for (let i = 0; i < toolCalls.length; i++) {
-                    const tc = toolCalls[i];
-                    const blockIndex = baseIndex + i;
-
-                    yield {
-                        type: "content_block_start",
-                        index: blockIndex,
-                        content_block: {
-                            type: "tool_use",
-                            id: tc.toolUseId || `tool_${uuidv4()}`,
-                            name: tc.name,
-                            input: {}
-                        }
-                    };
-                    
-                    yield {
-                        type: "content_block_delta",
-                        index: blockIndex,
-                        delta: {
-                            type: "input_json_delta",
-                            partial_json: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input || {})
-                        }
-                    };
-                    
-                    yield { type: "content_block_stop", index: blockIndex };
-                }
-            }
+            // 3. 工具调用在流中实时发送，这里不再批量补发
 
             // 计算 output tokens
             const contentBlocksForCount = thinkingRequested

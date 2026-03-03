@@ -12,6 +12,20 @@ const PROVIDERS_WITHOUT_USAGE_DISPLAY = [
     'gemini-antigravity'
 ];
 
+// 提供商配置缓存
+let currentProviderConfigs = null;
+
+/**
+ * 更新提供商配置
+ * @param {Array} configs - 提供商配置列表
+ */
+export function updateUsageProviderConfigs(configs) {
+    currentProviderConfigs = configs;
+    // 重新触发列表加载，以应用最新的可见性过滤、名称和图标
+    loadSupportedProviders();
+    loadUsage();
+}
+
 /**
  * 检查提供商是否支持显示用量
  * @param {string} providerType - 提供商类型
@@ -55,16 +69,31 @@ async function loadSupportedProviders() {
         const providers = await response.json();
         
         listEl.innerHTML = '';
-        providers.forEach(provider => {
+        
+        // 按照 currentProviderConfigs 的顺序渲染，确保顺序一致性
+        const displayOrder = currentProviderConfigs 
+            ? currentProviderConfigs.map(c => c.id) 
+            : providers;
+
+        displayOrder.forEach(providerId => {
+            // 必须是后端支持且前端配置可见的提供商
+            const isSupported = providers.includes(providerId);
+            if (!isSupported) return;
+
+            if (currentProviderConfigs) {
+                const config = currentProviderConfigs.find(c => c.id === providerId);
+                if (config && config.visible === false) return;
+            }
+
             const tag = document.createElement('span');
             tag.className = 'provider-tag';
-            tag.textContent = getProviderDisplayName(provider);
+            tag.textContent = getProviderDisplayName(providerId);
             tag.title = t('usage.doubleClickToRefresh') || '双击刷新该提供商用量';
             tag.setAttribute('data-i18n-title', 'usage.doubleClickToRefresh');
             
             // 添加双击事件
             tag.addEventListener('dblclick', () => {
-                refreshProviderUsage(provider);
+                refreshProviderUsage(providerId);
             });
             
             listEl.appendChild(tag);
@@ -240,6 +269,12 @@ function renderUsageData(data, container) {
     const groupedInstances = {};
     
     for (const [providerType, providerData] of Object.entries(data.providers)) {
+        // 如果配置了不可见，则跳过
+        if (currentProviderConfigs) {
+            const config = currentProviderConfigs.find(c => c.id === providerType);
+            if (config && config.visible === false) continue;
+        }
+
         if (providerData.instances && providerData.instances.length > 0) {
             const validInstances = [];
             for (const instance of providerData.instances) {
@@ -269,11 +304,18 @@ function renderUsageData(data, container) {
         return;
     }
 
-    // 按提供商分组渲染
-    for (const [providerType, instances] of Object.entries(groupedInstances)) {
-        const groupContainer = createProviderGroup(providerType, instances);
-        container.appendChild(groupContainer);
-    }
+    // 按提供商分组渲染，使用统一的显示顺序
+    const displayOrder = currentProviderConfigs 
+        ? currentProviderConfigs.map(c => c.id) 
+        : Object.keys(groupedInstances);
+
+    displayOrder.forEach(providerType => {
+        const instances = groupedInstances[providerType];
+        if (instances && instances.length > 0) {
+            const groupContainer = createProviderGroup(providerType, instances);
+            container.appendChild(groupContainer);
+        }
+    });
 }
 
 /**
@@ -822,6 +864,14 @@ function calculateTotalUsage(usageBreakdown) {
  * @returns {string} 显示名称
  */
 function getProviderDisplayName(providerType) {
+    // 优先从外部传入的配置中获取名称
+    if (currentProviderConfigs) {
+        const config = currentProviderConfigs.find(c => c.id === providerType);
+        if (config && config.name) {
+            return config.name;
+        }
+    }
+
     const names = {
         'claude-kiro-oauth': 'Claude Kiro OAuth',
         'gemini-cli-oauth': 'Gemini CLI OAuth',
@@ -839,6 +889,15 @@ function getProviderDisplayName(providerType) {
  * @returns {string} 图标类名
  */
 function getProviderIcon(providerType) {
+    // 优先从外部传入的配置中获取图标
+    if (currentProviderConfigs) {
+        const config = currentProviderConfigs.find(c => c.id === providerType);
+        if (config && config.icon) {
+            // 如果 icon 已经包含 fa- 则直接使用，否则加上 fas
+            return config.icon.startsWith('fa-') ? `fas ${config.icon}` : config.icon;
+        }
+    }
+
     const icons = {
         'claude-kiro-oauth': 'fas fa-robot',
         'gemini-cli-oauth': 'fas fa-gem',

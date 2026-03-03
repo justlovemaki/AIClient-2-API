@@ -5,6 +5,71 @@ import { handleProviderChange, handleGeminiCredsTypeChange, handleKiroCredsTypeC
 import { loadProviders } from './provider-manager.js';
 import { t } from './i18n.js';
 
+// 提供商配置缓存
+let currentProviderConfigs = null;
+
+/**
+ * 更新提供商配置并重新渲染配置页面的提供商选择标签
+ * @param {Array} configs - 提供商配置列表
+ */
+function updateConfigProviderConfigs(configs) {
+    currentProviderConfigs = configs;
+    
+    // 渲染基础设置中的模型提供商选择
+    const modelProviderEl = document.getElementById('modelProvider');
+    if (modelProviderEl) {
+        renderProviderTags(modelProviderEl, configs, true);
+    }
+    
+    // 渲染代理设置中的提供商选择
+    const proxyProvidersEl = document.getElementById('proxyProviders');
+    if (proxyProvidersEl) {
+        renderProviderTags(proxyProvidersEl, configs, false);
+    }
+    
+    // 重新加载当前配置以恢复选中状态
+    loadConfiguration();
+}
+
+/**
+ * 渲染提供商标签按钮
+ * @param {HTMLElement} container - 容器元素
+ * @param {Array} configs - 提供商配置列表
+ * @param {boolean} isRequired - 是否至少需要选择一个（用于点击事件逻辑）
+ */
+function renderProviderTags(container, configs, isRequired) {
+    // 过滤掉不可见的提供商
+    const visibleConfigs = configs.filter(c => c.visible !== false);
+    
+    container.innerHTML = visibleConfigs.map(c => `
+        <button type="button" class="provider-tag" data-value="${c.id}">
+            <i class="fas ${c.icon || 'fa-server'}"></i>
+            <span>${c.name}</span>
+        </button>
+    `).join('');
+    
+    // 为新生成的标签添加点击事件
+    const tags = container.querySelectorAll('.provider-tag');
+    tags.forEach(tag => {
+        tag.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isSelected = tag.classList.contains('selected');
+            
+            if (isRequired) {
+                const selectedCount = container.querySelectorAll('.provider-tag.selected').length;
+                // 如果当前是选中状态且只剩一个选中的，不允许取消
+                if (isSelected && selectedCount === 1) {
+                    showToast(t('common.warning'), t('config.modelProviderRequired'), 'warning');
+                    return;
+                }
+            }
+            
+            // 切换选中状态
+            tag.classList.toggle('selected');
+        });
+    });
+}
+
 /**
  * 加载配置
  */
@@ -24,7 +89,7 @@ async function loadConfiguration() {
         if (portEl) portEl.value = data.SERVER_PORT || 3000;
         
         if (modelProviderEl) {
-            // 处理多选 MODEL_PROVIDER (标签按钮)
+            // 处理多选 MODEL_PROVIDER
             const providers = Array.isArray(data.DEFAULT_MODEL_PROVIDERS)
                 ? data.DEFAULT_MODEL_PROVIDERS
                 : (typeof data.MODEL_PROVIDER === 'string' ? data.MODEL_PROVIDER.split(',') : []);
@@ -44,28 +109,6 @@ async function loadConfiguration() {
             if (!anySelected && tags.length > 0) {
                 tags[0].classList.add('selected');
             }
-
-            // 为标签按钮添加点击事件监听
-            tags.forEach(tag => {
-                // 移除旧的监听器（通过克隆节点）
-                const newTag = tag.cloneNode(true);
-                tag.parentNode.replaceChild(newTag, tag);
-                
-                newTag.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const isSelected = newTag.classList.contains('selected');
-                    const selectedCount = modelProviderEl.querySelectorAll('.provider-tag.selected').length;
-                    
-                    // 如果当前是选中状态且只剩一个选中的，不允许取消
-                    if (isSelected && selectedCount === 1) {
-                        showToast(t('common.warning'), t('config.modelProviderRequired'), 'warning');
-                        return;
-                    }
-                    
-                    // 切换选中状态
-                    newTag.classList.toggle('selected');
-                });
-            });
         }
         
         if (systemPromptEl) systemPromptEl.value = data.systemPrompt || '';
@@ -142,19 +185,6 @@ async function loadConfiguration() {
                 } else {
                     tag.classList.remove('selected');
                 }
-            });
-            
-            // 为代理提供商标签按钮添加点击事件监听
-            proxyTags.forEach(tag => {
-                // 移除旧的监听器（通过克隆节点）
-                const newTag = tag.cloneNode(true);
-                tag.parentNode.replaceChild(newTag, tag);
-                
-                newTag.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    // 代理提供商可以全部取消选择，所以不需要检查最少选择数量
-                    newTag.classList.toggle('selected');
-                });
             });
         }
         
@@ -320,5 +350,6 @@ async function saveConfiguration() {
 
 export {
     loadConfiguration,
-    saveConfiguration
+    saveConfiguration,
+    updateConfigProviderConfigs
 };

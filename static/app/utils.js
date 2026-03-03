@@ -3,6 +3,88 @@ import { t, getCurrentLanguage } from './i18n.js';
 import { apiClient } from './auth.js';
 
 /**
+ * 获取所有支持的提供商配置列表
+ * @param {string[]} supportedProviders - 已注册的提供商类型列表
+ * @returns {Object[]} 提供商配置对象数组
+ */
+function getProviderConfigs(supportedProviders = []) {
+    return [
+        { 
+            id: 'forward-api', 
+            name: 'NewAPI', 
+            icon: 'fa-share-square',
+            visible: supportedProviders.includes('forward-api') 
+        },
+        { 
+            id: 'gemini-cli-oauth', 
+            name: t('dashboard.routing.nodeName.gemini'), 
+            icon: 'fa-robot',
+            defaultPath: 'configs/gemini/',
+            visible: supportedProviders.includes('gemini-cli-oauth') 
+        },
+        { 
+            id: 'gemini-antigravity', 
+            name: t('dashboard.routing.nodeName.antigravity'), 
+            icon: 'fa-rocket',
+            defaultPath: 'configs/antigravity/',
+            visible: supportedProviders.includes('gemini-antigravity') 
+        },
+        { 
+            id: 'claude-kiro-oauth', 
+            name: t('dashboard.routing.nodeName.kiro'), 
+            icon: 'fa-key',
+            defaultPath: 'configs/kiro/',
+            visible: supportedProviders.includes('claude-kiro-oauth') 
+        },
+        { 
+            id: 'openai-codex-oauth', 
+            name: t('dashboard.routing.nodeName.codex'), 
+            icon: 'fa-code',
+            defaultPath: 'configs/codex/',
+            visible: supportedProviders.includes('openai-codex-oauth') 
+        },
+        { 
+            id: 'openai-qwen-oauth', 
+            name: t('dashboard.routing.nodeName.qwen'), 
+            icon: 'fa-cloud',
+            defaultPath: 'configs/qwen/',
+            visible: supportedProviders.includes('openai-qwen-oauth') 
+        },
+        { 
+            id: 'openai-iflow', 
+            name: t('dashboard.routing.nodeName.iflow'), 
+            icon: 'fa-stream',
+            defaultPath: 'configs/iflow/',
+            visible: supportedProviders.includes('openai-iflow') 
+        },
+        { 
+            id: 'grok-custom', 
+            name: t('dashboard.routing.nodeName.grok'), 
+            icon: 'fa-user-secret',
+            visible: supportedProviders.includes('grok-custom') 
+        },
+        { 
+            id: 'openai-custom', 
+            name: t('dashboard.routing.nodeName.openai'), 
+            icon: 'fa-microchip',
+            visible: supportedProviders.includes('openai-custom') 
+        },
+        { 
+            id: 'claude-custom', 
+            name: t('dashboard.routing.nodeName.claude'), 
+            icon: 'fa-brain',
+            visible: supportedProviders.includes('claude-custom') 
+        },
+        { 
+            id: 'openaiResponses-custom', 
+            name: 'OpenAI Responses', 
+            icon: 'fa-reply-all',
+            visible: supportedProviders.includes('openaiResponses-custom') 
+        },
+    ];
+}
+
+/**
  * 格式化运行时间
  * @param {number} seconds - 秒数
  * @returns {string} 格式化的时间字符串
@@ -310,32 +392,6 @@ function getProviderTypeFields(providerType) {
                 placeholder: 'https://grok.com'
             }
         ],
-        'grok-custom': [
-            {
-                id: 'GROK_COOKIE_TOKEN',
-                label: t('modal.provider.field.ssoToken'),
-                type: 'password',
-                placeholder: 'sso cookie token'
-            },
-            {
-                id: 'GROK_CF_CLEARANCE',
-                label: t('modal.provider.field.cfClearance'),
-                type: 'text',
-                placeholder: 'cf_clearance cookie value'
-            },
-            {
-                id: 'GROK_USER_AGENT',
-                label: t('modal.provider.field.userAgent'),
-                type: 'text',
-                placeholder: 'Mozilla/5.0 ...'
-            },
-            {
-                id: 'GROK_BASE_URL',
-                label: `Grok Base URL <span class="optional-tag">${t('config.optional')}</span>`,
-                type: 'text',
-                placeholder: 'https://grok.com'
-            }
-        ],
         'forward-api': [
             {
                 id: 'FORWARD_API_KEY',
@@ -404,6 +460,7 @@ export {
     showToast,
     getFieldLabel,
     getProviderTypeFields,
+    getProviderConfigs,
     getProviderStats,
     apiRequest
 };

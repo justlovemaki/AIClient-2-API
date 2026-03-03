@@ -16,7 +16,7 @@
                         <span class="file-name">config.json</span>
                         <span class="file-badge required" data-i18n="tutorial.config.badge.required">必需</span>
                     </div>
-                    <p class="file-desc" data-i18n="tutorial.config.file.config">主配置文件，包含 API Key、端口、模型提供商等核心设置</p>
+                    <p class="file-desc" data-i18n="tutorial.config.file.config">主配置文件，包含 API Key、端口、模型提供商等核心设置 (保存配置管理后自动新建)</p>
                 </div>
                 <div class="config-file-item">
                     <div class="file-header">
@@ -24,7 +24,7 @@
                         <span class="file-name">provider_pools.json</span>
                         <span class="file-badge required" data-i18n="tutorial.config.badge.required">必需</span>
                     </div>
-                    <p class="file-desc" data-i18n="tutorial.config.file.pools">提供商池配置，用于多账号轮询和故障转移</p>
+                    <p class="file-desc" data-i18n="tutorial.config.file.pools">提供商池配置，用于多账号轮询和故障转移 (保存节点后自动新建)</p>
                 </div>
                 <div class="config-file-item">
                     <div class="file-header">
@@ -295,7 +295,7 @@
             "name": "Gemini 账号 1",
             "oauthCredsFilePath": "configs/gemini/oauth_creds_1.json",
             "checkHealth": true,
-            "checkModel": "gemini-2.0-flash-exp"
+            "checkModel": "gemini-3-flash-preview"
         }
     ],
     "claude-kiro-oauth": [
@@ -351,49 +351,8 @@
         <div class="tutorial-content">
             <p data-i18n="tutorial.oauth.desc">各提供商的 OAuth 凭据文件默认存储位置（建议保持在 <code>configs/</code> 目录下以便统一管理）：</p>
             
-            <div class="oauth-path-list">
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-robot"></i>
-                        <span class="path-provider">Gemini CLI OAuth</span>
-                    </div>
-                    <code class="path-value">configs/gemini/</code>
-                </div>
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-rocket"></i>
-                        <span class="path-provider">Gemini Antigravity</span>
-                    </div>
-                    <code class="path-value">configs/antigravity/</code>
-                </div>
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-key"></i>
-                        <span class="path-provider">Claude Kiro OAuth</span>
-                    </div>
-                    <code class="path-value">configs/kiro/</code>
-                </div>
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-cloud"></i>
-                        <span class="path-provider">Qwen OAuth</span>
-                    </div>
-                    <code class="path-value">configs/qwen/</code>
-                </div>
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-stream"></i>
-                        <span class="path-provider">iFlow OAuth</span>
-                    </div>
-                    <code class="path-value">configs/iflow/</code>
-                </div>
-                <div class="oauth-path-item">
-                    <div class="path-header">
-                        <i class="fas fa-code"></i>
-                        <span class="path-provider">OpenAI Codex OAuth</span>
-                    </div>
-                    <code class="path-value">configs/codex/</code>
-                </div>
+            <div id="oauthPathList" class="oauth-path-list">
+                <!-- 动态生成 -->
             </div>
 
             <div class="tutorial-note">

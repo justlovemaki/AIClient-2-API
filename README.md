@@ -68,6 +68,7 @@
 
 ### 🚀 Break Through Limitations, Improve Efficiency
 *   **Bypass Official Restrictions**: Utilize OAuth authorization mechanism to effectively break through rate and quota limits of services like Gemini, Antigravity
+*   **TLS Fingerprint Bypass**: Built-in TLS Sidecar (Go uTLS) to simulate browser features, effectively bypassing Cloudflare 403 blocks for services like Grok
 *   **Free Advanced Models**: Use Claude Opus 4.5 for free via Kiro API mode, use Qwen3 Coder Plus via Qwen OAuth mode, reducing usage costs
 *   **Intelligent Account Pool Scheduling**: Support multi-account polling, automatic failover, and configuration degradation, ensuring 99.9% service availability
 
@@ -150,6 +151,15 @@ Go to the **"Configuration"** page, you can:
 *   ✅ Fill in the API Key for each provider or upload OAuth credential files
 *   ✅ Switch default model providers in real-time
 *   ✅ Monitor health status and real-time request logs
+
+#### 4. Local Environment Preparation (Non-Docker Users)
+If you are running directly on your local machine (via script or Node.js) and need to bypass TLS detection for services like Grok, please ensure:
+*   ✅ **Install Go Language**: Go to the [official Go website](https://go.dev/) to download and install (1.20+).
+*   ✅ **Manually Compile Sidecar**: Execute the following command to compile the TLS proxy component:
+    ```bash
+    cd tls-sidecar && go build -o tls-sidecar && cd ..
+    ```
+    *Note: If this binary file is not compiled, the TLS Sidecar feature will fail to start as it cannot find the executable.*
 
 #### Script Execution Example
 ```
@@ -521,6 +531,38 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 - Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
 - The system automatically checks if the target Provider Type supports the requested model
 
+#### 5. TLS Sidecar (Bypass 403/Cloudflare)
+
+For services like Grok that strictly validate TLS fingerprints (JA3/JA4), this project integrates a Sidecar proxy based on Go uTLS, which effectively solves 403 Forbidden errors by simulating browser TLS features.
+
+**Configuration Instructions**:
+
+1.  **Compile the Binary**:
+    Since TLS simulation requires Go language support, you need to compile the sidecar first:
+    ```bash
+    cd tls-sidecar
+    go build -o tls-sidecar
+    ```
+    *Windows users, after compiling, ensure the generated `tls-sidecar.exe` is located in the `tls-sidecar/` or the root directory.*
+
+2.  **Enable Configuration**:
+    Enable **TLS Sidecar** in the "Configuration" page of the Web UI, or modify `configs/config.json`:
+    ```json
+    {
+      "TLS_SIDECAR_ENABLED": true,
+      "TLS_SIDECAR_PORT": 9090
+    }
+    ```
+
+3.  **How It Works**:
+    - When enabled, the system automatically starts and manages the Go process.
+    - Requests for specific providers (like Grok) are automatically routed to the Sidecar.
+    - The Sidecar uses the latest Chrome fingerprint for TLS handshakes and supports automatic HTTP/2 negotiation.
+
+**Notes**:
+- Local running requires a Go environment (1.20+).
+- **Docker Users**: The image already includes the pre-compiled binary; just enable it in the configuration, no manual compilation required.
+
 </details>
 
 ---
@@ -664,6 +706,7 @@ Or modify the port configuration in `configs/config.json` to use a different por
 **Problem Description**: API requests return 403 Forbidden error.
 
 **Solutions**:
+- **Enable TLS Sidecar**: For services like Grok, 403 is often due to TLS fingerprint blocking. Please refer to [Advanced Configuration - TLS Sidecar](#5-tls-sidecar-bypass-403cloudflare) to enable and compile the Sidecar.
 - **Check Node Status**: If you see the node status is normal (health check passed) on the "Provider Pools" page in Web UI, you can ignore this error as the system will handle it automatically
 - **Check Account Permissions**: Confirm the account has permission to access the requested model or service
 - **Check API Key Permissions**: Some providers' API Keys may have access scope restrictions; ensure the Key has sufficient permissions

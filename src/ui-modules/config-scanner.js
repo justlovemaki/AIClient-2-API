@@ -247,6 +247,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `Gemini OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'GEMINI_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -259,6 +261,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `Kiro OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'KIRO_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -271,6 +275,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `Qwen OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -283,6 +289,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `Antigravity OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -295,6 +303,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `iFlow Token (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'IFLOW_TOKEN_FILE_PATH'
                 });
             }
@@ -307,6 +317,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     location: `Codex OAuth credentials (node ${index + 1})`,
                     providerType: providerType,
                     providerIndex: index,
+                    nodeName: provider.customName,
+                    uuid: provider.uuid,
                     configKey: 'CODEX_OAUTH_CREDS_FILE_PATH'
                 });
             }

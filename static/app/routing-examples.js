@@ -119,6 +119,17 @@ function initCardInteractions() {
 function getAvailableRoutes() {
     return [
         {
+            provider: 'forward-api',
+            name: 'NewAPI',
+            paths: {
+                openai: '/forward-api/v1/chat/completions',
+                claude: '/forward-api/v1/messages'
+            },
+            description: t('dashboard.routing.official'),
+            badge: t('dashboard.routing.official'),
+            badgeClass: 'official'
+        },
+        {
             provider: 'claude-custom',
             name: 'Claude Custom',
             paths: {
@@ -163,6 +174,17 @@ function getAvailableRoutes() {
             badgeClass: 'oauth'
         },
         {
+            provider: 'gemini-antigravity',
+            name: 'Gemini Antigravity',
+            paths: {
+                openai: '/gemini-antigravity/v1/chat/completions',
+                claude: '/gemini-antigravity/v1/messages'
+            },
+            description: t('dashboard.routing.experimental') || '实验性',
+            badge: t('dashboard.routing.experimental') || '实验性',
+            badgeClass: 'oauth'
+        },
+        {
             provider: 'openai-qwen-oauth',
             name: 'Qwen OAuth',
             paths: {
@@ -170,6 +192,28 @@ function getAvailableRoutes() {
                 claude: '/openai-qwen-oauth/v1/messages'
             },
             description: 'Qwen Code Plus',
+            badge: t('dashboard.routing.oauth'),
+            badgeClass: 'oauth'
+        },
+        {
+            provider: 'openai-iflow',
+            name: 'iFlow OAuth',
+            paths: {
+                openai: '/openai-iflow/v1/chat/completions',
+                claude: '/openai-iflow/v1/messages'
+            },
+            description: t('dashboard.routing.oauth'),
+            badge: t('dashboard.routing.oauth'),
+            badgeClass: 'oauth'
+        },
+        {
+            provider: 'openai-codex-oauth',
+            name: 'OpenAI Codex OAuth',
+            paths: {
+                openai: '/openai-codex-oauth/v1/chat/completions',
+                claude: '/openai-codex-oauth/v1/messages'
+            },
+            description: t('dashboard.routing.oauth'),
             badge: t('dashboard.routing.oauth'),
             badgeClass: 'oauth'
         },
@@ -294,7 +338,7 @@ async function copyCurlExample(provider, options = {}) {
                 curlCommand = `curl http://localhost:3000${path} \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "gemini-2.0-flash-exp",
+    "model": "gemini-3.1-pro-preview",
     "messages": [{"role": "user", "content": "${message}"}],
     "max_tokens": 1000
   }'`;
@@ -302,7 +346,7 @@ async function copyCurlExample(provider, options = {}) {
                 curlCommand = `curl http://localhost:3000${path} \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "gemini-2.0-flash-exp",
+    "model": "gemini-3.1-pro-preview",
     "max_tokens": 1000,
     "messages": [{"role": "user", "content": "${message}"}]
   }'`;
@@ -362,9 +406,139 @@ async function copyCurlExample(provider, options = {}) {
     }
 }
 
+/**
+ * 动态渲染路径路由示例
+ * @param {Array} providerConfigs - 提供商配置列表
+ */
+function renderRoutingExamples(providerConfigs) {
+    const container = document.querySelector('.routing-examples-grid');
+    if (!container) return;
+
+    container.innerHTML = '';
+    
+    // 获取路由端点基础信息
+    const routes = getAvailableRoutes();
+    
+    // 图标映射
+    const iconMap = {
+        'forward-api': 'fa-share-square',
+        'gemini-cli-oauth': 'fa-gem',
+        'gemini-antigravity': 'fa-rocket',
+        'openai-custom': 'fa-comments',
+        'claude-custom': 'fa-brain',
+        'claude-kiro-oauth': 'fa-robot',
+        'openai-qwen-oauth': 'fa-code',
+        'openaiResponses-custom': 'fa-comment-alt',
+        'openai-iflow': 'fa-wind',
+        'openai-codex-oauth': 'fa-keyboard',
+        'grok-custom': 'fa-search'
+    };
+
+    // 默认模型映射 (用于 curl 示例)
+    const modelMap = {
+        'gemini-cli-oauth': 'gemini-3-flash-preview',
+        'gemini-antigravity': 'gemini-3-flash-preview',
+        'claude-custom': 'claude-sonnet-4-6',
+        'claude-kiro-oauth': 'claude-sonnet-4-6',
+        'openai-custom': 'gpt-4o',
+        'openai-qwen-oauth': 'qwen3-coder-plus',
+        'openai-iflow': 'qwen3-max',
+        'openai-codex-oauth': 'gpt-5',
+        'grok-custom': 'grok-3',
+        'openaiResponses-custom': 'gpt-4o'
+    };
+
+    providerConfigs.forEach(config => {
+        if (config.visible === false) return;
+        
+        let routeInfo = routes.find(r => r.provider === config.id);
+        
+        // 如果没找到，则创建一个默认的
+        if (!routeInfo) {
+            routeInfo = {
+                provider: config.id,
+                name: config.name,
+                paths: {
+                    openai: `/${config.id}/v1/chat/completions`,
+                    claude: `/${config.id}/v1/messages`
+                },
+                description: t('dashboard.routing.oauth'),
+                badge: t('dashboard.routing.oauth'),
+                badgeClass: 'oauth'
+            };
+        }
+
+        const icon = iconMap[config.id] || 'fa-route';
+        const defaultModel = modelMap[config.id] || 'default-model';
+        const hostname = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
+                         `http://${window.location.host}` : 
+                         `${window.location.protocol}//${window.location.host}`;
+
+        const card = document.createElement('div');
+        card.className = 'routing-example-card';
+        card.dataset.provider = `${config.id}-card`;
+        
+        card.innerHTML = `
+            <div class="routing-card-header">
+                <i class="fas ${icon}"></i>
+                <h4>${routeInfo.name}</h4>
+                <span class="provider-badge ${routeInfo.badgeClass}">${routeInfo.badge}</span>
+            </div>
+            <div class="routing-card-content">
+                <div class="protocol-tabs">
+                    <button class="protocol-tab ${config.id === 'openai-codex-oauth' ? '' : 'active'}" data-protocol="openai" data-i18n="dashboard.routing.openai">${t('dashboard.routing.openai')}</button>
+                    <button class="protocol-tab ${config.id === 'openai-codex-oauth' ? 'active' : ''}" data-protocol="claude" data-i18n="dashboard.routing.claude">${t('dashboard.routing.claude')}</button>
+                </div>
+                
+                <div class="protocol-content ${config.id === 'openai-codex-oauth' ? '' : 'active'}" data-protocol="openai">
+                    <div class="endpoint-info">
+                        <label data-i18n="dashboard.routing.endpoint">${t('dashboard.routing.endpoint')}</label>
+                        <code class="endpoint-path">${routeInfo.paths.openai}</code>
+                    </div>
+                    <div class="usage-example">
+                        <label data-i18n="dashboard.routing.exampleOpenAI">${t('dashboard.routing.exampleOpenAI')}</label>
+                        <pre><code>curl ${hostname}${routeInfo.paths.openai} \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "model": "${defaultModel}",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 1000
+  }'</code></pre>
+                    </div>
+                </div>
+                
+                <div class="protocol-content ${config.id === 'openai-codex-oauth' ? 'active' : ''}" data-protocol="claude">
+                    <div class="endpoint-info">
+                        <label data-i18n="dashboard.routing.endpoint">${t('dashboard.routing.endpoint')}</label>
+                        <code class="endpoint-path">${routeInfo.paths.claude}</code>
+                    </div>
+                    <div class="usage-example">
+                        <label data-i18n="dashboard.routing.exampleClaude">${t('dashboard.routing.exampleClaude')}</label>
+                        <pre><code>curl ${hostname}${routeInfo.paths.claude} \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -d '{
+    "model": "${defaultModel}",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+
+    // 重新初始化卡片交互
+    initCardInteractions();
+}
+
 export {
     initRoutingExamples,
     getAvailableRoutes,
     highlightProviderRoute,
-    copyCurlExample
+    copyCurlExample,
+    renderRoutingExamples
 };

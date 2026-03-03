@@ -8,6 +8,21 @@ import { t } from './i18n.js';
 // 模型数据缓存
 let modelsCache = null;
 
+// 提供商配置缓存
+let currentProviderConfigs = null;
+
+/**
+ * 更新提供商配置
+ * @param {Array} configs - 提供商配置列表
+ */
+function updateModelsProviderConfigs(configs) {
+    currentProviderConfigs = configs;
+    // 如果已经加载了模型，重新渲染一次以更新显示名称和图标
+    if (modelsCache) {
+        renderModelsList(modelsCache);
+    }
+}
+
 /**
  * 获取所有提供商的可用模型
  * @returns {Promise<Object>} 模型数据
@@ -120,6 +135,12 @@ function renderModelsList(models) {
         const modelList = models[providerType];
         if (!modelList || modelList.length === 0) continue;
         
+        // 如果配置了不可见，则跳过
+        if (currentProviderConfigs) {
+            const config = currentProviderConfigs.find(c => c.id === providerType);
+            if (config && config.visible === false) continue;
+        }
+        
         const providerDisplayName = getProviderDisplayName(providerType);
         const providerIcon = getProviderIcon(providerType);
         
@@ -161,6 +182,14 @@ function renderModelsList(models) {
  * @returns {string} 显示名称
  */
 function getProviderDisplayName(providerType) {
+    // 优先从外部传入的配置中获取名称
+    if (currentProviderConfigs) {
+        const config = currentProviderConfigs.find(c => c.id === providerType);
+        if (config && config.name) {
+            return config.name;
+        }
+    }
+
     const displayNames = {
         'gemini-cli-oauth': 'Gemini CLI (OAuth)',
         'gemini-antigravity': 'Gemini Antigravity',
@@ -182,6 +211,15 @@ function getProviderDisplayName(providerType) {
  * @returns {string} 图标类名
  */
 function getProviderIcon(providerType) {
+    // 优先从外部传入的配置中获取图标
+    if (currentProviderConfigs) {
+        const config = currentProviderConfigs.find(c => c.id === providerType);
+        if (config && config.icon) {
+            // 如果 icon 已经包含 fa- 则直接使用，否则加上 fas
+            return config.icon.startsWith('fa-') ? `fas ${config.icon}` : config.icon;
+        }
+    }
+
     if (providerType.includes('gemini')) {
         return 'fas fa-gem';
     } else if (providerType.includes('claude')) {
@@ -285,5 +323,6 @@ window.addEventListener('componentsLoaded', () => {
 export {
     initModelsManager,
     refreshModels,
-    fetchProviderModels
+    fetchProviderModels,
+    updateModelsProviderConfigs
 };
