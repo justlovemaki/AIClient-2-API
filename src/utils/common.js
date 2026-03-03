@@ -55,7 +55,6 @@ export const MODEL_PROTOCOL_PREFIX = {
     OPENAI: 'openai',
     OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
-    OLLAMA: 'ollama',
     CODEX: 'codex',
     FORWARD: 'forward',
     GROK: 'grok',
@@ -74,6 +73,7 @@ export const MODEL_PROVIDER = {
     CODEX_API: 'openai-codex-oauth',
     FORWARD_API: 'forward-api',
     GROK_CUSTOM: 'grok-custom',
+    AUTO: 'auto',
 }
 
 /**
@@ -795,49 +795,63 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
  * and sends the JSON response.
  * @param {http.IncomingMessage} req The HTTP request object.
  * @param {http.ServerResponse} res The HTTP response object.
+ * @param {Object} service - The API service instance.
  * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_MODEL_LIST).
  * @param {Object} CONFIG - The server configuration object.
+ * @param {Object} providerPoolManager - The provider pool manager instance.
+ * @param {string} pooluuid - The selected provider UUID.
  */
 export async function handleModelListRequest(req, res, service, endpointType, CONFIG, providerPoolManager, pooluuid) {
-    try{
+    try {
         const clientProviderMap = {
             [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
             [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
         };
 
-
         const fromProvider = clientProviderMap[endpointType];
-        const toProvider = CONFIG.MODEL_PROVIDER;
-
+        
         if (!fromProvider) {
             throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
         }
 
-        // 1. Get the model list in the backend's native format.
-        const nativeModelList = await service.listModels();
-                
-        // 2. Convert the model list to the client's expected format, if necessary.
-        let clientModelList = nativeModelList;
-        if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
-            logger.info(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
-            clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
+        let clientModelList;
+
+        // --- 核心逻辑: auto 路由模式下的模型聚合 ---
+        if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO && providerPoolManager) {
+            logger.info(`[ModelList] Aggregating models for 'auto' mode...`);
+            clientModelList = await providerPoolManager.getAllAvailableModels(endpointType);
         } else {
-            logger.info(`[ModelList Convert] Model list format matches. No conversion needed.`);
+            // --- 原有的单提供商逻辑 ---
+            const toProvider = CONFIG.MODEL_PROVIDER;
+            
+            // 1. Get the model list in the backend's native format.
+            const nativeModelList = await service.listModels();
+                    
+            // 2. Convert the model list to the client's expected format, if necessary.
+            clientModelList = nativeModelList;
+            if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
+                logger.info(`[ModelList Convert] Converting model list from ${toProvider} to ${fromProvider}`);
+                clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
+            } else {
+                logger.info(`[ModelList Convert] Model list format matches. No conversion needed.`);
+            }
         }
 
-        logger.info(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
+        // logger.info(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(clientModelList));
     } catch (error) {
         logger.error('\n[Server] Error during model list processing:', error.stack);
-        if (providerPoolManager) {
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            }, error.message);
-        }
+        // if (providerPoolManager && pooluuid && CONFIG.MODEL_PROVIDER !== MODEL_PROVIDER.AUTO) {
+        //     // 如果是号池模式（且非 auto 模式），并且请求处理失败，则标记当前使用的提供者为不健康
+        //     providerPoolManager.markProviderUnhealthy(CONFIG.MODEL_PROVIDER, {
+        //         uuid: pooluuid
+        //     }, error.message);
+        // }
+        handleError(res, error, CONFIG.MODEL_PROVIDER);
     }
 }
+
 
 /**
  * Handles requests for content generation (both unary and streaming). This function
@@ -884,7 +898,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     // 2.5. 如果使用了提供商池，根据模型重新选择提供商（支持 Fallback）
     // 注意：这里开启 acquireSlot: true，会占用并发名额或进入队列
-    if (providerPoolManager && CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]) {
+    if (providerPoolManager && (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO || (CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]))) {
         const { getApiServiceWithFallback } = await import('../services/service-manager.js');
         const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
         
@@ -1209,35 +1223,6 @@ function _getProviderSpecificSuggestions(statusCode, provider) {
                     'Check your request format and parameters',
                     'Verify the model name is a valid Claude model',
                     'Ensure the message format follows Anthropic API specifications'
-                ]
-            };
-            
-        case MODEL_PROTOCOL_PREFIX.OLLAMA:
-            return {
-                auth: [
-                    'Ollama typically does not require authentication',
-                    'If using a custom setup, verify your credentials',
-                    'Check if the Ollama server requires authentication'
-                ],
-                permission: [
-                    'Verify the Ollama server is accessible',
-                    'Check if the requested model is available locally',
-                    'Ensure the Ollama server allows the requested operation'
-                ],
-                rateLimit: [
-                    'The local Ollama server may be overloaded',
-                    'Try reducing concurrent requests',
-                    'Consider increasing server resources if running locally'
-                ],
-                serverError: [
-                    'Check if the Ollama server is running',
-                    'Verify the server address and port are correct',
-                    'Check Ollama server logs for detailed error information'
-                ],
-                clientError: [
-                    'Check your request format and parameters',
-                    'Verify the model name is available in your Ollama installation',
-                    'Try pulling the model first with: ollama pull <model-name>'
                 ]
             };
             

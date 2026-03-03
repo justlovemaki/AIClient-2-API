@@ -7,8 +7,8 @@ import { getApiService, getProviderStatus } from '../services/service-manager.js
 import { getProviderPoolManager } from '../services/service-manager.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 import { getRegisteredProviders } from '../providers/adapter.js';
+import { countTokensAnthropic } from '../utils/token-utils.js';
 import { PROMPT_LOG_FILENAME } from '../core/config-manager.js';
-import { handleOllamaRequest, handleOllamaShow } from './ollama-handler.js';
 import { getPluginManager } from '../core/plugin-manager.js';
 import { randomUUID } from 'crypto';
 import { handleGrokAssetsProxy } from '../utils/grok-assets-proxy.js';
@@ -93,12 +93,6 @@ export function createRequestHandler(config, providerPoolManager) {
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
 
-        // Ollama show endpoint with model name
-        if (method === 'POST' && path === '/ollama/api/show') {
-            await handleOllamaShow(req, res);
-            return true;
-        }
-
         // logger.info(`\n${new Date().toLocaleString()}`);
         logger.info(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
 
@@ -170,15 +164,15 @@ export function createRequestHandler(config, providerPoolManager) {
         }
           
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
-        // Note: 'ollama' is not a valid MODEL_PROVIDER, it's a protocol prefix for Ollama API compatibility
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
-        const isOllamaPath = pathSegments[0] === 'ollama' || path.startsWith('/api/');
         
-        if (pathSegments.length > 0 && !isOllamaPath) {
+        if (pathSegments.length > 0) {
             const firstSegment = pathSegments[0];
             const registeredProviders = getRegisteredProviders();
             const isValidProvider = registeredProviders.includes(firstSegment);
-            if (firstSegment && isValidProvider) {
+            const isAutoMode = firstSegment === MODEL_PROVIDER.AUTO;
+
+            if (firstSegment && (isValidProvider || isAutoMode)) {
                 currentConfig.MODEL_PROVIDER = firstSegment;
                 logger.info(`[Config] MODEL_PROVIDER overridden by path segment to: ${currentConfig.MODEL_PROVIDER}`);
                 pathSegments.shift();
@@ -215,52 +209,22 @@ export function createRequestHandler(config, providerPoolManager) {
             return;
         }
 
-        // Handle Ollama request BEFORE getting apiService (Ollama endpoints handle their own provider selection)
-        // This is important because Ollama /api/tags aggregates models from ALL providers, not just the default one
-        if (isOllamaPath) {
-            const { handled, normalizedPath } = await handleOllamaRequest(method, path, requestUrl, req, res, null, currentConfig, providerPoolManager);
-            if (handled) return;
-            // If not handled by Ollama handler, continue with normal flow
-            path = normalizedPath;
-        }
-
-        // 获取或选择 API Service 实例
-        let apiService;
-        try {
-            apiService = await getApiService(currentConfig);
-        } catch (error) {
-            handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` }, currentConfig.MODEL_PROVIDER);
-            const poolManager = getProviderPoolManager();
-            if (poolManager) {
-                poolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
-                    uuid: currentConfig.uuid
-                });
-            }
-            return;
-        }
-
         // Handle count_tokens requests (Anthropic API compatible)
         if (path.includes('/count_tokens') && method === 'POST') {
             try {
                 const body = await parseRequestBody(req);
                 logger.info(`[Server] Handling count_tokens request for model: ${body.model}`);
 
-                // Check if apiService has countTokens method
-                if (apiService && typeof apiService.countTokens === 'function') {
-                    const result = apiService.countTokens(body);
+                // Use common utility method directly
+                try {
+                    const result = countTokensAnthropic(body);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify(result));
-                } else {
-                    // Fallback: use estimateInputTokens if available
-                    if (apiService && typeof apiService.estimateInputTokens === 'function') {
-                        const inputTokens = apiService.estimateInputTokens(body);
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ input_tokens: inputTokens }));
-                    } else {
-                        // Last resort: return 0 with a message
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ input_tokens: 0 }));
-                    }
+                } catch (tokenError) {
+                    logger.warn(`[Server] Common countTokens failed, falling back: ${tokenError.message}`);
+                    // Last resort: return 0
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ input_tokens: 0 }));
                 }
                 return true;
             } catch (error) {
@@ -270,8 +234,23 @@ export function createRequestHandler(config, providerPoolManager) {
             }
         }
 
+        // 获取或选择 API Service 实例
+        let apiService;
+        // try {
+        //     apiService = await getApiService(currentConfig);
+        // } catch (error) {
+        //     handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` }, currentConfig.MODEL_PROVIDER);
+        //     const poolManager = getProviderPoolManager();
+        //     if (poolManager) {
+        //         poolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
+        //             uuid: currentConfig.uuid
+        //         });
+        //     }
+        //     return;
+        // }
+
         try {
-            // Handle API requests (Ollama requests are already handled above before apiService is obtained)
+            // Handle API requests
             const apiHandled = await handleAPIRequests(method, path, req, res, currentConfig, apiService, providerPoolManager, PROMPT_LOG_FILENAME);
             if (apiHandled) return;
 

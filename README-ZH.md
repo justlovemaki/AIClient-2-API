@@ -43,7 +43,6 @@
 > - **2025.12.25** - 配置文件统一管理：所有配置集中到 `configs/` 目录，Docker 用户需更新挂载路径为 `-v "本地路径:/app/configs"`
 > - **2025.12.11** - Docker 镜像自动构建并发布到 Docker Hub: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 > - **2025.11.30** - 新增 Antigravity 协议支持，支持通过 Google 内部接口访问 Gemini 3 Pro、Claude Sonnet 4.5 等模型
-> - **2025.11.16** - 新增 Ollama 协议支持，统一接口访问所有支持的模型（Claude、Gemini、Qwen、OpenAI等）
 > - **2025.11.11** - 新增 Web UI 管理控制台，支持实时配置管理和健康状态监控
 > - **2025.11.06** - 新增对 Gemini 3 预览版的支持，增强模型兼容性和性能优化
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
@@ -92,7 +91,6 @@
   - [📋 核心功能](#-核心功能)
 - [🔐 授权配置指南](#-授权配置指南)
 - [📁 授权文件存储路径](#-授权文件存储路径)
-- [🦙 Ollama 协议使用示例](#-ollama-协议使用示例)
 - [⚙️ 高级配置](#高级配置)
 - [❓ 常见问题](#-常见问题)
 - [📄 开源许可](#-开源许可)
@@ -343,41 +341,6 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 > **自定义路径**：可通过配置文件中的相关参数或环境变量指定自定义存储位置
 
 </details>
-
----
-
-### 🦙 Ollama 协议使用示例
-
-本项目支持 Ollama 协议，可以通过统一接口访问所有支持的模型。Ollama 端点提供 `/api/tags`、`/api/chat`、`/api/generate` 等标准接口。
-
-**Ollama API 调用示例**：
-
-1. **列出所有可用模型**：
-```bash
-curl http://localhost:3000/ollama/api/tags \
-  -H "Authorization: Bearer your-api-key"
-```
-
-2. **聊天接口**：
-```bash
-curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [
-      {"role": "user", "content": "你好"}
-    ]
-  }'
-```
-
-3. **使用模型前缀指定提供商**：
-- `[Kiro]` - 使用 Kiro API 访问 Claude 模型
-- `[Claude]` - 使用 Claude 官方 API
-- `[Gemini CLI]` - 通过 Gemini CLI OAuth 访问
-- `[OpenAI]` - 使用 OpenAI 官方 API
-- `[Grok]` - 通过 Grok Cookie/SSO 访问
-- `[Qwen CLI]` - 通过 Qwen OAuth 访问
 
 ---
 
@@ -674,7 +637,7 @@ kill -9 <PID>
 **问题描述**：调用 API 接口时返回 404 Not Found 错误。
 
 **解决方案**：
-- **检查接口路径**：确保使用正确的接口路径，如 `/v1/chat/completions`、`/ollama/api/chat` 等
+- **检查接口路径**：确保使用正确的接口路径，如 `/v1/chat/completions` 等
 - **检查客户端自动补全**：某些客户端（如 Cherry-Studio、NextChat）会自动在 Base URL 后追加路径（如 `/v1/chat/completions`），导致路径重复。请查看控制台中的实际请求 URL，移除多余的路径部分
 - **检查服务状态**：确认服务已正常启动，访问 `http://localhost:3000` 查看 Web UI
 - **检查端口配置**：确保请求发送到正确的端口（默认 3000）

@@ -1,11 +1,11 @@
 import * as fs from 'fs';
-import * as crypto from 'crypto';
-import { getServiceAdapter } from './adapter.js';
+import { getServiceAdapter, getRegisteredProviders } from './adapter.js';
 import logger from '../utils/logger.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { getProviderModels } from './provider-models.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
-import axios from 'axios';
+import { convertData } from '../convert/convert.js';
+import { ENDPOINT_TYPE } from '../utils/common.js';
 
 /**
  * Manages a pool of API service providers, handling their health and selection.
@@ -1187,11 +1187,106 @@ export class ProviderPoolManager {
     }
 
     /**
+     * Gets all available models across all provider pools, with optional format conversion.
+     * @param {string} [endpointType] - Optional endpoint type for format conversion (OPENAI_MODEL_LIST or GEMINI_MODEL_LIST).
+     * @returns {Promise<Object|Array>} Formatted model list or raw array of model objects.
+     */
+    async getAllAvailableModels(endpointType = null) {
+        const allModels = [];
+        
+        // 获取所有已注册的提供商和号池中的提供商
+        const registeredProviders = getRegisteredProviders();
+        const allProviderTypes = Array.from(new Set([...registeredProviders]));
+
+        for (const providerType of allProviderTypes) {
+            if (this.providerStatus[providerType]) {
+                let models = getProviderModels(providerType);
+                
+                // 如果硬编码的模型列表为空，或者该类型的提供商在号池中没有配置节点，尝试从服务获取
+                if (models.length === 0) {
+                    try {
+                        // 确定使用的配置：优先使用号池中第一个节点的配置，否则使用全局配置
+                        let targetConfig = this.globalConfig;
+                if (this.providerStatus[providerType] && this.providerStatus[providerType].length > 0) {
+                            targetConfig = this.providerStatus[providerType][0].config;
+                        }
+
+                        const tempConfig = {
+                            ...this.globalConfig,
+                            ...targetConfig,
+                            MODEL_PROVIDER: providerType
+                        };
+                        const serviceAdapter = getServiceAdapter(tempConfig);
+                        
+                        if (typeof serviceAdapter.listModels === 'function') {
+                            const nativeModels = await serviceAdapter.listModels();
+                            // 统一转换为 OpenAI 格式以便提取 ID
+                            const convertedData = convertData(nativeModels, 'modelList', providerType, MODEL_PROVIDER.OPENAI_CUSTOM);
+                            if (convertedData && Array.isArray(convertedData.data)) {
+                                const fetchedModels = convertedData.data.map(m => m.id);
+                                if (fetchedModels.length > 0) {
+                                    models = fetchedModels;
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        this._log('debug', `Failed to fetch model list for ${providerType} from service: ${err.message}`);
+                        // 保持原有的 models (可能是硬编码的空列表或 getProviderModels 返回的结果)
+                    }
+                }
+
+                for (const model of models) {
+                    allModels.push({
+                        id: `${providerType}:${model}`,
+                        provider: providerType,
+                        model: model
+                    });
+                }
+            }
+        }
+        
+        // 如果没有指定 endpointType，返回原始数组
+        if (!endpointType) {
+            return allModels;
+        }
+        
+        // 根据 endpointType 转换为对应格式        
+        if (endpointType === ENDPOINT_TYPE.OPENAI_MODEL_LIST) {
+            // OpenAI 格式聚合
+            return {
+                object: "list",
+                data: allModels.map(m => ({
+                    id: m.id,
+                    object: "model",
+                    created: Math.floor(Date.now() / 1000),
+                    owned_by: m.provider
+                }))
+            };
+        } else if (endpointType === ENDPOINT_TYPE.GEMINI_MODEL_LIST) {
+            // Gemini 格式聚合
+            return {
+                models: allModels.map(m => ({
+                    name: `models/${m.id}`,
+                    baseModelId: m.model,
+                    version: "v1",
+                    displayName: `${m.model} (${m.provider})`,
+                    description: `Model ${m.model} provided by ${m.provider}`,
+                    supportedGenerationMethods: ["generateContent", "countTokens"]
+                }))
+            };
+        }
+        
+        // 默认返回空列表
+        return { data: [] };
+    }
+
+    /**
      * 标记提供商需要刷新并推入刷新队列
      * @param {string} providerType - 提供商类型
      * @param {object} providerConfig - 提供商配置（包含 uuid）
      */
     markProviderNeedRefresh(providerType, providerConfig) {
+
         if (!providerConfig?.uuid) {
             this._log('error', 'Invalid providerConfig in markProviderNeedRefresh');
             return;

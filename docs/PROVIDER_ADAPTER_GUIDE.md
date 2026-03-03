@@ -16,7 +16,6 @@
     *   `static/components/section-config.html`：配置按钮。
     *   `static/components/section-guide.html`：使用指南。
     *   `static/app/routing-examples.js`：路由调用示例。
-    *   `src/handlers/ollama-handler.js`：Ollama 协议前缀与支持映射。
 6.  **系统级映射（必做）**：在 OAuth 处理器、凭据关联工具、用量统计等模块中建立映射。
 
 ---
@@ -133,10 +132,6 @@
 *   **处理器逻辑**：在 `src/auth/oauth-handlers.js` 中导出处理函数。
 *   **路由分发**：在 [`src/ui-modules/oauth-api.js`](src/ui-modules/oauth-api.js) 的 `handleGenerateAuthUrl` 中分发到相应的处理器。
 *   **回调处理**：若涉及 HTTP 回调，需在 `src/auth/` 下实现回调服务器逻辑。
-
-### 4.5 Ollama 协议映射 ([`src/handlers/ollama-handler.js`](src/handlers/ollama-handler.js))
-*   在 `MODEL_PREFIX_MAP` 中添加该提供商对应的日志/显示前缀。
-*   在 `supportedProviders` 数组中添加该提供商标识，以支持 Ollama 协议转换。
 
 ---
 

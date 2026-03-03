@@ -8,7 +8,13 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import * as https from 'https';
 import { getProviderModels } from '../provider-models.js';
-import { countTokens } from '@anthropic-ai/tokenizer';
+import { 
+    countTextTokens as countTextTokensUtil, 
+    estimateInputTokens as estimateInputTokensUtil, 
+    countTokensAnthropic as countTokensUtil,
+    processContent as processContentUtil,
+    getContentText as getContentTextUtil
+} from '../../utils/token-utils.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
@@ -721,34 +727,34 @@ async saveCredentialsToFile(filePath, newData) {
 
 
     /**
+     * Count tokens for a given text using Claude's official tokenizer
+     * Static version for use without instance
+     */
+    static countTextTokens(text) {
+        return countTextTokensUtil(text);
+    }
+
+    /**
+     * Count tokens for a message request (compatible with Anthropic API)
+     * Static version for use without instance
+     */
+    static countTokens(requestBody) {
+        return countTokensUtil(requestBody);
+    }
+
+    /**
+     * Calculate input tokens from request body
+     * Static version for use without instance
+     */
+    static estimateInputTokens(requestBody) {
+        return estimateInputTokensUtil(requestBody);
+    }
+
+    /**
      * Extract text content from OpenAI message format
      */
     getContentText(message) {
-        if(message==null){
-            return "";
-        }
-        if (Array.isArray(message)) {
-            return message.map(part => {
-                if (typeof part === 'string') return part;
-                if (part && typeof part === 'object') {
-                    if (part.type === 'text' && part.text) return part.text;
-                    if (part.text) return part.text;
-                }
-                return '';
-            }).join('');
-        } else if (typeof message.content === 'string') {
-            return message.content;
-        } else if (Array.isArray(message.content)) {
-            return message.content.map(part => {
-                if (typeof part === 'string') return part;
-                if (part && typeof part === 'object') {
-                    if (part.type === 'text' && part.text) return part.text;
-                    if (part.text) return part.text;
-                }
-                return '';
-            }).join('');
-        }
-        return String(message.content || message);
+        return getContentTextUtil(message);
     }
 
     /**
@@ -757,22 +763,7 @@ async saveCredentialsToFile(filePath, newData) {
      * @returns {string} 处理后的文本
      */
     processContent(content) {
-        if (!content) return "";
-        if (typeof content === 'string') return content;
-        if (Array.isArray(content)) {
-            return content.map(part => {
-                if (typeof part === 'string') return part;
-                if (part && typeof part === 'object') {
-                    if (part.type === 'text') return part.text || "";
-                    if (part.type === 'thinking') return part.thinking || part.text || "";
-                    if (part.type === 'tool_result') return this.processContent(part.content);
-                    if (part.type === 'tool_use' && part.input) return JSON.stringify(part.input);
-                    if (part.text) return part.text;
-                }
-                return "";
-            }).join("");
-        }
-        return this.getContentText(content);
+        return processContentUtil(content);
     }
 
     _normalizeThinkingBudgetTokens(budgetTokens) {
@@ -2644,56 +2635,14 @@ async saveCredentialsToFile(filePath, newData) {
      * Count tokens for a given text using Claude's official tokenizer
      */
     countTextTokens(text) {
-        if (!text) return 0;
-        try {
-            return countTokens(text);
-        } catch (error) {
-            // Fallback to estimation if tokenizer fails
-            logger.warn('[Kiro] Tokenizer error, falling back to estimation:', error.message);
-            return Math.ceil((text || '').length / 4);
-        }
+        return KiroApiService.countTextTokens(text);
     }
 
     /**
      * Calculate input tokens from request body using Claude's official tokenizer
      */
     estimateInputTokens(requestBody) {
-        let allText = "";
-        
-        // Count system prompt tokens
-        if (requestBody.system) {
-            allText += this.processContent(requestBody.system);
-        }
-        
-        // Count thinking prefix tokens if thinking is enabled
-        if (requestBody.thinking?.type && typeof requestBody.thinking.type === 'string') {
-            const t = requestBody.thinking.type.toLowerCase().trim();
-            if (t === 'enabled') {
-                const budget = this._normalizeThinkingBudgetTokens(requestBody.thinking.budget_tokens);
-                allText += `<thinking_mode>enabled</thinking_mode><max_thinking_length>${budget}</max_thinking_length>`;
-            } else if (t === 'adaptive') {
-                const effortRaw = typeof requestBody.thinking.effort === 'string' ? requestBody.thinking.effort : '';
-                const effort = effortRaw.toLowerCase().trim();
-                const normalizedEffort = (effort === 'low' || effort === 'medium' || effort === 'high') ? effort : 'high';
-                allText += `<thinking_mode>adaptive</thinking_mode><thinking_effort>${normalizedEffort}</thinking_effort>`;
-            }
-        }
-        
-        // Count all messages tokens
-        if (requestBody.messages && Array.isArray(requestBody.messages)) {
-            for (const message of requestBody.messages) {
-                if (message.content) {
-                    allText += this.processContent(message.content);
-                }
-            }
-        }
-        
-        // Count tools definitions tokens if present
-        if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            allText += JSON.stringify(requestBody.tools);
-        }
-        
-        return this.countTextTokens(allText);
+        return KiroApiService.estimateInputTokens(requestBody);
     }
 
     /**
@@ -2957,48 +2906,7 @@ async saveCredentialsToFile(filePath, newData) {
      * @returns {Object} { input_tokens: number }
      */
     countTokens(requestBody) {
-        let allText = "";
-        let extraTokens = 0;
-
-        // Count system prompt tokens
-        if (requestBody.system) {
-            allText += this.processContent(requestBody.system);
-        }
-
-        // Count all messages tokens
-        if (requestBody.messages && Array.isArray(requestBody.messages)) {
-            for (const message of requestBody.messages) {
-                if (message.content) {
-                    if (Array.isArray(message.content)) {
-                        for (const block of message.content) {
-                            if (block.type === 'image') {
-                                // Images have a fixed token cost (approximately 1600 tokens for a typical image)
-                                // This is an estimation as actual cost depends on image size
-                                extraTokens += 1600;
-                            } else if (block.type === 'document') {
-                                // Documents - estimate based on content if available
-                                if (block.source?.data) {
-                                    // For base64 encoded documents, estimate tokens
-                                    const estimatedChars = block.source.data.length * 0.75; // base64 to bytes ratio
-                                    extraTokens += Math.ceil(estimatedChars / 4);
-                                }
-                            } else {
-                                allText += this.processContent([block]);
-                            }
-                        }
-                    } else {
-                        allText += this.processContent(message.content);
-                    }
-                }
-            }
-        }
-
-        // Count tools definitions tokens if present
-        if (requestBody.tools && Array.isArray(requestBody.tools)) {
-            allText += JSON.stringify(requestBody.tools);
-        }
-
-        return { input_tokens: this.countTextTokens(allText) + extraTokens };
+        return KiroApiService.countTokens(requestBody);
     }
 
     /**

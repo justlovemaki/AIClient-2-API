@@ -43,7 +43,6 @@
 > - **2025.12.25** - 設定ファイル統一管理：すべての設定を `configs/` ディレクトリに集約。Dockerユーザーはマウントパスを `-v "ローカルパス:/app/configs"` に更新が必要
 > - **2025.12.11** - Dockerイメージが自動的にビルドされ、Docker Hubで公開されました: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 > - **2025.11.30** - Antigravityプロトコルサポートの追加、Google内部インターフェース経由でGemini 3 Pro、Claude Sonnet 4.5などのモデルへのアクセスをサポート
-> - **2025.11.16** - Ollamaプロトコルサポートの追加、統一インターフェースでサポートされるすべてのモデルにアクセス
 > - **2025.11.11** - Web UI管理コントロールコンソールの追加、リアルタイム設定管理と健康状態モニタリングをサポート
 > - **2025.11.06** - Gemini 3 プレビュー版のサポートを追加、モデル互換性とパフォーマンス最適化を向上
 > - **2025.10.18** - Kiroオープン登録、新規アカウントに500クレジット付与、Claude Sonnet 4.5を完全サポート
@@ -93,7 +92,6 @@
   - [📋 コア機能](#-コア機能)
 - [🔐 認証設定ガイド](#-認証設定ガイド)
 - [📁 認証ファイル保存パス](#-認証ファイル保存パス)
-- [🦙 Ollamaプロトコル使用例](#-ollamaプロトコル使用例)
 - [⚙️ 高度な設定](#高度な設定)
 - [❓ よくある質問](#-よくある質問)
 - [📄 オープンソースライセンス](#-オープンソースライセンス)
@@ -344,41 +342,6 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 > **カスタムパス**：設定ファイルの関連パラメータまたは環境変数でカスタム保存場所を指定可能
 
 </details>
-
----
-
-### 🦙 Ollamaプロトコル使用例
-
-本プロジェクトはOllamaプロトコルをサポートしており、統一インターフェースを通じてすべてのサポートモデルにアクセスできます。Ollamaエンドポイントは`/api/tags`、`/api/chat`、`/api/generate`などの標準インターフェースを提供します。
-
-**Ollama API呼び出し例**：
-
-1. **利用可能なすべてのモデルをリスト表示**：
-```bash
-curl http://localhost:3000/ollama/api/tags \
-  -H "Authorization: Bearer your-api-key"
-```
-
-2. **チャットインターフェース**：
-```bash
-curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [
-      {"role": "user", "content": "こんにちは"}
-    ]
-  }'
-```
-
-3. **モデルプレフィックスを使用してプロバイダーを指定**：
-- `[Kiro]` - Kiro APIを使用してClaudeモデルにアクセス
-- `[Claude]` - 公式Claude APIを使用
-- `[Gemini CLI]` - Gemini CLI OAuth経由でアクセス
-- `[OpenAI]` - 公式OpenAI APIを使用
-- `[Grok]` - Grok Cookie/SSO経由でアクセス
-- `[Qwen CLI]` - Qwen OAuth経由でアクセス
 
 ---
 
@@ -672,11 +635,9 @@ kill -9 <PID>
 
 ### 10. APIが404を返す
 
-**問題の説明**：APIエンドポイントを呼び出すと404 Not Foundエラーが返されます。
-
 **解決策**：
-- **エンドポイントパスを確認**：`/v1/chat/completions`、`/ollama/api/chat` などの正しいエンドポイントパスを使用していることを確認
-- **クライアントの自動補完を確認**：一部のクライアント（Cherry-Studio、NextChatなど）はBase URLの後にパス（`/v1/chat/completions` など）を自動的に追加し、パスの重複を引き起こします。コンソールで実際のリクエストURLを確認し、冗長なパス部分を削除してください
+- **エンドポイントパスを確認**：`/v1/chat/completions` などの正しいエンドポイントパスを使用していることを確認
+- **クライアントの自動補完を確認**：一部のクライアント（Cherry-Studio、NextChatなど）はBase URLの後にパス（`/v1/chat/completions` など）を自動的に追加し、パスの重複を引き起こします。コンソールで実際のリクエストURLを確認し、冗长なパス部分を削除してください
 - **サービス状態を確認**：サービスが正常に起動していることを確認、`http://localhost:3000` にアクセスしてWeb UIを確認
 - **ポート設定を確認**：リクエストが正しいポート（デフォルト3000）に送信されていることを確認
 - **利用可能なルートを確認**：Web UIダッシュボードページの「インタラクティブルーティング例」ですべての利用可能なエンドポイントを確認

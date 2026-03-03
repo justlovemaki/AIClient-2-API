@@ -43,7 +43,6 @@
 > - **2025.12.25** - Unified configuration management: All configs centralized to `configs/` directory. Docker users need to update mount path to `-v "local_path:/app/configs"`
 > - **2025.12.11** - Automatically built Docker images are now available on Docker Hub: [justlikemaki/aiclient-2-api](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
 > - **2025.11.30** - Added Antigravity protocol support, enabling access to Gemini 3 Pro, Claude Sonnet 4.5, and other models via Google internal interfaces
-> - **2025.11.16** - Added Ollama protocol support, unified interface to access all supported models (Claude, Gemini, Qwen, OpenAI, etc.)
 > - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
 > - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
@@ -93,7 +92,6 @@
   - [📋 Core Features](#-core-features)
 - [🔐 Authorization Configuration Guide](#-authorization-configuration-guide)
 - [📁 Authorization File Storage Paths](#-authorization-file-storage-paths)
-- [🦙 Ollama Protocol Usage Examples](#-ollama-protocol-usage-examples)
 - [⚙️ Advanced Configuration](#advanced-configuration)
 - [❓ FAQ](#-faq)
 - [📄 Open Source License](#-open-source-license)
@@ -344,41 +342,6 @@ Default storage locations for authorization credential files of each service:
 > **Custom Path**: Can specify custom storage location via relevant parameters in configuration file or environment variables
 
 </details>
-
----
-
-### 🦙 Ollama Protocol Usage Examples
-
-This project supports the Ollama protocol, allowing access to all supported models through a unified interface. The Ollama endpoint provides standard interfaces such as `/api/tags`, `/api/chat`, `/api/generate`, etc.
-
-**Ollama API Call Examples**:
-
-1. **List all available models**:
-```bash
-curl http://localhost:3000/ollama/api/tags \
-  -H "Authorization: Bearer your-api-key"
-```
-
-2. **Chat interface**:
-```bash
-curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [
-      {"role": "user", "content": "Hello"}
-    ]
-  }'
-```
-
-3. **Specify provider using model prefix**:
-- `[Kiro]` - Access Claude models using Kiro API
-- `[Claude]` - Use official Claude API
-- `[Gemini CLI]` - Access via Gemini CLI OAuth
-- `[OpenAI]` - Use official OpenAI API
-- `[Grok]` - Access via Grok Cookie/SSO
-- `[Qwen CLI]` - Access via Qwen OAuth
 
 ---
 
@@ -672,10 +635,8 @@ Or modify the port configuration in `configs/config.json` to use a different por
 
 ### 10. API Returns 404
 
-**Problem Description**: When calling API endpoints, it returns 404 Not Found error.
-
 **Solutions**:
-- **Check Endpoint Path**: Ensure you're using the correct endpoint path, such as `/v1/chat/completions`, `/ollama/api/chat`, etc.
+- **Check Endpoint Path**: Ensure you're using the correct endpoint path, such as `/v1/chat/completions` etc.
 - **Check Client Auto-completion**: Some clients (like Cherry-Studio, NextChat) automatically append paths (like `/v1/chat/completions`) after the Base URL, causing path duplication. Check the actual request URL in the console and remove redundant path parts
 - **Check Service Status**: Confirm the service has started normally, visit `http://localhost:3000` to view Web UI
 - **Check Port Configuration**: Ensure requests are sent to the correct port (default 3000)

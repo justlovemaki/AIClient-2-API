@@ -13,6 +13,7 @@ import {
     getFileName,
     formatSystemPath
 } from '../utils/provider-utils.js';
+import { MODEL_PROVIDER } from '../utils/common.js';
 
 // 存储 ProviderPoolManager 实例
 let providerPoolManager = null;
@@ -352,6 +353,35 @@ export async function initApiService(config, isReady = false) {
 }
 
 /**
+ * [路由解析层] 负责前置处理前缀和 AUTO 模式转换
+ * @private
+ * @returns {Promise<Object>} { effectiveProvider, actualModelName }
+ */
+async function _resolveEffectiveRouting(config, requestedModel) {
+    let effectiveProvider = config.MODEL_PROVIDER;
+    let actualModelName = requestedModel;
+
+    // 1. 处理显式前缀 (无论是否是 AUTO 模式都支持)
+    if (requestedModel && requestedModel.includes(':')) {
+        const [prefix, ...modelParts] = requestedModel.split(':');
+        const modelSuffix = modelParts.join(':');
+        // 检查前缀是否是有效的提供商标识
+        if (providerPoolManager && (providerPoolManager.providerStatus[prefix] || config.providerPools?.[prefix])) {
+            effectiveProvider = prefix;
+            actualModelName = modelSuffix;
+            logger.info(`[Routing] Prefix resolved: ${prefix}:${modelSuffix}`);
+        }
+    }
+
+    // 2. 严格性检查：在 AUTO 模式下，如果到这里还没解析出具体提供商，则报错 (除非是列出模型场景)
+    if (effectiveProvider === MODEL_PROVIDER.AUTO && requestedModel) {
+        throw new Error(`[API Service] Auto-routing failed: Model name must include a provider prefix (e.g., 'provider:model'). Received: '${requestedModel}'`);
+    }
+
+    return { effectiveProvider, actualModelName };
+}
+
+/**
  * Get API service adapter, considering provider pools
  * @param {Object} config - The current request configuration
  * @param {string} [requestedModel] - Optional. The model name to filter providers by.
@@ -360,11 +390,18 @@ export async function initApiService(config, isReady = false) {
  * @returns {Promise<Object>} The API service adapter
  */
 export async function getApiService(config, requestedModel = null, options = {}) {
+    // 1. 前置路由解析
+    const { effectiveProvider, actualModelName } = await _resolveEffectiveRouting(config, requestedModel);
+    config.MODEL_PROVIDER = effectiveProvider;
+
+    // 模型列表特殊场景：AUTO 且无模型名
+    if (effectiveProvider === MODEL_PROVIDER.AUTO && !actualModelName) return null;
+
     let serviceConfig = config;
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
         // selectProvider 现在是异步的，使用链式锁确保并发安全
-        const selectedProviderConfig = await providerPoolManager.selectProvider(config.MODEL_PROVIDER, requestedModel, { skipUsageCount: true });
+        const selectedProviderConfig = await providerPoolManager.selectProvider(config.MODEL_PROVIDER, actualModelName, { ...options, skipUsageCount: true });
         if (selectedProviderConfig) {
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);
@@ -372,12 +409,15 @@ export async function getApiService(config, requestedModel = null, options = {})
             config.uuid = serviceConfig.uuid;
             config.customName = serviceConfig.customName;
             const customNameDisplay = serviceConfig.customName ? ` (${serviceConfig.customName})` : '';
-            logger.info(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${requestedModel ? ` (model: ${requestedModel})` : ''}`);
+            logger.info(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}${customNameDisplay}${actualModelName ? ` (model: ${actualModelName})` : ''}`);
         } else {
-            const errorMsg = `[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
+            const errorMsg = `[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}${actualModelName ? ` supporting model: ${actualModelName}` : ''}`;
             logger.error(errorMsg);
             throw new Error(errorMsg);
         }
+    } else if (effectiveProvider === MODEL_PROVIDER.AUTO && actualModelName) {
+        // 如果在 AUTO 模式下依然没能解析出具体提供商，则报错
+        throw new Error(`[API Service] Auto-routing failed: Model name must include a provider prefix (e.g., 'provider:model'). Received: '${actualModelName}'`);
     }
     return getServiceAdapter(serviceConfig);
 }
@@ -390,11 +430,20 @@ export async function getApiService(config, requestedModel = null, options = {})
  * @returns {Promise<Object>} Object containing service adapter and metadata
  */
 export async function getApiServiceWithFallback(config, requestedModel = null, options = {}) {
+    // 1. 前置路由解析
+    const { effectiveProvider, actualModelName } = await _resolveEffectiveRouting(config, requestedModel);
+    config.MODEL_PROVIDER = effectiveProvider;
+
+    // 模型列表特殊场景：AUTO 且无模型名
+    if (effectiveProvider === MODEL_PROVIDER.AUTO && !actualModelName) {
+        return { service: null, serviceConfig: config, actualProviderType: effectiveProvider, isFallback: false, uuid: null, actualModel: null };
+    }
+
     let serviceConfig = config;
     let actualProviderType = config.MODEL_PROVIDER;
     let isFallback = false;
     let selectedUuid = null;
-    let actualModel = null;
+    let actualModel = actualModelName;
     
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         // selectProviderWithFallback 现在是异步的，使用链式锁确保并发安全
@@ -406,13 +455,13 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
              // 我们需要一个支持 Fallback 的 acquireSlot
              selectedResult = await providerPoolManager.acquireSlotWithFallback(
                 config.MODEL_PROVIDER,
-                requestedModel,
+                actualModelName,
                 options
             );
         } else {
             selectedResult = await providerPoolManager.selectProviderWithFallback(
                 config.MODEL_PROVIDER,
-                requestedModel,
+                actualModelName,
                 { ...options, skipUsageCount: true }
             );
         }
@@ -427,17 +476,20 @@ export async function getApiServiceWithFallback(config, requestedModel = null, o
             actualProviderType = selectedType;
             isFallback = fallbackUsed;
             selectedUuid = selectedProviderConfig.uuid;
-            actualModel = fallbackModel;
+            actualModel = fallbackModel || actualModelName;
             
             // 如果发生了 fallback，需要更新 MODEL_PROVIDER
             if (isFallback) {
                 serviceConfig.MODEL_PROVIDER = actualProviderType;
             }
         } else {
-            const errorMsg = `[API Service] No healthy provider found in pool (including fallback) for ${config.MODEL_PROVIDER}${requestedModel ? ` supporting model: ${requestedModel}` : ''}`;
+            const errorMsg = `[API Service] No healthy provider found in pool (including fallback) for ${config.MODEL_PROVIDER}${actualModelName ? ` supporting model: ${actualModelName}` : ''}`;
             logger.error(errorMsg);
             throw new Error(errorMsg);
         }
+    } else if (effectiveProvider === MODEL_PROVIDER.AUTO && actualModelName) {
+        // 如果在 AUTO 模式下依然没能解析出具体提供商，则报错
+        throw new Error(`[API Service] Auto-routing failed: Model name must include a provider prefix (e.g., 'provider:model'). Received: '${actualModelName}'`);
     }
     
     const service = getServiceAdapter(serviceConfig);

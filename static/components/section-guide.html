@@ -166,31 +166,6 @@
         </div>
     </div>
 
-    <!-- Ollama 协议使用 -->
-    <div class="guide-panel">
-        <h3><i class="fas fa-llama"></i> <span data-i18n="guide.ollama.title">Ollama 协议使用</span></h3>
-        <div class="guide-content">
-            <p data-i18n="guide.ollama.desc">本项目支持 Ollama 协议，可以通过统一接口访问所有支持的模型。</p>
-            
-            <div class="api-example">
-                <h4 data-i18n="guide.ollama.listModels">列出所有可用模型</h4>
-                <pre><code>curl http://localhost:3000/ollama/api/tags \
-  -H "Authorization: Bearer YOUR_API_KEY"</code></pre>
-            </div>
-            
-            <div class="api-example">
-                <h4 data-i18n="guide.ollama.chat">聊天接口</h4>
-                <pre><code>curl http://localhost:3000/ollama/api/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "model": "[Claude] claude-sonnet-4.5",
-    "messages": [{"role": "user", "content": "你好"}]
-  }'</code></pre>
-            </div>
-        </div>
-    </div>
-
     <!-- 常见问题 -->
     <div class="guide-panel">
         <h3><i class="fas fa-question-circle"></i> <span data-i18n="guide.faq.title">常见问题</span></h3>

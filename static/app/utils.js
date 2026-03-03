@@ -375,13 +375,13 @@ function getProviderTypeFields(providerType) {
             },
             {
                 id: 'GROK_CF_CLEARANCE',
-                label: t('modal.provider.field.cfClearance'),
+                label: `${t('modal.provider.field.cfClearance')} <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'cf_clearance cookie value'
             },
             {
                 id: 'GROK_USER_AGENT',
-                label: t('modal.provider.field.userAgent'),
+                label: `${t('modal.provider.field.userAgent')} <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
                 placeholder: 'Mozilla/5.0 ...'
             },
