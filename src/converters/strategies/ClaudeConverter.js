@@ -2163,6 +2163,7 @@ export class ClaudeConverter extends BaseConverter {
                     id: codexChunk.response.id,
                     type: "message",
                     role: "assistant",
+                    content: [],
                     model: model,
                     usage: { input_tokens: 0, output_tokens: 0 }
                 }

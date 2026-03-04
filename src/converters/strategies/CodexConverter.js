@@ -1133,7 +1133,9 @@ export class CodexConverter extends BaseConverter {
                 model: model,
                 createdAt: Math.floor(Date.now() / 1000),
                 responseID: resId,
-                blockIndex: 0
+                blockIndex: 0,
+                blockStarted: false, // track whether content_block_start has been sent for current block
+                currentBlockType: null // 'thinking' or 'text'
             });
         }
         const state = this.streamParams.get(resId);
@@ -1146,6 +1148,7 @@ export class CodexConverter extends BaseConverter {
                     id: state.responseID,
                     type: "message",
                     role: "assistant",
+                    content: [],
                     model: state.model,
                     usage: { input_tokens: 0, output_tokens: 0 }
                 }
@@ -1153,23 +1156,67 @@ export class CodexConverter extends BaseConverter {
         }
 
         if (type === 'response.reasoning_summary_text.delta') {
-            return {
+            const events = [];
+            // If switching from a different block type, close the previous block first
+            if (state.blockStarted && state.currentBlockType !== 'thinking') {
+                events.push({ type: "content_block_stop", index: state.blockIndex });
+                state.blockIndex++;
+                state.blockStarted = false;
+            }
+            // Emit content_block_start on first delta for this thinking block
+            if (!state.blockStarted) {
+                events.push({
+                    type: "content_block_start",
+                    index: state.blockIndex,
+                    content_block: { type: "thinking", thinking: "" }
+                });
+                state.blockStarted = true;
+                state.currentBlockType = 'thinking';
+            }
+            events.push({
                 type: "content_block_delta",
                 index: state.blockIndex,
                 delta: { type: "thinking_delta", thinking: chunk.delta }
-            };
+            });
+            return events;
         }
 
         if (type === 'response.output_text.delta') {
-            return {
+            const events = [];
+            // If switching from a different block type, close the previous block first
+            if (state.blockStarted && state.currentBlockType !== 'text') {
+                events.push({ type: "content_block_stop", index: state.blockIndex });
+                state.blockIndex++;
+                state.blockStarted = false;
+            }
+            // Emit content_block_start on first delta for this text block
+            if (!state.blockStarted) {
+                events.push({
+                    type: "content_block_start",
+                    index: state.blockIndex,
+                    content_block: { type: "text", text: "" }
+                });
+                state.blockStarted = true;
+                state.currentBlockType = 'text';
+            }
+            events.push({
                 type: "content_block_delta",
                 index: state.blockIndex,
                 delta: { type: "text_delta", text: chunk.delta }
-            };
+            });
+            return events;
         }
 
         if (type === 'response.output_item.done' && chunk.item?.type === 'function_call') {
-            const events = [
+            const events = [];
+            // Close any open text/thinking block before tool_use
+            if (state.blockStarted) {
+                events.push({ type: "content_block_stop", index: state.blockIndex });
+                state.blockIndex++;
+                state.blockStarted = false;
+                state.currentBlockType = null;
+            }
+            events.push(
                 {
                     type: "content_block_start",
                     index: state.blockIndex,
@@ -1192,13 +1239,18 @@ export class CodexConverter extends BaseConverter {
                     type: "content_block_stop",
                     index: state.blockIndex
                 }
-            ];
+            );
             state.blockIndex++;
             return events;
         }
 
         if (type === 'response.completed') {
-            const events = [
+            const events = [];
+            // Close any open content block before ending the message
+            if (state.blockStarted) {
+                events.push({ type: "content_block_stop", index: state.blockIndex });
+            }
+            events.push(
                 {
                     type: "message_delta",
                     delta: { stop_reason: "end_turn" },
@@ -1208,7 +1260,7 @@ export class CodexConverter extends BaseConverter {
                     }
                 },
                 { type: "message_stop" }
-            ];
+            );
             this.streamParams.delete(resId);
             return events;
         }
