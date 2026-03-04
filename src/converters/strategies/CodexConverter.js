@@ -1126,8 +1126,29 @@ export class CodexConverter extends BaseConverter {
      */
     toClaudeStreamChunk(chunk, model) {
         const type = chunk.type;
-        const resId = chunk.response?.id || 'default';
-        
+
+        // Codex 的多数增量事件不带 response.id，需要将其归并到最近活跃的流状态。
+        let resId = chunk.response?.id;
+        if (!resId) {
+            if (this.lastClaudeStreamResponseId && this.streamParams.has(this.lastClaudeStreamResponseId)) {
+                resId = this.lastClaudeStreamResponseId;
+            } else if (this.streamParams.size === 1) {
+                resId = this.streamParams.keys().next().value;
+            } else {
+                // 兜底：选择最近更新的流，避免落到固定 "default" key 导致串流状态污染。
+                let latestKey = null;
+                let latestUpdatedAt = -1;
+                for (const [key, streamState] of this.streamParams.entries()) {
+                    const updatedAt = streamState?.lastUpdatedAt || 0;
+                    if (updatedAt > latestUpdatedAt) {
+                        latestUpdatedAt = updatedAt;
+                        latestKey = key;
+                    }
+                }
+                resId = latestKey || 'default';
+            }
+        }
+
         if (!this.streamParams.has(resId)) {
             this.streamParams.set(resId, {
                 model: model,
@@ -1135,13 +1156,16 @@ export class CodexConverter extends BaseConverter {
                 responseID: resId,
                 blockIndex: 0,
                 blockStarted: false, // track whether content_block_start has been sent for current block
-                currentBlockType: null // 'thinking' or 'text'
+                currentBlockType: null, // 'thinking' or 'text'
+                lastUpdatedAt: Date.now()
             });
         }
         const state = this.streamParams.get(resId);
+        state.lastUpdatedAt = Date.now();
 
         if (type === 'response.created') {
             state.responseID = chunk.response.id;
+            this.lastClaudeStreamResponseId = state.responseID;
             return {
                 type: "message_start",
                 message: {
@@ -1262,6 +1286,9 @@ export class CodexConverter extends BaseConverter {
                 { type: "message_stop" }
             );
             this.streamParams.delete(resId);
+            if (this.lastClaudeStreamResponseId === resId) {
+                this.lastClaudeStreamResponseId = null;
+            }
             return events;
         }
 
