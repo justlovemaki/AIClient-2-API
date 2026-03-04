@@ -2913,19 +2913,19 @@ async saveCredentialsToFile(filePath, newData) {
      * 获取用量限制信息
      * @returns {Promise<Object>} 用量限制信息
      */
-    async getUsageLimits() {
+    async getUsageLimits(_isRetry = false) {
         if (!this.isInitialized) await this.initialize();
 
         // Token 刷新策略：
         // 1. 已过期 → 必须等待刷新
         // 2. 即将过期但还能用 → 后台异步刷新，不阻塞当前请求
-        // if (this.isTokenExpired()) {
-        //     logger.info('[Kiro] Token is expired, must refresh before getUsageLimits request...');
-        //     await this.initializeAuth(true);
-        // } else if (this.isExpiryDateNear()) {
-        //     logger.info('[Kiro] Token is near expiry, triggering background refresh...');
-        //     this.triggerBackgroundRefresh();
-        // }
+        if (this.isTokenExpired()) {
+            logger.info('[Kiro] Token is expired, must refresh before getUsageLimits request...');
+            await this.initializeAuth(true);
+        } else if (this.isExpiryDateNear()) {
+            logger.info('[Kiro] Token is near expiry, triggering background refresh...');
+            this.triggerBackgroundRefresh();
+        }
         
         // 内部固定的资源类型
         const resourceType = 'AGENTIC_REQUEST';
@@ -2964,6 +2964,14 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             const response = await this.axiosInstance.get(fullUrl, { headers });
             logger.info('[Kiro] Usage limits fetched successfully');
+            
+            // 用量限制获取成功，重置 PoolManager 中的刷新状态并标记为健康
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.KIRO_API, this.uuid);
+                logger.info(`[Kiro] Provider ${this.uuid} marked as healthy after successful usage limits query`);
+            }
+            
             return response.data;
         } catch (error) {
             const status = error.response?.status;
@@ -2987,29 +2995,50 @@ async saveCredentialsToFile(filePath, newData) {
                 ? new Error(`API call failed: ${status} - ${errorMessage}`)
                 : new Error(`API call failed: ${errorMessage}`);
             
-            // 对于用量查询，401/403 错误直接标记凭证为不健康，不重试
-            if (status === 401) {
-                logger.info('[Kiro] Received 401 on getUsageLimits. Marking credential as unhealthy (no retry)...');
+            // 对于用量查询，401/403 错误尝试刷新 token 后重试一次
+            if (status === 401 && !_isRetry) {
+                logger.info('[Kiro] Received 401 on getUsageLimits. Refreshing token and retrying once...');
+                try {
+                    await this.initializeAuth(true);
+                    return await this.getUsageLimits(true);
+                } catch (retryError) {
+                    logger.error('[Kiro] Retry after 401 refresh failed:', retryError.message);
+                    this._markCredentialNeedRefresh('401 Unauthorized on usage query (retry failed)', formattedError);
+                    throw formattedError;
+                }
+            } else if (status === 401) {
+                logger.info('[Kiro] Received 401 on getUsageLimits retry. Marking credential as unhealthy...');
                 this._markCredentialNeedRefresh('401 Unauthorized on usage query', formattedError);
                 throw formattedError;
             }
             
             if (status === 403) {
-                logger.info('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
-                
                 // 检查是否为 temporarily suspended 错误
                 const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
                 
                 if (isSuspended) {
-                    // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
+                    // temporarily suspended 错误：直接标记为不健康，不刷新 UUID，不重试
                     logger.info('[Kiro] Account temporarily suspended on usage query. Marking as unhealthy without UUID refresh...');
                     this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended on usage query', formattedError);
-                } else {
-                    // 其他 403 错误：标记需要刷新
-                    this._markCredentialNeedRefresh('403 Forbidden on usage query', formattedError);
+                    throw formattedError;
                 }
                 
-                throw formattedError;
+                // 非 suspended 的 403：尝试刷新 token 后重试一次
+                if (!_isRetry) {
+                    logger.info('[Kiro] Received 403 on getUsageLimits. Refreshing token and retrying once...');
+                    try {
+                        await this.initializeAuth(true);
+                        return await this.getUsageLimits(true);
+                    } catch (retryError) {
+                        logger.error('[Kiro] Retry after 403 refresh failed:', retryError.message);
+                        this._markCredentialNeedRefresh('403 Forbidden on usage query (retry failed)', formattedError);
+                        throw formattedError;
+                    }
+                } else {
+                    logger.info('[Kiro] Received 403 on getUsageLimits retry. Marking credential as needing refresh...');
+                    this._markCredentialNeedRefresh('403 Forbidden on usage query', formattedError);
+                    throw formattedError;
+                }
             }
             
             logger.error('[Kiro] Failed to fetch usage limits:', formattedError.message, error);
