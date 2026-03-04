@@ -297,6 +297,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     let fullResponseJson = '';
     let fullOldResponseJson = '';
     let responseClosed = false;
+    let anyDataSent = retryContext?.anyDataSent || false; // 跟踪是否已向客户端发送过任何数据
     
     // 重试上下文：包含 CONFIG 和重试计数
     // maxRetries: 凭证切换最大次数（跨凭证），默认 5 次
@@ -439,6 +440,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                     if (!clientDisconnected.value && !res.writableEnded) {
                         try {
                             res.write(`event: ${chunk.type}\n`);
+                            anyDataSent = true;
                         } catch (writeErr) {
                             logger.error('[Stream] Failed to write event:', writeErr.message);
                             clientDisconnected.value = true;
@@ -453,6 +455,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                 if (!clientDisconnected.value && !res.writableEnded) {
                     try {
                         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                        anyDataSent = true;
                     } catch (writeErr) {
                         logger.error('[Stream] Failed to write data:', writeErr.message);
                         clientDisconnected.value = true;
@@ -482,9 +485,9 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             return;
         }
         
-        // 如果已经发送了内容，不进行重试（避免响应数据损坏）
-        if (fullResponseText.length > 0) {
-            logger.info(`[Stream Retry] Cannot retry: ${fullResponseText.length} bytes already sent to client`);
+        // 如果已经发送了数据（包括 metadata），不进行重试（避免响应数据损坏或顺序错误）
+        if (anyDataSent) {
+            logger.info(`[Stream Retry] Cannot retry: data already sent to client`);
             // 直接发送错误并结束
             const errorPayload = createStreamErrorResponse(error, fromProvider);
             if (!res.writableEnded) {
@@ -553,7 +556,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                         CONFIG,
                         currentRetry: currentRetry + 1,
                         maxRetries,
-                        clientDisconnected  // 传递断开状态
+                        clientDisconnected,  // 传递断开状态
+                        anyDataSent          // 传递数据发送状态
                     };
                     
                     // 递归调用，使用新的服务
@@ -821,12 +825,23 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             logger.info(`[ModelList] Aggregating models for 'auto' mode...`);
             clientModelList = await providerPoolManager.getAllAvailableModels(endpointType);
         } else {
-            // --- 原有的单提供商逻辑 ---
+            // --- 单提供商逻辑 ---
             const toProvider = CONFIG.MODEL_PROVIDER;
-            
+
+            // service 可能未在上层预先注入（例如仅改了路径 provider 前缀），这里兜底获取
+            let resolvedService = service;
+            if (!resolvedService) {
+                const { getApiService } = await import('../services/service-manager.js');
+                resolvedService = await getApiService(CONFIG, null, { skipUsageCount: true });
+            }
+
+            if (!resolvedService || typeof resolvedService.listModels !== 'function') {
+                throw new Error(`[ModelList] Service adapter is unavailable or does not implement listModels() for provider: ${toProvider}`);
+            }
+
             // 1. Get the model list in the backend's native format.
-            const nativeModelList = await service.listModels();
-                    
+            const nativeModelList = await resolvedService.listModels();
+
             // 2. Convert the model list to the client's expected format, if necessary.
             clientModelList = nativeModelList;
             if (!getProtocolPrefix(toProvider).includes(getProtocolPrefix(fromProvider))) {
@@ -896,17 +911,20 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     let actualCustomName = CONFIG.customName;
 
-    // 2.5. 如果使用了提供商池，根据模型重新选择提供商（支持 Fallback）
-    // 注意：这里开启 acquireSlot: true，会占用并发名额或进入队列
-    if (providerPoolManager && (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO || (CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]))) {
+    // 2.5. 根据模型选择服务适配器：
+    // - service 缺失时（例如上游未预先注入）进行兜底选择
+    // - 使用号池/AUTO 时按模型重选并支持 fallback
+    // 注意：仅在号池场景开启 acquireSlot，占用并发名额或进入队列
+    const shouldSelectByPool = providerPoolManager && (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO || (CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]));
+    if (!service || shouldSelectByPool) {
         const { getApiServiceWithFallback } = await import('../services/service-manager.js');
-        const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
-        
+        const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: shouldSelectByPool });
+
         service = result.service;
         toProvider = result.actualProviderType;
         actualUuid = result.uuid || pooluuid;
         actualCustomName = result.serviceConfig?.customName || CONFIG.customName;
-        
+
         // 如果发生了模型级别的 fallback，需要更新请求使用的模型
         if (result.actualModel && result.actualModel !== model) {
             logger.info(`[Content Generation] Model Fallback: ${model} -> ${result.actualModel}`);
@@ -916,7 +934,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         if (result.isFallback) {
             logger.info(`[Content Generation] Fallback activated: ${CONFIG.MODEL_PROVIDER} -> ${toProvider} (uuid: ${actualUuid})`);
         } else {
-            logger.info(`[Content Generation] Re-selected service adapter based on model: ${model}`);
+            logger.info(`[Content Generation] Selected service adapter based on model: ${model}`);
         }
     }
 

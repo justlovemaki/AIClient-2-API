@@ -16,6 +16,8 @@ import { setServiceMode } from './event-handlers.js';
 let initialServerTime = null;
 let initialUptime = null;
 let initialLoadTime = null;
+let isStaticProviderConfigsUpdated = false;
+let cachedSupportedProviders = null;
 
 /**
  * 加载系统信息
@@ -186,11 +188,35 @@ function updateTimeDisplay() {
  */
 async function loadProviders() {
     try {
-        const [providers, supportedProviders] = await Promise.all([
-            window.apiClient.get('/providers'),
-            window.apiClient.get('/providers/supported')
-        ]);
-        renderProviders(providers, supportedProviders);
+        const providers = await window.apiClient.get('/providers');
+
+        // 动态更新其他模块的提供商信息，只需更新一次
+        if (!isStaticProviderConfigsUpdated) {
+            cachedSupportedProviders = await window.apiClient.get('/providers/supported');
+            const providerConfigs = getProviderConfigs(cachedSupportedProviders);
+            
+            // 动态更新凭据文件管理的提供商类型筛选项
+            updateProviderFilterOptions(providerConfigs);
+            
+            // 动态更新仪表盘页面的路径路由调用示例
+            renderRoutingExamples(providerConfigs);
+            
+            // 动态更新仪表盘页面的可用模型列表提供商信息
+            updateModelsProviderConfigs(providerConfigs);
+            
+            // 动态更新配置教程页面的提供商信息
+            updateTutorialProviderConfigs(providerConfigs);
+            
+            // 动态更新用量查询页面的提供商信息
+            updateUsageProviderConfigs(providerConfigs);
+            
+            // 动态更新配置管理页面的提供商选择标签
+            updateConfigProviderConfigs(providerConfigs);
+            
+            isStaticProviderConfigsUpdated = true;
+        }
+
+        renderProviders(providers, cachedSupportedProviders);
     } catch (error) {
         console.error('Failed to load providers:', error);
     }
@@ -349,24 +375,6 @@ function renderProviders(providers, supportedProviders = []) {
         }
     });
 
-    // 动态更新凭据文件管理的提供商类型筛选项
-    updateProviderFilterOptions(providerConfigs);
-    
-    // 动态更新仪表盘页面的路径路由调用示例
-    renderRoutingExamples(providerConfigs);
-    
-    // 动态更新仪表盘页面的可用模型列表提供商信息
-    updateModelsProviderConfigs(providerConfigs);
-    
-    // 动态更新配置教程页面的提供商信息
-    updateTutorialProviderConfigs(providerConfigs);
-    
-    // 动态更新用量查询页面的提供商信息
-    updateUsageProviderConfigs(providerConfigs);
-    
-    // 动态更新配置管理页面的提供商选择标签
-    updateConfigProviderConfigs(providerConfigs);
-    
     // 更新统计卡片数据
     const activeProviders = hasProviders ? Object.keys(providers).length : 0;
     updateProviderStatsDisplay(activeProviders, totalHealthy, totalAccounts);
