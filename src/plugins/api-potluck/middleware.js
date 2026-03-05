@@ -4,6 +4,7 @@
  */
 
 import { validateKey, incrementUsage, KEY_PREFIX } from './key-manager.js';
+import logger from '../../utils/logger.js';
 
 /**
  * 从请求中提取 Potluck API Key

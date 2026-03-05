@@ -169,6 +169,10 @@
 .config-item-icon-wrapper.api-key { background: rgba(16, 185, 129, 0.1); color: #10b981; }
 .config-item-icon-wrapper.provider-pool { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
 .config-item-icon-wrapper.system-prompt { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.config-item-icon-wrapper.plugins { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
+.config-item-icon-wrapper.usage { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.config-item-icon-wrapper.config { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
+.config-item-icon-wrapper.database { background: rgba(16, 185, 129, 0.1); color: #10b981; }
 .config-item-icon-wrapper.other { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
 
 .config-item-title-area {

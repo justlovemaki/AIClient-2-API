@@ -54,49 +54,57 @@ function normalizeConfiguredProviders(config) {
  * @returns {Object} The initialized configuration object.
  */
 export async function initializeConfig(args = process.argv.slice(2), configFilePath = 'configs/config.json') {
-    let currentConfig = {};
+    const defaultConfig = {
+        REQUIRED_API_KEY: "123456",
+        SERVER_PORT: 3000,
+        HOST: '0.0.0.0',
+        MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
+        SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
+        SYSTEM_PROMPT_MODE: 'append',
+        PROXY_URL: null, // HTTP/HTTPS/SOCKS5 代理地址，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080
+        PROXY_ENABLED_PROVIDERS: [], // 启用代理的提供商列表，如 ['gemini-cli-oauth', 'claude-kiro-oauth']
+        PROMPT_LOG_BASE_NAME: "prompt_log",
+        PROMPT_LOG_MODE: "none",
+        REQUEST_MAX_RETRIES: 3,
+        REQUEST_BASE_DELAY: 1000,
+        CREDENTIAL_SWITCH_MAX_RETRIES: 5, // 坏凭证切换最大重试次数（用于认证错误后切换凭证）
+        CRON_NEAR_MINUTES: 15,
+        CRON_REFRESH_TOKEN: false,
+        LOGIN_EXPIRY: 3600, // 登录过期时间（秒），默认1小时
+        LOGIN_MAX_ATTEMPTS: 5, // 最大失败重试次数
+        LOGIN_LOCKOUT_DURATION: 1800, // 锁定持续时间（秒），默认30分钟
+        LOGIN_MIN_INTERVAL: 5000, // 两次尝试之间的最小间隔（毫秒），默认1秒
+        PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
+        MAX_ERROR_COUNT: 10, // 提供商最大错误次数
+        providerFallbackChain: {}, // 跨类型 Fallback 链配置
+        LOG_ENABLED: true,
+        LOG_OUTPUT_MODE: "all",
+        LOG_LEVEL: "info",
+        LOG_DIR: "logs",
+        LOG_INCLUDE_REQUEST_ID: true,
+        LOG_INCLUDE_TIMESTAMP: true,
+        LOG_MAX_FILE_SIZE: 10485760,
+        LOG_MAX_FILES: 10,
+        TLS_SIDECAR_ENABLED: false, // 启用 Go uTLS sidecar（需要编译 tls-sidecar 二进制）
+        TLS_SIDECAR_PORT: 9090,     // sidecar 监听端口
+        TLS_SIDECAR_BINARY_PATH: null // 自定义二进制路径（默认自动搜索）
+    };
+
+    let currentConfig = { ...defaultConfig };
 
     try {
         const configData = fs.readFileSync(configFilePath, 'utf8');
-        currentConfig = JSON.parse(configData);
+        const loadedConfig = JSON.parse(configData);
+        Object.assign(currentConfig, loadedConfig);
         logger.info('[Config] Loaded configuration from configs/config.json');
     } catch (error) {
-        logger.error('[Config Error] Failed to load configs/config.json:', error.message);
-        // Fallback to default values if config.json is not found or invalid
-        currentConfig = {
-            REQUIRED_API_KEY: "123456",
-            SERVER_PORT: 3000,
-            HOST: '0.0.0.0',
-            MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
-            SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
-            SYSTEM_PROMPT_MODE: 'append',
-            PROXY_URL: null, // HTTP/HTTPS/SOCKS5 代理地址，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080
-            PROXY_ENABLED_PROVIDERS: [], // 启用代理的提供商列表，如 ['gemini-cli-oauth', 'claude-kiro-oauth']
-            PROMPT_LOG_BASE_NAME: "prompt_log",
-            PROMPT_LOG_MODE: "none",
-            REQUEST_MAX_RETRIES: 3,
-            REQUEST_BASE_DELAY: 1000,
-            CREDENTIAL_SWITCH_MAX_RETRIES: 5, // 坏凭证切换最大重试次数（用于认证错误后切换凭证）
-            CRON_NEAR_MINUTES: 15,
-            CRON_REFRESH_TOKEN: false,
-            LOGIN_EXPIRY: 3600, // 登录过期时间（秒），默认1小时
-            PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
-            MAX_ERROR_COUNT: 10, // 提供商最大错误次数
-            providerFallbackChain: {}, // 跨类型 Fallback 链配置
-            LOG_ENABLED: true,
-            LOG_OUTPUT_MODE: "all",
-            LOG_LEVEL: "info",
-            LOG_DIR: "logs",
-            LOG_INCLUDE_REQUEST_ID: true,
-            LOG_INCLUDE_TIMESTAMP: true,
-            LOG_MAX_FILE_SIZE: 10485760,
-            LOG_MAX_FILES: 10,
-            TLS_SIDECAR_ENABLED: false, // 启用 Go uTLS sidecar（需要编译 tls-sidecar 二进制）
-            TLS_SIDECAR_PORT: 9090,     // sidecar 监听端口
-            TLS_SIDECAR_BINARY_PATH: null // 自定义二进制路径（默认自动搜索）
-        };
-        logger.info('[Config] Using default configuration.');
+        if (error.code !== 'ENOENT') {
+            logger.error('[Config Error] Failed to load configs/config.json:', error.message);
+        } else {
+            logger.info('[Config] configs/config.json not found, using default configuration.');
+        }
     }
+
 
     // CLI argument definitions: { flag, configKey, type, validValues? }
     // type: 'string' | 'int' | 'bool' | 'enum'
@@ -113,6 +121,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         { flag: '--cron-refresh-token',   configKey: 'CRON_REFRESH_TOKEN',     type: 'bool' },
         { flag: '--provider-pools-file',  configKey: 'PROVIDER_POOLS_FILE_PATH', type: 'string' },
         { flag: '--max-error-count',      configKey: 'MAX_ERROR_COUNT',        type: 'int' },
+        { flag: '--login-max-attempts',   configKey: 'LOGIN_MAX_ATTEMPTS',     type: 'int' },
+        { flag: '--login-lockout-duration', configKey: 'LOGIN_LOCKOUT_DURATION', type: 'int' },
+        { flag: '--login-min-interval',   configKey: 'LOGIN_MIN_INTERVAL',     type: 'int' },
     ];
 
     // Parse command-line arguments using definitions

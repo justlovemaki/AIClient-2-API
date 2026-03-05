@@ -55,9 +55,25 @@ textarea.form-control {
 }
 
 .password-input-wrapper {
-    position: relative;
     display: flex;
     align-items: center;
+    gap: 0.5rem;
+}
+
+.input-with-toggle {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.generate-key-btn {
+    flex-shrink: 0;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
 }
 
 .password-input-wrapper .form-control {

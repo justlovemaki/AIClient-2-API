@@ -988,21 +988,19 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);
     }
 
-    if (CONFIG?._monitorRequestId) {
-        // 执行插件钩子：内容生成后
-        try {
-            const pluginManager = getPluginManager();
-            await pluginManager.executeHook('onContentGenerated', {
-                ...CONFIG,
-                originalRequestBody,
-                processedRequestBody,
-                fromProvider,
-                toProvider,
-                model,
-                isStream
-            });
-        } catch (e) { /* 静默失败，不影响主流程 */ }
-    }
+    // 执行插件钩子：内容生成后
+    try {
+        const pluginManager = getPluginManager();
+        await pluginManager.executeHook('onContentGenerated', {
+            ...CONFIG,
+            originalRequestBody,
+            processedRequestBody,
+            fromProvider,
+            toProvider,
+            model,
+            isStream
+        });
+    } catch (e) { /* 静默失败，不影响主流程 */ }
 }
 
 /**

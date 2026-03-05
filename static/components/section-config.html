@@ -10,9 +10,14 @@
                 <div class="form-group password-input-group">
                     <label for="apiKey" data-i18n="config.apiKey">API密钥</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="apiKey" class="form-control" data-i18n="config.apiKeyPlaceholder" placeholder="请输入API密钥" autocomplete="off">
-                        <button type="button" class="password-toggle" data-target="apiKey" aria-label="显示/隐藏密码">
-                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        <div class="input-with-toggle">
+                            <input type="password" id="apiKey" class="form-control" data-i18n="config.apiKeyPlaceholder" placeholder="请输入API密钥" autocomplete="off">
+                            <button type="button" class="password-toggle" data-target="apiKey" aria-label="显示/隐藏密码">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary generate-key-btn" id="generateApiKey" data-i18n-title="config.apiKey.generateTitle" title="自动生成API密钥">
+                            <i class="fas fa-magic"></i> <span data-i18n="config.apiKey.generate">生成</span>
                         </button>
                     </div>
                 </div>
@@ -318,10 +323,12 @@
                 <div class="form-group">
                     <label for="adminPassword" data-i18n="config.advanced.adminPassword">后台登录密码</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="adminPassword" class="form-control" autocomplete="new-password">
-                        <button type="button" class="password-toggle" data-target="adminPassword" aria-label="显示/隐藏密码">
-                            <i class="fas fa-eye" aria-hidden="true"></i>
-                        </button>
+                        <div class="input-with-toggle">
+                            <input type="password" id="adminPassword" class="form-control" autocomplete="new-password">
+                            <button type="button" class="password-toggle" data-target="adminPassword" aria-label="显示/隐藏密码">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                     <small class="form-text" data-i18n="config.advanced.adminPasswordNote">修改后需要重新登录</small>
                 </div>

@@ -137,6 +137,13 @@ docker compose up -d
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: 双击运行 `install-and-run.bat`
 
+> **💡 如果脚本运行失败，可以尝试手动安装依赖并启动：**
+> ```bash
+> npm install
+> npm start
+> ```
+
+
 #### 2. 访问控制台
 服务器启动后，打开浏览器访问：
 👉 [**http://localhost:3000**](http://localhost:3000)

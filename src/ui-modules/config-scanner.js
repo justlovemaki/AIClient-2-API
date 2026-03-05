@@ -77,51 +77,96 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
         
         // 读取文件内容进行分析
         let content = '';
-        let type = 'oauth_credentials';
+        let type = 'oauth'; // 默认为 oauth 类型
         let isValid = true;
         let errorMessage = '';
         let oauthProvider = 'unknown';
         let usageInfo = getFileUsageInfo(relativePath, filename, usedPaths, currentConfig);
         
+        // 从路径预检测提供商
+        const normalizedPath = relativePath.replace(/\\/g, '/').toLowerCase();
+        if (normalizedPath.includes('/kiro/')) oauthProvider = 'kiro';
+        else if (normalizedPath.includes('/gemini/')) oauthProvider = 'gemini';
+        else if (normalizedPath.includes('/qwen/')) oauthProvider = 'qwen';
+        else if (normalizedPath.includes('/antigravity/')) oauthProvider = 'antigravity';
+        else if (normalizedPath.includes('/codex/')) oauthProvider = 'codex';
+        else if (normalizedPath.includes('/iflow/')) oauthProvider = 'iflow';
+
         try {
+            content = await fs.readFile(filePath, 'utf8');
+            
+            // 1. 首先尝试根据文件名识别特定类型的配置 (最高优先级)
+            const lowerFilename = filename.toLowerCase();
+            if (lowerFilename === 'provider_pools.json' || lowerFilename === 'provider-pools.json') {
+                type = 'provider-pool';
+            } else if (lowerFilename.includes('system_prompt') || lowerFilename.includes('system-prompt')) {
+                type = 'system-prompt';
+            } else if (lowerFilename === 'plugins.json') {
+                type = 'plugins';
+            } else if (lowerFilename === 'usage-cache.json') {
+                type = 'usage';
+            } else if (lowerFilename === 'config.json') {
+                type = 'config';
+            } else if (lowerFilename.includes('potluck-keys')) {
+                type = 'api-key';
+            } else if (lowerFilename.includes('potluck-data')) {
+                type = 'database';
+            } else if (lowerFilename === 'token-store.json') {
+                type = 'oauth';
+            }
+
+            // 2. 根据内容进一步识别和完善信息
             if (ext === '.json') {
-                const rawContent = await fs.readFile(filePath, 'utf8');
-                const jsonData = JSON.parse(rawContent);
-                content = rawContent;
-                
-                // 识别OAuth提供商
-                if (jsonData.apiKey || jsonData.api_key) {
-                    type = 'api_key';
-                } else if (jsonData.client_id || jsonData.client_secret) {
-                    oauthProvider = 'oauth2';
-                } else if (jsonData.access_token || jsonData.refresh_token) {
-                    oauthProvider = 'token_based';
-                } else if (jsonData.credentials) {
-                    oauthProvider = 'service_account';
-                }
-                
-                if (jsonData.base_url || jsonData.endpoint) {
-                    if (jsonData.base_url.includes('openai.com')) {
-                        oauthProvider = 'openai';
-                    } else if (jsonData.base_url.includes('anthropic.com')) {
-                        oauthProvider = 'claude';
-                    } else if (jsonData.base_url.includes('googleapis.com')) {
-                        oauthProvider = 'gemini';
+                try {
+                    const jsonData = JSON.parse(content);
+                    
+                    // 如果文件名没识别出类型，尝试从内容识别
+                    if (type === 'oauth') {
+                        if (jsonData.providerPools || jsonData.provider_pools) {
+                            type = 'provider-pool';
+                        } else if (jsonData.apiKey || jsonData.api_key) {
+                            type = 'api-key';
+                        }
                     }
+
+                    // 识别具体的提供商/认证方式
+                    if (jsonData.client_id || jsonData.client_secret) {
+                        if (oauthProvider === 'unknown') oauthProvider = 'oauth2';
+                    } else if (jsonData.access_token || jsonData.refresh_token) {
+                        if (oauthProvider === 'unknown') oauthProvider = 'token_based';
+                    } else if (jsonData.credentials) {
+                        if (oauthProvider === 'unknown') oauthProvider = 'service_account';
+                    } else if (jsonData.apiKey || jsonData.api_key) {
+                        if (oauthProvider === 'unknown') oauthProvider = 'api_key';
+                    }
+                    
+                    if (jsonData.base_url || jsonData.endpoint) {
+                        const baseUrl = (jsonData.base_url || jsonData.endpoint).toLowerCase();
+                        if (baseUrl.includes('openai.com')) {
+                            oauthProvider = 'openai';
+                        } else if (baseUrl.includes('anthropic.com')) {
+                            oauthProvider = 'claude';
+                        } else if (baseUrl.includes('googleapis.com')) {
+                            oauthProvider = 'gemini';
+                        }
+                    }
+                } catch (jsonErr) {
+                    isValid = false;
+                    errorMessage = `JSON Parse Error: ${jsonErr.message}`;
                 }
             } else {
-                content = await fs.readFile(filePath, 'utf8');
-                
+                // 处理非 JSON 文件
                 if (ext === '.key' || ext === '.pem') {
                     if (content.includes('-----BEGIN') && content.includes('PRIVATE KEY-----')) {
                         oauthProvider = 'private_key';
                     }
                 } else if (ext === '.txt') {
                     if (content.includes('api_key') || content.includes('apikey')) {
-                        oauthProvider = 'api_key';
+                        if (type === 'oauth') type = 'api-key';
+                        if (oauthProvider === 'unknown') oauthProvider = 'api_key';
                     }
                 } else if (ext === '.oauth' || ext === '.creds') {
-                    oauthProvider = 'oauth_credentials';
+                    if (oauthProvider === 'unknown') oauthProvider = 'oauth_credentials';
                 }
             }
         } catch (readError) {
@@ -133,14 +178,14 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
             name: filename,
             path: relativePath,
             size: stats.size,
-            type: type,
+            type: type, // 用于前端图标显示的关键字段
             provider: oauthProvider,
             extension: ext,
             modified: stats.mtime.toISOString(),
             isValid: isValid,
             errorMessage: errorMessage,
             isUsed: isPathUsed(relativePath, filename, usedPaths),
-            usageInfo: usageInfo, // 新增详细关联信息
+            usageInfo: usageInfo,
             preview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
         };
     } catch (error) {

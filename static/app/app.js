@@ -46,7 +46,8 @@ import {
 
 import {
     loadConfiguration,
-    saveConfiguration
+    saveConfiguration,
+    generateApiKey
 } from './config-manager.js';
 
 import {
@@ -241,6 +242,7 @@ window.loadConfigList = loadConfigList;
 window.closeConfigModal = closeConfigModal;
 window.copyConfigContent = copyConfigContent;
 window.reloadConfig = reloadConfig;
+window.generateApiKey = generateApiKey;
 
 // 用量管理相关全局函数
 window.refreshUsage = refreshUsage;

@@ -138,6 +138,13 @@ docker compose up -d
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: `install-and-run.bat` をダブルクリックして実行
 
+> **💡 スクリプトの実行に失敗した場合は、手動で依存関係をインストールして起動できます：**
+> ```bash
+> npm install
+> npm start
+> ```
+
+
 #### 2. コンソールへのアクセス
 サーバー起動後、ブラウザで以下にアクセスしてください：
 👉 [**http://localhost:3000**](http://localhost:3000)

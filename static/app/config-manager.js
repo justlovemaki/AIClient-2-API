@@ -348,8 +348,30 @@ async function saveConfiguration() {
     }
 }
 
+/**
+ * 自动生成 API 密钥
+ */
+function generateApiKey() {
+    const apiKeyEl = document.getElementById('apiKey');
+    if (!apiKeyEl) return;
+    
+    // 生成 32 位 16 进制随机字符串
+    const array = new Uint8Array(16);
+    window.crypto.getRandomValues(array);
+    const randomKey = 'sk-' + Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    
+    apiKeyEl.value = randomKey;
+    
+    showToast(t('common.success'), t('config.apiKey.generated') || '已生成新的 API 密钥', 'success');
+    
+    // 触发输入框的 change 事件
+    apiKeyEl.dispatchEvent(new Event('input', { bubbles: true }));
+    apiKeyEl.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 export {
     loadConfiguration,
     saveConfiguration,
-    updateConfigProviderConfigs
+    updateConfigProviderConfigs,
+    generateApiKey
 };

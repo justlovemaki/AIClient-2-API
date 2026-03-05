@@ -9,11 +9,11 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-// 配置常量
+// 配置文件路径
 const KEYS_STORE_FILE = path.join(process.cwd(), 'configs', 'api-potluck-keys.json');
 const KEY_PREFIX = 'maki_';
 
-// 默认配置（会被 user-data-manager 的配置覆盖）
+// 默认配置
 const DEFAULT_CONFIG = {
     defaultDailyLimit: 500,
     persistInterval: 5000
@@ -56,18 +56,6 @@ function ensureLoaded() {
         if (existsSync(KEYS_STORE_FILE)) {
             const content = readFileSync(KEYS_STORE_FILE, 'utf8');
             keyStore = JSON.parse(content);
-            // 兼容历史数据：为旧 Key 添加 bonusRemaining 字段
-            let needsMigration = false;
-            for (const keyData of Object.values(keyStore.keys)) {
-                if (keyData.bonusRemaining === undefined) {
-                    keyData.bonusRemaining = 0;
-                    needsMigration = true;
-                }
-            }
-            if (needsMigration) {
-                logger.info('[API Potluck] Migrated legacy keys: added bonusRemaining field');
-                markDirty();
-            }
         } else {
             keyStore = { keys: {} };
             syncWriteToFile();
@@ -178,6 +166,7 @@ function checkAndResetDailyCount(keyData) {
 
 /**
  * 创建新的 API Key
+
  * @param {string} name - Key 名称
  * @param {number} [dailyLimit] - 每日限额，不传则使用配置的默认值
  */
@@ -199,8 +188,7 @@ export async function createKey(name = '', dailyLimit = null) {
         totalUsage: 0,
         lastResetDate: today,
         lastUsedAt: null,
-        enabled: true,
-        bonusRemaining: 0           // 剩余资源包总次数（由同步检查更新）
+        enabled: true
     };
 
     keyStore.keys[apiKey] = keyData;
@@ -333,7 +321,7 @@ export async function regenerateKey(oldKeyId) {
 }
 
 /**
- * 验证 API Key 是否有效且有配额（每日限额 + 资源包）
+ * 验证 API Key 是否有效且有配额
  */
 export async function validateKey(apiKey) {
     ensureLoaded();
@@ -349,13 +337,7 @@ export async function validateKey(apiKey) {
     
     // 检查每日限额
     if (keyData.todayUsage < keyData.dailyLimit) {
-        return { valid: true, keyData, useBonus: false };
-    }
-    
-    // 每日限额用尽，检查资源包
-    const bonusRemaining = keyData.bonusRemaining || 0;
-    if (bonusRemaining > 0) {
-        return { valid: true, keyData, useBonus: true, bonusRemaining };
+        return { valid: true, keyData };
     }
     
     return { valid: false, reason: 'quota_exceeded', keyData };
@@ -363,47 +345,55 @@ export async function validateKey(apiKey) {
 
 /**
  * 增加 Key 的使用次数（原子操作，直接修改内存）
- * 优先消耗每日限额，用尽后消耗资源包
  * @param {string} apiKey - API Key
- * @param {Function} [onBonusUsed] - 资源包消耗回调，用于更新 data 中的 usedCount
+ * @param {string} provider - 使用的提供商
+ * @param {string} model - 使用的模型
  */
-export async function incrementUsage(apiKey, onBonusUsed = null) {
+export async function incrementUsage(apiKey, provider = 'unknown', model = 'unknown') {
     ensureLoaded();
     const keyData = keyStore.keys[apiKey];
     if (!keyData) return null;
 
     checkAndResetDailyCount(keyData);
     
-    let usedBonus = false;
-    
-    // 优先消耗每日限额
+    // 消耗每日限额
     if (keyData.todayUsage < keyData.dailyLimit) {
         keyData.todayUsage += 1;
     } else {
-        // 每日限额用尽，消耗资源包
-        const bonusRemaining = keyData.bonusRemaining || 0;
-        
-        if (bonusRemaining > 0) {
-            keyData.bonusRemaining = bonusRemaining - 1;
-            usedBonus = true;
-            
-            // 触发回调更新 data 中的 usedCount
-            if (onBonusUsed) {
-                await onBonusUsed(apiKey);
-            }
-        } else {
-            // 无可用配额
-            return null;
-        }
+        // 每日限额用尽
+        return null;
     }
     
     keyData.totalUsage += 1;
     keyData.lastUsedAt = new Date().toISOString();
+
+    // 记录个人按天统计 (每个 Key 独立)
+    const today = getTodayDateString();
+    if (!keyData.usageHistory) keyData.usageHistory = {};
+    if (!keyData.usageHistory[today]) {
+        keyData.usageHistory[today] = { providers: {}, models: {} };
+    }
+    
+    // 确保 provider 和 model 是字符串
+    const pName = String(provider || 'unknown');
+    const mName = String(model || 'unknown');
+    
+    const userHistory = keyData.usageHistory[today];
+    userHistory.providers[pName] = (userHistory.providers[pName] || 0) + 1;
+    userHistory.models[mName] = (userHistory.models[mName] || 0) + 1;
+
+    // 清理该 Key 的过期历史 (保留 7 天)
+    const userDates = Object.keys(keyData.usageHistory).sort();
+    if (userDates.length > 7) {
+        const dropDates = userDates.slice(0, userDates.length - 7);
+        dropDates.forEach(d => delete keyData.usageHistory[d]);
+    }
+
     markDirty();
     
     return {
         ...keyData,
-        usedBonus
+        usedBonus: false
     };
 }
 
@@ -414,12 +404,36 @@ export async function getStats() {
     ensureLoaded();
     const keys = Object.values(keyStore.keys);
     let enabledKeys = 0, todayTotalUsage = 0, totalUsage = 0;
+    const aggregatedHistory = {};
 
     for (const key of keys) {
         checkAndResetDailyCount(key);
         if (key.enabled) enabledKeys++;
         todayTotalUsage += key.todayUsage;
         totalUsage += key.totalUsage;
+
+        // 汇总每个 Key 的历史数据
+        if (key.usageHistory) {
+            Object.entries(key.usageHistory).forEach(([date, history]) => {
+                if (!aggregatedHistory[date]) {
+                    aggregatedHistory[date] = { providers: {}, models: {} };
+                }
+                
+                // 汇总提供商
+                if (history.providers) {
+                    Object.entries(history.providers).forEach(([p, count]) => {
+                        aggregatedHistory[date].providers[p] = (aggregatedHistory[date].providers[p] || 0) + count;
+                    });
+                }
+                
+                // 汇总模型
+                if (history.models) {
+                    Object.entries(history.models).forEach(([m, count]) => {
+                        aggregatedHistory[date].models[m] = (aggregatedHistory[date].models[m] || 0) + count;
+                    });
+                }
+            });
+        }
     }
 
     return {
@@ -427,48 +441,11 @@ export async function getStats() {
         enabledKeys,
         disabledKeys: keys.length - enabledKeys,
         todayTotalUsage,
-        totalUsage
+        totalUsage,
+        usageHistory: aggregatedHistory
     };
 }
 
-// ============ 凭证资源包管理 ============
-
-/**
- * 更新 Key 的剩余资源包次数（由同步检查调用）
- * @param {string} keyId - Key ID
- * @param {number} bonusRemaining - 剩余资源包总次数
- * @returns {Promise<boolean>}
- */
-export async function updateBonusRemaining(keyId, bonusRemaining) {
-    ensureLoaded();
-    const keyData = keyStore.keys[keyId];
-    if (!keyData) return false;
-    
-    keyData.bonusRemaining = Math.max(0, bonusRemaining);
-    markDirty();
-    return true;
-}
-
-/**
- * 获取 Key 的资源包信息
- * @param {string} keyId - Key ID
- * @param {Function} getConfigFn - 获取配置的函数（从 user-data-manager 传入）
- * @returns {Promise<Object|null>}
- */
-export async function getBonusInfo(keyId, getConfigFn = null) {
-    ensureLoaded();
-    const keyData = keyStore.keys[keyId];
-    if (!keyData) return null;
-    
-    // 从 user-data-manager 获取配置
-    const config = getConfigFn ? getConfigFn() : { bonusPerCredential: 300, bonusValidityDays: 30 };
-    
-    return {
-        bonusRemaining: keyData.bonusRemaining || 0,
-        bonusPerCredential: config.bonusPerCredential,
-        validityDays: config.bonusValidityDays
-    };
-}
 
 /**
  * 批量更新所有 Key 的每日限额

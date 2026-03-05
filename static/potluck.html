@@ -3,29 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#059669">
     <title>API 大锅饭 - Key 管理</title>
+    <link rel="stylesheet" href="app/base.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: #0d1117;
-            min-height: 100vh; 
-            color: #e6edf3;
+        body {
+            background: var(--bg-secondary);
+            min-height: 100vh;
         }
-        
+
         /* 顶部导航 */
         .navbar {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
             position: sticky;
             top: 0;
             z-index: 100;
+            box-shadow: var(--shadow-sm);
         }
         .navbar-inner {
-            max-width: 1000px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 0 24px;
-            height: 60px;
+            height: 64px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -36,40 +37,50 @@
             gap: 12px;
             font-size: 20px;
             font-weight: 700;
-            color: #fff;
+            color: var(--text-primary);
         }
-        .navbar-brand .icon { font-size: 28px; }
+        .navbar-brand .icon {
+            font-size: 28px;
+            color: var(--primary-color);
+        }
         .navbar-brand .badge {
-            background: linear-gradient(135deg, #4ade80, #22c55e);
-            color: #000;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: #ffffff;
             font-size: 11px;
             padding: 2px 8px;
-            border-radius: 10px;
+            border-radius: var(--radius-full);
             font-weight: 600;
         }
-        
+
         /* 主容器 */
         .main-container {
-            max-width: 1000px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 30px 24px;
         }
-        
+
         /* 统计卡片网格 */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-bottom: 30px;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
         .stat-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 20px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem;
             text-align: center;
             position: relative;
             overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-30);
         }
         .stat-card::before {
             content: '';
@@ -79,32 +90,71 @@
             right: 0;
             height: 3px;
         }
-        .stat-card.purple::before { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+        .stat-card.purple::before { background: linear-gradient(90deg, var(--indigo-500), var(--indigo-600)); }
+        .stat-card.green::before { background: linear-gradient(90deg, var(--success-color), var(--primary-light)); }
         .stat-card.pink::before { background: linear-gradient(90deg, #ec4899, #f472b6); }
-        .stat-card.cyan::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
-        .stat-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+        .stat-card.cyan::before { background: linear-gradient(90deg, var(--info-color), #22d3ee); }
         .stat-card .label {
             font-size: 12px;
-            color: #8b949e;
+            color: var(--text-secondary);
             margin-bottom: 8px;
         }
         .stat-card .value {
-            font-size: 28px;
+            font-size: 2rem;
             font-weight: 700;
+            color: var(--text-primary);
         }
-        .stat-card.purple .value { color: #a855f7; }
+        .stat-card.purple .value { color: var(--indigo-500); }
+        .stat-card.green .value { color: var(--success-color); }
         .stat-card.pink .value { color: #ec4899; }
-        .stat-card.cyan .value { color: #22d3ee; }
-        .stat-card.green .value { color: #10b981; }
-        
-        /* 区块标题 */
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #e6edf3;
-            margin-bottom: 20px;
+        .stat-card.cyan .value { color: var(--info-color); }
+
+        /* 分布统计样式 */
+        .distribution-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
-        
+        .distribution-item {
+            width: 100%;
+        }
+        .dist-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .dist-name {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .dist-count {
+            color: var(--text-secondary);
+        }
+        .dist-bar {
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+        .dist-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            border-radius: var(--radius-full);
+        }
+
+        /* 区块标题 */
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
         /* 工具栏 */
         .toolbar {
             display: flex;
@@ -113,75 +163,35 @@
             flex-wrap: wrap;
         }
         .search-box {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
             padding: 10px 14px;
-            color: #e6edf3;
+            color: var(--text-primary);
             font-size: 14px;
             width: 220px;
-            transition: all 0.2s;
+            transition: var(--transition);
+            flex: 1;
+            min-width: 180px;
+        }
+        .sort-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
         }
         .search-box:focus {
             outline: none;
-            border-color: #a855f7;
-            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px var(--primary-10);
         }
-        .search-box::placeholder { color: #484f58; }
-        .sort-select {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 10px 14px;
-            color: #e6edf3;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .sort-select:focus {
-            outline: none;
-            border-color: #a855f7;
-        }
-        
-        /* 按钮样式 */
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #4ade80, #22c55e);
-            color: #000;
-            font-weight: 600;
-        }
-        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-secondary {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #e6edf3;
-        }
-        .btn-secondary:hover { background: #30363d; }
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #ef4444;
-        }
-        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
-        .btn-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 1px solid rgba(245, 158, 11, 0.4);
-            color: #f59e0b;
-        }
-        .btn-warning:hover { background: rgba(245, 158, 11, 0.25); }
-        .btn-sm { padding: 6px 12px; font-size: 12px; }
-        
+        .search-box::placeholder { color: var(--text-tertiary); }
+
         /* Key 列表 */
         .keys-section { margin-top: 10px; }
         .keys-header {
@@ -198,46 +208,54 @@
             gap: 12px;
         }
         .key-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
             padding: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 16px;
-            transition: all 0.2s;
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
         }
-        .key-card:hover { border-color: #8b949e; }
-        .key-card.disabled { opacity: 0.5; }
+        .key-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-md);
+        }
+        .key-card.disabled { opacity: 0.6; }
         .key-info { flex: 1; min-width: 200px; }
         .key-name {
             font-size: 15px;
             font-weight: 600;
-            color: #e6edf3;
+            color: var(--text-primary);
             margin-bottom: 6px;
         }
         .key-id {
-            font-family: monospace;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
-            color: #8b949e;
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
             gap: 8px;
         }
         .btn-copy {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #8b949e;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
             cursor: pointer;
             font-size: 12px;
             padding: 4px 8px;
-            border-radius: 6px;
-            transition: all 0.2s;
+            border-radius: var(--radius-md);
+            transition: var(--transition);
         }
-        .btn-copy:hover { background: #30363d; color: #e6edf3; }
-        
+        .btn-copy:hover {
+            background: var(--bg-tertiary);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
         /* Key 统计 */
         .key-stats {
             display: flex;
@@ -250,67 +268,91 @@
         }
         .key-stat .label {
             font-size: 11px;
-            color: #8b949e;
+            color: var(--text-secondary);
             margin-bottom: 4px;
         }
         .key-stat .value {
             font-size: 14px;
             font-weight: 600;
-            color: #e6edf3;
+            color: var(--text-primary);
         }
-        .key-stat .value.warning { color: #fbbf24; }
-        .key-stat .value.danger { color: #ef4444; }
-        .key-stat .value.muted { color: #8b949e; font-size: 12px; }
+        .key-stat .value.warning { color: var(--warning-color); }
+        .key-stat .value.danger { color: var(--danger-color); }
+        .key-stat .value.muted { color: var(--text-tertiary); font-size: 12px; }
+        
+        /* Key 详情中的分布 */
+        .key-dist-mini {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .dist-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .dist-badge b { color: var(--primary-color); }
+        
         .progress-bar {
-            width: 80px;
+
             height: 6px;
-            background: #21262d;
-            border-radius: 3px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-full);
             overflow: hidden;
             margin-top: 6px;
         }
         .progress-bar .fill {
             height: 100%;
-            background: linear-gradient(90deg, #10b981, #34d399);
+            background: linear-gradient(90deg, var(--success-color), var(--primary-light));
             transition: width 0.3s;
         }
-        .progress-bar .fill.warning { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-        .progress-bar .fill.danger { background: linear-gradient(90deg, #ef4444, #f87171); }
-        
+        .progress-bar .fill.warning { background: linear-gradient(90deg, var(--warning-color), #fbbf24); }
+        .progress-bar .fill.danger { background: linear-gradient(90deg, var(--danger-color), #f87171); }
+
         /* Key 操作 */
         .key-actions {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
         }
-        
+
         /* 模态框 */
-        .modal {
+        .modal-overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: var(--overlay-bg);
             align-items: center;
             justify-content: center;
             z-index: 1000;
             padding: 20px;
+            backdrop-filter: blur(4px);
         }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 16px;
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
             padding: 0;
             max-width: 500px;
             width: 100%;
             overflow: hidden;
+            box-shadow: var(--shadow-xl);
+            animation: slideIn 0.3s ease;
         }
         .modal-header {
             padding: 20px 24px;
-            border-bottom: 1px solid #30363d;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -318,156 +360,215 @@
         .modal-header h3 {
             font-size: 18px;
             font-weight: 600;
-            color: #e6edf3;
+            color: var(--text-primary);
         }
         .modal-close {
             background: none;
             border: none;
-            color: #8b949e;
+            color: var(--text-secondary);
             font-size: 24px;
             cursor: pointer;
             padding: 4px;
             line-height: 1;
+            transition: var(--transition);
         }
-        .modal-close:hover { color: #e6edf3; }
+        .modal-close:hover { color: var(--text-primary); }
         .modal-body { padding: 24px; }
-        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
         /* 表单 */
         .form-group { margin-bottom: 20px; }
         .form-group label {
             display: block;
             font-size: 13px;
-            color: #8b949e;
+            color: var(--text-secondary);
+            font-weight: 500;
             margin-bottom: 8px;
         }
         .form-group input {
             width: 100%;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
             padding: 12px 16px;
-            color: #e6edf3;
+            color: var(--text-primary);
             font-size: 14px;
-            transition: all 0.2s;
+            transition: var(--transition);
         }
         .form-group input:focus {
             outline: none;
-            border-color: #a855f7;
-            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px var(--primary-10);
         }
-        .form-group input::placeholder { color: #484f58; }
-        
+        .form-group input::placeholder { color: var(--text-tertiary); }
+
         /* Key 显示 */
         .key-display {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
             padding: 16px;
-            font-family: monospace;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 14px;
-            color: #7ee787;
+            color: var(--success-color);
             word-break: break-all;
             margin: 16px 0;
         }
-        
+
         /* 空状态 */
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #8b949e;
+            color: var(--text-secondary);
         }
-        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
         .empty-state p { font-size: 14px; margin-bottom: 20px; }
         .no-results {
             text-align: center;
             padding: 40px;
-            color: #8b949e;
+            color: var(--text-secondary);
         }
-        
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 14px 20px;
-            color: #e6edf3;
-            font-size: 14px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s;
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .btn {
+            height: 2.5rem;
         }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success { border-left: 4px solid #10b981; }
-        .toast.error { border-left: 4px solid #ef4444; }
-        
-        /* 响应式 - iPad */
+
+        /* 响应式 */
         @media (max-width: 1024px) {
             .key-card { gap: 12px; }
             .key-stats { gap: 16px; }
             .key-stat { min-width: 60px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
-        
-        /* 响应式 - 平板竖屏/大手机 */
+
         @media (max-width: 768px) {
             .navbar-inner { padding: 0 16px; }
-            .navbar-brand span:not(.icon):not(.badge) { display: none; }
             .main-container { padding: 20px 16px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .key-card { 
-                flex-direction: column; 
+            .stats-grid { grid-template-columns: 1fr; }
+            .key-card {
+                flex-direction: column;
                 align-items: stretch;
                 gap: 16px;
             }
             .key-info { margin-bottom: 4px; }
-            .key-stats { 
-                width: 100%; 
+            .key-stats {
+                width: 100%;
                 justify-content: flex-start;
                 gap: 20px;
                 flex-wrap: wrap;
             }
             .key-stat { min-width: 70px; text-align: left; }
-            .key-actions { 
-                width: 100%; 
+            .key-actions {
+                width: 100%;
                 justify-content: flex-start;
                 padding-top: 12px;
-                border-top: 1px solid #30363d;
+                border-top: 1px solid var(--border-color);
             }
-            .search-box { width: 100%; }
         }
-        
-        /* 响应式 - 手机 */
+
         @media (max-width: 480px) {
-            .stat-card .value { font-size: 24px; }
+            .stat-card .value { font-size: 1.5rem; }
             .keys-header { flex-direction: column; align-items: stretch; gap: 12px; }
-            .toolbar { flex-direction: column; }
-            .key-stats { 
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .toolbar .search-wrapper {
+                display: flex;
+                gap: 8px;
+                width: 100%;
+            }
+            .search-box {
+                flex: 1;
+                min-width: 0;
+            }
+            .sort-select {
+                width: auto;
+                flex-shrink: 0;
+            }
+            .toolbar .btn-limit-wrapper {
+                width: 100%;
+            }
+            .toolbar .btn-limit-wrapper .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .key-stats {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
                 gap: 12px;
             }
-            .key-stat { 
-                min-width: unset; 
+            .key-stat {
+                min-width: unset;
                 text-align: center;
             }
             .key-actions {
                 display: grid;
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(2, 1fr);
                 gap: 8px;
             }
-            .key-actions .btn { 
-                padding: 8px 6px; 
-                font-size: 11px;
-                justify-content: center;
+            .navbar-brand .badge { display: none; }
+            .navbar-actions { gap: 8px; }
+            #createKeyBtn .btn-text { display: none; }
+            .theme-toggle { width: 36px; height: 36px; font-size: 1rem; }
+        }
+
+        @keyframes slideIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* 按钮扩展样式 */
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-lg {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+        }
+
+        /* 移动端 Key 操作按钮样式 */
+        @media (max-width: 480px) {
+            .key-actions .btn-sm {
+                padding: 10px 12px;
+                font-size: 13px;
+                height: 44px;
             }
         }
+
+        /* 主题切换按钮 */
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.125rem;
+            transition: var(--transition);
+        }
+        .theme-toggle:hover {
+            background: var(--bg-secondary);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .theme-toggle .fa-sun { display: none; }
+        .theme-toggle .fa-moon { display: inline-block; }
+        [data-theme="dark"] .theme-toggle .fa-sun { display: inline-block; }
+        [data-theme="dark"] .theme-toggle .fa-moon { display: none; }
     </style>
 </head>
 <body>
@@ -479,7 +580,15 @@
                 <span>API 大锅饭</span>
                 <span class="badge">管理端</span>
             </div>
-            <button id="createKeyBtn" class="btn btn-primary">+ 生成新 Key</button>
+            <div class="navbar-actions" style="display: flex; align-items: center; gap: 12px;">
+                <button class="theme-toggle" id="themeToggle" title="切换主题">
+                    <i class="fas fa-sun"></i>
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button id="createKeyBtn" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> <span class="btn-text">生成新 Key</span>
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -505,40 +614,58 @@
             </div>
         </div>
 
-        <!-- 系统配置卡片 -->
-        <div class="config-card" style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-                <div>
-                    <h3 style="font-size: 15px; font-weight: 600; color: #e6edf3; margin-bottom: 8px;">⚙️ 系统配置</h3>
-                    <p style="font-size: 13px; color: #8b949e;">
-                        默认限额: <span id="configLimit" style="color: #a855f7; font-weight: 600;">500</span> 次/天 | 
-                        资源包: <span id="configBonus" style="color: #10b981; font-weight: 600;">300</span> 次/凭证 | 
-                        有效期: <span id="configDays" style="color: #22d3ee; font-weight: 600;">30</span> 天
-                    </p>
+        <!-- 使用分布统计区域 -->
+        <div id="usageStatsSection" style="margin-bottom: 2.5rem; display: none;">
+            <div class="section-title">
+                <i class="fas fa-chart-pie"></i> 最近 7 天使用分布统计
+            </div>
+            <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+                <!-- 提供商分布 -->
+                <div class="stat-card" style="text-align: left; padding: 20px;">
+                    <div class="label" style="margin-bottom: 15px; font-weight: 600; display: flex; justify-content: space-between;">
+                        <span>提供商占比 (Providers)</span>
+                        <span id="providerTotalCount" style="color: var(--primary-color);">0 次</span>
+                    </div>
+                    <div id="providerDistribution" class="distribution-list">
+                        <!-- 动态填充 -->
+                    </div>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button class="btn btn-warning" onclick="showConfirmModal('applyLimit')">应用限额</button>
-                    <button class="btn btn-warning" onclick="showConfirmModal('applyBonus')">应用资源包</button>
-                    <button class="btn btn-secondary" onclick="openConfigModal()">修改配置</button>
+                <!-- 模型分布 -->
+                <div class="stat-card" style="text-align: left; padding: 20px;">
+                    <div class="label" style="margin-bottom: 15px; font-weight: 600; display: flex; justify-content: space-between;">
+                        <span>模型活跃度 (Models)</span>
+                        <span id="modelTotalCount" style="color: var(--primary-color);">0 次</span>
+                    </div>
+                    <div id="modelDistribution" class="distribution-list">
+                        <!-- 动态填充 -->
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Key 列表区域 -->
+
         <div class="keys-section">
             <div class="keys-header">
-                <h2 class="section-title" style="margin-bottom: 0;">Key 列表</h2>
+                <h2 class="section-title" style="margin-bottom: 0;"><i class="fas fa-key"></i> Key 列表</h2>
                 <div class="toolbar">
-                    <input type="text" id="searchBox" class="search-box" placeholder="搜索名称或 Key...">
-                    <select id="sortSelect" class="sort-select">
-                        <option value="name-asc">名称 A-Z</option>
-                        <option value="name-desc">名称 Z-A</option>
-                        <option value="usage-desc">今日用量 ↓</option>
-                        <option value="usage-asc">今日用量 ↑</option>
-                        <option value="total-desc">累计用量 ↓</option>
-                        <option value="lastUsed-desc">最近使用 ↓</option>
-                        <option value="created-desc">创建时间 ↓</option>
-                    </select>
+                    <div class="search-wrapper">
+                        <input type="text" id="searchBox" class="search-box" placeholder="搜索名称或 Key...">
+                        <select id="sortSelect" class="sort-select">
+                            <option value="name-asc">名称 A-Z</option>
+                            <option value="name-desc">名称 Z-A</option>
+                            <option value="usage-desc">今日用量 ↓</option>
+                            <option value="usage-asc">今日用量 ↑</option>
+                            <option value="total-desc">累计用量 ↓</option>
+                            <option value="lastUsed-desc">最近使用 ↓</option>
+                            <option value="created-desc">创建时间 ↓</option>
+                        </select>
+                    </div>
+                    <div class="btn-limit-wrapper">
+                        <button class="btn btn-secondary btn-sm" onclick="showApplyLimitModal()">
+                            <i class="fas fa-cog"></i> <span class="btn-limit-text">批量应用限额</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div id="keysList" class="keys-list"></div>
@@ -546,46 +673,50 @@
     </div>
 
     <!-- 创建 Key 模态框 -->
-    <div id="createModal" class="modal">
-        <div class="modal-content">
+    <div id="createModal" class="modal-overlay">
+        <div class="modal">
             <div class="modal-header">
-                <h3>生成新 API Key</h3>
+                <h3><i class="fas fa-plus-circle"></i> 生成新 API Key</h3>
                 <button class="modal-close" onclick="closeModal('createModal')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
                     <label>Key 名称 (可选)</label>
-                    <input type="text" id="keyName" placeholder="例如：测试用户1">
+                    <input type="text" id="keyName" placeholder="例如：测试用户 1">
                 </div>
                 <div class="form-group">
                     <label>每日调用限额</label>
                     <input type="number" id="keyLimit" placeholder="500" min="1">
                 </div>
-                <button class="btn btn-primary" style="width:100%" onclick="createKey()">生成 Key</button>
+                <button class="btn btn-primary btn-block" onclick="createKey()">
+                    <i class="fas fa-check"></i> 生成 Key
+                </button>
             </div>
         </div>
     </div>
 
     <!-- 显示新 Key 模态框 -->
-    <div id="showKeyModal" class="modal">
-        <div class="modal-content">
+    <div id="showKeyModal" class="modal-overlay">
+        <div class="modal">
             <div class="modal-header">
-                <h3>🎉 Key 已生成</h3>
+                <h3><i class="fas fa-key"></i> Key 已生成</h3>
                 <button class="modal-close" onclick="closeModal('showKeyModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <p style="color:#8b949e;margin-bottom:10px">请妥善保存此 Key，关闭后将无法再次查看完整内容：</p>
+                <p style="color:var(--text-secondary);margin-bottom:10px">请妥善保存此 Key，关闭后将无法再次查看完整内容：</p>
                 <div class="key-display" id="newKeyDisplay"></div>
-                <button class="btn btn-secondary" style="width:100%" onclick="copyKey()">📋 复制 Key</button>
+                <button class="btn btn-secondary btn-block" onclick="copyKey()">
+                    <i class="fas fa-copy"></i> 复制 Key
+                </button>
             </div>
         </div>
     </div>
 
     <!-- 修改限额模态框 -->
-    <div id="editLimitModal" class="modal">
-        <div class="modal-content">
+    <div id="editLimitModal" class="modal-overlay">
+        <div class="modal">
             <div class="modal-header">
-                <h3>修改每日限额</h3>
+                <h3><i class="fas fa-sliders-h"></i> 修改每日限额</h3>
                 <button class="modal-close" onclick="closeModal('editLimitModal')">&times;</button>
             </div>
             <div class="modal-body">
@@ -594,55 +725,36 @@
                     <input type="number" id="newLimit" min="1">
                 </div>
                 <input type="hidden" id="editKeyId">
-                <button class="btn btn-primary" style="width:100%" onclick="updateLimit()">保存</button>
+                <button class="btn btn-primary btn-block" onclick="updateLimit()">
+                    <i class="fas fa-save"></i> 保存
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- 系统配置模态框 -->
-    <div id="configModal" class="modal">
-        <div class="modal-content">
+    <!-- 批量应用限额模态框 -->
+    <div id="applyLimitModal" class="modal-overlay">
+        <div class="modal">
             <div class="modal-header">
-                <h3>⚙️ 系统配置</h3>
-                <button class="modal-close" onclick="closeModal('configModal')">&times;</button>
+                <h3><i class="fas fa-cog"></i> 批量应用每日限额</h3>
+                <button class="modal-close" onclick="closeModal('applyLimitModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <p style="color: #8b949e; font-size: 13px; margin-bottom: 20px;">
-                    修改配置后立即生效（热更新）。资源包剩余次数会根据新配置重新计算。
-                </p>
                 <div class="form-group">
-                    <label>默认每日限额</label>
-                    <input type="number" id="configLimitInput" min="1" placeholder="500">
+                    <label>每日调用限额</label>
+                    <input type="number" id="applyLimitValue" placeholder="500" min="1">
                 </div>
-                <div class="form-group">
-                    <label>每凭证资源包次数</label>
-                    <input type="number" id="configBonusInput" min="0" placeholder="300">
+                <div style="background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-lg); padding: 12px; margin-top: 12px;">
+                    <p style="color: var(--danger-text); font-size: 13px; margin: 0;"><i class="fas fa-exclamation-triangle"></i> 风险提示：</p>
+                    <ul style="color: var(--danger-text); font-size: 12px; margin: 8px 0 0 16px; padding: 0;">
+                        <li>所有 Key 的每日限额将被覆盖</li>
+                        <li>已单独设置限额的 Key 也会被修改</li>
+                        <li>此操作不可撤销</li>
+                    </ul>
                 </div>
-                <div class="form-group">
-                    <label>资源包有效期（天）</label>
-                    <input type="number" id="configDaysInput" min="1" placeholder="30">
-                </div>
-                <button class="btn btn-primary" style="width:100%" onclick="updateConfig()">保存配置</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast 提示 -->
-    <div id="toast" class="toast"></div>
-
-    <!-- 批量操作确认弹框 -->
-    <div id="confirmModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="confirmModalTitle">确认操作</h3>
-                <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="confirmModalContent" style="margin-bottom: 20px;"></div>
-                <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                    <button class="btn btn-secondary" onclick="closeModal('confirmModal')">取消</button>
-                    <button id="confirmModalBtn" class="btn btn-danger" onclick="executeConfirmedAction()">确认执行</button>
-                </div>
+                <button class="btn btn-primary btn-block" style="margin-top: 16px;" onclick="applyDailyLimitToAll()">
+                    <i class="fas fa-check"></i> 应用限额
+                </button>
             </div>
         </div>
     </div>
@@ -650,8 +762,7 @@
     <script>
         let currentNewKey = '';
         let allKeys = [];
-        let systemConfig = { defaultDailyLimit: 500, bonusPerCredential: 300, bonusValidityDays: 30 };
-        let pendingAction = null; // 待确认的操作
+        let systemConfig = { defaultDailyLimit: 500 };
         const API_BASE = '/api/potluck';
 
         function getToken() { return localStorage.getItem('authToken'); }
@@ -669,48 +780,128 @@
         async function loadData() {
             const result = await apiRequest(`${API_BASE}/keys`);
             if (!result || !result.success) { showToast('加载失败', 'error'); return; }
-            const { keys, stats, config } = result.data;
-            if (config) {
-                systemConfig = { ...systemConfig, ...config };
-                // 更新配置显示
-                document.getElementById('configLimit').textContent = config.defaultDailyLimit || 500;
-                document.getElementById('configBonus').textContent = config.bonusPerCredential || 300;
-                document.getElementById('configDays').textContent = config.bonusValidityDays || 30;
-                document.getElementById('keyLimit').placeholder = config.defaultDailyLimit || 500;
-            }
+            const { keys, stats } = result.data;
             document.getElementById('totalKeys').textContent = stats.totalKeys;
             document.getElementById('enabledKeys').textContent = stats.enabledKeys;
             document.getElementById('todayUsage').textContent = stats.todayTotalUsage;
             document.getElementById('totalUsage').textContent = stats.totalUsage;
+            
+            // 渲染使用历史分布
+            renderUsageHistory(stats.usageHistory);
+            
             allKeys = keys;
             applyFilterAndSort();
         }
 
-        async function updateConfig() {
-            const defaultDailyLimit = parseInt(document.getElementById('configLimitInput').value);
-            const bonusPerCredential = parseInt(document.getElementById('configBonusInput').value);
-            const bonusValidityDays = parseInt(document.getElementById('configDaysInput').value);
+        /**
+         * 渲染最近 7 天使用历史分布
+         */
+        function renderUsageHistory(usageHistory) {
+            if (!usageHistory || Object.keys(usageHistory).length === 0) {
+                document.getElementById('usageStatsSection').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('usageStatsSection').style.display = 'block';
             
-            const body = {};
-            if (!isNaN(defaultDailyLimit) && defaultDailyLimit >= 1) body.defaultDailyLimit = defaultDailyLimit;
-            if (!isNaN(bonusPerCredential) && bonusPerCredential >= 0) body.bonusPerCredential = bonusPerCredential;
-            if (!isNaN(bonusValidityDays) && bonusValidityDays >= 1) body.bonusValidityDays = bonusValidityDays;
+            const aggregatedProviders = {};
+            const aggregatedModels = {};
+            let totalCalls = 0;
+
+            // 汇总最近 7 天的数据
+            Object.values(usageHistory).forEach(day => {
+                if (day.providers) {
+                    Object.entries(day.providers).forEach(([p, count]) => {
+                        aggregatedProviders[p] = (aggregatedProviders[p] || 0) + count;
+                        totalCalls += count;
+                    });
+                }
+                if (day.models) {
+                    Object.entries(day.models).forEach(([m, count]) => {
+                        aggregatedModels[m] = (aggregatedModels[m] || 0) + count;
+                    });
+                }
+            });
+
+            if (totalCalls === 0) {
+                document.getElementById('usageStatsSection').style.display = 'none';
+                return;
+            }
+
+            // 渲染提供商分布
+            renderDistribution('providerDistribution', aggregatedProviders, totalCalls);
+            document.getElementById('providerTotalCount').textContent = `${totalCalls} 次`;
+
+            // 渲染模型分布 (模型总数与提供商总数一致)
+            renderDistribution('modelDistribution', aggregatedModels, totalCalls);
+            document.getElementById('modelTotalCount').textContent = `${totalCalls} 次`;
+        }
+
+        function renderDistribution(elementId, data, total) {
+            const container = document.getElementById(elementId);
+            const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
             
-            if (Object.keys(body).length === 0) {
-                showToast('请输入有效的配置值', 'error');
+            // 最多显示前 6 个
+            const topData = sorted.slice(0, 6);
+            
+            container.innerHTML = topData.map(([name, count]) => {
+                const percent = Math.round((count / total) * 100);
+                return `
+                    <div class="distribution-item">
+                        <div class="dist-info">
+                            <span class="dist-name">${escapeHtml(name)}</span>
+                            <span class="dist-count">${count} 次 (${percent}%)</span>
+                        </div>
+                        <div class="dist-bar">
+                            <div class="dist-fill" style="width: ${percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            if (sorted.length > 6) {
+                const otherCount = sorted.slice(6).reduce((sum, item) => sum + item[1], 0);
+                const otherPercent = Math.round((otherCount / total) * 100);
+                container.innerHTML += `
+                    <div class="distribution-item">
+                        <div class="dist-info">
+                            <span class="dist-name" style="font-style: italic;">其他 (${sorted.length - 6} 个)</span>
+                            <span class="dist-count">${otherCount} 次 (${otherPercent}%)</span>
+                        </div>
+                        <div class="dist-bar">
+                            <div class="dist-fill" style="width: ${otherPercent}%; background: #94a3b8;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+
+        // 显示批量应用限额模态框
+        function showApplyLimitModal() {
+            document.getElementById('applyLimitValue').value = systemConfig.defaultDailyLimit || 500;
+            openModal('applyLimitModal');
+        }
+
+        // 批量应用每日限额
+        async function applyDailyLimitToAll() {
+            const dailyLimit = parseInt(document.getElementById('applyLimitValue').value);
+            if (!dailyLimit || dailyLimit < 1) {
+                showToast('请输入有效的限额', 'error');
                 return;
             }
             
-            const result = await apiRequest(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('正在应用限额...', 'success');
+            const result = await apiRequest(`${API_BASE}/keys/apply-limit`, { 
+                method: 'POST', 
+                body: JSON.stringify({ dailyLimit }) 
+            });
             if (result && result.success) {
-                showToast('配置已更新', 'success');
-                closeModal('configModal');
-                document.getElementById('configLimitInput').value = '';
-                document.getElementById('configBonusInput').value = '';
-                document.getElementById('configDaysInput').value = '';
+                showToast(result.message, 'success');
+                closeModal('applyLimitModal');
                 loadData();
             } else {
-                showToast(result?.error?.message || '更新失败', 'error');
+                showToast(result?.error?.message || '操作失败', 'error');
             }
         }
 
@@ -745,13 +936,19 @@
             if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
             if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
             if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
-            return d.toLocaleDateString();
+            return d.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
 
         function renderKeys(keys) {
             const container = document.getElementById('keysList');
             if (allKeys.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>还没有任何 API Key</p><button class="btn btn-primary" onclick="openModal(\'createModal\')">生成第一个 Key</button></div>';
+                container.innerHTML = '<div class="empty-state"><div class="icon"><i class="fas fa-inbox"></i></div><p>还没有任何 API Key</p><button class="btn btn-primary btn-lg" onclick="openModal(\'createModal\')"><i class="fas fa-plus"></i> 生成第一个 Key</button></div>';
                 return;
             }
             if (keys.length === 0) {
@@ -762,21 +959,38 @@
                 const usagePercent = key.dailyLimit > 0 ? (key.todayUsage / key.dailyLimit * 100) : 0;
                 const progressClass = usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : '';
                 const valueClass = usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : '';
-                const bonusRemaining = key.bonusRemaining || 0;
+                
+                // 汇总该 Key 的提供商分布 (最近 7 天)
+                const providers = {};
+                if (key.usageHistory) {
+                    Object.values(key.usageHistory).forEach(day => {
+                        if (day.providers) {
+                            Object.entries(day.providers).forEach(([p, count]) => {
+                                providers[p] = (providers[p] || 0) + count;
+                            });
+                        }
+                    });
+                }
+                const topProviders = Object.entries(providers)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3);
+                
+                const providerBadges = topProviders.map(([name, count]) => 
+                    `<span class="dist-badge">${escapeHtml(name)}: <b>${count}</b></span>`
+                ).join('');
+
                 return `<div class="key-card ${key.enabled ? '' : 'disabled'}">
                     <div class="key-info">
                         <div class="key-name">${escapeHtml(key.name)}</div>
-                        <div class="key-id">${key.maskedKey} <button class="btn-copy" onclick="copyToClipboard('${key.id}')" title="复制完整 Key">📋</button></div>
+                        <div class="key-id">${key.maskedKey} <button class="btn-copy" onclick="copyToClipboard('${key.id}')" title="复制完整 Key"><i class="fas fa-copy"></i></button></div>
+                        ${providerBadges ? `<div class="key-dist-mini">${providerBadges}</div>` : ''}
                     </div>
                     <div class="key-stats">
+
                         <div class="key-stat">
                             <div class="label">今日/限额</div>
                             <div class="value ${valueClass}">${key.todayUsage}/${key.dailyLimit}</div>
                             <div class="progress-bar"><div class="fill ${progressClass}" style="width:${Math.min(usagePercent, 100)}%"></div></div>
-                        </div>
-                        <div class="key-stat">
-                            <div class="label">资源包</div>
-                            <div class="value" style="color:${bonusRemaining > 0 ? '#10b981' : '#8b949e'}">${bonusRemaining}</div>
                         </div>
                         <div class="key-stat">
                             <div class="label">累计</div>
@@ -788,14 +1002,14 @@
                         </div>
                         <div class="key-stat">
                             <div class="label">状态</div>
-                            <div class="value" style="color:${key.enabled ? '#10b981' : '#ef4444'}">${key.enabled ? '启用' : '禁用'}</div>
+                            <div class="value" style="color:${key.enabled ? 'var(--success-color)' : 'var(--danger-color)'}">${key.enabled ? '启用' : '禁用'}</div>
                         </div>
                     </div>
                     <div class="key-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="resetUsage('${key.id}')">重置</button>
-                        <button class="btn btn-secondary btn-sm" onclick="openEditLimit('${key.id}', ${key.dailyLimit})">限额</button>
-                        <button class="btn btn-secondary btn-sm" onclick="toggleKey('${key.id}')">${key.enabled ? '禁用' : '启用'}</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteKey('${key.id}')">删除</button>
+                        <button class="btn btn-secondary btn-sm" onclick="resetUsage('${key.id}')" title="重置今日用量"><i class="fas fa-redo"></i> <span class="btn-text">重置</span></button>
+                        <button class="btn btn-secondary btn-sm" onclick="openEditLimit('${key.id}', ${key.dailyLimit})" title="修改限额"><i class="fas fa-sliders-h"></i> <span class="btn-text">限额</span></button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleKey('${key.id}')" title="${key.enabled ? '禁用' : '启用'}">${key.enabled ? '<i class="fas fa-toggle-on"></i>' : '<i class="fas fa-toggle-off"></i>'} <span class="btn-text">${key.enabled ? '禁用' : '启用'}</span></button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteKey('${key.id}')" title="删除"><i class="fas fa-trash"></i> <span class="btn-text">删除</span></button>
                     </div>
                 </div>`;
             }).join('');
@@ -890,102 +1104,23 @@
         function openModal(id) { document.getElementById(id).classList.add('active'); }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-        // 显示确认弹框
-        function showConfirmModal(action) {
-            pendingAction = action;
-            const titleEl = document.getElementById('confirmModalTitle');
-            const contentEl = document.getElementById('confirmModalContent');
-            const btnEl = document.getElementById('confirmModalBtn');
-            
-            if (action === 'applyLimit') {
-                titleEl.textContent = '⚠️ 批量应用每日限额';
-                contentEl.innerHTML = `
-                    <p style="color: #e6edf3; margin-bottom: 12px;">此操作将把当前配置的默认限额 <strong style="color: #a855f7;">${systemConfig.defaultDailyLimit}</strong> 次/天 应用到所有 Key。</p>
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-top: 12px;">
-                        <p style="color: #ef4444; font-size: 13px; margin: 0;">⚠️ 风险提示：</p>
-                        <ul style="color: #f87171; font-size: 12px; margin: 8px 0 0 16px; padding: 0;">
-                            <li>所有 Key 的每日限额将被覆盖</li>
-                            <li>已单独设置限额的 Key 也会被修改</li>
-                            <li>此操作不可撤销</li>
-                        </ul>
-                    </div>
-                `;
-                btnEl.textContent = '确认应用限额';
-            } else if (action === 'applyBonus') {
-                titleEl.textContent = '🔄 批量同步资源包';
-                contentEl.innerHTML = `
-                    <p style="color: #e6edf3; margin-bottom: 12px;">此操作将重新同步所有用户的资源包状态。</p>
-                    <div style="background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 8px; padding: 12px; margin-top: 12px;">
-                        <p style="color: #22d3ee; font-size: 13px; margin: 0;">📋 操作说明：</p>
-                        <ul style="color: #67e8f9; font-size: 12px; margin: 8px 0 0 16px; padding: 0;">
-                            <li>检查所有用户的凭据健康状态</li>
-                            <li>为健康凭据创建/更新资源包</li>
-                            <li>移除失效凭据的资源包</li>
-                            <li>更新各 Key 的剩余资源包次数</li>
-                        </ul>
-                    </div>
-                `;
-                btnEl.textContent = '确认同步资源包';
-                btnEl.className = 'btn btn-primary';
-            }
-            
-            openModal('confirmModal');
-        }
-
-        // 执行确认的操作
-        async function executeConfirmedAction() {
-            if (!pendingAction) return;
-            
-            closeModal('confirmModal');
-            
-            if (pendingAction === 'applyLimit') {
-                await applyDailyLimitToAll();
-            } else if (pendingAction === 'applyBonus') {
-                await applyBonusToAll();
-            }
-            
-            pendingAction = null;
-            // 重置按钮样式
-            document.getElementById('confirmModalBtn').className = 'btn btn-danger';
-        }
-
-        // 批量应用每日限额
-        async function applyDailyLimitToAll() {
-            showToast('正在应用限额...', 'success');
-            const result = await apiRequest(`${API_BASE}/keys/apply-limit`, { method: 'POST' });
-            if (result && result.success) {
-                showToast(result.message, 'success');
-                loadData();
-            } else {
-                showToast(result?.error?.message || '操作失败', 'error');
-            }
-        }
-
-        // 批量同步资源包
-        async function applyBonusToAll() {
-            showToast('正在同步资源包...', 'success');
-            const result = await apiRequest(`${API_BASE}/keys/apply-bonus`, { method: 'POST' });
-            if (result && result.success) {
-                showToast(result.message, 'success');
-                loadData();
-            } else {
-                showToast(result?.error?.message || '操作失败', 'error');
-            }
-        }
-
-        // 打开配置弹框并加载当前配置
-        function openConfigModal() {
-            document.getElementById('configLimitInput').value = systemConfig.defaultDailyLimit || '';
-            document.getElementById('configBonusInput').value = systemConfig.bonusPerCredential || '';
-            document.getElementById('configDaysInput').value = systemConfig.bonusValidityDays || '';
-            openModal('configModal');
-        }
-
         function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
+            // 使用主页面的 toast 系统
+            const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
             toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function createToastContainer() {
+            const container = document.createElement('div');
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+            return container;
         }
 
         function escapeHtml(text) {
@@ -994,12 +1129,33 @@
             return div.innerHTML;
         }
 
+        // 主题切换
+        function setupTheme() {
+            const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        }
+        
         // 事件绑定
         document.getElementById('createKeyBtn').addEventListener('click', () => openModal('createModal'));
         document.getElementById('searchBox').addEventListener('input', applyFilterAndSort);
         document.getElementById('sortSelect').addEventListener('change', applyFilterAndSort);
+        document.getElementById('themeToggle')?.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
 
         // 初始化
+        setupTheme();
         if (!getToken()) { window.location.href = '/login.html'; } else { loadData(); }
     </script>
 </body>

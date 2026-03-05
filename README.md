@@ -138,6 +138,13 @@ To build from source instead of using the pre-built image, edit `docker-compose.
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: Double-click `install-and-run.bat`
 
+> **💡 If the script fails, you can try manually installing dependencies and starting:**
+> ```bash
+> npm install
+> npm start
+> ```
+
+
 #### 2. Access the console
 After the server starts, open your browser and visit:
 👉 [**http://localhost:3000**](http://localhost:3000)

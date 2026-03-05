@@ -2,7 +2,6 @@
 
 import { elements, autoScroll, setAutoScroll, clearLogs } from './constants.js';
 import { showToast } from './utils.js';
-import { fileUploadHandler } from './file-upload.js';
 import { t } from './i18n.js';
 import { checkUpdate, performUpdate } from './provider-manager.js';
 
@@ -151,7 +150,13 @@ function initEventListeners() {
 
     // 保存配置
     if (elements.saveConfigBtn) {
-        elements.saveConfigBtn.addEventListener('click', saveConfiguration);
+        elements.saveConfigBtn.addEventListener('click', () => {
+            if (window.saveConfiguration) {
+                window.saveConfiguration();
+            } else if (saveConfiguration) {
+                saveConfiguration();
+            }
+        });
     }
 
     // 重置配置
@@ -178,6 +183,18 @@ function initEventListeners() {
     document.querySelectorAll('.password-toggle').forEach(button => {
         button.addEventListener('click', handlePasswordToggle);
     });
+
+    // 生成 API 密钥按钮监听
+    const generateApiKeyBtn = document.getElementById('generateApiKey');
+    if (generateApiKeyBtn) {
+        generateApiKeyBtn.addEventListener('click', () => {
+            if (window.generateApiKey) {
+                window.generateApiKey();
+            } else {
+                console.error('generateApiKey function not found');
+            }
+        });
+    }
 
     // 生成凭据按钮监听
     document.querySelectorAll('.generate-creds-btn').forEach(button => {

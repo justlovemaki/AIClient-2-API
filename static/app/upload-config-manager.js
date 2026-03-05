@@ -13,6 +13,11 @@ let isLoadingConfigs = false; // 防止重复加载配置
  * @param {string} statusFilter - 状态过滤
  */
 function searchConfigs(searchTerm = '', statusFilter = '', providerFilter = '') {
+    // 确保 searchTerm 是字符串，防止事件对象等非字符串被传入
+    if (typeof searchTerm !== 'string') {
+        searchTerm = '';
+    }
+
     if (!allConfigs.length) {
         console.log('没有配置数据可搜索');
         return;
@@ -88,7 +93,11 @@ function createConfigItemElement(config, index) {
     const typeIcon = config.type === 'oauth' ? 'fa-key' :
                     config.type === 'api-key' ? 'fa-lock' :
                     config.type === 'provider-pool' ? 'fa-network-wired' :
-                    config.type === 'system-prompt' ? 'fa-file-text' : 'fa-file-code';
+                    config.type === 'system-prompt' ? 'fa-file-text' :
+                    config.type === 'plugins' ? 'fa-plug' :
+                    config.type === 'usage' ? 'fa-chart-line' :
+                    config.type === 'config' ? 'fa-cog' :
+                    config.type === 'database' ? 'fa-database' : 'fa-file-code';
 
     // 检测提供商信息
     const providerInfo = detectProviderFromPath(config.path);
@@ -453,6 +462,11 @@ function updateStats() {
  * @param {string} providerFilter - 提供商过滤
  */
 async function loadConfigList(searchTerm = '', statusFilter = '', providerFilter = '') {
+    // 确保 searchTerm 是字符串，处理事件监听器直接调用的情况
+    if (typeof searchTerm !== 'string') {
+        searchTerm = '';
+    }
+
     // 防止重复加载
     if (isLoadingConfigs) {
         console.log('正在加载配置列表，跳过重复调用');
@@ -912,7 +926,7 @@ function initUploadConfigManager() {
     }
 
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadConfigList);
+        refreshBtn.addEventListener('click', () => loadConfigList());
     }
 
     if (downloadAllBtn) {

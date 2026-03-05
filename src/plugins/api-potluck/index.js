@@ -30,17 +30,16 @@ import {
     sendPotluckError
 } from './middleware.js';
 
-import { consumeBonus, getConfig } from './user-data-manager.js';
 import logger from '../../utils/logger.js';
 
-import { handlePotluckApiRoutes, handlePotluckUserApiRoutes, startHealthCheckScheduler, stopHealthCheckScheduler } from './api-routes.js';
+import { handlePotluckApiRoutes, handlePotluckUserApiRoutes } from './api-routes.js';
 
 /**
  * 插件定义
  */
 const apiPotluckPlugin = {
     name: 'api-potluck',
-    version: '1.0.1',
+    version: '1.0.2',
     description: 'API 大锅饭 - Key 管理和用量统计插件<br>管理端：<a href="potluck.html" target="_blank">potluck.html</a><br>用户端：<a href="potluck-user.html" target="_blank">potluck-user.html</a>',
     
     // 插件类型：认证插件
@@ -55,10 +54,6 @@ const apiPotluckPlugin = {
      */
     async init(config) {
         logger.info('[API Potluck Plugin] Initializing...');
-        // 注入配置获取函数
-        setConfigGetter(getConfig);
-        // 启动定时健康检查
-        startHealthCheckScheduler();
     },
 
     /**
@@ -66,8 +61,6 @@ const apiPotluckPlugin = {
      */
     async destroy() {
         logger.info('[API Potluck Plugin] Destroying...');
-        // 停止定时健康检查
-        stopHealthCheckScheduler();
     },
 
     /**
@@ -155,21 +148,24 @@ const apiPotluckPlugin = {
     hooks: {
         /**
          * 内容生成后钩子 - 记录用量
-         * @param {Object} config - 服务器配置
+         * @param {Object} hookContext - 钩子上下文，包含请求和模型信息
          */
-        async onContentGenerated(config) {
-            if (config.potluckApiKey) {
+        async onContentGenerated(hookContext) {
+            if (hookContext.potluckApiKey) {
                 try {
-                    // 传入资源包消耗回调
-                    await incrementUsage(config.potluckApiKey, async (apiKey) => {
-                        await consumeBonus(apiKey);
-                    });
+                    // 传入提供商和模型信息
+                    await incrementUsage(
+                        hookContext.potluckApiKey, 
+                        hookContext.toProvider, 
+                        hookContext.model
+                    );
                 } catch (e) {
                     // 静默失败，不影响主流程
                     logger.error('[API Potluck Plugin] Failed to record usage:', e.message);
                 }
             }
         }
+
     },
 
     // 导出内部函数供外部使用（可选）
@@ -186,7 +182,6 @@ const apiPotluckPlugin = {
         incrementUsage,
         getStats,
         KEY_PREFIX,
-        getConfig,
         extractPotluckKey,
         isPotluckRequest
     }
@@ -208,7 +203,6 @@ export {
     incrementUsage,
     getStats,
     KEY_PREFIX,
-    getConfig,
     extractPotluckKey,
     isPotluckRequest
 };

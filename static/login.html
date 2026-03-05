@@ -304,7 +304,8 @@
                     // 跳转到主页
                     window.location.href = '/';
                 } else {
-                    showError(data.message || t('login.error.incorrect'));
+                    const errorMsg = data.messageCode ? t(data.messageCode, data.messageParams) : (data.message || t('login.error.incorrect'));
+                    showError(errorMsg);
                     loginButton.disabled = false;
                     loginButton.innerHTML = t('login.button');
                     passwordInput.value = '';
