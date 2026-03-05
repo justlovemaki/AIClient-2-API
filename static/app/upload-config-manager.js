@@ -493,80 +493,14 @@ async function loadConfigList(searchTerm = '', statusFilter = '', providerFilter
     } catch (error) {
         console.error('加载配置列表失败:', error);
         showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
-        
-        // 使用模拟数据作为示例
-        allConfigs = sortConfigs(generateMockConfigData());
-        filteredConfigs = [...allConfigs];
+        allConfigs = [];
+        filteredConfigs = [];
         renderConfigList();
         updateStats();
     } finally {
         isLoadingConfigs = false;
         console.log('配置列表加载完成');
     }
-}
-
-/**
- * 生成模拟配置数据（用于演示）
- * @returns {Array} 模拟配置数据
- */
-function generateMockConfigData() {
-    return [
-        {
-            name: 'provider_pools.json',
-            path: './configs/provider_pools.json',
-            type: 'provider-pool',
-            size: 2048,
-            modified: '2025-11-11T04:30:00.000Z',
-            isUsed: true,
-            content: JSON.stringify({
-                "gemini-cli-oauth": [
-                    {
-                        "GEMINI_OAUTH_CREDS_FILE_PATH": "~/.gemini/oauth/creds.json",
-                        "PROJECT_ID": "test-project"
-                    }
-                ]
-            }, null, 2)
-        },
-        {
-            name: 'config.json',
-            path: './configs/config.json',
-            type: 'other',
-            size: 1024,
-            modified: '2025-11-10T12:00:00.000Z',
-            isUsed: true,
-            content: JSON.stringify({
-                "REQUIRED_API_KEY": "123456",
-                "SERVER_PORT": 3000
-            }, null, 2)
-        },
-        {
-            name: 'oauth_creds.json',
-            path: '~/.gemini/oauth/creds.json',
-            type: 'oauth',
-            size: 512,
-            modified: '2025-11-09T08:30:00.000Z',
-            isUsed: false,
-            content: '{"client_id": "test", "client_secret": "test"}'
-        },
-        {
-            name: 'input_system_prompt.txt',
-            path: './configs/input_system_prompt.txt',
-            type: 'system-prompt',
-            size: 256,
-            modified: '2025-11-08T15:20:00.000Z',
-            isUsed: true,
-            content: '你是一个有用的AI助手...'
-        },
-        {
-            name: 'invalid_config.json',
-            path: './invalid_config.json',
-            type: 'other',
-            size: 128,
-            modified: '2025-11-07T10:15:00.000Z',
-            isUsed: false,
-            content: '{"invalid": json}'
-        }
-    ];
 }
 
 /**
