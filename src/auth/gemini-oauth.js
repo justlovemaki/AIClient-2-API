@@ -72,26 +72,38 @@ async function closeActiveServer(provider, port = null) {
     // 1. 关闭该提供商之前的所有服务器
     const existing = activeServers.get(provider);
     if (existing) {
-        await new Promise((resolve) => {
-            existing.server.close(() => {
-                activeServers.delete(provider);
-                logger.info(`[OAuth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
-                resolve();
+        // 清理轮询定时器
+        if (existing.pollTimer) {
+            clearInterval(existing.pollTimer);
+            existing.pollTimer = null;
+        }
+
+        try {
+            const closePromise = new Promise((resolve, reject) => {
+                existing.server.close((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
             });
-        });
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Server close timeout after 2s')), 2000);
+            });
+
+            await Promise.race([closePromise, timeoutPromise]);
+            logger.info(`[OAuth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+        } catch (error) {
+            logger.warn(`[OAuth] 关闭提供商 ${provider} 服务器失败或超时: ${error.message}`);
+        } finally {
+            activeServers.delete(provider);
+        }
     }
 
     // 2. 如果指定了端口，检查是否有其他提供商占用了该端口
     if (port) {
         for (const [p, info] of activeServers.entries()) {
             if (info.port === port) {
-                await new Promise((resolve) => {
-                    info.server.close(() => {
-                        activeServers.delete(p);
-                        logger.info(`[OAuth] 已关闭端口 ${port} 上被占用（提供商: ${p}）的旧服务器`);
-                        resolve();
-                    });
-                });
+                await closeActiveServer(p);
             }
         }
     }
@@ -112,6 +124,18 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
     await closeActiveServer(provider, port);
     
     return new Promise((resolve, reject) => {
+        let pollCount = 0;
+        const maxPollCount = 100; // 约 5 分钟 (100 * 3s = 300s)
+        const pollInterval = 3000;
+        let pollTimer = null;
+
+        const clearPollTimer = () => {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        };
+
         const server = http.createServer(async (req, res) => {
             try {
                 const url = new URL(req.url, redirectUri);
@@ -119,6 +143,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                 const errorParam = url.searchParams.get('error');
                 
                 if (code) {
+                    clearPollTimer();
                     logger.info(`${config.logPrefix} 收到来自 Google 的成功回调: ${req.url}`);
                     
                     try {
@@ -167,6 +192,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                         });
                     }
                 } else if (errorParam) {
+                    clearPollTimer();
                     const errorMessage = `授权失败。Google 返回错误: ${errorParam}`;
                     logger.error(`${config.logPrefix}`, errorMessage);
                     
@@ -181,6 +207,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
                     res.end();
                 }
             } catch (error) {
+                clearPollTimer();
                 logger.error(`${config.logPrefix} 处理回调时出错:`, error);
                 res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(generateResponsePage(false, `服务器错误: ${error.message}`));
@@ -194,6 +221,7 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
         });
         
         server.on('error', (err) => {
+            clearPollTimer();
             if (err.code === 'EADDRINUSE') {
                 logger.error(`${config.logPrefix} 端口 ${port} 已被占用`);
                 reject(new Error(`端口 ${port} 已被占用`));
@@ -206,7 +234,24 @@ async function createOAuthCallbackServer(config, redirectUri, authClient, credPa
         const host = '0.0.0.0';
         server.listen(port, host, () => {
             logger.info(`${config.logPrefix} OAuth 回调服务器已启动于 ${host}:${port}`);
-            activeServers.set(provider, { server, port });
+            
+            // 启动轮询日志
+            pollTimer = setInterval(() => {
+                pollCount++;
+                if (pollCount <= maxPollCount) {
+                    logger.info(`${config.logPrefix} Waiting for callback... (${pollCount}/${maxPollCount})`);
+                } else {
+                    clearPollTimer();
+                    logger.warn(`${config.logPrefix} Polling timeout, closing server...`);
+                    if (server.listening) {
+                        server.close(() => {
+                            activeServers.delete(provider);
+                        });
+                    }
+                }
+            }, pollInterval);
+
+            activeServers.set(provider, { server, port, pollTimer });
             resolve(server);
         });
     });

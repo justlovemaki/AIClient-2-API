@@ -33,26 +33,37 @@ const activeServers = new Map();
  */
 async function closeActiveServer(provider, port = null) {
     const existing = activeServers.get(provider);
+    
     if (existing) {
-        await new Promise((resolve) => {
-            existing.server.close(() => {
-                activeServers.delete(provider);
-                logger.info(`[Codex Auth] 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
-                resolve();
+        try {
+            // 1. 使用 Promise.race() 添加 2 秒超时
+            const closePromise = new Promise((resolve, reject) => {
+                existing.server.close((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
             });
-        });
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Server close timeout after 2s')), 2000);
+            });
+
+            await Promise.race([closePromise, timeoutPromise]);
+            logger.info(`[Codex Auth] ${provider} server closed successfully`);
+        } catch (error) {
+            // 2. try-catch 捕获错误
+            logger.warn(`[Codex Auth] Server close failed or timed out: ${error.message}`);
+        } finally {
+            // 3. finally 块强制清理，防止阻塞
+            activeServers.delete(provider);
+        }
     }
 
     if (port) {
         for (const [p, info] of activeServers.entries()) {
             if (info.port === port) {
-                await new Promise((resolve) => {
-                    info.server.close(() => {
-                        activeServers.delete(p);
-                        logger.info(`[Codex Auth] 已关闭端口 ${port} 上被占用（提供商: ${p}）的旧服务器`);
-                        resolve();
-                    });
-                });
+                // 递归调用处理端口冲突的情况
+                await closeActiveServer(p);
             }
         }
     }
@@ -594,6 +605,170 @@ class CodexAuth {
             return false;
         }
     }
+
+    /**
+     * 检查凭据是否已存在（基于 account_id 或 refresh_token）
+     * @param {string} accountId 
+     * @param {string} refreshToken 
+     * @returns {Promise<{isDuplicate: boolean, existingPath?: string}>}
+     */
+    async checkDuplicate(accountId, refreshToken) {
+        const projectDir = process.cwd();
+        const targetDir = path.join(projectDir, 'configs', 'codex');
+
+        try {
+            if (!fs.existsSync(targetDir)) {
+                return { isDuplicate: false };
+            }
+
+            const files = await fs.promises.readdir(targetDir);
+            for (const file of files) {
+                if (file.endsWith('.json')) {
+                    try {
+                        const fullPath = path.join(targetDir, file);
+                        const content = await fs.promises.readFile(fullPath, 'utf8');
+                        const credentials = JSON.parse(content);
+
+                        if ((accountId && credentials.account_id === accountId) || (refreshToken && credentials.refresh_token === refreshToken)) {
+                            const relativePath = path.relative(process.cwd(), fullPath);
+                            return {
+                                isDuplicate: true,
+                                existingPath: relativePath
+                            };
+                        }
+                    } catch (e) {
+                        // 忽略解析错误
+                    }
+                }
+            }
+            return { isDuplicate: false };
+        } catch (error) {
+            logger.warn(`${CODEX_OAUTH_CONFIG.logPrefix} Error checking duplicates:`, error.message);
+            return { isDuplicate: false };
+        }
+    }
+}
+
+/**
+ * 批量导入 Codex Token 并生成凭据文件（流式版本）
+ * @param {Object[]} tokens - Token 对象数组
+ * @param {Function} onProgress - 进度回调函数
+ * @param {boolean} skipDuplicateCheck - 是否跳过重复检查
+ * @returns {Promise<Object>} 批量处理结果
+ */
+export async function batchImportCodexTokensStream(tokens, onProgress = null, skipDuplicateCheck = false) {
+    const auth = new CodexAuth({});
+    const results = {
+        total: tokens.length,
+        success: 0,
+        failed: 0,
+        details: []
+    };
+
+    for (let i = 0; i < tokens.length; i++) {
+        const tokenData = tokens[i];
+        const progressData = {
+            index: i + 1,
+            total: tokens.length,
+            current: null
+        };
+
+        try {
+            // 验证 token 数据
+            if (!tokenData.access_token || !tokenData.id_token) {
+                throw new Error('Token 缺少必需字段 (access_token 或 id_token)');
+            }
+
+            // 解析 JWT 提取账户信息
+            const claims = auth.parseJWT(tokenData.id_token);
+            const accountId = claims['https://api.openai.com/auth']?.chatgpt_account_id || claims.sub;
+            const email = claims.email;
+
+            // 检查重复
+            if (!skipDuplicateCheck) {
+                const duplicateCheck = await auth.checkDuplicate(accountId, tokenData.refresh_token);
+                if (duplicateCheck.isDuplicate) {
+                    progressData.current = {
+                        index: i + 1,
+                        success: false,
+                        error: 'duplicate',
+                        existingPath: duplicateCheck.existingPath
+                    };
+                    results.failed++;
+                    results.details.push(progressData.current);
+                    if (onProgress) {
+                        onProgress({
+                            ...progressData,
+                            successCount: results.success,
+                            failedCount: results.failed
+                        });
+                    }
+                    continue;
+                }
+            }
+
+            // 构建凭据对象
+            const credentials = {
+                id_token: tokenData.id_token,
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                account_id: accountId,
+                last_refresh: new Date().toISOString(),
+                email: email,
+                type: 'codex',
+                expired: new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString()
+            };
+
+            // 保存凭据
+            const saveResult = await auth.saveCredentials(credentials);
+            const relativePath = saveResult.relativePath;
+
+            logger.info(`${CODEX_OAUTH_CONFIG.logPrefix} Token ${i + 1} imported: ${relativePath}`);
+
+            progressData.current = {
+                index: i + 1,
+                success: true,
+                path: relativePath
+            };
+            results.success++;
+
+            // 自动关联到 Pools
+            await autoLinkProviderConfigs(CONFIG, {
+                onlyCurrentCred: true,
+                credPath: relativePath
+            });
+
+        } catch (error) {
+            logger.error(`${CODEX_OAUTH_CONFIG.logPrefix} Token ${i + 1} import failed:`, error.message);
+
+            progressData.current = {
+                index: i + 1,
+                success: false,
+                error: error.message
+            };
+            results.failed++;
+        }
+
+        results.details.push(progressData.current);
+
+        if (onProgress) {
+            onProgress({
+                ...progressData,
+                successCount: results.success,
+                failedCount: results.failed
+            });
+        }
+    }
+
+    if (results.success > 0) {
+        broadcastEvent('oauth_batch_success', {
+            provider: 'openai-codex-oauth',
+            count: results.success,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    return results;
 }
 
 /**
@@ -668,7 +843,7 @@ export async function handleCodexOAuth(currentConfig, options = {}) {
         
         // 轮询计数器
         let pollCount = 0;
-        const maxPollCount = 200; // 增加到约 10 分钟 (200 * 3s = 600s)
+        const maxPollCount = 100; // 增加到约 5 分钟 (100 * 3s = 300s)
         const pollInterval = 3000; // 轮询间隔（毫秒）
         let pollTimer = null;
         let isCompleted = false;

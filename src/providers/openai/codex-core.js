@@ -8,6 +8,10 @@ import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
+import { getProviderModels } from '../provider-models.js';
+
+const CODEX_MODELS = getProviderModels(MODEL_PROVIDER.CODEX_API);
+const CODEX_VERSION = '0.111.0';
 
 /**
  * Codex API 服务类
@@ -22,6 +26,7 @@ export class CodexApiService {
         this.email = null;
         this.expiresAt = null;
         this.idToken = null;
+        this.last_refresh = null;
         this.credsPath = null; // 记录本次加载/使用的凭据文件路径，确保刷新后写回同一文件
         this.uuid = config.uuid; // 保存 uuid 用于号池管理
         this.isInitialized = false;
@@ -89,6 +94,7 @@ export class CodexApiService {
             this.refreshToken = creds.refresh_token;
             this.accountId = creds.account_id;
             this.email = creds.email;
+            this.last_refresh = creds.last_refresh || this.last_refresh;
             this.expiresAt = new Date(creds.expired); // 注意：字段名是 expired
 
             // 检查 token 是否需要刷新
@@ -136,6 +142,13 @@ export class CodexApiService {
             await this.initialize();
         }
 
+        let selectedModel = model;
+        if (!CODEX_MODELS.includes(model)) {
+            const defaultModel = CODEX_MODELS[0] || 'gpt-5';
+            logger.warn(`[Codex] Model '${model}' not found in supported list. Falling back to default: '${defaultModel}'`);
+            selectedModel = defaultModel;
+        }
+
         // 临时存储 monitorRequestId
         if (requestBody._monitorRequestId) {
             this.config._monitorRequestId = requestBody._monitorRequestId;
@@ -157,7 +170,7 @@ export class CodexApiService {
         }
 
         const url = `${this.baseUrl}/responses`;
-        const body = this.prepareRequestBody(model, requestBody, true);
+        const body = this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
@@ -210,6 +223,13 @@ export class CodexApiService {
             await this.initialize();
         }
 
+        let selectedModel = model;
+        if (!CODEX_MODELS.includes(model)) {
+            const defaultModel = CODEX_MODELS[0] || 'gpt-5';
+            logger.warn(`[Codex] Model '${model}' not found in supported list. Falling back to default: '${defaultModel}'`);
+            selectedModel = defaultModel;
+        }
+
         // 临时存储 monitorRequestId
         if (requestBody._monitorRequestId) {
             this.config._monitorRequestId = requestBody._monitorRequestId;
@@ -231,7 +251,7 @@ export class CodexApiService {
         }
 
         const url = `${this.baseUrl}/responses`;
-        const body = this.prepareRequestBody(model, requestBody, true);
+        const body = this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
@@ -281,13 +301,13 @@ export class CodexApiService {
      */
     buildHeaders(cacheId, stream = true) {
         const headers = {
-            'version': '0.101.0',
+            'version': CODEX_VERSION,
             'x-codex-beta-features': 'powershell_utf8',
             'x-oai-web-search-eligible': 'true',
             'authorization': `Bearer ${this.accessToken}`,
             'chatgpt-account-id': this.accountId,
             'content-type': 'application/json',
-            'user-agent': 'codex_cli_rs/0.101.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
+            'user-agent': `codex_cli_rs/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal`,
             'originator': 'codex_cli_rs',
             'host': 'chatgpt.com',
             'Connection': 'Keep-Alive'
@@ -360,6 +380,7 @@ export class CodexApiService {
             this.refreshToken = newTokens.refresh_token;
             this.accountId = newTokens.account_id;
             this.email = newTokens.email;
+            this.last_refresh = new Date().toISOString();
 
             // 关键修复：refreshCodexTokensWithRetry 返回字段名是 `expired`（ISO string），不是 `expire`
             const expiredValue = newTokens.expired || newTokens.expire || newTokens.expires_at || newTokens.expiresAt;
@@ -445,7 +466,7 @@ export class CodexApiService {
                     access_token: this.accessToken,
                     refresh_token: this.refreshToken,
                     account_id: this.accountId,
-                    last_refresh: new Date().toISOString(),
+                    last_refresh: this.last_refresh || new Date().toISOString(),
                     email: this.email,
                     type: 'codex',
                     expired: this.expiresAt.toISOString()
@@ -552,19 +573,12 @@ export class CodexApiService {
     async listModels() {
         return {
             object: 'list',
-            data: [
-                { id: 'gpt-5', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5-codex-mini', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.1', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.1-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.1-codex-mini', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.1-codex-max', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.2', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.2-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.3-codex', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' },
-                { id: 'gpt-5.3-codex-spark', object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'openai' }
-            ]
+            data: CODEX_MODELS.map(id => ({
+                id,
+                object: 'model',
+                created: Math.floor(Date.now() / 1000),
+                owned_by: 'openai'
+            }))
         };
     }
 
@@ -605,7 +619,7 @@ export class CodexApiService {
         try {
             const url = 'https://chatgpt.com/backend-api/wham/usage';
             const headers = {
-                'user-agent': 'codex_cli_rs/0.89.0 (Windows 10.0.26100; x86_64) WindowsTerminal',
+                'user-agent': `codex_cli_rs/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal`,
                 'authorization': `Bearer ${this.accessToken}`,
                 'chatgpt-account-id': this.accountId,
                 'accept': '*/*',

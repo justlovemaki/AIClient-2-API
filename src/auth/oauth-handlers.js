@@ -7,6 +7,7 @@ export {
     refreshCodexTokensWithRetry,
     handleCodexOAuth,
     handleCodexOAuthCallback,
+    batchImportCodexTokensStream,
     // Gemini OAuth
     handleGeminiCliOAuth,
     handleGeminiAntigravityOAuth,

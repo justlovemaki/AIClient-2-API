@@ -319,6 +319,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await oauthApi.handleBatchImportGeminiTokens(req, res);
     }
 
+    if (method === 'POST' && pathParam === '/api/codex/batch-import-tokens') {
+        return await oauthApi.handleBatchImportCodexTokens(req, res);
+    }
+
     // Import AWS SSO credentials for Kiro
     if (method === 'POST' && pathParam === '/api/kiro/import-aws-credentials') {
         return await oauthApi.handleImportAwsCredentials(req, res);

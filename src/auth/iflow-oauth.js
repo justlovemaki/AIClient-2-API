@@ -253,25 +253,31 @@ async function fetchIFlowUserInfo(accessToken) {
 async function closeIFlowServer(provider, port = null) {
     const existing = activeIFlowServers.get(provider);
     if (existing) {
-        await new Promise((resolve) => {
-            existing.server.close(() => {
-                activeIFlowServers.delete(provider);
-                logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
-                resolve();
+        try {
+            const closePromise = new Promise((resolve, reject) => {
+                existing.server.close((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
             });
-        });
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Server close timeout after 2s')), 2000);
+            });
+
+            await Promise.race([closePromise, timeoutPromise]);
+            logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
+        } catch (error) {
+            logger.warn(`${IFLOW_OAUTH_CONFIG.logPrefix} 关闭提供商 ${provider} 服务器失败或超时: ${error.message}`);
+        } finally {
+            activeIFlowServers.delete(provider);
+        }
     }
 
     if (port) {
         for (const [p, info] of activeIFlowServers.entries()) {
             if (info.port === port) {
-                await new Promise((resolve) => {
-                    info.server.close(() => {
-                        activeIFlowServers.delete(p);
-                        logger.info(`${IFLOW_OAUTH_CONFIG.logPrefix} 已关闭端口 ${port} 上的旧服务器`);
-                        resolve();
-                    });
-                });
+                await closeIFlowServer(p);
             }
         }
     }
