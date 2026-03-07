@@ -161,7 +161,7 @@ export class OpenAIConverter extends BaseConverter {
                 }
                 content.push({
                     type: 'tool_result',
-                    tool_use_id: message.tool_call_id,
+                    tool_use_id: message.tool_call_id || message.tool_use_id,
                     content: toolContent
                 });
                 claudeMessages.push({ role: 'user', content: content });
@@ -219,6 +219,26 @@ export class OpenAIConverter extends BaseConverter {
                                     content.push({ type: 'text', text: `[Audio: ${audioUrl}]` });
                                 }
                                 break;
+                            case 'tool_use':
+                                content.push({
+                                    type: 'tool_use',
+                                    id: item.id,
+                                    name: item.name,
+                                    input: typeof item.input === 'string' ? safeParseJSON(item.input) : (item.input || {})
+                                });
+                                break;
+                            case 'tool_result': {
+                                let resultContent = item.content;
+                                if (typeof resultContent === 'object' && resultContent !== null) {
+                                    resultContent = JSON.stringify(resultContent);
+                                }
+                                content.push({
+                                    type: 'tool_result',
+                                    tool_use_id: item.tool_use_id || item.id,
+                                    content: resultContent
+                                });
+                                break;
+                            }
                         }
                     });
                 }
@@ -276,12 +296,25 @@ export class OpenAIConverter extends BaseConverter {
         }
 
         if (openaiRequest.tools?.length) {
-            claudeRequest.tools = openaiRequest.tools.map(t => ({
-                name: t.function.name,
-                description: t.function.description || '',
-                input_schema: t.function.parameters || { type: 'object', properties: {} }
-            }));
-            claudeRequest.tool_choice = this.buildClaudeToolChoice(openaiRequest.tool_choice);
+            claudeRequest.tools = openaiRequest.tools
+                .filter(t => t && ((t.function && t.function.name) || t.name))
+                .map(t => {
+                    if (t.function) {
+                        return {
+                            name: t.function.name,
+                            description: t.function.description || '',
+                            input_schema: t.function.parameters || { type: 'object', properties: {} }
+                        };
+                    }
+                    return {
+                        name: t.name,
+                        description: t.description || '',
+                        input_schema: t.input_schema || { type: 'object', properties: {} }
+                    };
+                });
+            if (claudeRequest.tools.length > 0) {
+                claudeRequest.tool_choice = this.buildClaudeToolChoice(openaiRequest.tool_choice);
+            }
         }
 
         // Optional passthrough: request-side "thinking" controls for Claude/Kiro.
@@ -625,6 +658,14 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
             }
+            // Claude 格式：content 数组中的 tool_use
+            if (message.role === 'assistant' && Array.isArray(message.content)) {
+                for (const item of message.content) {
+                    if (item && item.type === 'tool_use' && item.id && item.name) {
+                        tcID2Name[item.id] = item.name;
+                    }
+                }
+            }
         }
 
         // 构建 tool_call_id -> response 映射
@@ -632,6 +673,14 @@ export class OpenAIConverter extends BaseConverter {
         for (const message of messages) {
             if (message.role === 'tool' && message.tool_call_id) {
                 toolResponses[message.tool_call_id] = message.content;
+            }
+            // Claude 格式：user content 数组中的 tool_result
+            if (message.role === 'user' && Array.isArray(message.content)) {
+                for (const item of message.content) {
+                    if (item && item.type === 'tool_result' && item.tool_use_id) {
+                        toolResponses[item.tool_use_id] = item.content;
+                    }
+                }
             }
         }
 
@@ -790,6 +839,7 @@ export class OpenAIConverter extends BaseConverter {
                 const node = { role: 'model', parts: [] };
                 
                 // 处理文本内容
+                const functionCallIds = [];
                 if (typeof content === 'string' && content) {
                     node.parts.push({ text: content });
                 } else if (Array.isArray(content)) {
@@ -797,6 +847,19 @@ export class OpenAIConverter extends BaseConverter {
                         if (!item) continue;
                         if (item.type === 'text' && item.text) {
                             node.parts.push({ text: item.text });
+                        } else if (item.type === 'tool_use') {
+                            // Claude 格式 tool_use -> Gemini functionCall
+                            const fid = item.id || '';
+                            const fname = item.name || '';
+                            const argsObj = typeof item.input === 'string' ? (() => { try { return JSON.parse(item.input); } catch(e) { return {}; } })() : (item.input || {});
+                            node.parts.push({
+                                functionCall: {
+                                    name: fname,
+                                    args: argsObj
+                                },
+                                thoughtSignature: OpenAIConverter.GEMINI_OPENAI_THOUGHT_SIGNATURE
+                            });
+                            if (fid) functionCallIds.push(fid);
                         } else if (item.type === 'image_url' && item.image_url) {
                             const imageUrl = typeof item.image_url === 'string'
                                 ? item.image_url
@@ -823,22 +886,21 @@ export class OpenAIConverter extends BaseConverter {
                     }
                 }
 
-                // 处理 tool_calls -> functionCall
+                // 处理 OpenAI 格式 tool_calls -> functionCall
                 if (message.tool_calls && Array.isArray(message.tool_calls)) {
-                    const functionCallIds = [];
                     for (const tc of message.tool_calls) {
                         if (tc.type !== 'function') continue;
                         const fid = tc.id || '';
                         const fname = tc.function?.name || '';
                         const fargs = tc.function?.arguments || '{}';
-                        
+
                         let argsObj;
                         try {
                             argsObj = typeof fargs === 'string' ? JSON.parse(fargs) : fargs;
                         } catch (e) {
                             argsObj = {};
                         }
-                        
+
                         node.parts.push({
                             functionCall: {
                                 name: fname,
@@ -846,46 +908,40 @@ export class OpenAIConverter extends BaseConverter {
                             },
                             thoughtSignature: OpenAIConverter.GEMINI_OPENAI_THOUGHT_SIGNATURE
                         });
-                        
+
                         if (fid) {
                             functionCallIds.push(fid);
                         }
                     }
-                    
-                    // 添加 model 消息
-                    if (node.parts.length > 0) {
-                        processedMessages.push(node);
-                    }
-                    
-                    // 添加对应的 functionResponse（作为 user 消息）
-                    if (functionCallIds.length > 0) {
-                        const toolNode = { role: 'user', parts: [] };
-                        for (const fid of functionCallIds) {
-                            const name = tcID2Name[fid];
-                            if (name) {
-                                let resp = toolResponses[fid] || '{}';
-                                // 确保 resp 是字符串
-                                if (typeof resp !== 'string') {
-                                    resp = JSON.stringify(resp);
-                                }
-                                toolNode.parts.push({
-                                    functionResponse: {
-                                        name: name,
-                                        response: {
-                                            result: resp
-                                        }
-                                    }
-                                });
+                }
+
+                // 添加 model 消息
+                if (node.parts.length > 0) {
+                    processedMessages.push(node);
+                }
+
+                // 添加对应的 functionResponse（作为 user 消息）
+                if (functionCallIds.length > 0) {
+                    const toolNode = { role: 'user', parts: [] };
+                    for (const fid of functionCallIds) {
+                        const name = tcID2Name[fid];
+                        if (name) {
+                            let resp = toolResponses[fid] || '{}';
+                            if (typeof resp !== 'string') {
+                                resp = JSON.stringify(resp);
                             }
-                        }
-                        if (toolNode.parts.length > 0) {
-                            processedMessages.push(toolNode);
+                            toolNode.parts.push({
+                                functionResponse: {
+                                    name: name,
+                                    response: {
+                                        result: resp
+                                    }
+                                }
+                            });
                         }
                     }
-                } else {
-                    // 没有 tool_calls，直接添加
-                    if (node.parts.length > 0) {
-                        processedMessages.push(node);
+                    if (toolNode.parts.length > 0) {
+                        processedMessages.push(toolNode);
                     }
                 }
             }
@@ -1013,7 +1069,7 @@ export class OpenAIConverter extends BaseConverter {
                         name: String(func.name || ''),
                         description: String(func.description || '')
                     };
-                    
+
                     // 处理 parameters -> parametersJsonSchema
                     if (func.parameters) {
                         fnDecl.parametersJsonSchema = cleanJsonSchema(func.parameters);
@@ -1023,8 +1079,14 @@ export class OpenAIConverter extends BaseConverter {
                             properties: {}
                         };
                     }
-                    
+
                     functionDeclarations.push(fnDecl);
+                } else if (t.name) {
+                    functionDeclarations.push({
+                        name: String(t.name),
+                        description: String(t.description || ''),
+                        parametersJsonSchema: cleanJsonSchema(t.input_schema || { type: 'object', properties: {} })
+                    });
                 }
                 
                 // 处理 google_search 工具
