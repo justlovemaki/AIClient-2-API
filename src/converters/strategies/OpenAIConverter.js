@@ -219,6 +219,13 @@ export class OpenAIConverter extends BaseConverter {
                                     content.push({ type: 'text', text: `[Audio: ${audioUrl}]` });
                                 }
                                 break;
+                            case 'input_audio':
+                                // OpenAI 官方 input_audio 格式
+                                if (item.input_audio) {
+                                    // Claude 不直接支持音频输入，转换为文本描述
+                                    content.push({ type: 'text', text: `[Audio Input: ${item.input_audio.format || 'audio'}]` });
+                                }
+                                break;
                             case 'tool_use':
                                 content.push({
                                     type: 'tool_use',
@@ -629,8 +636,15 @@ export class OpenAIConverter extends BaseConverter {
             const mapping = { auto: 'auto', none: 'none', required: 'any' };
             return { type: mapping[toolChoice] };
         }
-        if (typeof toolChoice === 'object' && toolChoice.function) {
-            return { type: 'tool', name: toolChoice.function.name };
+        if (typeof toolChoice === 'object') {
+            // Claude 原生格式：{ type, name }
+            if (toolChoice.type && toolChoice.name) {
+                return { type: toolChoice.type, name: toolChoice.name };
+            }
+            // OpenAI 格式：{ function: { name } }
+            if (toolChoice.function) {
+                return { type: 'tool', name: toolChoice.function.name };
+            }
         }
         return undefined;
     }
@@ -692,7 +706,7 @@ export class OpenAIConverter extends BaseConverter {
             const role = message.role;
             const content = message.content;
 
-            if (role === 'system') {
+            if (role === 'system' || role === 'developer') {
                 // system -> system_instruction
                 if (messages.length > 1) {
                     if (typeof content === 'string') {
@@ -944,8 +958,36 @@ export class OpenAIConverter extends BaseConverter {
                         processedMessages.push(toolNode);
                     }
                 }
+            } else if (role === 'tool') {
+                // 处理独立的 tool role 消息（OpenAI 格式）
+                // 转换为 Gemini 的 functionResponse 格式
+                const toolNode = { role: 'user', parts: [] };
+                
+                // 从 tool_call_id 查找对应的函数名
+                const toolCallId = message.tool_call_id;
+                const functionName = tcID2Name[toolCallId];
+                
+                if (functionName) {
+                    let responseContent = message.content;
+                    if (typeof responseContent !== 'string') {
+                        responseContent = JSON.stringify(responseContent);
+                    }
+                    
+                    toolNode.parts.push({
+                        functionResponse: {
+                            name: functionName,
+                            response: {
+                                result: responseContent
+                            }
+                        }
+                    });
+                    
+                    if (toolNode.parts.length > 0) {
+                        processedMessages.push(toolNode);
+                    }
+                }
             }
-            // tool 消息已经在 assistant 的 tool_calls 处理中合并了，这里跳过
+            // 其他 role 类型跳过
         }
 
         // 构建 Gemini 请求
@@ -1396,6 +1438,8 @@ export class OpenAIConverter extends BaseConverter {
                 }
             }]
         };
+        
+        return result;
     }
 
     // =========================================================================
