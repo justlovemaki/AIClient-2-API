@@ -104,6 +104,9 @@ export class CodexConverter extends BaseConverter {
         codexRequest.parallel_tool_calls = true;
         codexRequest.include = ['reasoning.encrypted_content'];
         codexRequest.service_tier = responsesRequest.service_tier || 'default';
+        if (codexRequest.service_tier !== 'priority') {
+            delete codexRequest.service_tier;
+        }
     
         // 删除Codex不支持的字段
         delete codexRequest.max_output_tokens;
@@ -158,9 +161,13 @@ export class CodexConverter extends BaseConverter {
                 summary: data.reasoning?.summary || 'auto'
             },
             parallel_tool_calls: true,
-            include: ['reasoning.encrypted_content'],
-            service_tier: data.service_tier || 'default'
+            include: ['reasoning.encrypted_content']
         };
+
+        codexRequest.service_tier = data.service_tier || 'default';
+        if (codexRequest.service_tier !== 'priority') {
+            delete codexRequest.service_tier;
+        }
 
         // 处理 OpenAI Responses 特有的 instructions 和 input 字段（如果存在）
         if (data.instructions && !codexRequest.instructions) {
