@@ -380,7 +380,7 @@ export class CodexApiService {
             service_tier: cleanedBody.service_tier || defaultServiceTier,
             reasoning: {
                 ...cleanedBody.reasoning,
-                effort: cleanedBody.reasoning?.effort || defaultReasoningEffort
+                effort: isFastModel ? defaultReasoningEffort : cleanedBody.reasoning?.effort
             },
             stream,
             prompt_cache_key: cache.id
