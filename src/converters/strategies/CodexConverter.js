@@ -85,6 +85,14 @@ export class CodexConverter extends BaseConverter {
     toOpenAIResponsesToCodexRequest(responsesRequest) {
         let codexRequest = { ...responsesRequest };
     
+        // 保留监控相关字段
+        if (responsesRequest._monitorRequestId) {
+            codexRequest._monitorRequestId = responsesRequest._monitorRequestId;
+        }
+        if (responsesRequest._requestBaseUrl) {
+            codexRequest._requestBaseUrl = responsesRequest._requestBaseUrl;
+        }
+
         // 处理 input 字段，如果它是字符串，则转换为消息数组
         if (codexRequest.input && typeof codexRequest.input === 'string') {
             const inputText = codexRequest.input;
@@ -163,6 +171,14 @@ export class CodexConverter extends BaseConverter {
             parallel_tool_calls: true,
             include: ['reasoning.encrypted_content']
         };
+
+        // 保留监控相关字段
+        if (data._monitorRequestId) {
+            codexRequest._monitorRequestId = data._monitorRequestId;
+        }
+        if (data._requestBaseUrl) {
+            codexRequest._requestBaseUrl = data._requestBaseUrl;
+        }
 
         codexRequest.service_tier = data.service_tier || 'default';
         if (codexRequest.service_tier !== 'priority') {

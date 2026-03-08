@@ -52,7 +52,9 @@ async function loadSystemInfo() {
         }
         
         // 初始显示
-        if (serverTimeEl) serverTimeEl.textContent = data.serverTime || '--';
+        if (serverTimeEl) {
+            serverTimeEl.textContent = data.serverTime ? new Date(data.serverTime).toLocaleString(getCurrentLanguage()) : '--';
+        }
         if (uptimeEl) uptimeEl.textContent = data.uptime ? formatUptime(data.uptime) : '--';
 
         // 加载服务模式信息
@@ -165,15 +167,7 @@ function updateTimeDisplay() {
     // 更新服务器时间
     if (serverTimeEl) {
         const currentServerTime = new Date(initialServerTime.getTime() + elapsedSeconds * 1000);
-        serverTimeEl.textContent = currentServerTime.toLocaleString(getCurrentLanguage(), {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
+        serverTimeEl.textContent = currentServerTime.toLocaleString(getCurrentLanguage());
     }
 
     // 更新运行时间
