@@ -63,6 +63,7 @@ const MODEL_ALIAS_MAP = {
     'gemini-3-pro-image-preview': 'gemini-3-pro-image',
     'gemini-3-pro-preview': 'gemini-3-pro-high',
     'gemini-3.1-pro-preview': 'gemini-3.1-pro-high',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite-preview',
     'gemini-3-flash-preview': 'gemini-3-flash',
     'gemini-2.5-flash-preview': 'gemini-2.5-flash',
     'gemini-claude-sonnet-4-5': 'claude-sonnet-4-5',
@@ -77,6 +78,7 @@ const MODEL_NAME_MAP = {
     'gemini-3-pro-image': 'gemini-3-pro-image-preview',
     'gemini-3-pro-high': 'gemini-3-pro-preview',
     'gemini-3.1-pro-high': 'gemini-3.1-pro-preview',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite-preview',
     'gemini-3-flash': 'gemini-3-flash-preview',
     'gemini-2.5-flash': 'gemini-2.5-flash-preview',
     'claude-sonnet-4-5': 'gemini-claude-sonnet-4-5',
@@ -129,8 +131,8 @@ function isImageModel(modelName) {
 function modelSupportsThinking(modelName) {
     if (!modelName) return false;
     const name = modelName.toLowerCase();
-    // 支持 thinking 的模型：gemini-3-*, gemini-2.5-*, claude-*-thinking
-    return name.startsWith('gemini-3-') ||
+    // 支持 thinking 的模型：gemini-3*, gemini-2.5-*, claude-*-thinking
+    return name.startsWith('gemini-3') ||
            name.startsWith('gemini-2.5-') ||
            name.includes('-thinking');
 }

@@ -34,8 +34,7 @@ const httpsAgent = new https.Agent({
     ALPNProtocols: ['http/1.1'], ecdhCurve: 'X25519:P-256:P-384', honorCipherOrder: false, sessionTimeout: 300,
 });
 
-const GROK_MODELS = getProviderModels(MODEL_PROVIDER.GROK_CUSTOM);
-const MODEL_MAPPING = {
+const CORE_MODEL_MAPPING = {
     'grok-3': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3' },
     'grok-3-mini': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3_MINI_THINKING' },
     'grok-3-thinking': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3_THINKING' },
@@ -53,6 +52,24 @@ const MODEL_MAPPING = {
     'grok-imagine-1.0-video': { name: 'grok-3', mode: 'MODEL_MODE_FAST' }
 };
 
+const MODEL_MAPPING = { ...CORE_MODEL_MAPPING };
+Object.keys(CORE_MODEL_MAPPING).forEach(key => {
+    if (!key.endsWith('-nsfw')) {
+        MODEL_MAPPING[`${key}-nsfw`] = CORE_MODEL_MAPPING[key];
+    }
+});
+
+const GROK_MODELS = Object.keys(MODEL_MAPPING);
+
+function isGrokNsfwModel(modelId) {
+    return typeof modelId === 'string' && modelId.toLowerCase().endsWith('-nsfw');
+}
+
+function normalizeGrokModelId(modelId) {
+    if (typeof modelId !== 'string') return modelId;
+    return isGrokNsfwModel(modelId) ? modelId.slice(0, -5) : modelId;
+}
+
 export class GrokApiService {
     constructor(config) {
         this.config = config;
@@ -63,9 +80,68 @@ export class GrokApiService {
         this.baseUrl = config.GROK_BASE_URL || 'https://grok.com';
         this.chatApi = `${this.baseUrl}/rest/app-chat/conversations/new`;
         this.isInitialized = false;
+        this.nsfwSetupDone = false;
         this.converter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.GROK);
         if (this.converter && this.uuid) this.converter.setUuid(this.uuid);
         this.lastSyncAt = null;
+    }
+
+    async setupNsfw() {
+        if (this.nsfwSetupDone) return;
+        try {
+            await this.acceptTos();
+            await this.setBirthDate();
+            await this.enableNsfwAccount();
+            this.nsfwSetupDone = true;
+            logger.info(`[Grok NSFW] Account-level NSFW setup completed for ${this.uuid}`);
+        } catch (error) {
+            logger.warn(`[Grok NSFW] Failed to setup account-level NSFW: ${error.message}`);
+        }
+    }
+
+    async acceptTos() {
+        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/accept-tos`, headers: this.buildHeaders(), data: {}, httpAgent, httpsAgent, timeout: 15000 };
+        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        this._applySidecar(axiosConfig);
+        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok TOS] ${e.message}`); }
+    }
+
+    async setBirthDate() {
+        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/set-birth-date`, headers: this.buildHeaders(), data: { "birthDate": "1990-01-01" }, httpAgent, httpsAgent, timeout: 15000 };
+        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        this._applySidecar(axiosConfig);
+        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok Birth] ${e.message}`); }
+    }
+
+    async enableNsfwAccount() {
+        const name = Buffer.from("always_show_nsfw_content");
+        const inner = Buffer.concat([Buffer.from([0x0a, name.length]), name]);
+        const protobuf = Buffer.concat([Buffer.from([0x0a, 0x02, 0x10, 0x01, 0x12, inner.length]), inner]);
+        
+        const header = Buffer.alloc(5);
+        header.writeUInt8(0, 0);
+        header.writeUInt32BE(protobuf.length, 1);
+        const payload = Buffer.concat([header, protobuf]);
+
+        const headers = this.buildHeaders();
+        headers['content-type'] = 'application/grpc-web+proto';
+        headers['x-grpc-web'] = '1';
+        headers['x-user-agent'] = 'connect-es/2.1.1';
+        headers['referer'] = `${this.baseUrl}/?_s=data`;
+
+        const axiosConfig = { 
+            method: 'post', 
+            url: `${this.baseUrl}/auth_mgmt.AuthManagement/UpdateUserFeatureControls`, 
+            headers, 
+            data: payload, 
+            httpAgent, 
+            httpsAgent, 
+            timeout: 15000,
+            responseType: 'arraybuffer' 
+        };
+        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        this._applySidecar(axiosConfig);
+        try { await axios(axiosConfig); } catch (e) { throw e; }
     }
 
     _applySidecar(axiosConfig) {
@@ -243,7 +319,9 @@ export class GrokApiService {
     }
 
     buildPayload(modelId, requestBody) {
-        const mapping = MODEL_MAPPING[modelId] || MODEL_MAPPING['grok-3'];
+        const rawModelId = typeof modelId === 'string' ? modelId : '';
+        const normalizedModelId = normalizeGrokModelId(rawModelId);
+        const mapping = MODEL_MAPPING[normalizedModelId] || MODEL_MAPPING['grok-3'];
         let message = requestBody.message || "";
         let toolOverrides = requestBody.toolOverrides || {};
         let fileAttachments = requestBody.fileAttachments || [];
@@ -296,12 +374,13 @@ export class GrokApiService {
             if (requestBody.videoGenPrompt) message = requestBody.videoGenPrompt;
         }
 
-        const modelLower = modelId.toLowerCase();
+        const modelLower = normalizedModelId.toLowerCase();
         const isMediaModel = modelLower.includes('imagine') || modelLower.includes('video') || modelLower.includes('edit');
+        const isNsfw = isGrokNsfwModel(rawModelId) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
 
         return {
             "deviceEnvInfo": { "darkModeEnabled": false, "devicePixelRatio": 2, "screenWidth": 2056, "screenHeight": 1329, "viewportWidth": 2056, "viewportHeight": 1083 },
-            "disableMemory": false, "disableSearch": false, "disableSelfHarmShortCircuit": false, "disableTextFollowUps": false,
+            "disableMemory": false, "disableNsfwFilter": isNsfw, "disableSearch": false, "disableSelfHarmShortCircuit": false, "disableTextFollowUps": false,
             "enableImageGeneration": isMediaModel, "enableImageStreaming": isMediaModel, "enableSideBySide": true,
             "fileAttachments": fileAttachments, "forceConcise": false, "forceSideBySide": false, "imageAttachments": [], "imageGenerationCount": 2,
             "isAsyncChat": false, "isReasoning": false, "message": message, "modelMode": mapping.mode, "modelName": mapping.name,
@@ -406,9 +485,14 @@ export class GrokApiService {
             getProviderPoolManager().markProviderNeedRefresh(MODEL_PROVIDER.GROK_CUSTOM, { uuid: this.uuid });
         }
 
+        const rawModel = typeof model === 'string' ? model : '';
+        const normalizedModel = normalizeGrokModelId(rawModel);
+        const modelLower = normalizedModel.toLowerCase();
+        const isNsfw = isGrokNsfwModel(rawModel) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
+        if (isNsfw) await this.setupNsfw();
+
         this.buildPayload(model, requestBody);
 
-        const modelLower = model.toLowerCase();
         const isVideoModel = modelLower.includes('video');
         const isImageModel = modelLower.includes('imagine') && !isVideoModel && !modelLower.includes('edit');
         const isImageEditModel = modelLower.includes('edit');
@@ -461,7 +545,8 @@ export class GrokApiService {
                 requestBody.toolOverrides = { ...requestBody.toolOverrides, videoGen: true };
             }
         } else if (isImageModel || isImageEditModel) {
-            requestBody.toolOverrides = { ...requestBody.toolOverrides, imageGen: true };
+            const isNsfw = isGrokNsfwModel(rawModel) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
+            requestBody.toolOverrides = { ...requestBody.toolOverrides, imageGen: isNsfw ? { disableNsfwFilter: true } : true };
         }
 
         let fileAttachments = requestBody.fileAttachments || [];

@@ -10,7 +10,9 @@ import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 import { getProviderModels } from '../provider-models.js';
 
-const CODEX_MODELS = getProviderModels(MODEL_PROVIDER.CODEX_API);
+const baseModels = getProviderModels(MODEL_PROVIDER.CODEX_API);
+const fastModels = baseModels.map(m => `${m}-fast`);
+const CODEX_MODELS = [...new Set([...baseModels, ...fastModels])];
 const CODEX_VERSION = '0.111.0';
 
 /**
@@ -339,8 +341,18 @@ export class CodexApiService {
         // 明确会话维度：优先使用 session_id 或 conversation_id，其次 user_id
         const sessionId = metadata.session_id || metadata.conversation_id || metadata.user_id || 'default';
         
+        // 判断是否为 fast 模型并确定默认值
+        const isFastModel = model.endsWith('-fast');
+        const defaultServiceTier = isFastModel ? 'priority' : 'default';
+        const defaultReasoningEffort = isFastModel ? 'xhigh' : 'medium';
+
         const cleanedBody = { ...requestBody };
         delete cleanedBody.metadata;
+
+        // 如果是 fast 模型，移除后缀再传给上游
+        if (isFastModel) {
+            cleanedBody.model = model.replace('-fast', '');
+        }
 
         // 生成会话缓存键
         // 弱化 model 依赖，以提升同会话跨模型的缓存命中率
@@ -363,6 +375,11 @@ export class CodexApiService {
         // 注意：requestBody 已经去除了 metadata
         return {
             ...cleanedBody,
+            service_tier: cleanedBody.service_tier || defaultServiceTier,
+            reasoning: {
+                ...cleanedBody.reasoning,
+                effort: cleanedBody.reasoning?.effort || defaultReasoningEffort
+            },
             stream,
             prompt_cache_key: cache.id
         };

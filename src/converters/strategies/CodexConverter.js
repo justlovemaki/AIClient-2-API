@@ -103,20 +103,19 @@ export class CodexConverter extends BaseConverter {
         codexRequest.store = false;
         codexRequest.parallel_tool_calls = true;
         codexRequest.include = ['reasoning.encrypted_content'];
+        codexRequest.service_tier = responsesRequest.service_tier || 'default';
     
         // 删除Codex不支持的字段
         delete codexRequest.max_output_tokens;
         delete codexRequest.max_completion_tokens;
         delete codexRequest.temperature;
         delete codexRequest.top_p;
-        delete codexRequest.service_tier;
         delete codexRequest.user;
-        delete codexRequest.reasoning;
         
         // 添加 reasoning 配置
         codexRequest.reasoning = {
-          "effort": "medium",
-          "summary": "auto"
+          "effort": responsesRequest.reasoning_effort || responsesRequest.reasoning?.effort || "medium",
+          "summary": responsesRequest.reasoning?.summary || "auto"
         };
         
     
@@ -155,11 +154,12 @@ export class CodexConverter extends BaseConverter {
             store: false,
             metadata: data.metadata || {},
             reasoning: {
-                effort: data.reasoning_effort || 'medium',
-                summary: 'auto'
+                effort: data.reasoning_effort || data.reasoning?.effort || 'medium',
+                summary: data.reasoning?.summary || 'auto'
             },
             parallel_tool_calls: true,
-            include: ['reasoning.encrypted_content']
+            include: ['reasoning.encrypted_content'],
+            service_tier: data.service_tier || 'default'
         };
 
         // 处理 OpenAI Responses 特有的 instructions 和 input 字段（如果存在）
