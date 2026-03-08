@@ -378,7 +378,7 @@ export class GrokApiService {
         const isMediaModel = modelLower.includes('imagine') || modelLower.includes('video') || modelLower.includes('edit');
         const isNsfw = isGrokNsfwModel(rawModelId) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
 
-        return {
+        const payload = {
             "deviceEnvInfo": { "darkModeEnabled": false, "devicePixelRatio": 2, "screenWidth": 2056, "screenHeight": 1329, "viewportWidth": 2056, "viewportHeight": 1083 },
             "disableMemory": false, "disableNsfwFilter": isNsfw, "disableSearch": false, "disableSelfHarmShortCircuit": false, "disableTextFollowUps": false,
             "enableImageGeneration": isMediaModel, "enableImageStreaming": isMediaModel, "enableSideBySide": true,
@@ -387,6 +387,15 @@ export class GrokApiService {
             "responseMetadata": { "requestModelDetails": { "modelId": mapping.name }, "modelConfigOverride": modelConfigOverride },
             "returnImageBytes": false, "returnRawGrokInXaiRequest": false, "sendFinalMetadata": true, "temporary": true, "toolOverrides": toolOverrides,
         };
+
+        if (isMediaModel && !modelLower.includes('video')) {
+            payload.enable_nsfw = isNsfw;
+            if (requestBody.aspect_ratio || requestBody.aspectRatio) {
+                payload.aspect_ratio = requestBody.aspect_ratio || requestBody.aspectRatio;
+            }
+        }
+
+        return payload;
     }
 
     async generateContent(model, requestBody) {
@@ -545,8 +554,7 @@ export class GrokApiService {
                 requestBody.toolOverrides = { ...requestBody.toolOverrides, videoGen: true };
             }
         } else if (isImageModel || isImageEditModel) {
-            const isNsfw = isGrokNsfwModel(rawModel) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
-            requestBody.toolOverrides = { ...requestBody.toolOverrides, imageGen: isNsfw ? { disableNsfwFilter: true } : true };
+            requestBody.toolOverrides = { ...requestBody.toolOverrides, imageGen: true };
         }
 
         let fileAttachments = requestBody.fileAttachments || [];
