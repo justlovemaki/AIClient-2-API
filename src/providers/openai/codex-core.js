@@ -351,9 +351,12 @@ export class CodexApiService {
         const cleanedBody = { ...requestBody };
         delete cleanedBody.metadata;
 
-        // 如果是 fast 模型，移除后缀再传给上游
+        // 【关键修复】确保传给上游的模型名称不带 -fast 后缀
+        // 即使 originalRequestBody 中已经带了 model，这里也必须覆盖
+        cleanedBody.model = upstreamModel;
+
         if (isFastModel) {
-            cleanedBody.model = upstreamModel;
+            logger.info(`[Codex] Detected -fast model: ${normalizedModel} -> ${upstreamModel}, service_tier: ${cleanedBody.service_tier || defaultServiceTier}`);
         }
 
         // 生成会话缓存键
