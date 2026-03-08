@@ -373,7 +373,7 @@ export class CodexApiService {
         }
 
         // 注意：requestBody 已经去除了 metadata
-        return {
+        const result = {
             ...cleanedBody,
             service_tier: cleanedBody.service_tier || defaultServiceTier,
             reasoning: {
@@ -383,6 +383,12 @@ export class CodexApiService {
             stream,
             prompt_cache_key: cache.id
         };
+
+        if (result.service_tier !== 'priority') {
+            delete result.service_tier;
+        }
+
+        return result;
     }
 
     /**
