@@ -172,7 +172,7 @@ export class CodexApiService {
         }
 
         const url = `${this.baseUrl}/responses`;
-        const body = this.prepareRequestBody(selectedModel, requestBody, true);
+        const body = await this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
@@ -253,7 +253,7 @@ export class CodexApiService {
         }
 
         const url = `${this.baseUrl}/responses`;
-        const body = this.prepareRequestBody(selectedModel, requestBody, true);
+        const body = await this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
         try {
@@ -334,7 +334,7 @@ export class CodexApiService {
     /**
      * 准备请求体
      */
-    prepareRequestBody(model, requestBody, stream) {
+    async prepareRequestBody(model, requestBody, stream) {
         // 提取 metadata 并从请求体中移除，避免透传到上游
         const metadata = requestBody.metadata || {};
         
@@ -391,6 +391,23 @@ export class CodexApiService {
 
         if (result.service_tier !== 'priority') {
             delete result.service_tier;
+        }
+
+        // 监控钩子：内部请求转换
+        if (this.config?._monitorRequestId) {
+            try {
+                const { getPluginManager } = await import('../../core/plugin-manager.js');
+                const pluginManager = getPluginManager();
+                if (pluginManager) {
+                    await pluginManager.executeHook('onInternalRequestConverted', {
+                        requestId: this.config._monitorRequestId,
+                        internalRequest: result,
+                        converterName: 'prepareRequestBody'
+                    });
+                }
+            } catch (e) {
+                logger.error('[Codex] Error calling onInternalRequestConverted hook:', e.message);
+            }
         }
 
         return result;
