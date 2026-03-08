@@ -342,7 +342,9 @@ export class CodexApiService {
         const sessionId = metadata.session_id || metadata.conversation_id || metadata.user_id || 'default';
         
         // 判断是否为 fast 模型并确定默认值
-        const isFastModel = model.endsWith('-fast');
+        const normalizedModel = String(model || '').trim();
+        const isFastModel = /-fast$/i.test(normalizedModel);
+        const upstreamModel = isFastModel ? normalizedModel.replace(/-fast$/i, '') : normalizedModel;
         const defaultServiceTier = isFastModel ? 'priority' : 'default';
         const defaultReasoningEffort = isFastModel ? 'xhigh' : 'medium';
 
@@ -351,7 +353,7 @@ export class CodexApiService {
 
         // 如果是 fast 模型，移除后缀再传给上游
         if (isFastModel) {
-            cleanedBody.model = model.replace('-fast', '');
+            cleanedBody.model = upstreamModel;
         }
 
         // 生成会话缓存键
