@@ -1127,10 +1127,19 @@ export class CodexConverter extends BaseConverter {
     toClaudeStreamChunk(chunk, model) {
         const type = chunk.type;
 
-        // Codex 的多数增量事件不带 response.id，需要将其归并到最近活跃的流状态。
+        // 初始化 item_id → resId 映射表（用于并发流隔离）
+        if (!this._claudeItemToResId) {
+            this._claudeItemToResId = new Map();
+        }
+
+        // Codex 的多数增量事件不带 response.id，需要通过 item_id 映射或兜底逻辑归并到正确的流状态。
         let resId = chunk.response?.id;
         if (!resId) {
-            if (this.lastClaudeStreamResponseId && this.streamParams.has(this.lastClaudeStreamResponseId)) {
+            // 优先通过 item_id 精确匹配到对应的 response（并发安全）
+            const itemId = chunk.item_id || chunk.item?.id;
+            if (itemId && this._claudeItemToResId.has(itemId)) {
+                resId = this._claudeItemToResId.get(itemId);
+            } else if (this.lastClaudeStreamResponseId && this.streamParams.has(this.lastClaudeStreamResponseId)) {
                 resId = this.lastClaudeStreamResponseId;
             } else if (this.streamParams.size === 1) {
                 resId = this.streamParams.keys().next().value;
@@ -1162,6 +1171,16 @@ export class CodexConverter extends BaseConverter {
         }
         const state = this.streamParams.get(resId);
         state.lastUpdatedAt = Date.now();
+
+        // 捕获 response.output_item.added 事件中的 item_id → resId 映射，
+        // 使后续 delta 事件能通过 item_id 精确关联到正确的流（并发安全）。
+        if (type === 'response.output_item.added') {
+            const itemId = chunk.item?.id;
+            if (itemId && resId) {
+                this._claudeItemToResId.set(itemId, resId);
+            }
+            return null; // 此事件不产生 Claude 输出
+        }
 
         if (type === 'response.created') {
             state.responseID = chunk.response.id;
@@ -1285,6 +1304,14 @@ export class CodexConverter extends BaseConverter {
                 },
                 { type: "message_stop" }
             );
+            // 清理 item_id → resId 映射，避免内存泄漏
+            if (this._claudeItemToResId) {
+                for (const [itemId, mappedResId] of this._claudeItemToResId.entries()) {
+                    if (mappedResId === resId) {
+                        this._claudeItemToResId.delete(itemId);
+                    }
+                }
+            }
             this.streamParams.delete(resId);
             if (this.lastClaudeStreamResponseId === resId) {
                 this.lastClaudeStreamResponseId = null;
