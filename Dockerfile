@@ -19,8 +19,8 @@ FROM node:20-alpine
 LABEL maintainer="AIClient2API Team"
 LABEL description="Docker image for AIClient2API server"
 
-# 安装必要的系统工具（tar 用于更新功能，git 用于版本检查）
-RUN apk add --no-cache tar git
+# 安装必要的系统工具（tar 用于更新功能，git 用于版本检查，procps 用于系统监控）
+RUN apk add --no-cache tar git procps
 
 # 设置工作目录
 WORKDIR /app
