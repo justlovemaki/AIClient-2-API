@@ -39,7 +39,7 @@ import {
  * @returns {object} 转换后的数据
  * @throws {Error} 如果找不到合适的转换函数
  */
-export function convertData(data, type, fromProvider, toProvider, model) {
+export function convertData(data, type, fromProvider, toProvider, model, requestId) {
     try {
         // 获取协议前缀
         const fromProtocol = getProtocolPrefix(fromProvider);
@@ -67,7 +67,7 @@ export function convertData(data, type, fromProvider, toProvider, model) {
                 return converter.convertResponse(data, toProtocol, model);
                 
             case 'streamChunk':
-                return converter.convertStreamChunk(data, toProtocol, model);
+                return converter.convertStreamChunk(data, toProtocol, model, requestId);
                 
             case 'modelList':
                 return converter.convertModelList(data, toProtocol);

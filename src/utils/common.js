@@ -344,6 +344,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         requestBody.model = model;
         const nativeStream = await service.generateContentStream(model, requestBody);
         const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
+        // 为每个请求生成唯一 ID，用于在单例 converter 中隔离并发流状态
+        const streamRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         for await (const nativeChunk of nativeStream) {
             // 检查客户端是否已断开连接
@@ -360,7 +362,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
             // Convert the complete chunk object to the client's format (fromProvider), if necessary.
             const chunkToSend = needsConversion
-                ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model)
+                ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model, streamRequestId)
                 : nativeChunk;
 
             // 监控钩子：流式响应分块
