@@ -99,10 +99,9 @@ export class CodexApiService {
             this.last_refresh = creds.last_refresh || this.last_refresh;
             this.expiresAt = new Date(creds.expired); // 注意：字段名是 expired
 
-            // 检查 token 是否需要刷新
+            // 检查 token 是否需要刷新（异步触发，不阻塞加载）
             if (this.isExpiryDateNear()) {
-                logger.info('[Codex] Token expiring soon, refreshing...');
-                await this.refreshAccessToken();
+                this.triggerBackgroundRefresh();
             }
 
             this.isInitialized = true;
@@ -116,9 +115,6 @@ export class CodexApiService {
      * 初始化认证并执行必要刷新
      */
     async initializeAuth(forceRefresh = false) {
-        // 首先执行基础凭证加载
-        await this.loadCredentials();
-
         // 检查 token 是否需要刷新
         const needsRefresh = forceRefresh;
 
@@ -126,13 +122,30 @@ export class CodexApiService {
             return;
         }
 
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
         // 只有在明确要求刷新，或者 AccessToken 缺失时，才执行刷新
+        // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
         if (needsRefresh || !this.accessToken) {
             if (!this.refreshToken) {
                 throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
             }
             logger.info('[Codex] Token expiring soon or refresh requested, refreshing...');
             await this.refreshAccessToken();
+        }
+    }
+
+    /**
+     * 后台异步刷新 token（不阻塞当前请求）
+     */
+    triggerBackgroundRefresh() {
+        const poolManager = getProviderPoolManager();
+        if (poolManager && this.uuid) {
+            logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for background refresh`);
+            poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+                uuid: this.uuid
+            });
         }
     }
 
@@ -160,15 +173,9 @@ export class CodexApiService {
             delete requestBody._requestBaseUrl;
         }
 
-        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        // 检查 token 是否即将过期，如果是则触发后台异步刷新
         if (this.isExpiryDateNear()) {
-            const poolManager = getProviderPoolManager();
-            if (poolManager && this.uuid) {
-                logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
-                    uuid: this.uuid
-                });
-            }
+            this.triggerBackgroundRefresh();
         }
 
         const url = `${this.baseUrl}/responses`;
@@ -194,17 +201,11 @@ export class CodexApiService {
             return this.parseNonStreamResponse(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
-                logger.info('[Codex] Received 401. Triggering background refresh via PoolManager...');
+                logger.info('[Codex] Received 401. Triggering background refresh...');
 
-                // 标记当前凭证为不健康（会自动进入刷新队列）
-                const poolManager = getProviderPoolManager();
-                if (poolManager && this.uuid) {
-                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
-                        uuid: this.uuid
-                    });
-                    error.credentialMarkedUnhealthy = true;
-                }
+                // 触发后台异步刷新
+                this.triggerBackgroundRefresh();
+                error.credentialMarkedUnhealthy = true;
 
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -241,15 +242,9 @@ export class CodexApiService {
             delete requestBody._requestBaseUrl;
         }
 
-        // 检查 token 是否即将过期，如果是则推送到刷新队列
+        // 检查 token 是否即将过期，如果是则触发后台异步刷新
         if (this.isExpiryDateNear()) {
-            const poolManager = getProviderPoolManager();
-            if (poolManager && this.uuid) {
-                logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
-                    uuid: this.uuid
-                });
-            }
+            this.triggerBackgroundRefresh();
         }
 
         const url = `${this.baseUrl}/responses`;
@@ -275,17 +270,11 @@ export class CodexApiService {
             yield* this.parseSSEStream(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
-                logger.info('[Codex] Received 401 during stream. Triggering background refresh via PoolManager...');
+                logger.info('[Codex] Received 401 during stream. Triggering background refresh...');
 
-                // 标记当前凭证为不健康
-                const poolManager = getProviderPoolManager();
-                if (poolManager && this.uuid) {
-                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in stream`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
-                        uuid: this.uuid
-                    });
-                    error.credentialMarkedUnhealthy = true;
-                }
+                // 触发后台异步刷新
+                this.triggerBackgroundRefresh();
+                error.credentialMarkedUnhealthy = true;
 
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
@@ -731,17 +720,11 @@ export class CodexApiService {
             return result;
         } catch (error) {
             if (error.response?.status === 401) {
-                logger.info('[Codex] Received 401 during getUsageLimits. Triggering background refresh via PoolManager...');
+                logger.info('[Codex] Received 401 during getUsageLimits. Triggering background refresh...');
 
-                // 标记当前凭证为不健康
-                const poolManager = getProviderPoolManager();
-                if (poolManager && this.uuid) {
-                    logger.info(`[Codex] Marking credential ${this.uuid} as needs refresh. Reason: 401 Unauthorized in getUsageLimits`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
-                        uuid: this.uuid
-                    });
-                    error.credentialMarkedUnhealthy = true;
-                }
+                // 触发后台异步刷新
+                this.triggerBackgroundRefresh();
+                error.credentialMarkedUnhealthy = true;
 
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;

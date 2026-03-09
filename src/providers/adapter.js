@@ -574,7 +574,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
         }
         if (this.isExpiryDateNear()) {
             logger.info(`[Codex] Expiry date is near, refreshing token...`);
-            await this.codexApiService.refreshAccessToken();
+            await this.codexApiService.initializeAuth(true);
         }
         return Promise.resolve();
     }
@@ -584,7 +584,7 @@ export class CodexApiServiceAdapter extends ApiServiceAdapter {
             await this.codexApiService.initialize();
         }
         logger.info(`[Codex] Force refreshing token...`);
-        return this.codexApiService.refreshAccessToken();
+        return this.codexApiService.initializeAuth(true);
     }
 
     isExpiryDateNear() {
