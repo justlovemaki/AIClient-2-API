@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import { serviceInstances, getServiceAdapter } from '../providers/adapter.js';
 import { formatKiroUsage, formatGeminiUsage, formatAntigravityUsage, formatCodexUsage, formatGrokUsage } from '../services/usage-service.js';
 import { readUsageCache, writeUsageCache, readProviderUsageCache, updateProviderUsageCache } from './usage-cache.js';
+import { PROVIDER_MAPPINGS } from '../utils/provider-utils.js';
 import path from 'path';
 
 const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth', 'grok-custom'];
@@ -82,6 +83,7 @@ async function getProviderTypeUsage(providerType, currentConfig, providerPoolMan
         const instanceResult = {
             uuid: provider.uuid || 'unknown',
             name: getProviderDisplayName(provider, providerType),
+            configFilePath: getProviderConfigFilePath(provider, providerType),
             isHealthy: provider.isHealthy !== false,
             isDisabled: provider.isDisabled === true,
             success: false,
@@ -209,14 +211,8 @@ function getProviderDisplayName(provider, providerType) {
     }
 
     // 尝试从凭据文件路径提取名称
-    const credPathKey = {
-        'claude-kiro-oauth': 'KIRO_OAUTH_CREDS_FILE_PATH',
-        'gemini-cli-oauth': 'GEMINI_OAUTH_CREDS_FILE_PATH',
-        'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
-        'openai-codex-oauth': 'CODEX_OAUTH_CREDS_FILE_PATH',
-        'openai-qwen-oauth': 'QWEN_OAUTH_CREDS_FILE_PATH',
-        'openai-iflow': 'IFLOW_TOKEN_FILE_PATH'
-    }[providerType];
+    const mapping = PROVIDER_MAPPINGS.find(m => m.providerType === providerType);
+    const credPathKey = mapping ? mapping.credPathKey : null;
 
     if (credPathKey && provider[credPathKey]) {
         const filePath = provider[credPathKey];
@@ -226,6 +222,19 @@ function getProviderDisplayName(provider, providerType) {
     }
 
     return 'Unnamed';
+}
+
+/**
+ * 获取提供商配置文件路径
+ * @param {Object} provider - 提供商配置
+ * @param {string} providerType - 提供商类型
+ * @returns {string|null} 配置文件路径
+ */
+function getProviderConfigFilePath(provider, providerType) {
+    const mapping = PROVIDER_MAPPINGS.find(m => m.providerType === providerType);
+    const credPathKey = mapping ? mapping.credPathKey : null;
+
+    return (credPathKey && provider[credPathKey]) ? provider[credPathKey] : null;
 }
 
 /**

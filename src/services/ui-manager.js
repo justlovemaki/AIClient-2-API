@@ -246,6 +246,13 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await uploadConfigApi.handleViewConfigFile(req, res, filePath);
     }
 
+    // Download specific configuration file
+    const downloadConfigMatch = pathParam.match(/^\/api\/upload-configs\/download\/(.+)$/);
+    if (method === 'GET' && downloadConfigMatch) {
+        const filePath = decodeURIComponent(downloadConfigMatch[1]);
+        return await uploadConfigApi.handleDownloadConfigFile(req, res, filePath);
+    }
+
     // Delete specific configuration file
     const deleteConfigMatch = pathParam.match(/^\/api\/upload-configs\/delete\/(.+)$/);
     if (method === 'DELETE' && deleteConfigMatch) {

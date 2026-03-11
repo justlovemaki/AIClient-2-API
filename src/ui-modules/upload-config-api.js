@@ -84,6 +84,60 @@ export async function handleViewConfigFile(req, res, filePath) {
 }
 
 /**
+ * 下载特定配置文件
+ */
+export async function handleDownloadConfigFile(req, res, filePath) {
+    try {
+        const fullPath = path.join(process.cwd(), filePath);
+        
+        // 安全检查：确保文件路径在允许的目录内
+        const allowedDirs = ['configs'];
+        const relativePath = path.relative(process.cwd(), fullPath);
+        const isAllowed = allowedDirs.some(dir => relativePath.startsWith(dir + path.sep) || relativePath === dir);
+        
+        if (!isAllowed) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'Access denied: can only download files in configs directory'
+                }
+            }));
+            return true;
+        }
+        
+        if (!existsSync(fullPath)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: {
+                    message: 'File does not exist'
+                }
+            }));
+            return true;
+        }
+        
+        const content = await fs.readFile(fullPath);
+        const fileName = path.basename(fullPath);
+        
+        res.writeHead(200, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+            'Content-Length': content.length
+        });
+        res.end(content);
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Failed to download config file:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            error: {
+                message: 'Failed to download config file: ' + error.message
+            }
+        }));
+        return true;
+    }
+}
+
+/**
  * 删除特定配置文件
  */
 export async function handleDeleteConfigFile(req, res, filePath) {

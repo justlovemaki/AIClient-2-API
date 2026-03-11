@@ -294,6 +294,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'GEMINI_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -308,6 +310,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'KIRO_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -322,6 +326,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -336,6 +342,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH'
                 });
             }
@@ -350,6 +358,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'IFLOW_TOKEN_FILE_PATH'
                 });
             }
@@ -364,6 +374,8 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
                     providerIndex: index,
                     nodeName: provider.customName,
                     uuid: provider.uuid,
+                    isHealthy: provider.isHealthy !== false,
+                    isDisabled: provider.isDisabled === true,
                     configKey: 'CODEX_OAUTH_CREDS_FILE_PATH'
                 });
             }

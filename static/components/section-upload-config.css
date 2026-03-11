@@ -314,6 +314,36 @@
     font-weight: 500;
 }
 
+.node-tag.status-healthy {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.15);
+}
+
+.node-tag.status-healthy i {
+    color: #10b981;
+}
+
+.node-tag.status-unhealthy {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+.node-tag.status-unhealthy i {
+    color: #ef4444;
+}
+
+.node-tag.status-disabled {
+    color: #6b7280;
+    background: rgba(107, 114, 128, 0.08);
+    border-color: rgba(107, 114, 128, 0.15);
+}
+
+.node-tag.status-disabled i {
+    color: #6b7280;
+}
+
 .node-tag i {
     font-size: 0.6rem;
     color: #3b82f6;
@@ -454,6 +484,8 @@
 
 .btn-view { background: var(--primary-color); color: white; }
 .btn-view:hover { background: var(--btn-primary-hover); }
+.btn-download { background: #10b981; color: white; }
+.btn-download:hover { background: #059669; }
 .btn-delete-small { background: var(--danger-color); color: white; }
 
 .config-item-manager.expanded {
@@ -568,6 +600,32 @@
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
+}
+
+.node-status-tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.node-status-tag.healthy {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.node-status-tag.unhealthy {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.node-status-tag.disabled {
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+    border: 1px solid rgba(107, 114, 128, 0.2);
 }
 
 .usage-detail-subtitle {

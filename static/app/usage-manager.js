@@ -526,6 +526,13 @@ function createInstanceUsageCard(instance, providerType) {
             ? `<span class="badge badge-healthy" data-i18n="usage.card.status.healthy">${t('usage.card.status.healthy')}</span>`
             : `<span class="badge badge-unhealthy" data-i18n="usage.card.status.unhealthy">${t('usage.card.status.unhealthy')}</span>`);
 
+    // 下载按钮
+    const downloadBtnHTML = instance.configFilePath ? `
+        <button class="btn-download-config" title="${t('usage.card.downloadConfig') || '下载授权文件'}" data-path="${instance.configFilePath}">
+            <i class="fas fa-download"></i>
+        </button>
+    ` : '';
+
     // 获取用户邮箱和订阅信息
     const userEmail = instance.usage?.user?.email || '';
     const subscriptionTitle = instance.usage?.subscription?.title || '';
@@ -545,6 +552,7 @@ function createInstanceUsageCard(instance, providerType) {
                 <span>${providerDisplayName}</span>
             </div>
             <div class="instance-status-badges">
+                ${downloadBtnHTML}
                 ${statusIcon}
                 ${healthBadge}
             </div>
@@ -554,6 +562,18 @@ function createInstanceUsageCard(instance, providerType) {
         </div>
         ${userInfoHTML}
     `;
+    
+    // 添加下载按钮点击事件
+    if (instance.configFilePath) {
+        const downloadBtn = header.querySelector('.btn-download-config');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                downloadConfigFile(instance.configFilePath);
+            });
+        }
+    }
+
     expandedContent.appendChild(header);
 
     // 实例内容 - 只显示用量和到期时间
@@ -909,6 +929,41 @@ function getProviderIcon(providerType) {
     return icons[providerType] || 'fas fa-server';
 }
 
+
+/**
+ * 下载配置文件
+ * @param {string} filePath - 文件路径
+ */
+async function downloadConfigFile(filePath) {
+    if (!filePath) return;
+    
+    try {
+        const fileName = filePath.split(/[/\\]/).pop();
+        const response = await fetch(`/api/upload-configs/download/${encodeURIComponent(filePath)}`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast(t('common.success'), t('usage.card.downloadSuccess') || '文件下载成功', 'success');
+    } catch (error) {
+        console.error('下载配置文件失败:', error);
+        showToast(t('common.error'), (t('usage.card.downloadFailed') || '下载配置文件失败') + ': ' + error.message, 'error');
+    }
+}
 
 /**
  * 格式化数字（向上取整保留两位小数）
