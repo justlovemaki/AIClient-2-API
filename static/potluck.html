@@ -732,6 +732,26 @@
         </div>
     </div>
 
+    <!-- 修改名称模态框 -->
+    <div id="editNameModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> 修改 Key 名称</h3>
+                <button class="modal-close" onclick="closeModal('editNameModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>新的名称</label>
+                    <input type="text" id="newName" placeholder="例如：测试用户 1">
+                </div>
+                <input type="hidden" id="editNameKeyId">
+                <button class="btn btn-primary btn-block" onclick="updateName()">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 批量应用限额模态框 -->
     <div id="applyLimitModal" class="modal-overlay">
         <div class="modal">
@@ -981,7 +1001,7 @@
 
                 return `<div class="key-card ${key.enabled ? '' : 'disabled'}">
                     <div class="key-info">
-                        <div class="key-name">${escapeHtml(key.name)}</div>
+                        <div class="key-name">${escapeHtml(key.name)} <button class="btn-copy" style="margin-left: 4px; padding: 2px 6px;" onclick="openEditName('${key.id}', '${escapeHtml(key.name).replace(/'/g, "\\'")}')" title="修改名称"><i class="fas fa-edit"></i></button></div>
                         <div class="key-id">${key.maskedKey} <button class="btn-copy" onclick="copyToClipboard('${key.id}')" title="复制完整 Key"><i class="fas fa-copy"></i></button></div>
                         ${providerBadges ? `<div class="key-dist-mini">${providerBadges}</div>` : ''}
                     </div>
@@ -1085,6 +1105,21 @@
             if (!dailyLimit || dailyLimit < 1) { showToast('请输入有效的限额', 'error'); return; }
             const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/limit`, { method: 'PUT', body: JSON.stringify({ dailyLimit }) });
             if (result && result.success) { showToast('限额已更新', 'success'); closeModal('editLimitModal'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+
+        function openEditName(keyId, currentName) {
+            document.getElementById('editNameKeyId').value = keyId;
+            document.getElementById('newName').value = currentName;
+            openModal('editNameModal');
+        }
+
+        async function updateName() {
+            const keyId = document.getElementById('editNameKeyId').value;
+            const name = document.getElementById('newName').value;
+            if (!name) { showToast('请输入有效的名称', 'error'); return; }
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/name`, { method: 'PUT', body: JSON.stringify({ name }) });
+            if (result && result.success) { showToast('名称已更新', 'success'); closeModal('editNameModal'); loadData(); }
             else { showToast(result?.error?.message || '操作失败', 'error'); }
         }
 
