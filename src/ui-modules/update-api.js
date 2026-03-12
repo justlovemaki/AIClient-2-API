@@ -8,6 +8,59 @@ import { CONFIG } from '../core/config-manager.js';
 import { parseProxyUrl } from '../utils/proxy-utils.js';
 
 const execAsync = promisify(exec);
+const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
+
+function buildGitHubApiCandidates(repo) {
+    const apiPath = `repos/${repo}/tags`;
+    return [
+        {
+            name: 'gh-proxy.org',
+            url: `https://gh-proxy.org/https://api.github.com/${apiPath}`
+        },
+        {
+            name: 'hk.gh-proxy.org',
+            url: `https://hk.gh-proxy.org/https://api.github.com/${apiPath}`
+        },
+        {
+            name: 'cdn.gh-proxy.org',
+            url: `https://cdn.gh-proxy.org/https://api.github.com/${apiPath}`
+        },
+                {
+            name: 'edgeone.gh-proxy.org',
+            url: `https://edgeone.gh-proxy.org/https://api.github.com/${apiPath}`
+        },
+        {
+            name: 'github-direct',
+            url: `https://api.github.com/${apiPath}`
+        }
+    ];
+}
+
+function buildTarballCandidates(repo, tag) {
+    const githubTarballPath = `${repo}/archive/refs/tags/${tag}.tar.gz`;
+    return [
+        {
+            name: 'gh-proxy.org',
+            url: `https://gh-proxy.org/https://github.com/${githubTarballPath}`
+        },
+        {
+            name: 'hk.gh-proxy.org',
+            url: `https://hk.gh-proxy.org/https://github.com/${githubTarballPath}`
+        },
+        {
+            name: 'cdn.gh-proxy.org',
+            url: `https://cdn.gh-proxy.org/https://github.com/${githubTarballPath}`
+        },
+        {
+            name: 'edgeone.gh-proxy.org',
+            url: `https://edgeone.gh-proxy.org/https://github.com/${githubTarballPath}`
+        },
+        {
+            name: 'gitclone.com',
+            url: `https://gitclone.com/github.com/${githubTarballPath}`
+        }
+    ];
+}
 
 /**
  * 获取更新检查使用的代理配置
@@ -100,46 +153,51 @@ function compareVersions(v1, v2) {
  * @returns {Promise<string|null>} 最新版本号或 null
  */
 async function getLatestVersionFromGitHub() {
-    const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
-    const apiUrl = `https://gh-proxy.org/https://api.github.com/repos/${GITHUB_REPO}/tags`;
+    const candidates = buildGitHubApiCandidates(GITHUB_REPO);
     
-    try {
-        logger.info('[Update] Fetching latest version from GitHub API...');
-        const response = await fetchWithProxy(apiUrl, {
-            headers: {
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'AIClient2API-UpdateChecker'
-            },
-            timeout: 10000
-        });
-        
-        if (!response.ok) {
-            throw new Error(`GitHub API returned ${response.status}: ${response.statusText}`);
+    for (const candidate of candidates) {
+        try {
+            logger.info(`[Update] Fetching latest version from GitHub API via ${candidate.name}...`);
+            logger.info(`[Update] Request URL: ${candidate.url}`);
+            const response = await fetchWithProxy(candidate.url, {
+                headers: {
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'AIClient2API-UpdateChecker'
+                },
+                timeout: 10000
+            });
+            
+            if (!response.ok) {
+                throw new Error(`GitHub API returned ${response.status}: ${response.statusText}`);
+            }
+            
+            const tags = await response.json();
+            
+            if (!Array.isArray(tags) || tags.length === 0) {
+                logger.warn(`[Update] No tags returned via ${candidate.name}`);
+                continue;
+            }
+            
+            // 提取版本号并排序
+            const versions = tags
+                .map(tag => tag.name)
+                .filter(name => /^v?\d+\.\d+/.test(name));
+            
+            if (versions.length === 0) {
+                logger.warn(`[Update] No valid version tags found via ${candidate.name}`);
+                continue;
+            }
+            
+            versions.sort((a, b) => compareVersions(b, a));
+            logger.info(`[Update] Latest version fetched successfully via ${candidate.name}: ${versions[0]}`);
+            return versions[0];
+        } catch (error) {
+            logger.warn(`[Update] Failed to fetch latest version via ${candidate.name}: ${error.message}`);
         }
-        
-        const tags = await response.json();
-        
-        if (!Array.isArray(tags) || tags.length === 0) {
-            return null;
-        }
-        
-        // 提取版本号并排序
-        const versions = tags
-            .map(tag => tag.name)
-            .filter(name => /^v?\d+\.\d+/.test(name)); // 只保留符合版本号格式的 tag
-        
-        if (versions.length === 0) {
-            return null;
-        }
-        
-        // 按版本号排序（降序）
-        versions.sort((a, b) => compareVersions(b, a));
-        
-        return versions[0];
-    } catch (error) {
-        logger.warn('[Update] Failed to fetch from GitHub API:', error.message);
-        return null;
     }
+    
+    logger.warn('[Update] All GitHub API proxy attempts failed');
+    return null;
 }
 
 /**
@@ -352,37 +410,53 @@ export async function performUpdate() {
  * @returns {Promise<Object>} 更新结果
  */
 async function performTarballUpdate(localVersion, latestTag) {
-    const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
-    const tarballUrl = `https://gh-proxy.org/https://github.com/${GITHUB_REPO}/archive/refs/tags/${latestTag}.tar.gz`;
+    const tarballCandidates = buildTarballCandidates(GITHUB_REPO, latestTag);
     const appDir = process.cwd();
     const tempDir = path.join(appDir, '.update_temp');
     const tarballPath = path.join(tempDir, 'update.tar.gz');
     
     logger.info(`[Update] Starting tarball update to ${latestTag}...`);
-    logger.info(`[Update] Download URL: ${tarballUrl}`);
     
     try {
         // 1. 创建临时目录
         await fs.mkdir(tempDir, { recursive: true });
         logger.info('[Update] Created temp directory');
         
-        // 2. 下载 tarball
-        logger.info('[Update] Downloading tarball...');
-        const response = await fetchWithProxy(tarballUrl, {
-            headers: {
-                'User-Agent': 'AIClient2API-Updater'
-            },
-            redirect: 'follow'
-        });
+        // 2. 循环下载 tarball，成功后跳过后续代理
+        logger.info('[Update] Downloading tarball via proxy candidates...');
+        let downloadSucceeded = false;
+        let lastDownloadError = null;
         
-        if (!response.ok) {
-            throw new Error(`Failed to download tarball: ${response.status} ${response.statusText}`);
+        for (const candidate of tarballCandidates) {
+            try {
+                logger.info(`[Update] Trying tarball download via ${candidate.name}: ${candidate.url}`);
+                logger.info(`[Update] Request URL: ${candidate.url}`);
+                const response = await fetchWithProxy(candidate.url, {
+                    headers: {
+                        'User-Agent': 'AIClient2API-Updater'
+                    },
+                    redirect: 'follow'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to download tarball: ${response.status} ${response.statusText}`);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                await fs.writeFile(tarballPath, buffer);
+                logger.info(`[Update] Downloaded tarball via ${candidate.name} (${buffer.length} bytes)`);
+                downloadSucceeded = true;
+                break;
+            } catch (downloadError) {
+                lastDownloadError = downloadError;
+                logger.warn(`[Update] Tarball download failed via ${candidate.name}: ${downloadError.message}`);
+            }
         }
         
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        await fs.writeFile(tarballPath, buffer);
-        logger.info(`[Update] Downloaded tarball (${buffer.length} bytes)`);
+        if (!downloadSucceeded) {
+            throw new Error(`All tarball proxy attempts failed${lastDownloadError ? `: ${lastDownloadError.message}` : ''}`);
+        }
         
         // 3. 解压 tarball
         logger.info('[Update] Extracting tarball...');
