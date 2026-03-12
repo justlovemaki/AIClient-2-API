@@ -408,7 +408,7 @@ export class ProviderPoolManager {
      * 分数越低，优先级越高
      * @private
      */
-    _calculateNodeScore(providerStatus, now = Date.now()) {
+    _calculateNodeScore(providerStatus, now = Date.now(), minSeqInPool = -1) {
         const config = providerStatus.config;
         const state = providerStatus.state;
         
@@ -430,42 +430,36 @@ export class ProviderPoolManager {
             }
         }
         
-        // 2. 预热/刷新分：60秒内刷新过且使用次数极少的节点视为“新鲜”，分数极低（最高优）
+        // 2. 预热/新鲜度判断
         const lastHealthCheckTime = config.lastHealthCheckTime ? new Date(config.lastHealthCheckTime).getTime() : 0;
-        const isFresh = lastHealthCheckTime && (now - lastHealthCheckTime < 60000); 
-        if (isFresh) return -2e18 + (config.usageCount || 0) * 10000 + (now - lastHealthCheckTime) + (state.activeCount * 5000); // 极其优先
- 
-        // 3. 权重计算逻辑：
-        // 改进点：使用 lastUsedTime + usageCount 惩罚 + selectionSequence 惩罚 + load 惩罚
-        // selectionSequence 用于在同一毫秒内彻底打破平局
-        
-        const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 86400000); // 没用过的视为 24 小时前用过（更旧）
+        const isFresh = lastHealthCheckTime && (now - lastHealthCheckTime < 60000);
+
+        // 3. 计算统一评分
+        // 基础分：新鲜节点使用固定负偏移 (-1e14)，普通节点使用上次使用时间 (约 1.7e12)
+        const lastUsedTime = config.lastUsed ? new Date(config.lastUsed).getTime() : (now - 86400000);
+        const baseScore = isFresh ? -1e14 : lastUsedTime;
+
+        // 惩罚项 A: 使用次数 (每多用一次增加 10 秒权重)
         const usageCount = config.usageCount || 0;
+        const usageScore = usageCount * 10000;
+
+        // 惩罚项 B: 相对序列号 (用于打破平局，确保轮询)
         const lastSelectionSeq = config._lastSelectionSeq || 0;
-        
-        // 核心目标：选分最小的。
-        // - lastUsedTime 越久，分越小。
-        // - usageCount 越多，分越大。
-        // - lastSelectionSeq 越大（最近选过），分越大。
-        // - activeCount 越多，分越大（负载均衡）
-        
-        // --- 策略优化：相对序列号 ---
-        // 为了防止全局自增序列号导致的“老节点排挤新节点”或“重置节点排挤未重置节点”
-        // 我们计算节点序列号相对于当前池中最小序列号的偏移量，并对该偏移量进行封顶处理。
-        // 这样序列号只在打破“同一毫秒”的平局时起作用，而不会成为跨越长时间周期的惩罚。
-        const pool = this.providerStatus[providerStatus.type] || [];
-        const minSeqInPool = Math.min(...pool.map(p => p.config._lastSelectionSeq || 0));
+        if (minSeqInPool === -1) {
+            const pool = this.providerStatus[providerStatus.type] || [];
+            minSeqInPool = Math.min(...pool.map(p => p.config._lastSelectionSeq || 0));
+        }
         const relativeSeq = Math.max(0, lastSelectionSeq - minSeqInPool);
-        const cappedRelativeSeq = Math.min(relativeSeq, 100); // 封顶偏移量，确保它只影响微观排序
-        
-        // usageCount * 10000: 每多用一次，权重增加 10 秒
-        // cappedRelativeSeq * 1000: 序列号偏移只在 100 秒（10次使用）范围内波动
-        // activeCount * 5000: 每个活跃请求增加 5 秒权重，用于平滑负载
-        const baseScore = lastUsedTime + (usageCount * 10000);
+        const cappedRelativeSeq = Math.min(relativeSeq, 100);
         const sequenceScore = cappedRelativeSeq * 1000;
+
+        // 惩罚项 C: 负载 (每个活跃请求增加 5 秒权重)
         const loadScore = (state.activeCount || 0) * 5000;
-        
-        return baseScore + sequenceScore + loadScore;
+
+        // 新鲜节点的微调：配合 usageScore 和 sequenceScore 在多个新鲜节点间轮询
+        const freshBonus = isFresh ? (now - lastHealthCheckTime) : 0;
+
+        return baseScore + usageScore + sequenceScore + loadScore + freshBonus;
     }
 
     /**
@@ -797,6 +791,9 @@ export class ProviderPoolManager {
         // 获取固定时间戳，确保排序过程中一致
         const now = Date.now();
         
+        // 提前计算池中最小序列号，避免在排序算法中重复 O(N) 计算
+        const minSeq = Math.min(...availableProviders.map(p => p.config._lastSelectionSeq || 0));
+
         let availableAndHealthyProviders = availableProviders.filter(p =>
             p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh
         );
@@ -829,8 +826,8 @@ export class ProviderPoolManager {
         // 改进：使用统一的评分策略进行选择
         // 传入当前时间戳 now 确保一致性
         const selected = availableAndHealthyProviders.sort((a, b) => {
-            const scoreA = this._calculateNodeScore(a, now);
-            const scoreB = this._calculateNodeScore(b, now);
+            const scoreA = this._calculateNodeScore(a, now, minSeq);
+            const scoreB = this._calculateNodeScore(b, now, minSeq);
             if (scoreA !== scoreB) return scoreA - scoreB;
             // 如果分值相同，使用 UUID 排序确保确定性
             return a.uuid < b.uuid ? -1 : 1;
