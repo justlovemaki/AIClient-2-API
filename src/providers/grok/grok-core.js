@@ -319,6 +319,10 @@ export class GrokApiService {
     }
 
     buildPayload(modelId, requestBody) {
+        if (requestBody && Object.prototype.hasOwnProperty.call(requestBody, 'tools')) {
+            delete requestBody.tools;
+        }
+
         const rawModelId = typeof modelId === 'string' ? modelId : '';
         const normalizedModelId = normalizeGrokModelId(rawModelId);
         const mapping = MODEL_MAPPING[normalizedModelId] || MODEL_MAPPING['grok-3'];
