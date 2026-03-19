@@ -1,0 +1,258 @@
+import axios from 'axios';
+import logger from '../../utils/logger.js';
+import * as http from 'http';
+import * as https from 'https';
+import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+
+/**
+ * MiniMax API service using OpenAI-compatible interface.
+ * Base URL: https://api.minimax.io/v1 (global) or https://api.minimaxi.com/v1 (China)
+ * Models: MiniMax-M2.7, MiniMax-M2.7-highspeed (204K context, 192K max output)
+ */
+export class MiniMaxApiService {
+    constructor(config) {
+        if (!config.MINIMAX_API_KEY) {
+            throw new Error("MiniMax API Key is required for MiniMaxApiService.");
+        }
+        this.config = config;
+        this.apiKey = config.MINIMAX_API_KEY;
+        this.baseUrl = config.MINIMAX_BASE_URL || 'https://api.minimax.io/v1';
+        this.useSystemProxy = config?.USE_SYSTEM_PROXY_MINIMAX ?? false;
+        logger.info(`[MiniMax] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
+
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+        const httpsAgent = new https.Agent({
+            keepAlive: true,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+            timeout: 120000,
+        });
+
+        const axiosConfig = {
+            baseURL: this.baseUrl,
+            httpAgent,
+            httpsAgent,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+            },
+        };
+
+        if (!this.useSystemProxy) {
+            axiosConfig.proxy = false;
+        }
+
+        configureAxiosProxy(axiosConfig, config, MODEL_PROVIDER.MINIMAX_CUSTOM);
+
+        this.axiosInstance = axios.create(axiosConfig);
+    }
+
+    _applySidecar(axiosConfig) {
+        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.MINIMAX_CUSTOM, this.baseUrl);
+    }
+
+    /**
+     * Clamp temperature to MiniMax's valid range (0.0, 1.0].
+     * MiniMax does not accept temperature=0; the minimum is just above 0.
+     */
+    _clampTemperature(body) {
+        if (body.temperature !== undefined) {
+            if (body.temperature <= 0) {
+                body.temperature = 0.01;
+            } else if (body.temperature > 1.0) {
+                body.temperature = 1.0;
+            }
+        }
+        return body;
+    }
+
+    /**
+     * Remove unsupported parameters from the request body.
+     * MiniMax does not support response_format.
+     */
+    _sanitizeRequestBody(body) {
+        const sanitized = { ...body };
+        this._clampTemperature(sanitized);
+        if (sanitized.response_format) {
+            delete sanitized.response_format;
+        }
+        return sanitized;
+    }
+
+    async callApi(endpoint, body, isRetry = false, retryCount = 0) {
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        const sanitizedBody = this._sanitizeRequestBody(body);
+
+        try {
+            const axiosConfig = {
+                method: 'post',
+                url: endpoint,
+                data: sanitizedBody
+            };
+            this._applySidecar(axiosConfig);
+            const response = await this.axiosInstance.request(axiosConfig);
+            return response.data;
+        } catch (error) {
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            const isNetworkError = isRetryableNetworkError(error);
+
+            if (status === 401 || status === 403) {
+                logger.error(`[MiniMax API] Received ${status}. API Key might be invalid or expired.`);
+                throw error;
+            }
+
+            if (status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[MiniMax API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(endpoint, body, isRetry, retryCount + 1);
+            }
+
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[MiniMax API] Received ${status} server error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(endpoint, body, isRetry, retryCount + 1);
+            }
+
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                logger.info(`[MiniMax API] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(endpoint, body, isRetry, retryCount + 1);
+            }
+
+            logger.error(`[MiniMax API] Error calling API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
+            throw error;
+        }
+    }
+
+    async *streamApi(endpoint, body, isRetry = false, retryCount = 0) {
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        const sanitizedBody = this._sanitizeRequestBody(body);
+        const streamRequestBody = { ...sanitizedBody, stream: true };
+
+        try {
+            const axiosConfig = {
+                method: 'post',
+                url: endpoint,
+                data: streamRequestBody,
+                responseType: 'stream'
+            };
+            this._applySidecar(axiosConfig);
+            const response = await this.axiosInstance.request(axiosConfig);
+
+            const stream = response.data;
+            let buffer = '';
+
+            for await (const chunk of stream) {
+                buffer += chunk.toString();
+                let newlineIndex;
+                while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+                    const line = buffer.substring(0, newlineIndex).trim();
+                    buffer = buffer.substring(newlineIndex + 1);
+
+                    if (line.startsWith('data: ')) {
+                        const jsonData = line.substring(6).trim();
+                        if (jsonData === '[DONE]') {
+                            return;
+                        }
+                        try {
+                            const parsedChunk = JSON.parse(jsonData);
+                            yield parsedChunk;
+                        } catch (e) {
+                            logger.warn("[MiniMaxApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            const status = error.response?.status;
+            const errorCode = error.code;
+            const errorMessage = error.message || '';
+            const isNetworkError = isRetryableNetworkError(error);
+
+            if (status === 401 || status === 403) {
+                logger.error(`[MiniMax API] Received ${status} during stream. API Key might be invalid or expired.`);
+                throw error;
+            }
+
+            if (status === 429 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[MiniMax API] Received 429 during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            if (status >= 500 && status < 600 && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[MiniMax API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            if (isNetworkError && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                logger.info(`[MiniMax API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                return;
+            }
+
+            logger.error(`[MiniMax API] Error calling streaming API (Status: ${status}, Code: ${errorCode}):`, errorMessage);
+            throw error;
+        }
+    }
+
+    async generateContent(model, requestBody) {
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+        if (requestBody._requestBaseUrl) {
+            delete requestBody._requestBaseUrl;
+        }
+
+        return this.callApi('/chat/completions', requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+        if (requestBody._requestBaseUrl) {
+            delete requestBody._requestBaseUrl;
+        }
+
+        yield* this.streamApi('/chat/completions', requestBody);
+    }
+
+    async listModels() {
+        try {
+            const response = await this.axiosInstance.get('/models');
+            return response.data;
+        } catch (error) {
+            const status = error.response?.status;
+            const data = error.response?.data;
+            logger.error(`Error listing MiniMax models (Status: ${status}):`, data || error.message);
+            throw error;
+        }
+    }
+}

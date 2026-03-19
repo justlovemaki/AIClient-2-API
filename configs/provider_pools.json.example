@@ -209,5 +209,21 @@
       "errorCount": 0,
       "lastErrorTime": null
     }
+  ],
+  "minimax-custom": [
+    {
+      "customName": "MiniMax节点1",
+      "MINIMAX_API_KEY": "your-minimax-api-key",
+      "MINIMAX_BASE_URL": "https://api.minimax.io/v1",
+      "checkModelName": "MiniMax-M2.7",
+      "checkHealth": false,
+      "uuid": "c3d4e5f6-7890-abcd-ef12-345678901234",
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
   ]
 }

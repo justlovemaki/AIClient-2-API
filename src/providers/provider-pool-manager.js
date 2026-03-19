@@ -24,6 +24,7 @@ export class ProviderPoolManager {
         'openai-codex-oauth': 'gpt-5-codex-mini',
         'openaiResponses-custom': 'gpt-4o-mini',
         'forward-api': 'gpt-4o-mini',
+        'minimax-custom': 'MiniMax-M2.7',
     };
 
     constructor(providerPools, options = {}) {

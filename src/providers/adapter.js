@@ -9,6 +9,7 @@ import { IFlowApiService } from './openai/iflow-core.js';
 import { CodexApiService } from './openai/codex-core.js';
 import { ForwardApiService } from './forward/forward-core.js';
 import { GrokApiService } from './grok/grok-core.js';
+import { MiniMaxApiService } from './minimax/minimax-core.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 import logger from '../utils/logger.js';
 
@@ -688,6 +689,38 @@ export class GrokApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// MiniMax API 服务适配器
+export class MiniMaxApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.miniMaxApiService = new MiniMaxApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        return this.miniMaxApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        yield* this.miniMaxApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        return this.miniMaxApiService.listModels();
+    }
+
+    async refreshToken() {
+        return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
+    }
+}
+
 // 注册所有内置适配器
 registerAdapter(MODEL_PROVIDER.OPENAI_CUSTOM, OpenAIApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES, OpenAIResponsesApiServiceAdapter);
@@ -699,6 +732,7 @@ registerAdapter(MODEL_PROVIDER.QWEN_API, QwenApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.IFLOW_API, IFlowApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.CODEX_API, CodexApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.GROK_CUSTOM, GrokApiServiceAdapter);
+registerAdapter(MODEL_PROVIDER.MINIMAX_CUSTOM, MiniMaxApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.FORWARD_API, ForwardApiServiceAdapter);
 
 // 用于存储服务适配器单例的映射

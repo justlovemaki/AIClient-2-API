@@ -59,7 +59,7 @@
 ## 💡 核心优势
 
 ### 🎯 统一接入，一站式管理
-*   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、Grok、Qwen Code、Kimi K2、MiniMax M2 等主流大模型
+*   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、Grok、Qwen Code、Kimi K2、MiniMax M2.7 等主流大模型
 *   **灵活切换机制**：Path 路由、支持通过启动参数、环境变量三种方式动态切换模型，满足不同场景需求
 *   **零成本迁移**：完全兼容 OpenAI API 规范，Cherry-Studio、NextChat、Cline 等工具无需修改即可使用
 *   **多协议智能转换**：支持 OpenAI、Claude、Gemini 三大协议间的智能转换，实现跨协议模型调用
@@ -221,7 +221,7 @@ docker compose up -d
 *   **Claude 4.5 Opus** - Anthropic 史上最强模型，现已通过 Kiro, Antigravity 支持
 *   **Gemini 3 Pro** - Google 下一代架构预览版，现已通过 Gemini, Antigravity 支持
 *   **Qwen3 Coder Plus** - 阿里通义千问最新代码专用模型，现已通过Qwen Code 支持
-*   **Kimi K2 / MiniMax M2** - 国内顶级旗舰模型同步支持，现已通过自定义OpenAI，Claude 支持
+*   **Kimi K2 / MiniMax M2.7** - 国内顶级旗舰模型同步支持。MiniMax 现已作为一级提供商 (`minimax-custom`) 支持，通过 API Key 直连，支持 MiniMax-M2.7 和 MiniMax-M2.7-highspeed 模型（204K 上下文）
 
 ---
 
@@ -319,6 +319,14 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
    - 图片生成（Grok Imagine）
    - 视频生成（Grok Video）
 4. **注意事项**：确保 `GROK_USER_AGENT` 与您获取 Cookie 时使用的浏览器一致以避免被拦截
+
+#### MiniMax API Key 配置
+1. **获取 API Key**：在 [MiniMax 开放平台](https://platform.minimax.io/) 注册并创建 API Key
+2. **填入配置**：在 Web UI 的"配置管理"或直接在 `provider_pools.json` 中设置 `MINIMAX_API_KEY`
+3. **支持模型**：
+   - `MiniMax-M2.7` - 性能巅峰，极致性价比，征服复杂任务
+   - `MiniMax-M2.7-highspeed` - 同等性能，更快更灵活
+4. **Base URL**：默认 `https://api.minimax.io/v1`（海外）。国内用户可使用 `https://api.minimaxi.com/v1`
 
 #### 账号池管理配置
 1. **创建号池配置文件**：参考 [provider_pools.json.example](./configs/provider_pools.json.example) 创建配置文件

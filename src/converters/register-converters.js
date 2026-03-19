@@ -23,6 +23,7 @@ export function registerAllConverters() {
     ConverterFactory.registerConverter(MODEL_PROTOCOL_PREFIX.GEMINI, GeminiConverter);
     ConverterFactory.registerConverter(MODEL_PROTOCOL_PREFIX.CODEX, CodexConverter);
     ConverterFactory.registerConverter(MODEL_PROTOCOL_PREFIX.GROK, GrokConverter);
+    ConverterFactory.registerConverter(MODEL_PROTOCOL_PREFIX.MINIMAX, OpenAIConverter);
 }
 
 // 自动注册所有转换器

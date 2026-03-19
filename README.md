@@ -60,7 +60,7 @@
 ## 💡 Core Advantages
 
 ### 🎯 Unified Access, One-Stop Management
-*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Grok, Qwen Code, Kimi K2, MiniMax M2
+*   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Grok, Qwen Code, Kimi K2, MiniMax M2.7
 *   **Flexible Switching Mechanism**: Path routing, support dynamic model switching via startup parameters or environment variables to meet different scenario requirements
 *   **Zero-Cost Migration**: Fully compatible with OpenAI API specifications, tools like Cherry-Studio, NextChat, Cline can be used without modification
 *   **Multi-Protocol Intelligent Conversion**: Support intelligent conversion between OpenAI, Claude, and Gemini protocols for cross-protocol model invocation
@@ -222,7 +222,7 @@ Seamlessly support the following latest large models, just configure the corresp
 *   **Claude 4.5 Opus** - Anthropic's strongest model ever, now supported via Kiro, Antigravity
 *   **Gemini 3 Pro** - Google's next-generation architecture preview, now supported via Gemini, Antigravity
 *   **Qwen3 Coder Plus** - Alibaba Tongyi Qianwen's latest code-specific model, now supported via Qwen Code
-*   **Kimi K2 / MiniMax M2** - Synchronized support for top domestic flagship models, now supported via custom OpenAI, Claude
+*   **Kimi K2 / MiniMax M2.7** - Synchronized support for top domestic flagship models. MiniMax now supported as a first-class provider (`minimax-custom`) with direct API key access, supporting MiniMax-M2.7 and MiniMax-M2.7-highspeed models (204K context)
 
 ---
 
@@ -320,6 +320,14 @@ Notes:
    - Image generation (Grok Imagine)
    - Video generation (Grok Video)
 4. **Notes**: Ensure `GROK_USER_AGENT` matches the browser used when obtaining the cookie to avoid being blocked
+
+#### MiniMax API Key Configuration
+1. **Obtain API Key**: Register on [MiniMax Platform](https://platform.minimax.io/) and create an API key
+2. **Enter Configuration**: In the Web UI "Configuration" page or directly in `provider_pools.json`, set `MINIMAX_API_KEY` to your API key
+3. **Supported Models**:
+   - `MiniMax-M2.7` - Peak Performance. Ultimate Value. Master the Complex
+   - `MiniMax-M2.7-highspeed` - Same performance, faster and more agile
+4. **Base URL**: Default `https://api.minimax.io/v1` (global). For China mainland, use `https://api.minimaxi.com/v1`
 
 #### Account Pool Management Configuration
 1. **Create Pool Configuration File**: Create a configuration file referencing [provider_pools.json.example](./configs/provider_pools.json.example)

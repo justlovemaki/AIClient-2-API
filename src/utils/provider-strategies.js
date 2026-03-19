@@ -27,6 +27,8 @@ class ProviderStrategyFactory {
                 return new ForwardStrategy();
             case MODEL_PROTOCOL_PREFIX.GROK:
                 return new GrokStrategy();
+            case MODEL_PROTOCOL_PREFIX.MINIMAX:
+                return new OpenAIStrategy();
             default:
                 throw new Error(`Unsupported provider protocol: ${providerProtocol}`);
         }

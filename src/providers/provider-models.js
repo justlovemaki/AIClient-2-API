@@ -106,6 +106,10 @@ export const PROVIDER_MODELS = {
         'grok-imagine-1.0',
         'grok-imagine-1.0-edit',
         'grok-imagine-1.0-video'
+    ],
+    'minimax-custom': [
+        'MiniMax-M2.7',
+        'MiniMax-M2.7-highspeed'
     ]
 };
 
