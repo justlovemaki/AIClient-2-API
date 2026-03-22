@@ -88,6 +88,8 @@ export const PROVIDER_MODELS = {
         'gpt-5.3-codex',
         'gpt-5.3-codex-spark',
         'gpt-5.4',
+        // 保留 Codex 侧的 mini 变体，避免 UI/校验层把可用模型误判为不存在。
+        'gpt-5.4-mini',
     ],
     'forward-api': [],
     'grok-custom': [
