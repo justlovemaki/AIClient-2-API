@@ -39,6 +39,16 @@ export class CodexApiService {
         this.startCacheCleanup();
     }
 
+    logCacheSelection({ sessionId, cacheKey, cacheId, status, model, providerUuid }) {
+        if (!this.config?.CODEX_CACHE_DEBUG_LOG) {
+            return;
+        }
+
+        logger.warn(
+            `[Codex CacheDebug] model=${model} sessionId=${sessionId} cacheKey=${cacheKey} cacheId=${cacheId} status=${status} uuid=${providerUuid || 'unknown'}`
+        );
+    }
+
     _applySidecar(axiosConfig) {
         return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.CODEX_API, this.baseUrl);
     }
@@ -369,15 +379,16 @@ export class CodexApiService {
             logger.info(`[Codex] Detected -fast model: ${normalizedModel} -> ${upstreamModel}, service_tier: ${cleanedBody.service_tier || defaultServiceTier}`);
         }
 
-        // 生成会话缓存键
-        // 弱化 model 依赖，以提升同会话跨模型的缓存命中率
-        // 仅当 sessionId 为 'default' 时加上 model 前缀，提供基础隔离
+        // 生成会话缓存键：
+        // 1) 有真实 session 时，优先按 session 复用同一个 prompt_cache_key
+        // 2) 没有 session 时，才退回到 model-default，避免不同模型无意共享
         let cacheKey = sessionId;
         if (sessionId === 'default') {
             cacheKey = `${model}-default`;
         }
         
         let cache = this.conversationCache.get(cacheKey);
+        let cacheStatus = 'hit';
 
         if (!cache || cache.expire < Date.now()) {
             cache = {
@@ -385,7 +396,17 @@ export class CodexApiService {
                 expire: Date.now() + 3600000 // 1 小时
             };
             this.conversationCache.set(cacheKey, cache);
+            cacheStatus = 'miss';
         }
+
+        this.logCacheSelection({
+            sessionId,
+            cacheKey,
+            cacheId: cache.id,
+            status: cacheStatus,
+            model: normalizedModel,
+            providerUuid: this.uuid
+        });
 
         // 注意：requestBody 已经去除了 metadata
         const result = {

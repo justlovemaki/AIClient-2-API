@@ -7,6 +7,25 @@ import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { convertData } from '../convert/convert.js';
 import { ENDPOINT_TYPE } from '../utils/common.js';
 
+function hashStickyKey(input) {
+    let hash = 0;
+    for (const char of String(input)) {
+        hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    }
+    return hash;
+}
+
+function resolveStickyPreferredUuid(providers, stickyKey) {
+    if (!stickyKey || !Array.isArray(providers) || providers.length === 0) {
+        return null;
+    }
+
+    // 将 session key 稳定映射到一个 provider uuid，避免同一会话在多个实例之间漂移。
+    const ordered = [...providers].sort((a, b) => String(a.uuid || '').localeCompare(String(b.uuid || '')));
+    const index = hashStickyKey(stickyKey) % ordered.length;
+    return ordered[index]?.uuid || null;
+}
+
 /**
  * Manages a pool of API service providers, handling their health and selection.
  */
@@ -823,15 +842,26 @@ export class ProviderPoolManager {
             return null;
         }
 
-        // 改进：使用统一的评分策略进行选择
-        // 传入当前时间戳 now 确保一致性
-        const selected = availableAndHealthyProviders.sort((a, b) => {
-            const scoreA = this._calculateNodeScore(a, now, minSeq);
-            const scoreB = this._calculateNodeScore(b, now, minSeq);
-            if (scoreA !== scoreB) return scoreA - scoreB;
-            // 如果分值相同，使用 UUID 排序确保确定性
-            return a.uuid < b.uuid ? -1 : 1;
-        })[0];
+        // sessionAffinityKey 仅用于 Codex 场景的“会话粘性”，不影响普通 LRU 选路。
+        const stickyPreferredUuid = resolveStickyPreferredUuid(availableAndHealthyProviders, options.sessionAffinityKey);
+        let selected = stickyPreferredUuid
+            ? availableAndHealthyProviders.find(p => p.uuid === stickyPreferredUuid)
+            : null;
+
+        if (!selected) {
+            // 改进：使用统一的评分策略进行选择
+            // 传入当前时间戳 now 确保一致性
+            selected = availableAndHealthyProviders.sort((a, b) => {
+                const scoreA = this._calculateNodeScore(a, now, minSeq);
+                const scoreB = this._calculateNodeScore(b, now, minSeq);
+                if (scoreA !== scoreB) return scoreA - scoreB;
+                // 如果分值相同，使用 UUID 排序确保确定性
+                return a.uuid < b.uuid ? -1 : 1;
+            })[0];
+        } else {
+            // 如果会话亲和性命中，就优先固定到对应实例；否则回退到原有评分策略。
+            this._log('debug', `Sticky session selection for ${providerType}: ${selected.config.uuid} (key: ${options.sessionAffinityKey})`);
+        }
 
         // 始终更新 lastUsed（确保 LRU 策略生效，避免并发请求选到同一个 provider）
         // usageCount 只在请求成功后才增加（由 skipUsageCount 控制）
@@ -850,7 +880,7 @@ export class ProviderPoolManager {
         // 使用防抖保存（文件 I/O 是异步的，但内存已经更新）
         this._debouncedSave(providerType);
 
-        this._log('debug', `Selected provider for ${providerType} (LRU): ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}${options.skipUsageCount ? ' (skip usage count)' : ''}`);
+        this._log('debug', `Selected provider for ${providerType}${stickyPreferredUuid && selected.config.uuid === stickyPreferredUuid ? ' (sticky)' : ' (LRU)'}: ${selected.config.uuid}${requestedModel ? ` for model: ${requestedModel}` : ''}${options.skipUsageCount ? ' (skip usage count)' : ''}`);
         
         return selected.config;
     }

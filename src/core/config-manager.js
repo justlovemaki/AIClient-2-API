@@ -85,6 +85,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         LOG_INCLUDE_TIMESTAMP: true,
         LOG_MAX_FILE_SIZE: 10485760,
         LOG_MAX_FILES: 10,
+        // 仅用于排障：打印 Codex 会话键、缓存键和命中状态；默认关闭避免日志噪音。
+        CODEX_CACHE_DEBUG_LOG: false,
         TLS_SIDECAR_ENABLED: false, // 启用 Go uTLS sidecar（需要编译 tls-sidecar 二进制）
         TLS_SIDECAR_ENABLED_PROVIDERS: [], // 启用 TLS Sidecar 的提供商列表
         TLS_SIDECAR_PORT: 9090,     // sidecar 监听端口

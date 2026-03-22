@@ -918,9 +918,20 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // - 使用号池/AUTO 时按模型重选并支持 fallback
     // 注意：仅在号池场景开启 acquireSlot，占用并发名额或进入队列
     const shouldSelectByPool = providerPoolManager && (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO || (CONFIG.providerPools && CONFIG.providerPools[CONFIG.MODEL_PROVIDER]));
+    // Codex 会话亲和性：把 OpenClaw 传下来的 session 标识带到号池选择层，
+    // 这样同一 Discord 频道 / 私聊 / 子线程更容易命中同一个 Codex 实例缓存。
+    const metadata = originalRequestBody?.metadata && typeof originalRequestBody.metadata === 'object'
+        ? originalRequestBody.metadata
+        : null;
+    const sessionAffinityKey = CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.CODEX_API
+        ? (metadata?.session_id || metadata?.conversation_id || metadata?.user_id || null)
+        : null;
     if (!service || shouldSelectByPool) {
         const { getApiServiceWithFallback } = await import('../services/service-manager.js');
-        const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: shouldSelectByPool });
+        const result = await getApiServiceWithFallback(CONFIG, model, {
+            acquireSlot: shouldSelectByPool,
+            ...(sessionAffinityKey ? { sessionAffinityKey } : {})
+        });
 
         service = result.service;
         toProvider = result.actualProviderType;
