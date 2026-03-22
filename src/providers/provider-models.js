@@ -90,6 +90,11 @@ export const PROVIDER_MODELS = {
         'gpt-5.4',
     ],
     'forward-api': [],
+    'openai-novita': [
+        'moonshotai/kimi-k2.5',
+        'zai-org/glm-5',
+        'minimax/minimax-m2.5',
+    ],
     'grok-custom': [
         'grok-3',
         'grok-3-mini',

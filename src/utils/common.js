@@ -73,6 +73,7 @@ export const MODEL_PROVIDER = {
     CODEX_API: 'openai-codex-oauth',
     FORWARD_API: 'forward-api',
     GROK_CUSTOM: 'grok-custom',
+    NOVITA_CUSTOM: 'openai-novita',
     AUTO: 'auto',
 }
 

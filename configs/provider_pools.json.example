@@ -180,6 +180,22 @@
       "lastErrorTime": null
     }
   ],
+  "openai-novita": [
+    {
+      "customName": "Novita AI节点1",
+      "NOVITA_API_KEY": "your-novita-api-key",
+      "NOVITA_BASE_URL": "https://api.novita.ai/openai",
+      "checkModelName": null,
+      "checkHealth": false,
+      "uuid": "c3a1f2b4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
   "openai-iflow": [
     {
       "customName": "iFlow Token节点1",

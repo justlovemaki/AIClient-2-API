@@ -9,6 +9,7 @@ import { IFlowApiService } from './openai/iflow-core.js';
 import { CodexApiService } from './openai/codex-core.js';
 import { ForwardApiService } from './forward/forward-core.js';
 import { GrokApiService } from './grok/grok-core.js';
+import { NovitaApiService } from './openai/novita-core.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 import logger from '../utils/logger.js';
 
@@ -688,6 +689,38 @@ export class GrokApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
+// Novita AI API 服务适配器
+export class NovitaApiServiceAdapter extends ApiServiceAdapter {
+    constructor(config) {
+        super();
+        this.novitaApiService = new NovitaApiService(config);
+    }
+
+    async generateContent(model, requestBody) {
+        return this.novitaApiService.generateContent(model, requestBody);
+    }
+
+    async *generateContentStream(model, requestBody) {
+        yield* this.novitaApiService.generateContentStream(model, requestBody);
+    }
+
+    async listModels() {
+        return this.novitaApiService.listModels();
+    }
+
+    async refreshToken() {
+        return Promise.resolve();
+    }
+
+    async forceRefreshToken() {
+        return Promise.resolve();
+    }
+
+    isExpiryDateNear() {
+        return false;
+    }
+}
+
 // 注册所有内置适配器
 registerAdapter(MODEL_PROVIDER.OPENAI_CUSTOM, OpenAIApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES, OpenAIResponsesApiServiceAdapter);
@@ -699,6 +732,7 @@ registerAdapter(MODEL_PROVIDER.QWEN_API, QwenApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.IFLOW_API, IFlowApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.CODEX_API, CodexApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.GROK_CUSTOM, GrokApiServiceAdapter);
+registerAdapter(MODEL_PROVIDER.NOVITA_CUSTOM, NovitaApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.FORWARD_API, ForwardApiServiceAdapter);
 
 // 用于存储服务适配器单例的映射
