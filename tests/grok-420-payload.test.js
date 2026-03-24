@@ -16,4 +16,8 @@ describe('Grok 4.20 payload format implementation', () => {
         expect(content).toContain("payload.modeId = mapping.modeId || 'expert';");
         expect(content).toContain("payload.enable420 = true;");
     });
+
+    test('allows extra_body.temporary to override default temporary=true', () => {
+        expect(content).toContain('"temporary": requestBody?.extra_body?.temporary ?? true');
+    });
 });
