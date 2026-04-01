@@ -283,6 +283,8 @@ export class ProviderPoolManager {
         }
 
         const queue = this.refreshQueues[providerType];
+        // 记录此任务是否持有一个全局槽位（情况1追加的任务不持有）
+        let ownsGlobalSlot = false;
 
         const runTask = async () => {
             try {
@@ -291,13 +293,13 @@ export class ProviderPoolManager {
                 this._log('error', `Failed to process refresh for node ${uuid}: ${err.message}`);
             } finally {
                 this.refreshingUuids.delete(uuid);
-                
+
                 // 再次获取当前队列引用
                 const currentQueue = this.refreshQueues[providerType];
                 if (!currentQueue) return;
 
                 currentQueue.activeCount--;
-                
+
                 // 1. 尝试从当前提供商队列中取下一个任务
                 if (currentQueue.waitingTasks.length > 0) {
                     const nextTask = currentQueue.waitingTasks.shift();
@@ -306,13 +308,14 @@ export class ProviderPoolManager {
                     Promise.resolve().then(nextTask);
                 } else if (currentQueue.activeCount === 0) {
                     // 2. 如果当前提供商的所有任务都完成了，释放全局槽位
-                    // 只有在确定队列为空且没有新任务时才清理
-                    if (currentQueue.waitingTasks.length === 0 &&
+                    // 只有持有全局槽位的任务才能递减计数器，避免负值
+                    if (ownsGlobalSlot &&
+                        currentQueue.waitingTasks.length === 0 &&
                         this.refreshQueues[providerType] === currentQueue) {
                         this.activeProviderRefreshes--;
                         delete this.refreshQueues[providerType]; // 清理空队列
                     }
-                    
+
                     // 3. 尝试启动下一个等待中的提供商队列
                     if (this.globalRefreshWaiters.length > 0) {
                         const nextProviderStart = this.globalRefreshWaiters.shift();
@@ -333,15 +336,17 @@ export class ProviderPoolManager {
 
         // 检查全局并发限制（按提供商分组）
         // 情况1: 该提供商已经在运行，直接加入其队列（不占用新的全局槽位）
-        if (this.refreshQueues[providerType].activeCount > 0) {
+        const isExistingQueue = this.refreshQueues[providerType].activeCount > 0 || this.refreshQueues[providerType].waitingTasks.length > 0;
+        if (isExistingQueue) {
             tryStartProviderQueue();
         }
-        // 情况2: 该提供商未运行，需要检查全局槽位
+        // 情况2: 该提供商未运行，需要检查全局槽位，此路径持有全局槽位
         else if (this.activeProviderRefreshes < this.refreshConcurrency.global) {
+            ownsGlobalSlot = true;
             this.activeProviderRefreshes++;
             tryStartProviderQueue();
         }
-        // 情况3: 全局槽位已满，进入等待队列
+        // 情况3: 全局槽位已满，进入等待队列，由等待回调负责标记持槽
         else {
             this.globalRefreshWaiters.push(() => {
                 // 重新获取最新的队列引用
@@ -351,7 +356,8 @@ export class ProviderPoolManager {
                         waitingTasks: []
                     };
                 }
-                // 重要：从等待队列启动时需要增加全局计数
+                // 从等待队列启动时持有全局槽位
+                ownsGlobalSlot = true;
                 this.activeProviderRefreshes++;
                 tryStartProviderQueue();
             });

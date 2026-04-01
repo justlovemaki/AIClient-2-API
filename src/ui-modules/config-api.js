@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { CONFIG } from '../core/config-manager.js';
 import { serviceInstances } from '../providers/adapter.js';
 import { initApiService } from '../services/service-manager.js';
@@ -110,16 +111,30 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         const body = await getRequestBody(req);
         const newConfig = body;
 
-        // Update config values in memory
-        if (newConfig.REQUIRED_API_KEY !== undefined) currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
-        if (newConfig.HOST !== undefined) currentConfig.HOST = newConfig.HOST;
-        if (newConfig.SERVER_PORT !== undefined) currentConfig.SERVER_PORT = newConfig.SERVER_PORT;
+        // Update config values in memory（含类型校验）
+        if (newConfig.REQUIRED_API_KEY !== undefined) {
+            if (typeof newConfig.REQUIRED_API_KEY === 'string') currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
+        }
+        if (newConfig.HOST !== undefined) {
+            if (typeof newConfig.HOST === 'string' && newConfig.HOST.length > 0) currentConfig.HOST = newConfig.HOST;
+        }
+        if (newConfig.SERVER_PORT !== undefined) {
+            const port = Number(newConfig.SERVER_PORT);
+            if (Number.isInteger(port) && port > 0 && port < 65536) currentConfig.SERVER_PORT = port;
+        }
         if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
-        if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) currentConfig.SYSTEM_PROMPT_FILE_PATH = newConfig.SYSTEM_PROMPT_FILE_PATH;
+        if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) {
+            const p = String(newConfig.SYSTEM_PROMPT_FILE_PATH);
+            // 防止路径遍历：只允许相对路径或限定目录
+            if (!p.includes('..')) currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
+        }
         if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
         if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
         if (newConfig.PROMPT_LOG_MODE !== undefined) currentConfig.PROMPT_LOG_MODE = newConfig.PROMPT_LOG_MODE;
-        if (newConfig.REQUEST_MAX_RETRIES !== undefined) currentConfig.REQUEST_MAX_RETRIES = newConfig.REQUEST_MAX_RETRIES;
+        if (newConfig.REQUEST_MAX_RETRIES !== undefined) {
+            const v = Number(newConfig.REQUEST_MAX_RETRIES);
+            if (Number.isInteger(v) && v >= 0 && v <= 100) currentConfig.REQUEST_MAX_RETRIES = v;
+        }
         if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
         if (newConfig.CREDENTIAL_SWITCH_MAX_RETRIES !== undefined) currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES = newConfig.CREDENTIAL_SWITCH_MAX_RETRIES;
         if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
@@ -326,17 +341,23 @@ export async function handleUpdateAdminPassword(req, res) {
 
         if (!password || password.trim() === '') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                error: {
-                    message: 'Password cannot be empty'
-                }
-            }));
+            res.end(JSON.stringify({ error: { message: 'Password cannot be empty' } }));
             return true;
         }
 
-        // 写入密码到 pwd 文件
+        if (password.trim().length < 8) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Password must be at least 8 characters' } }));
+            return true;
+        }
+
+        // 使用 PBKDF2 哈希存储密码，避免明文写入文件
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = crypto.pbkdf2Sync(password.trim(), salt, 100000, 64, 'sha512').toString('hex');
+        const stored = `pbkdf2:${salt}:${hash}`;
+
         const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
-        await fs.writeFile(pwdFilePath, password.trim(), 'utf-8');
+        await fs.writeFile(pwdFilePath, stored, 'utf-8');
         
         logger.info('[UI API] Admin password updated successfully');
 

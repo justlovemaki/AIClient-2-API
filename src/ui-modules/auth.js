@@ -48,10 +48,19 @@ export async function readPasswordFile() {
  */
 export async function validateCredentials(password) {
     const storedPassword = await readPasswordFile();
-    logger.info('[Auth] Validating password, stored password length:', storedPassword ? storedPassword.length : 0, ', input password length:', password ? password.length : 0);
-    const isValid = storedPassword && password === storedPassword;
-    logger.info('[Auth] Password validation result:', isValid);
-    return isValid;
+    if (!storedPassword || !password) return false;
+
+    // 新格式：pbkdf2:salt:hash
+    if (storedPassword.startsWith('pbkdf2:')) {
+        const parts = storedPassword.split(':');
+        if (parts.length !== 3) return false;
+        const [, salt, storedHash] = parts;
+        const inputHash = crypto.pbkdf2Sync(password.trim(), salt, 100000, 64, 'sha512').toString('hex');
+        return crypto.timingSafeEqual(Buffer.from(inputHash, 'hex'), Buffer.from(storedHash, 'hex'));
+    }
+
+    // 旧格式：明文（兼容迁移期，建议通过 UI 重新设置密码以升级为哈希格式）
+    return password === storedPassword;
 }
 
 /**

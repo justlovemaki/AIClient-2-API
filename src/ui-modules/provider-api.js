@@ -6,6 +6,13 @@ import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFro
 import { broadcastEvent } from './event-broadcast.js';
 import { getRegisteredProviders } from '../providers/adapter.js';
 
+// 文件级互斥锁：防止并发读写导致数据丢失
+let _fileLockChain = Promise.resolve();
+function withFileLock(fn) {
+    const next = _fileLockChain.then(() => fn());
+    _fileLockChain = next.catch(() => {});
+    return next;
+}
 /**
  * 获取提供商池摘要
  */
@@ -93,6 +100,9 @@ export async function handleGetProviderTypeModels(req, res, providerType) {
  * 添加新的提供商配置
  */
 export async function handleAddProvider(req, res, currentConfig, providerPoolManager) {
+    return withFileLock(() => _handleAddProvider(req, res, currentConfig, providerPoolManager));
+}
+async function _handleAddProvider(req, res, currentConfig, providerPoolManager) {
     try {
         const body = await getRequestBody(req);
         const { providerType, providerConfig } = body;
@@ -180,6 +190,9 @@ export async function handleAddProvider(req, res, currentConfig, providerPoolMan
  * 更新特定提供商配置
  */
 export async function handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
+    return withFileLock(() => _handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid));
+}
+async function _handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
     try {
         const body = await getRequestBody(req);
         const { providerConfig } = body;
@@ -266,6 +279,9 @@ export async function handleUpdateProvider(req, res, currentConfig, providerPool
  * 删除特定提供商配置
  */
 export async function handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
+    return withFileLock(() => _handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid));
+}
+async function _handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
     try {
         const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         let providerPools = {};
@@ -337,6 +353,9 @@ export async function handleDeleteProvider(req, res, currentConfig, providerPool
  * 禁用/启用特定提供商配置
  */
 export async function handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action) {
+    return withFileLock(() => _handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action));
+}
+async function _handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action) {
     try {
         const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         let providerPools = {};
