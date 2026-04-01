@@ -173,7 +173,7 @@ textarea.form-control {
     width: 18px;
     left: 3px;
     bottom: 2px;
-    background-color: white;
+    background-color: var(--bg-primary, white);
     transition: var(--transition);
     border-radius: 50%;
     box-shadow: 0 1px 3px var(--neutral-shadow-30);

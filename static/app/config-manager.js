@@ -53,10 +53,11 @@ function renderProviderTags(container, configs, isRequired) {
     // 过滤掉不可见的提供商
     const visibleConfigs = configs.filter(c => c.visible !== false);
     
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     container.innerHTML = visibleConfigs.map(c => `
-        <button type="button" class="provider-tag" data-value="${c.id}">
-            <i class="fas ${c.icon || 'fa-server'}"></i>
-            <span>${c.name}</span>
+        <button type="button" class="provider-tag" data-value="${escHtml(c.id)}">
+            <i class="fas ${escHtml(c.icon || 'fa-server')}"></i>
+            <span>${escHtml(c.name)}</span>
         </button>
     `).join('');
     
@@ -157,7 +158,7 @@ async function loadConfiguration() {
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
         if (loginExpiryEl) loginExpiryEl.value = data.LOGIN_EXPIRY || 3600;
-        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH;
+        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 10;
         if (warmupTargetEl) warmupTargetEl.value = data.WARMUP_TARGET || 0;
         if (refreshConcurrencyPerProviderEl) refreshConcurrencyPerProviderEl.value = data.REFRESH_CONCURRENCY_PER_PROVIDER || 1;
@@ -248,7 +249,7 @@ async function loadConfiguration() {
         const scheduledHealthCheckIntervalEl = document.getElementById('scheduledHealthCheckInterval');
         
         if (data.SCHEDULED_HEALTH_CHECK) {
-            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = data.SCHEDULED_HEALTH_CHECK.enabled !== false;
+            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = data.SCHEDULED_HEALTH_CHECK.enabled === true;
             if (scheduledHealthCheckStartupRunEl) scheduledHealthCheckStartupRunEl.checked = data.SCHEDULED_HEALTH_CHECK.startupRun !== false;
             if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = data.SCHEDULED_HEALTH_CHECK.interval || 600000;
         } else {

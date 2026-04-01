@@ -57,11 +57,48 @@ export async function handleGetConfig(req, res, currentConfig) {
         }
     }
 
+    // 白名单过滤：只返回前端需要的字段，避免泄露凭据路径、内部状态等敏感信息
+    const safeConfig = {
+        HOST: currentConfig.HOST,
+        SERVER_PORT: currentConfig.SERVER_PORT,
+        MODEL_PROVIDER: currentConfig.MODEL_PROVIDER,
+        SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
+        SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
+        PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,
+        PROMPT_LOG_MODE: currentConfig.PROMPT_LOG_MODE,
+        REQUEST_MAX_RETRIES: currentConfig.REQUEST_MAX_RETRIES,
+        REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
+        CREDENTIAL_SWITCH_MAX_RETRIES: currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES,
+        CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
+        CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
+        LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
+        PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
+        MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
+        WARMUP_TARGET: currentConfig.WARMUP_TARGET,
+        REFRESH_CONCURRENCY_PER_PROVIDER: currentConfig.REFRESH_CONCURRENCY_PER_PROVIDER,
+        providerFallbackChain: currentConfig.providerFallbackChain,
+        modelFallbackMapping: currentConfig.modelFallbackMapping,
+        PROXY_URL: currentConfig.PROXY_URL,
+        PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS,
+        TLS_SIDECAR_ENABLED: currentConfig.TLS_SIDECAR_ENABLED,
+        TLS_SIDECAR_ENABLED_PROVIDERS: currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS,
+        TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT,
+        TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL,
+        LOG_ENABLED: currentConfig.LOG_ENABLED,
+        LOG_OUTPUT_MODE: currentConfig.LOG_OUTPUT_MODE,
+        LOG_LEVEL: currentConfig.LOG_LEVEL,
+        LOG_DIR: currentConfig.LOG_DIR,
+        LOG_INCLUDE_REQUEST_ID: currentConfig.LOG_INCLUDE_REQUEST_ID,
+        LOG_INCLUDE_TIMESTAMP: currentConfig.LOG_INCLUDE_TIMESTAMP,
+        LOG_MAX_FILE_SIZE: currentConfig.LOG_MAX_FILE_SIZE,
+        LOG_MAX_FILES: currentConfig.LOG_MAX_FILES,
+        SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK,
+        // 脱敏：只返回是否设置了 API Key，不返回原文
+        REQUIRED_API_KEY: currentConfig.REQUIRED_API_KEY ? '******' : '',
+        systemPrompt,
+    };
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-        ...currentConfig,
-        systemPrompt
-    }));
+    res.end(JSON.stringify(safeConfig));
     return true;
 }
 
@@ -129,8 +166,10 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                  providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
              };
              
-             // 如果定时器已存在且 enabled，重新加载 timer（interval 变化时）
-             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled) {
+             // 如果定时器已存在且 enabled，仅在 interval 实际变化时重新加载 timer
+             const previousInterval = currentConfig.SCHEDULED_HEALTH_CHECK._activeInterval;
+             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled && newInterval !== previousInterval) {
+                 currentConfig.SCHEDULED_HEALTH_CHECK._activeInterval = newInterval;
                  globalThis.reloadHealthCheckTimer(newInterval);
              }
         }

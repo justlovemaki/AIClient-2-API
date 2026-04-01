@@ -115,7 +115,7 @@ export async function handleAddProvider(req, res, currentConfig, providerPoolMan
         providerConfig.errorCount = providerConfig.errorCount || 0;
         providerConfig.lastErrorTime = providerConfig.lastErrorTime || null;
 
-        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+        const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
         let providerPools = {};
         
         // Load existing pools

@@ -112,7 +112,12 @@ export class ProviderPoolManager {
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
-                        if (true) {
+                        const fileContent = fs.readFileSync(configPath, 'utf-8');
+                        const credData = JSON.parse(fileContent);
+                        const expiryTime = credData.expiry_date || credData.expiry || credData.expires_at;
+                        const nearExpiryMs = (currentConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+                        const isNearExpiry = expiryTime && (expiryTime - Date.now()) < nearExpiryMs;
+                        if (isNearExpiry) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
                         }
@@ -389,7 +394,16 @@ export class ProviderPoolManager {
             // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
             if (typeof serviceAdapter.refreshToken === 'function') {
                 const startTime = Date.now();
-                force ? await serviceAdapter.forceRefreshToken() : await serviceAdapter.refreshToken() 
+                if (force) {
+                    if (typeof serviceAdapter.forceRefreshToken === 'function') {
+                        await serviceAdapter.forceRefreshToken();
+                    } else {
+                        this._log('warn', `forceRefreshToken not implemented for ${providerType}, falling back to refreshToken`);
+                        await serviceAdapter.refreshToken();
+                    }
+                } else {
+                    await serviceAdapter.refreshToken();
+                }
                 const duration = Date.now() - startTime;
                 this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
                 
@@ -452,7 +466,7 @@ export class ProviderPoolManager {
         const lastSelectionSeq = config._lastSelectionSeq || 0;
         if (minSeqInPool === -1) {
             const pool = this.providerStatus[providerStatus.type] || [];
-            minSeqInPool = Math.min(...pool.map(p => p.config._lastSelectionSeq || 0));
+            minSeqInPool = pool.reduce((min, p) => Math.min(min, p.config._lastSelectionSeq || 0), Infinity);
         }
         const relativeSeq = Math.max(0, lastSelectionSeq - minSeqInPool);
         const cappedRelativeSeq = Math.min(relativeSeq, 100);
@@ -1819,14 +1833,14 @@ export class ProviderPoolManager {
                 continue;
             }
             
-            const checkStartTime = Date.now();
+            const providerCheckStart = Date.now();
             const checkModelName = provider.config.checkModelName || ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 'unknown';
             const displayName = customName || uuid.substring(0, 8);
-            
+
             try {
                 // Perform health check (health check is based on providerTypes configuration, not per-provider checkHealth flag)
                 const result = await this._checkProviderHealth(providerType, provider.config);
-                const checkDuration = Date.now() - checkStartTime;
+                const checkDuration = Date.now() - providerCheckStart;
                 
                 if (!result.success) {
                     // Provider is unhealthy
@@ -1840,7 +1854,7 @@ export class ProviderPoolManager {
                     this.markProviderHealthy(providerType, provider.config, false, result.modelName);
                 }
             } catch (error) {
-                const checkDuration = Date.now() - checkStartTime;
+                const checkDuration = Date.now() - providerCheckStart;
                 failCount++;
                 this._log('error', `[ScheduledHealthCheck] ${displayName} (${providerType}) EXCEPTION: ${error.message} (${checkDuration}ms)`);
                 this.markProviderUnhealthyImmediately(providerType, provider.config, error.message);

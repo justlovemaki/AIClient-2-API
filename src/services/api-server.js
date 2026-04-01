@@ -313,7 +313,7 @@ async function startServer() {
         logger.info(`  System Prompt Mode: ${CONFIG.SYSTEM_PROMPT_MODE}`);
         logger.info(`  Host: ${CONFIG.HOST}`);
         logger.info(`  Port: ${CONFIG.SERVER_PORT}`);
-        logger.info(`  Required API Key: ${CONFIG.REQUIRED_API_KEY}`);
+        logger.info(`  Required API Key: ${CONFIG.REQUIRED_API_KEY ? CONFIG.REQUIRED_API_KEY.slice(0, 4) + '****' : '(none)'}`);
         logger.info(`  Prompt Logging: ${CONFIG.PROMPT_LOG_MODE}${CONFIG.PROMPT_LOG_FILENAME ? ` (to ${CONFIG.PROMPT_LOG_FILENAME})` : ''}`);
         logger.info(`------------------------------------------`);
         logger.info(`\nUnified API Server running on http://${CONFIG.HOST}:${CONFIG.SERVER_PORT}`);
@@ -355,14 +355,14 @@ async function startServer() {
             setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
         }
         // 服务器完全启动后,执行初始健康检查
-         const poolManager = getProviderPoolManager();
-         if (poolManager) {
-             logger.info('[Initialization] Performing initial health checks for provider pools...');
-             poolManager.performHealthChecks();
-         }
+        const poolManager = getProviderPoolManager();
+        if (poolManager) {
+            logger.info('[Initialization] Performing initial health checks for provider pools...');
+            poolManager.performHealthChecks();
+        }
 
         // 定时健康检查
-         const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
+        const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
         if (scheduledConfig?.enabled) {
             // 设计决策：只验证最小值 60000ms，不设最大值。
             // 前端有 max=3600000 (1小时) 的 UI 限制，但后端允许更大值以支持特殊需求。
