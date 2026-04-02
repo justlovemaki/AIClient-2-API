@@ -116,8 +116,11 @@ export class ProviderPoolManager {
                         const credData = JSON.parse(fileContent);
                         const expiryTime = credData.expiry_date || credData.expiry || credData.expires_at;
                         const nearExpiryMs = (currentConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-                        const isNearExpiry = expiryTime && (expiryTime - Date.now()) < nearExpiryMs;
-                        if (isNearExpiry) {
+                        if (!expiryTime) {
+                            // 凭据文件缺少 expiry 字段，无法判断是否快过期，作为安全措施强制刷新
+                            this._log('warn', `Node ${providerStatus.uuid} (${providerType}) has no expiry field. Forcing refresh as safety measure...`);
+                            this._enqueueRefresh(providerType, providerStatus);
+                        } else if ((expiryTime - Date.now()) < nearExpiryMs) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
                         }
@@ -1692,14 +1695,15 @@ export class ProviderPoolManager {
     }
 
     /**
-     * Performs health checks on selected providers.
+     * Performs initial (startup) health checks on selected providers.
      * Respects SCHEDULED_HEALTH_CHECK.providerTypes configuration.
-     * 
+     * Called once at server startup.
+     *
      * 设计决策：如果没有选择任何 provider types，则不进行检查任何 provider。
      * 这是有意为之的设计 - 如果用户没有明确选择，则不需要自动健康检查。
      * 区别于原来的逻辑（检查所有 provider），现在的行为更符合用户预期。
      */
-    async performHealthChecks() {
+    async performInitialHealthChecks() {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
         const selectedProviderTypes = scheduledConfig?.providerTypes;
         
@@ -1788,7 +1792,7 @@ export class ProviderPoolManager {
      * This method is designed to be called periodically to proactively check provider health.
      * It respects provider-level isDisabled flag.
      */
-    async performScheduledHealthChecks() {
+    async performHealthChecks() {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
         const checkStartTime = Date.now();
         
@@ -1920,7 +1924,7 @@ export class ProviderPoolManager {
      * Performs an actual health check for a specific provider.
      * 
      * 设计决策：不检查 providerConfig.checkHealth 标志。
-     * 健康检查是否执行由上层调用方（performScheduledHealthChecks / performHealthChecks）
+     * 健康检查是否执行由上层调用方（performHealthChecks / performInitialHealthChecks）
      * 通过 providerTypes 数组来决定，不在每个 provider 级别控制。
      * 这样简化了逻辑，避免 per-provider 的 checkHealth flag 变得无用。
      * 
@@ -1972,7 +1976,7 @@ export class ProviderPoolManager {
                 await serviceAdapter.generateContent(modelName, requestWithSignal);
                 
                 clearTimeout(timeoutId);
-                // 注意：使用量计数由调用方处理（performScheduledHealthChecks/performHealthChecks）
+                // 注意：使用量计数由调用方处理（performHealthChecks/performInitialHealthChecks）
                 // 这里只返回成功结果，让调用方统一处理状态更新和计数
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {

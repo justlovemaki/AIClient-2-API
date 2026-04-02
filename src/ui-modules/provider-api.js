@@ -7,18 +7,22 @@ import { broadcastEvent } from './event-broadcast.js';
 import { getRegisteredProviders } from '../providers/adapter.js';
 
 // 文件级互斥锁：防止并发读写导致数据丢失
-// HTML 脱敏：移除用户输入字段中的 HTML/JS，防止 XSS
+// 安全净化：移除用户输入字段中的危险内容（script、事件处理器、javascript:协议等），
+// 存储原始文本。HTML 转义统一由前端 escHtml() 负责，避免双编码问题。
 function sanitizeProviderData(provider) {
     if (!provider || typeof provider !== 'object') return provider;
     const sanitized = { ...provider };
-    // 允许在前端显示的纯文本字段做 HTML 转义
     if (typeof sanitized.customName === 'string') {
-        sanitized.customName = sanitized.customName
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+        let name = sanitized.customName;
+        // 拒绝包含 data: 协议（可能包含内嵌恶意内容）
+        if (/data\s*:/i.test(name)) return sanitized;
+        // 移除 <script>...</script>（支持跨行匹配）
+        name = name.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+        // 移除 HTML 事件处理器属性（onclick/onerror 等）
+        name = name.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
+        // 移除 javascript: 协议（更严格：要求独立单词边界，防止误匹配 "not javascript code"）
+        name = name.replace(/\bjavascript\s*:/gi, '');
+        sanitized.customName = name.trim();
     }
     return sanitized;
 }
@@ -39,9 +43,9 @@ function withFileLock(fn) {
     const next = _fileLockChain
         .then(() => fn())
         .catch(err => {
-            // 记录错误但继续链式执行，防止死锁
+            // 记录错误并抛出，中断操作
             logger.error('[FileLock] Operation failed:', err?.message || err);
-            return null;
+            throw err;
         });
     _fileLockChain = next.then(() => {}).catch(() => {});
     return next;
@@ -133,7 +137,11 @@ export async function handleGetProviderTypeModels(req, res, providerType) {
  * 添加新的提供商配置
  */
 export async function handleAddProvider(req, res, currentConfig, providerPoolManager) {
-    return withFileLock(() => _handleAddProvider(req, res, currentConfig, providerPoolManager));
+    return withFileLock(() => _handleAddProvider(req, res, currentConfig, providerPoolManager)).catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    });
 }
 async function _handleAddProvider(req, res, currentConfig, providerPoolManager) {
     try {
@@ -223,7 +231,11 @@ async function _handleAddProvider(req, res, currentConfig, providerPoolManager) 
  * 更新特定提供商配置
  */
 export async function handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
-    return withFileLock(() => _handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid));
+    return withFileLock(() => _handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid)).catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    });
 }
 async function _handleUpdateProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
     try {
@@ -312,7 +324,11 @@ async function _handleUpdateProvider(req, res, currentConfig, providerPoolManage
  * 删除特定提供商配置
  */
 export async function handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
-    return withFileLock(() => _handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid));
+    return withFileLock(() => _handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid)).catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    });
 }
 async function _handleDeleteProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
     try {
@@ -386,7 +402,11 @@ async function _handleDeleteProvider(req, res, currentConfig, providerPoolManage
  * 禁用/启用特定提供商配置
  */
 export async function handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action) {
-    return withFileLock(() => _handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action));
+    return withFileLock(() => _handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action)).catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    });
 }
 async function _handleDisableEnableProvider(req, res, currentConfig, providerPoolManager, providerType, providerUuid, action) {
     try {

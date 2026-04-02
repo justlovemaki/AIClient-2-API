@@ -129,11 +129,20 @@ export async function handleUpdateConfig(req, res, currentConfig) {
             // 防止路径遍历：解析后的绝对路径必须在工作目录内
             const resolved = path.resolve(process.cwd(), p);
             const cwd = process.cwd();
-            // Windows兼容：统一使用正斜杠进行比较
-            const normalizedResolved = resolved.replace(/\\/g, '/');
-            const normalizedCwd = cwd.replace(/\\/g, '/');
-            if (normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd) {
+
+            // 使用 path.relative 和 path.isAbsolute 进行更严格的校验
+            const relativePath = path.relative(cwd, resolved);
+            const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
+
+            // Windows 大小写不敏感兼容：统一转换为小写比较
+            const normalizedResolved = resolved.toLowerCase().replace(/\\/g, '/');
+            const normalizedCwd = cwd.toLowerCase().replace(/\\/g, '/');
+            const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
+
+            if (isInsideCwd && startsWithCwd) {
                 currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
+            } else {
+                logger.warn(`[UI API] Rejected SYSTEM_PROMPT_FILE_PATH traversal attempt: ${p}`);
             }
         }
         if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
@@ -174,11 +183,20 @@ export async function handleUpdateConfig(req, res, currentConfig) {
             // 防止路径遍历：解析后的绝对路径必须在工作目录内
             const resolved = path.resolve(process.cwd(), p);
             const cwd = process.cwd();
-            // Windows兼容：统一使用正斜杠进行比较
-            const normalizedResolved = resolved.replace(/\\/g, '/');
-            const normalizedCwd = cwd.replace(/\\/g, '/');
-            if (normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd) {
+
+            // 使用 path.relative 和 path.isAbsolute 进行更严格的校验
+            const relativePath = path.relative(cwd, resolved);
+            const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
+
+            // Windows 大小写不敏感兼容：统一转换为小写比较
+            const normalizedResolved = resolved.toLowerCase().replace(/\\/g, '/');
+            const normalizedCwd = cwd.toLowerCase().replace(/\\/g, '/');
+            const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
+
+            if (isInsideCwd && startsWithCwd) {
                 currentConfig.LOG_DIR = p;
+            } else {
+                logger.warn(`[UI API] Rejected LOG_DIR traversal attempt: ${p}`);
             }
         }
         if (newConfig.LOG_INCLUDE_REQUEST_ID !== undefined) currentConfig.LOG_INCLUDE_REQUEST_ID = newConfig.LOG_INCLUDE_REQUEST_ID;
@@ -188,39 +206,45 @@ export async function handleUpdateConfig(req, res, currentConfig) {
 
         // Scheduled Health Check settings
         if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) {
-             const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
-             const newInterval = (() => {
-                 const val = Number(incoming?.interval);
-                 return isNaN(val) ? HEALTH_CHECK.DEFAULT_INTERVAL_MS : Math.max(HEALTH_CHECK.MIN_INTERVAL_MS, val);
-             })();
-             currentConfig.SCHEDULED_HEALTH_CHECK = {
-                 enabled: incoming?.enabled === true,
-                 startupRun: incoming?.startupRun !== false,
-                 interval: newInterval,
-                 providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
-             };
+            const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
 
-             // 检测 enabled 状态变化
-             const wasEnabled = currentConfig.SCHEDULED_HEALTH_CHECK?.enabled === true;
-             const nowEnabled = incoming?.enabled === true;
+            // 检测 enabled 状态变化（在更新配置之前保存旧状态）
+            const prevConfig = currentConfig.SCHEDULED_HEALTH_CHECK || {};
+            const wasEnabled = prevConfig.enabled === true;
+            const nowEnabled = incoming?.enabled === true;
 
-             if (currentConfig.SCHEDULED_HEALTH_CHECK) {
-                 // 当 enabled 从 true -> false 时，清除 timer
-                 if (wasEnabled && !nowEnabled && globalThis.stopHealthCheckTimer) {
-                     globalThis.stopHealthCheckTimer();
-                     globalThis._activeHealthCheckInterval = undefined;
-                 }
-                 // 当 enabled 从 false -> true 时，启动 timer
-                 else if (!wasEnabled && nowEnabled && globalThis.reloadHealthCheckTimer) {
-                     globalThis._activeHealthCheckInterval = newInterval;
-                     globalThis.reloadHealthCheckTimer(newInterval);
-                 }
-                 // 当 enabled=true 且 interval 变化时，重启 timer
-                 else if (nowEnabled && newInterval !== globalThis._activeHealthCheckInterval) {
-                     globalThis._activeHealthCheckInterval = newInterval;
-                     globalThis.reloadHealthCheckTimer(newInterval);
-                 }
-             }
+            const newInterval = (() => {
+                const val = Number(incoming?.interval);
+                return isNaN(val) ? HEALTH_CHECK.DEFAULT_INTERVAL_MS : Math.max(HEALTH_CHECK.MIN_INTERVAL_MS, Math.min(HEALTH_CHECK.MAX_INTERVAL_MS, val));
+            })();
+
+            // 先保存旧的 interval 用于比较
+            const oldInterval = globalThis._activeHealthCheckInterval;
+
+            // 更新配置
+            currentConfig.SCHEDULED_HEALTH_CHECK = {
+                enabled: nowEnabled,
+                startupRun: incoming?.startupRun !== false,
+                interval: newInterval,
+                providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
+            };
+
+            // 处理 timer 状态变化
+            // 当 enabled 从 true -> false 时，清除 timer
+            if (wasEnabled && !nowEnabled && globalThis.stopHealthCheckTimer) {
+                globalThis.stopHealthCheckTimer();
+                globalThis._activeHealthCheckInterval = undefined;
+            }
+            // 当 enabled 从 false -> true 时，启动 timer
+            else if (!wasEnabled && nowEnabled && globalThis.reloadHealthCheckTimer) {
+                globalThis._activeHealthCheckInterval = newInterval;
+                globalThis.reloadHealthCheckTimer(newInterval);
+            }
+            // 当 enabled=true 且 interval 变化时，重启 timer
+            else if (nowEnabled && newInterval !== oldInterval && globalThis.reloadHealthCheckTimer) {
+                globalThis._activeHealthCheckInterval = newInterval;
+                globalThis.reloadHealthCheckTimer(newInterval);
+            }
         }
 
         // Handle system prompt update

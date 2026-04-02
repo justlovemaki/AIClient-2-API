@@ -359,7 +359,7 @@ async function startServer() {
         const poolManager = getProviderPoolManager();
         if (poolManager) {
             logger.info('[Initialization] Performing initial health checks for provider pools...');
-            poolManager.performHealthChecks();
+            poolManager.performInitialHealthChecks();
         }
 
         // 定时健康检查
@@ -394,7 +394,7 @@ async function startServer() {
                     }
                     isHealthCheckRunning = true;
                     try {
-                        await poolManager.performScheduledHealthChecks();
+                        await poolManager.performHealthChecks();
                     } catch (error) {
                         logger.error('[ScheduledHealthCheck] Error:', error);
                     } finally {
@@ -426,13 +426,13 @@ async function startServer() {
                 // 启动时运行健康检查
                 if (scheduledConfig.startupRun !== false) {
                     logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
-                    setImmediate(async () => {
+                    setTimeout(async () => {
                         try {
                             await poolManager.performScheduledHealthChecks();
                         } catch (error) {
                             logger.error('[ScheduledHealthCheck] Startup run error:', error);
                         }
-                    });
+                    }, 100);
                 }
 
                 // 设置定时任务

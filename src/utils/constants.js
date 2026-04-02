@@ -15,10 +15,10 @@ export const HEALTH_CHECK = {
 
 // 密码安全相关常量
 export const PASSWORD = {
-    // 最小密码长度
-    MIN_LENGTH: 8,
-    // PBKDF2迭代次数
-    PBKDF2_ITERATIONS: 100000,
+    // 最小密码长度（最少12位，与现代安全实践一致）
+    MIN_LENGTH: 12,
+    // PBKDF2迭代次数（OWASP 2023建议 SHA-512 ≥310,000次）
+    PBKDF2_ITERATIONS: 310000,
     // PBKDF2密钥长度（字节）
     PBKDF2_KEYLEN: 64,
     // PBKDF2哈希算法
@@ -38,7 +38,5 @@ export const NETWORK = {
 // 请求重试相关常量
 export const RETRY = {
     // 最大重试次数
-    MAX_RETRIES: 100,
-    // 默认重试次数
-    DEFAULT_RETRIES: 3
+    MAX_RETRIES: 100
 };
