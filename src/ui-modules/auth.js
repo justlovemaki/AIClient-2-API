@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { CONFIG } from '../core/config-manager.js';
 import { getClientIp } from '../utils/common.js';
+import { PASSWORD } from '../utils/constants.js';
 
 // Token存储到本地文件中
 const TOKEN_STORE_FILE = path.join(process.cwd(), 'configs', 'token-store.json');
@@ -56,7 +57,7 @@ export async function validateCredentials(password) {
         if (parts.length !== 3) return false;
         const [, salt, storedHash] = parts;
         const inputHash = await new Promise((resolve, reject) =>
-            crypto.pbkdf2(password.trim(), salt, 100000, 64, 'sha512', (err, key) =>
+            crypto.pbkdf2(password.trim(), salt, PASSWORD.PBKDF2_ITERATIONS, PASSWORD.PBKDF2_KEYLEN, PASSWORD.PBKDF2_DIGEST, (err, key) =>
                 err ? reject(err) : resolve(key.toString('hex'))
             )
         );
@@ -64,7 +65,11 @@ export async function validateCredentials(password) {
     }
 
     // 旧格式：明文（兼容迁移期，建议通过 UI 重新设置密码以升级为哈希格式）
-    return password === storedPassword;
+    // 使用 timingSafeEqual 防止时序攻击
+    const a = Buffer.from(password.trim());
+    const b = Buffer.from(storedPassword);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
 }
 
 /**

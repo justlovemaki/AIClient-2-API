@@ -307,13 +307,15 @@ export class ProviderPoolManager {
                     // 使用 Promise.resolve().then 避免过深的递归
                     Promise.resolve().then(nextTask);
                 } else if (currentQueue.activeCount === 0) {
-                    // 2. 如果当前提供商的所有任务都完成了，释放全局槽位
-                    // 只有持有全局槽位的任务才能递减计数器，避免负值
-                    if (ownsGlobalSlot &&
-                        currentQueue.waitingTasks.length === 0 &&
+                    // 清理空队列：无论是否持有全局槽位，都应删除已无任务的队列对象
+                    if (currentQueue.waitingTasks.length === 0 &&
                         this.refreshQueues[providerType] === currentQueue) {
+                        delete this.refreshQueues[providerType];
+                    }
+
+                    // 只有持有全局槽位的任务才能递减计数器
+                    if (ownsGlobalSlot) {
                         this.activeProviderRefreshes--;
-                        delete this.refreshQueues[providerType]; // 清理空队列
                     }
 
                     // 3. 尝试启动下一个等待中的提供商队列

@@ -7,19 +7,13 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-      - "8085-8087:8085-8087" 
+      - "8085-8087:8085-8087"
       - "1455:1455"
       - "19876-19880:19876-19880"
     volumes:
       - ./configs:/app/configs
     environment:
       - ARGS=
-      - HTTP_PROXY=http://host.docker.internal:10801
-      - http_proxy=http://host.docker.internal:10801
-      - HTTPS_PROXY=http://host.docker.internal:10801
-      - https_proxy=http://host.docker.internal:10801
-      - NO_PROXY=localhost,127.0.0.1,host.docker.internal
-      - no_proxy=localhost,127.0.0.1,host.docker.internal
     healthcheck:
       test: ["CMD", "node", "healthcheck.js"]
       interval: 30s

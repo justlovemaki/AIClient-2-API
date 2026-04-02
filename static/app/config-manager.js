@@ -53,7 +53,7 @@ function renderProviderTags(container, configs, isRequired) {
     // 过滤掉不可见的提供商
     const visibleConfigs = configs.filter(c => c.visible !== false);
     
-    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     container.innerHTML = visibleConfigs.map(c => `
         <button type="button" class="provider-tag" data-value="${escHtml(c.id)}">
             <i class="fas ${escHtml(c.icon || 'fa-server')}"></i>

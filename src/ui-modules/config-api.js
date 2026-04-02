@@ -8,6 +8,7 @@ import { serviceInstances } from '../providers/adapter.js';
 import { initApiService } from '../services/service-manager.js';
 import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
+import { HEALTH_CHECK, PASSWORD, NETWORK, RETRY } from '../utils/constants.js';
 
 /**
  * 重载配置文件
@@ -120,14 +121,18 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         }
         if (newConfig.SERVER_PORT !== undefined) {
             const port = Number(newConfig.SERVER_PORT);
-            if (Number.isInteger(port) && port > 0 && port < 65536) currentConfig.SERVER_PORT = port;
+            if (Number.isInteger(port) && port >= NETWORK.MIN_PORT && port <= NETWORK.MAX_PORT) currentConfig.SERVER_PORT = port;
         }
         if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
         if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) {
             const p = String(newConfig.SYSTEM_PROMPT_FILE_PATH);
             // 防止路径遍历：解析后的绝对路径必须在工作目录内
             const resolved = path.resolve(process.cwd(), p);
-            if (resolved.startsWith(process.cwd() + path.sep) || resolved === process.cwd()) {
+            const cwd = process.cwd();
+            // Windows兼容：统一使用正斜杠进行比较
+            const normalizedResolved = resolved.replace(/\\/g, '/');
+            const normalizedCwd = cwd.replace(/\\/g, '/');
+            if (normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd) {
                 currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
             }
         }
@@ -136,7 +141,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.PROMPT_LOG_MODE !== undefined) currentConfig.PROMPT_LOG_MODE = newConfig.PROMPT_LOG_MODE;
         if (newConfig.REQUEST_MAX_RETRIES !== undefined) {
             const v = Number(newConfig.REQUEST_MAX_RETRIES);
-            if (Number.isInteger(v) && v >= 0 && v <= 100) currentConfig.REQUEST_MAX_RETRIES = v;
+            if (Number.isInteger(v) && v >= 0 && v <= RETRY.MAX_RETRIES) currentConfig.REQUEST_MAX_RETRIES = v;
         }
         if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
         if (newConfig.CREDENTIAL_SWITCH_MAX_RETRIES !== undefined) currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES = newConfig.CREDENTIAL_SWITCH_MAX_RETRIES;
@@ -164,7 +169,18 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
         if (newConfig.LOG_OUTPUT_MODE !== undefined) currentConfig.LOG_OUTPUT_MODE = newConfig.LOG_OUTPUT_MODE;
         if (newConfig.LOG_LEVEL !== undefined) currentConfig.LOG_LEVEL = newConfig.LOG_LEVEL;
-        if (newConfig.LOG_DIR !== undefined) currentConfig.LOG_DIR = newConfig.LOG_DIR;
+        if (newConfig.LOG_DIR !== undefined) {
+            const p = String(newConfig.LOG_DIR);
+            // 防止路径遍历：解析后的绝对路径必须在工作目录内
+            const resolved = path.resolve(process.cwd(), p);
+            const cwd = process.cwd();
+            // Windows兼容：统一使用正斜杠进行比较
+            const normalizedResolved = resolved.replace(/\\/g, '/');
+            const normalizedCwd = cwd.replace(/\\/g, '/');
+            if (normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd) {
+                currentConfig.LOG_DIR = p;
+            }
+        }
         if (newConfig.LOG_INCLUDE_REQUEST_ID !== undefined) currentConfig.LOG_INCLUDE_REQUEST_ID = newConfig.LOG_INCLUDE_REQUEST_ID;
         if (newConfig.LOG_INCLUDE_TIMESTAMP !== undefined) currentConfig.LOG_INCLUDE_TIMESTAMP = newConfig.LOG_INCLUDE_TIMESTAMP;
         if (newConfig.LOG_MAX_FILE_SIZE !== undefined) currentConfig.LOG_MAX_FILE_SIZE = newConfig.LOG_MAX_FILE_SIZE;
@@ -175,7 +191,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
              const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
              const newInterval = (() => {
                  const val = Number(incoming?.interval);
-                 return isNaN(val) ? 600000 : Math.max(60000, val);
+                 return isNaN(val) ? HEALTH_CHECK.DEFAULT_INTERVAL_MS : Math.max(HEALTH_CHECK.MIN_INTERVAL_MS, val);
              })();
              currentConfig.SCHEDULED_HEALTH_CHECK = {
                  enabled: incoming?.enabled === true,
@@ -184,10 +200,26 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                  providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
              };
 
-             // 仅在 interval 实际变化时重新加载 timer（_activeInterval 存在内存变量中，不写入配置文件）
-             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled && newInterval !== globalThis._activeHealthCheckInterval) {
-                 globalThis._activeHealthCheckInterval = newInterval;
-                 globalThis.reloadHealthCheckTimer(newInterval);
+             // 检测 enabled 状态变化
+             const wasEnabled = currentConfig.SCHEDULED_HEALTH_CHECK?.enabled === true;
+             const nowEnabled = incoming?.enabled === true;
+
+             if (currentConfig.SCHEDULED_HEALTH_CHECK) {
+                 // 当 enabled 从 true -> false 时，清除 timer
+                 if (wasEnabled && !nowEnabled && globalThis.stopHealthCheckTimer) {
+                     globalThis.stopHealthCheckTimer();
+                     globalThis._activeHealthCheckInterval = undefined;
+                 }
+                 // 当 enabled 从 false -> true 时，启动 timer
+                 else if (!wasEnabled && nowEnabled && globalThis.reloadHealthCheckTimer) {
+                     globalThis._activeHealthCheckInterval = newInterval;
+                     globalThis.reloadHealthCheckTimer(newInterval);
+                 }
+                 // 当 enabled=true 且 interval 变化时，重启 timer
+                 else if (nowEnabled && newInterval !== globalThis._activeHealthCheckInterval) {
+                     globalThis._activeHealthCheckInterval = newInterval;
+                     globalThis.reloadHealthCheckTimer(newInterval);
+                 }
              }
         }
 
@@ -347,16 +379,16 @@ export async function handleUpdateAdminPassword(req, res) {
             return true;
         }
 
-        if (password.trim().length < 8) {
+        if (password.trim().length < PASSWORD.MIN_LENGTH) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Password must be at least 8 characters' } }));
+            res.end(JSON.stringify({ error: { message: `Password must be at least ${PASSWORD.MIN_LENGTH} characters` } }));
             return true;
         }
 
         // 使用 PBKDF2 哈希存储密码，避免明文写入文件
         const salt = crypto.randomBytes(16).toString('hex');
         const hash = await new Promise((resolve, reject) =>
-            crypto.pbkdf2(password.trim(), salt, 100000, 64, 'sha512', (err, key) =>
+            crypto.pbkdf2(password.trim(), salt, PASSWORD.PBKDF2_ITERATIONS, PASSWORD.PBKDF2_KEYLEN, PASSWORD.PBKDF2_DIGEST, (err, key) =>
                 err ? reject(err) : resolve(key.toString('hex'))
             )
         );

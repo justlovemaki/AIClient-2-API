@@ -256,43 +256,7 @@
                 <div class="form-group">
                     <label data-i18n="config.healthCheck.providerTypes">定时检查的供应商</label>
                     <div id="scheduledHealthCheckProviders" class="provider-tags">
-                        <button type="button" class="provider-tag" data-value="gemini-cli-oauth">
-                            <i class="fas fa-robot"></i>
-                            <span>Gemini CLI OAuth</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="gemini-antigravity">
-                            <i class="fas fa-rocket"></i>
-                            <span>Gemini Antigravity</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="openai-custom">
-                            <i class="fas fa-brain"></i>
-                            <span>OpenAI Custom</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="claude-custom">
-                            <i class="fas fa-comment-dots"></i>
-                            <span>Claude Custom</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="claude-kiro-oauth">
-                            <i class="fas fa-key"></i>
-                            <span>Claude Kiro OAuth</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="openai-qwen-oauth">
-                            <i class="fas fa-cloud"></i>
-                            <span>Qwen OAuth</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="openaiResponses-custom">
-                            <i class="fas fa-reply"></i>
-                            <span>OpenAI Responses</span>
-                        </button>
-
-                        <button type="button" class="provider-tag" data-value="openai-codex-oauth">
-                            <i class="fas fa-code"></i>
-                            <span>OpenAI Codex OAuth</span>
-                        </button>
-                        <button type="button" class="provider-tag" data-value="grok-custom">
-                            <i class="fas fa-search"></i>
-                            <span>Grok Reverse</span>
-                        </button>
+                        <!-- 由 config-manager.js updateConfigProviderConfigs 动态渲染，勿在此处硬编码 -->
                     </div>
                     <small class="form-text" data-i18n="config.healthCheck.providerTypesNote">选择需要进行定时健康检查的供应商类型</small>
                 </div>
