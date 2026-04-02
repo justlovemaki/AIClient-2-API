@@ -10,6 +10,7 @@ import { MODEL_PROVIDER } from '../../utils/common.js';
 import { ConverterFactory } from '../../converters/ConverterFactory.js';
 import * as readline from 'readline';
 import { getProviderPoolManager } from '../../services/service-manager.js';
+import { ImagineWebSocketService } from './ws-imagine.js';
 
 // Chrome 136 TLS cipher suites
 const CHROME_CIPHERS = [
@@ -416,30 +417,50 @@ export class GrokApiService {
         const isMediaModel = modelLower.includes('imagine') || modelLower.includes('video') || modelLower.includes('edit');
         const isNsfw = isGrokNsfwModel(rawModelId) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
 
+        // 处理生成图片数量，API 通常限制单次最多 2 张
+        const imageGenerationCount = Math.min(parseInt(requestBody.n || requestBody.imageGenerationCount || (isMediaModel ? 2 : 0)), 2);
+        
+        // 处理响应格式
+        const returnImageBytes = requestBody.response_format === 'b64_json' || requestBody.responseFormat === 'b64_json';
+
         const payload = {
             "deviceEnvInfo": { "darkModeEnabled": false, "devicePixelRatio": 2, "screenWidth": 2056, "screenHeight": 1329, "viewportWidth": 2056, "viewportHeight": 1083 },
             "disableMemory": false, "disableNsfwFilter": isNsfw, "disableSearch": false, "disableSelfHarmShortCircuit": false, "disableTextFollowUps": false,
             "enableImageGeneration": isMediaModel, "enableImageStreaming": isMediaModel, "enableSideBySide": true,
-            "fileAttachments": fileAttachments, "forceConcise": false, "forceSideBySide": false, "imageAttachments": [], "imageGenerationCount": 2,
+            "fileAttachments": fileAttachments, "forceConcise": false, "forceSideBySide": false, "imageAttachments": [], 
+            "imageGenerationCount": imageGenerationCount,
             "isAsyncChat": false, "isReasoning": false, "message": message, "modelMode": mapping.mode, "modelName": mapping.name,
             "responseMetadata": { "requestModelDetails": { "modelId": mapping.name }, "modelConfigOverride": modelConfigOverride },
-            "returnImageBytes": false, "returnRawGrokInXaiRequest": false, "sendFinalMetadata": true, "temporary": true, "toolOverrides": toolOverrides,
+            "returnImageBytes": returnImageBytes, "returnRawGrokInXaiRequest": false, "sendFinalMetadata": true, "temporary": true, "toolOverrides": toolOverrides,
         };
 
         if (isMediaModel && !modelLower.includes('video')) {
             payload.enable_nsfw = isNsfw;
-            if (requestBody.aspect_ratio || requestBody.aspectRatio) {
-                payload.aspect_ratio = requestBody.aspect_ratio || requestBody.aspectRatio;
+            const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio;
+            if (aspectRatio) {
+                payload.aspect_ratio = aspectRatio;
             }
         }
 
         return payload;
     }
 
-    async generateContent(model, requestBody) {
-        logger.info(`[Grok] Starting generateContent (unified processing)`);
+    async _generateAndCollect(model, requestBody) {
         const stream = this.generateContentStream(model, requestBody);
-        const collected = { message: "", responseId: "", postId: "", llmInfo: {}, rolloutId: "", modelResponse: null, cardAttachment: null, streamingImageGenerationResponse: null, streamingVideoGenerationResponse: null, finalVideoUrl: null, finalThumbnailUrl: null };
+        const collected = { 
+            message: "", 
+            responseId: "", 
+            postId: "", 
+            llmInfo: {}, 
+            rolloutId: "", 
+            modelResponse: null, 
+            cardAttachment: null,
+            cardAttachments: [], // 收集所有的卡片附件
+            streamingImageGenerationResponse: null, 
+            streamingVideoGenerationResponse: null, 
+            finalVideoUrl: null, 
+            finalThumbnailUrl: null 
+        };
         
         for await (const chunk of stream) {
             const resp = chunk.result?.response;
@@ -450,8 +471,41 @@ export class GrokApiService {
             if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
             if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
             if (resp._uuid) collected._uuid = resp._uuid;
-            if (resp.modelResponse) collected.modelResponse = resp.modelResponse;
-            if (resp.cardAttachment) collected.cardAttachment = resp.cardAttachment;
+            
+            if (resp.modelResponse) {
+                if (!collected.modelResponse) {
+                    collected.modelResponse = resp.modelResponse;
+                } else {
+                    // 合并 modelResponse 中的数据
+                    if (resp.modelResponse.message) collected.modelResponse.message = resp.modelResponse.message;
+                    if (Array.isArray(resp.modelResponse.cardAttachmentsJson)) {
+                        if (!collected.modelResponse.cardAttachmentsJson) {
+                            collected.modelResponse.cardAttachmentsJson = resp.modelResponse.cardAttachmentsJson;
+                        } else {
+                            const currentIds = new Set(collected.modelResponse.cardAttachmentsJson.map(raw => {
+                                try { return JSON.parse(raw).id; } catch (e) { return null; }
+                            }).filter(id => id));
+                            
+                            for (const raw of resp.modelResponse.cardAttachmentsJson) {
+                                try {
+                                    const id = JSON.parse(raw).id;
+                                    if (!id || !currentIds.has(id)) {
+                                        collected.modelResponse.cardAttachmentsJson.push(raw);
+                                        if (id) currentIds.add(id);
+                                    }
+                                } catch (e) {
+                                    collected.modelResponse.cardAttachmentsJson.push(raw);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (resp.cardAttachment) {
+                collected.cardAttachment = resp.cardAttachment;
+                collected.cardAttachments.push(resp.cardAttachment);
+            }
             if (resp.streamingImageGenerationResponse) {
                 collected.streamingImageGenerationResponse = resp.streamingImageGenerationResponse;
             }
@@ -464,9 +518,67 @@ export class GrokApiService {
                 }
             }
         }
+        return collected;
+    }
+
+    async generateContent(model, requestBody) {
+        logger.info(`[Grok] Starting generateContent (unified processing)`);
+        
+        const n = parseInt(requestBody.n || 1);
+        const isImagine = model.toLowerCase().includes('imagine');
+        
+        let collected;
+        try {
+            if (n <= 2 || !isImagine) {
+                // 单次请求处理
+                collected = await this._generateAndCollect(model, requestBody);
+            } else {
+                // 处理 n > 2 的情况，分批并发请求
+                logger.info(`[Grok] Multi-image request detected (n=${n}), splitting into multiple tasks`);
+                const perCall = 2;
+                const callsNeeded = Math.ceil(n / perCall);
+                const tasks = [];
+                
+                for (let i = 0; i < callsNeeded; i++) {
+                    const count = Math.min(perCall, n - i * perCall);
+                    const subRequestBody = { ...requestBody, n: count };
+                    tasks.push(this._generateAndCollect(model, subRequestBody));
+                }
+                
+                const results = await Promise.all(tasks);
+                
+                // 合并所有批次的结果
+                collected = results[0];
+                for (let i = 1; i < results.length; i++) {
+                    const res = results[i];
+                    // 合并消息文本
+                    if (res.message) collected.message += "\n" + res.message;
+                    // 合并卡片附件
+                    if (res.cardAttachments) collected.cardAttachments.push(...res.cardAttachments);
+                    // 合并 modelResponse 中的卡片 JSON
+                    if (res.modelResponse?.cardAttachmentsJson) {
+                        if (!collected.modelResponse) collected.modelResponse = { cardAttachmentsJson: [] };
+                        if (!collected.modelResponse.cardAttachmentsJson) collected.modelResponse.cardAttachmentsJson = [];
+                        collected.modelResponse.cardAttachmentsJson.push(...res.modelResponse.cardAttachmentsJson);
+                    }
+                }
+            }
+        } catch (error) {
+            // 只有图片生成才支持 WebSocket Fallback
+            if (isImagine) {
+                logger.warn(`[Grok] app_chat image generation failed, trying ws_imagine fallback: ${error.message}`);
+                try {
+                    return await this._generateAndCollectWS(model, requestBody);
+                } catch (wsError) {
+                    logger.error(`[Grok] ws_imagine fallback also failed: ${wsError.message}`);
+                    throw error; // 抛出原始错误
+                }
+            }
+            throw error;
+        }
 
         logger.info(`[Grok] Finalizing collection. model: ${model}, respId: ${collected.responseId}, videoPostId: ${collected.postId}`);
-
+        
         // 1. 仅针对视频进行 postId 提取和分享链接创建
         const isVideo = !!(collected.finalVideoUrl || collected.streamingVideoGenerationResponse || model.toLowerCase().includes('video'));
         logger.info(`[Grok Decision] isVideo detected: ${isVideo}. (finalUrl: ${!!collected.finalVideoUrl}, streamResp: ${!!collected.streamingVideoGenerationResponse}, modelIncludeVideo: ${model.toLowerCase().includes('video')})`);
@@ -503,6 +615,124 @@ export class GrokApiService {
         }
 
         return collected;
+    }
+
+    /**
+     * WebSocket 方式生成图片 (Fallback)
+     */
+    async _generateAndCollectWS(model, requestBody) {
+        const n = parseInt(requestBody.n || 1);
+        // 提取 prompt
+        let prompt = requestBody.message || requestBody.videoGenPrompt;
+        if (!prompt && requestBody.messages?.length > 0) {
+            const lastMsg = requestBody.messages[requestBody.messages.length - 1];
+            prompt = typeof lastMsg.content === 'string' ? lastMsg.content : (lastMsg.content?.find(p => p.type === 'text')?.text || "");
+        }
+        prompt = prompt || "A beautiful image";
+
+        const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio || "1:1";
+        const enableNsfw = requestBody.nsfw !== false;
+        
+        logger.info(`[Grok WS] Starting fallback image generation for: ${prompt.substring(0, 50)}...`);
+        
+        const wsService = new ImagineWebSocketService(this.config);
+        const stream = wsService.stream(this.token, prompt, aspectRatio, n, enableNsfw);
+        
+        const collected = { 
+            message: "", 
+            responseId: `ws-${uuidv4()}`, 
+            postId: "", 
+            llmInfo: { modelHash: "ws-imagine" }, 
+            rolloutId: "", 
+            modelResponse: { cardAttachmentsJson: [] }, 
+            cardAttachments: [] 
+        };
+        
+        for await (const item of stream) {
+            if (item.type === 'error') {
+                throw new Error(item.error || 'WebSocket generation failed');
+            }
+            if (item.type === 'image' && item.stage === 'final') {
+                const cardData = {
+                    id: item.image_id || uuidv4(),
+                    image: {
+                        original: item.blob.startsWith('data:') ? item.blob : `data:image/png;base64,${item.blob}`,
+                        title: "Generated Image"
+                    }
+                };
+                const jsonStr = JSON.stringify(cardData);
+                collected.modelResponse.cardAttachmentsJson.push(jsonStr);
+                collected.cardAttachments.push({ jsonData: jsonStr });
+                logger.info(`[Grok WS] Received image: ${cardData.id}`);
+            }
+        }
+        
+        if (collected.cardAttachments.length === 0) {
+            throw new Error("WebSocket generation returned no images");
+        }
+        
+        return collected;
+    }
+
+    /**
+     * WebSocket 方式流式生成图片 (Fallback)
+     */
+    async * _generateContentStreamWS(model, requestBody) {
+        const n = parseInt(requestBody.n || 1);
+        let prompt = requestBody.message || requestBody.videoGenPrompt;
+        if (!prompt && requestBody.messages?.length > 0) {
+            const lastMsg = requestBody.messages[requestBody.messages.length - 1];
+            prompt = typeof lastMsg.content === 'string' ? lastMsg.content : (lastMsg.content?.find(p => p.type === 'text')?.text || "");
+        }
+        prompt = prompt || "A beautiful image";
+
+        const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio || "1:1";
+        const enableNsfw = requestBody.nsfw !== false;
+
+        const wsService = new ImagineWebSocketService(this.config);
+        const stream = wsService.stream(this.token, prompt, aspectRatio, n, enableNsfw);
+        
+        const responseId = `ws-${uuidv4()}`;
+
+        for await (const item of stream) {
+            if (item.type === 'error') {
+                throw new Error(item.error || 'WebSocket generation failed');
+            }
+            if (item.type === 'image') {
+                yield {
+                    result: {
+                        response: {
+                            responseId,
+                            streamingImageGenerationResponse: {
+                                imageIndex: 0,
+                                progress: item.stage === 'final' ? 100 : (item.stage === 'medium' ? 50 : 10)
+                            }
+                        }
+                    }
+                };
+                
+                if (item.stage === 'final') {
+                    const cardData = {
+                        id: item.image_id || uuidv4(),
+                        image: {
+                            original: item.blob.startsWith('data:') ? item.blob : `data:image/png;base64,${item.blob}`,
+                            title: "Generated Image"
+                        }
+                    };
+                    yield {
+                        result: {
+                            response: {
+                                responseId,
+                                cardAttachment: {
+                                    jsonData: JSON.stringify(cardData)
+                                }
+                            }
+                        }
+                    };
+                }
+            }
+        }
+        yield { result: { response: { isDone: true, responseId } } };
     }
 
     async uploadFile(fileInput) {
@@ -631,6 +861,9 @@ export class GrokApiService {
                         resp._requestBaseUrl = reqBaseUrl;
                         resp._uuid = this.uuid;
                         if (resp.responseId) lastResponseId = resp.responseId;
+                        if (resp.streamingImageGenerationResponse) {
+                            // 图片生成进度通过流透传，暂无额外处理
+                        }
                         if (resp.streamingVideoGenerationResponse) {
                             const vid = resp.streamingVideoGenerationResponse;
                             if (vid.progress === 100 && vid.videoUrl && (requestBody.videoGenModelConfig?.resolutionName === "720p")) {
@@ -647,6 +880,18 @@ export class GrokApiService {
         } catch (error) {
             const { status, errorCode, errorMessage, isNetworkError } = this.classifyApiError(error);
             const canRetryInRequest = !hasYieldedData && retryCount < maxRetries;
+
+            // 只有图片生成且未发送过数据时才尝试 WebSocket Fallback
+            const isImagine = modelLower.includes('imagine');
+            if (isImagine && !hasYieldedData && retryCount === 0) {
+                logger.warn(`[Grok] app_chat stream failed, trying ws_imagine fallback: ${error.message}`);
+                try {
+                    yield* this._generateContentStreamWS(model, requestBody);
+                    return;
+                } catch (wsError) {
+                    logger.error(`[Grok] ws_imagine fallback also failed: ${wsError.message}`);
+                }
+            }
 
             if (status === 429 && canRetryInRequest) {
                 const delay = baseDelay * Math.pow(2, retryCount);

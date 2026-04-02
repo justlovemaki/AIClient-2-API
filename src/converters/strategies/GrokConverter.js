@@ -104,6 +104,7 @@ export class GrokConverter extends BaseConverter {
                 has_tool_call: false,
                 rollout_id: "",
                 in_tool_call: false, // 是否处于 <tool_call> 块内
+                content_started: false, // 是否已经开始输出正式内容
                 requestBaseUrl: "",
                 uuid: null,
                 pending_text_buffer: "" // 用于处理流式输出中被截断的 URL
@@ -352,6 +353,17 @@ export class GrokConverter extends BaseConverter {
                             }
                             continue;
                         }
+                        if (key === "cardAttachmentsJson" && Array.isArray(item)) {
+                            item.forEach(jsonStr => {
+                                if (typeof jsonStr !== 'string') return;
+                                try {
+                                    const card = JSON.parse(jsonStr);
+                                    const url = card.image?.original;
+                                    if (url) add(url);
+                                } catch (e) {}
+                            });
+                            continue;
+                        }
                         walk(item);
                     }
                 }
@@ -484,13 +496,55 @@ export class GrokConverter extends BaseConverter {
         content = this._filterToken(content, responseId);
         content = this._processGrokAssetsInText(content, state);
 
-        // 收集图片并追加
+        // 处理 cardAttachmentsJson 中的图片，将其映射到卡片 ID
+        const cardMap = new Map();
+        const modelResponse = grokResponse.modelResponse || {};
+        
+        // 收集所有的卡片原始数据（可能是 cardAttachmentsJson 中的，或者是单独收集的 cardAttachments 数组）
+        const allCardSources = [];
+        if (Array.isArray(modelResponse.cardAttachmentsJson)) allCardSources.push(...modelResponse.cardAttachmentsJson);
+        if (Array.isArray(grokResponse.cardAttachments)) {
+            grokResponse.cardAttachments.forEach(card => card.jsonData && allCardSources.push(card.jsonData));
+        } else if (grokResponse.cardAttachment?.jsonData) {
+            allCardSources.push(grokResponse.cardAttachment.jsonData);
+        }
+
+        for (const raw of allCardSources) {
+            try {
+                const cardData = JSON.parse(raw);
+                const cardId = cardData.id;
+                const image = cardData.image || {};
+                const original = image.original;
+                const title = image.title || "image";
+                if (cardId && original) {
+                    cardMap.set(cardId, { title, original });
+                }
+            } catch (e) {}
+        }
+
+        // 替换正文中的 <grok:render> 标签为 Markdown 图片
+        if (content && cardMap.size > 0) {
+            content = content.replace(/<grok:render[^>]*card_id="([^"]+)"[^>]*>.*?<\/grok:render>/gs, (match, cardId) => {
+                const item = cardMap.get(cardId);
+                if (!item) return "";
+                return this._renderImage(item.original, item.title || "image", state);
+            });
+        }
+
+        // 收集未在正文中渲染的其他图片并追加
         const imageUrls = this._collectImages(grokResponse);
         if (imageUrls.length > 0) {
-            content += "\n";
+            // 已通过卡片 ID 渲染过的 URL 记录
+            const handledUrls = new Set();
+            for (const item of cardMap.values()) handledUrls.add(item.original);
+            
+            let appendContent = "";
             for (const url of imageUrls) {
-                content += this._renderImage(url, "image", state) + "\n";
+                if (!handledUrls.has(url)) {
+                    appendContent += this._renderImage(url, "image", state) + "\n";
+                }
             }
+            if (appendContent) content += "\n" + appendContent;
         }
 
         // 处理视频 (非流式模式)
@@ -585,6 +639,13 @@ export class GrokConverter extends BaseConverter {
         // 处理结束标志
         if (resp.isDone) {
             let finalContent = "";
+            
+            // 如果思考块未关闭，在此关闭
+            if (state.think_opened) {
+                finalContent += "\n</think>\n";
+                state.think_opened = false;
+            }
+
             // 处理剩余的缓冲区
             if (state.pending_text_buffer) {
                 finalContent += this._processGrokAssetsInText(state.pending_text_buffer, state);
@@ -722,11 +783,26 @@ export class GrokConverter extends BaseConverter {
             const token = resp.token;
             const filtered = this._filterToken(token, responseId);
             const isThinking = !!resp.isThinking;
-            const inThink = isThinking || state.image_think_active || state.video_think_active;
+            const hasStepId = !!resp.messageStepId;
+            const inThink = isThinking || hasStepId || state.image_think_active || state.video_think_active;
 
-            if (inThink) {
+            // 正式内容已开始后，丢弃中途插入的 Agent 思考（1-2 句内部注释，无用户价值）
+            if (state.content_started && inThink && !state.image_think_active && !state.video_think_active) {
+                // 跳过不展示
+            } else if (inThink) {
+                if (!state.think_opened) {
+                    deltaContent += "<think>\n";
+                    state.think_opened = true;
+                }
                 deltaReasoning += filtered;
+                deltaContent += filtered;
             } else {
+                if (state.think_opened) {
+                    deltaContent += "\n</think>\n";
+                    state.think_opened = false;
+                    state.content_started = true;
+                }
+                
                 // 将新 token 加入待处理缓冲区，解决 URL 被截断的问题
                 state.pending_text_buffer += filtered;
                 
