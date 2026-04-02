@@ -125,8 +125,11 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
         if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) {
             const p = String(newConfig.SYSTEM_PROMPT_FILE_PATH);
-            // 防止路径遍历：只允许相对路径或限定目录
-            if (!p.includes('..')) currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
+            // 防止路径遍历：解析后的绝对路径必须在工作目录内
+            const resolved = path.resolve(process.cwd(), p);
+            if (resolved.startsWith(process.cwd() + path.sep) || resolved === process.cwd()) {
+                currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
+            }
         }
         if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
         if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
@@ -180,11 +183,10 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                  interval: newInterval,
                  providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
              };
-             
-             // 如果定时器已存在且 enabled，仅在 interval 实际变化时重新加载 timer
-             const previousInterval = currentConfig.SCHEDULED_HEALTH_CHECK._activeInterval;
-             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled && newInterval !== previousInterval) {
-                 currentConfig.SCHEDULED_HEALTH_CHECK._activeInterval = newInterval;
+
+             // 仅在 interval 实际变化时重新加载 timer（_activeInterval 存在内存变量中，不写入配置文件）
+             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled && newInterval !== globalThis._activeHealthCheckInterval) {
+                 globalThis._activeHealthCheckInterval = newInterval;
                  globalThis.reloadHealthCheckTimer(newInterval);
              }
         }
@@ -353,7 +355,11 @@ export async function handleUpdateAdminPassword(req, res) {
 
         // 使用 PBKDF2 哈希存储密码，避免明文写入文件
         const salt = crypto.randomBytes(16).toString('hex');
-        const hash = crypto.pbkdf2Sync(password.trim(), salt, 100000, 64, 'sha512').toString('hex');
+        const hash = await new Promise((resolve, reject) =>
+            crypto.pbkdf2(password.trim(), salt, 100000, 64, 'sha512', (err, key) =>
+                err ? reject(err) : resolve(key.toString('hex'))
+            )
+        );
         const stored = `pbkdf2:${salt}:${hash}`;
 
         const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');

@@ -55,7 +55,11 @@ export async function validateCredentials(password) {
         const parts = storedPassword.split(':');
         if (parts.length !== 3) return false;
         const [, salt, storedHash] = parts;
-        const inputHash = crypto.pbkdf2Sync(password.trim(), salt, 100000, 64, 'sha512').toString('hex');
+        const inputHash = await new Promise((resolve, reject) =>
+            crypto.pbkdf2(password.trim(), salt, 100000, 64, 'sha512', (err, key) =>
+                err ? reject(err) : resolve(key.toString('hex'))
+            )
+        );
         return crypto.timingSafeEqual(Buffer.from(inputHash, 'hex'), Buffer.from(storedHash, 'hex'));
     }
 

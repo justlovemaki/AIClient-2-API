@@ -1834,11 +1834,6 @@ export class ProviderPoolManager {
         let failCount = 0;
         
         for (const { providerType, provider, uuid, customName } of providersToCheck) {
-            // Skip if provider became disabled during iteration
-            if (provider.config.isDisabled === true) {
-                continue;
-            }
-            
             const providerCheckStart = Date.now();
             const checkModelName = provider.config.checkModelName || ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 'unknown';
             const displayName = customName || uuid.substring(0, 8);

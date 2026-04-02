@@ -420,9 +420,10 @@ async function startServer() {
             
             // 设置定时任务
             runHealthCheckTimer(interval);
-            
-            // 导出重载函数供外部调用
+
+            // 注册重载函数和初始 interval 到 globalThis（供 config-api 热更新使用）
             globalThis.reloadHealthCheckTimer = runHealthCheckTimer;
+            globalThis._activeHealthCheckInterval = interval;
         }
 
         // 如果是子进程，通知主进程已就绪
