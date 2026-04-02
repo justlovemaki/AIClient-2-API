@@ -134,9 +134,10 @@ export async function handleUpdateConfig(req, res, currentConfig) {
             const relativePath = path.relative(cwd, resolved);
             const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
 
-            // Windows 大小写不敏感兼容：统一转换为小写比较
-            const normalizedResolved = resolved.toLowerCase().replace(/\\/g, '/');
-            const normalizedCwd = cwd.toLowerCase().replace(/\\/g, '/');
+            // Windows 大小写不敏感兼容：仅在 Windows 平台统一转换为小写比较
+            const isWindows = process.platform === 'win32';
+            const normalizedResolved = (isWindows ? resolved.toLowerCase() : resolved).replace(/\\/g, '/');
+            const normalizedCwd = (isWindows ? cwd.toLowerCase() : cwd).replace(/\\/g, '/');
             const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
 
             if (isInsideCwd && startsWithCwd) {
@@ -188,9 +189,10 @@ export async function handleUpdateConfig(req, res, currentConfig) {
             const relativePath = path.relative(cwd, resolved);
             const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
 
-            // Windows 大小写不敏感兼容：统一转换为小写比较
-            const normalizedResolved = resolved.toLowerCase().replace(/\\/g, '/');
-            const normalizedCwd = cwd.toLowerCase().replace(/\\/g, '/');
+            // Windows 大小写不敏感兼容：仅在 Windows 平台统一转换为小写比较
+            const isWindows = process.platform === 'win32';
+            const normalizedResolved = (isWindows ? resolved.toLowerCase() : resolved).replace(/\\/g, '/');
+            const normalizedCwd = (isWindows ? cwd.toLowerCase() : cwd).replace(/\\/g, '/');
             const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
 
             if (isInsideCwd && startsWithCwd) {

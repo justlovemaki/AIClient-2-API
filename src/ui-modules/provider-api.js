@@ -14,14 +14,22 @@ function sanitizeProviderData(provider) {
     const sanitized = { ...provider };
     if (typeof sanitized.customName === 'string') {
         let name = sanitized.customName;
-        // 拒绝包含 data: 协议（可能包含内嵌恶意内容）
-        if (/data\s*:/i.test(name)) return sanitized;
-        // 移除 <script>...</script>（支持跨行匹配）
-        name = name.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+        // 拒绝包含危险协议
+        if (/(?:data|javascript|vbscript)\s*:/i.test(name)) {
+            sanitized.customName = '';
+            return sanitized;
+        }
+
+        // 移除所有 HTML 标签（更安全的方式）
+        name = name.replace(/<[^>]*>/g, '');
+
         // 移除 HTML 事件处理器属性（onclick/onerror 等）
         name = name.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
-        // 移除 javascript: 协议（更严格：要求独立单词边界，防止误匹配 "not javascript code"）
-        name = name.replace(/\bjavascript\s*:/gi, '');
+
+        // 移除潜在的 HTML 实体编码攻击
+        name = name.replace(/&[#\w]+;/g, '');
+
         sanitized.customName = name.trim();
     }
     return sanitized;
@@ -39,9 +47,20 @@ function sanitizeProviderPools(pools) {
 }
 // 使用 Promise 链式队列，确保文件操作顺序执行
 let _fileLockChain = Promise.resolve();
+
+// 超时包装函数：防止操作永久挂起导致锁链阻塞
+function withTimeout(promise, ms = 30000) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Operation timeout after ${ms}ms`)), ms)
+        )
+    ]);
+}
+
 function withFileLock(fn) {
     const next = _fileLockChain
-        .then(() => fn())
+        .then(() => withTimeout(fn(), 30000))
         .catch(err => {
             // 记录错误并抛出，中断操作
             logger.error('[FileLock] Operation failed:', err?.message || err);

@@ -428,7 +428,7 @@ async function startServer() {
                     logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
                     setTimeout(async () => {
                         try {
-                            await poolManager.performScheduledHealthChecks();
+                            await poolManager.performHealthChecks();
                         } catch (error) {
                             logger.error('[ScheduledHealthCheck] Startup run error:', error);
                         }
