@@ -889,8 +889,11 @@ export class ProviderPoolManager {
         // 如果指定了模型，则排除不支持该模型的提供商
         if (requestedModel) {
             const modelFilteredProviders = availableAndHealthyProviders.filter(p => {
+                // 对于使用 managed model list 的 provider（如 openai-custom），优先使用 supportedModels 白名单
+                // 如果 supportedModels 为空数组（用户未配置），则回退到 notSupportedModels 黑名单逻辑
                 const supportedModels = getConfiguredSupportedModels(providerType, p.config);
                 if (supportedModels.length > 0) {
+                    // 白名单模式：只有明确在 supportedModels 中的模型才被允许
                     return supportedModels.includes(requestedModel);
                 }
                 // 如果提供商没有配置 notSupportedModels，则认为它支持所有模型
