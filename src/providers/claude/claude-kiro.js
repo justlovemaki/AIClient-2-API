@@ -49,9 +49,9 @@ const KIRO_CONSTANTS = {
 
 // Per-model context window sizes for accurate token estimation
 const MODEL_CONTEXT_TOKENS = {
-    "claude-opus-4-6": 1000000,
-    "claude-opus-4-5": 1000000,
-    "claude-opus-4-5-20251101": 1000000,
+    "claude-opus-4-6": 200000,
+    "claude-opus-4-5": 200000,
+    "claude-opus-4-5-20251101": 200000,
     "claude-sonnet-4-6": 200000,
     "claude-sonnet-4-5": 200000,
     "claude-sonnet-4-5-20250929": 200000,
