@@ -114,6 +114,118 @@ const MODEL_MAPPING = Object.fromEntries(
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
+// Kiro IDE source credentials cache directory (~/.aws/sso/cache/)
+const KIRO_IDE_CACHE_DIR = path.join(os.homedir(), '.aws', 'sso', 'cache');
+
+/**
+ * Sync credentials from Kiro IDE source files (~/.aws/sso/cache/).
+ *
+ * Kiro IDE continuously refreshes OAuth tokens in the background. When the proxy's
+ * refresh token is invalidated (e.g., consumed by Kiro IDE due to the one-time-use
+ * nature of AWS IAM Identity Center refresh tokens), this function provides a
+ * fallback recovery path by reading the latest token directly from Kiro IDE's cache.
+ *
+ * The Kiro IDE cache stores credentials in two files:
+ *   - kiro-auth-token.json: accessToken, refreshToken, expiresAt, profileArn
+ *   - <hash>.json: clientId, clientSecret (client registration, ~90 day lifetime)
+ *
+ * Both files are merged and written back to the proxy's credential file.
+ *
+ * @param {string} proxyCredFilePath - Path to the proxy's credential file to update
+ * @returns {Object|null} Merged credentials object, or null if sync is not possible
+ */
+async function syncFromKiroIDE(proxyCredFilePath) {
+    try {
+        let cacheFiles;
+        try {
+            cacheFiles = (await fs.readdir(KIRO_IDE_CACHE_DIR)).filter(f => f.endsWith('.json'));
+        } catch (e) {
+            logger.debug(`[Kiro Sync] Cannot read Kiro IDE cache dir: ${e.message}`);
+            return null;
+        }
+
+        // Find the most recently modified token file (has accessToken + refreshToken)
+        let tokenContent = null;
+        let tokenFileName = null;
+        let latestMtime = 0;
+        for (const f of cacheFiles) {
+            const fp = path.join(KIRO_IDE_CACHE_DIR, f);
+            try {
+                const stat = await fs.stat(fp);
+                const raw = await fs.readFile(fp, 'utf8');
+                const parsed = JSON.parse(raw);
+                if (parsed.accessToken && parsed.refreshToken && stat.mtimeMs > latestMtime) {
+                    tokenContent = parsed;
+                    tokenFileName = f;
+                    latestMtime = stat.mtimeMs;
+                }
+            } catch { /* skip unreadable files */ }
+        }
+
+        // Find clientId + clientSecret from a separate client registration file
+        let clientId = null;
+        let clientSecret = null;
+        for (const f of cacheFiles) {
+            try {
+                const raw = await fs.readFile(path.join(KIRO_IDE_CACHE_DIR, f), 'utf8');
+                const parsed = JSON.parse(raw);
+                if (parsed.clientId && parsed.clientSecret) {
+                    clientId = parsed.clientId;
+                    clientSecret = parsed.clientSecret;
+                    break;
+                }
+            } catch { /* skip */ }
+        }
+
+        if (!tokenContent || !clientId) {
+            logger.debug('[Kiro Sync] No valid source token or client registration found in Kiro IDE cache');
+            return null;
+        }
+
+        // Check if the source token itself is still valid (not expired)
+        if (tokenContent.expiresAt) {
+            const expiresAt = new Date(tokenContent.expiresAt);
+            if (expiresAt <= new Date()) {
+                logger.warn(`[Kiro Sync] Kiro IDE source token is also expired (${tokenContent.expiresAt}), cannot recover`);
+                return null;
+            }
+        }
+
+        // Merge credentials from both files
+        const merged = {
+            accessToken: tokenContent.accessToken,
+            refreshToken: tokenContent.refreshToken,
+            expiresAt: tokenContent.expiresAt,
+            clientId,
+            clientSecret,
+        };
+        if (tokenContent.profileArn) merged.profileArn = tokenContent.profileArn;
+        if (tokenContent.authMethod) merged.authMethod = tokenContent.authMethod;
+        if (tokenContent.region) merged.region = tokenContent.region;
+
+        // Write merged credentials to the proxy's credential file
+        if (proxyCredFilePath) {
+            try {
+                let existingData = {};
+                try {
+                    const raw = await fs.readFile(proxyCredFilePath, 'utf8');
+                    existingData = JSON.parse(raw);
+                } catch { /* file may not exist yet */ }
+                const updatedData = { ...existingData, ...merged };
+                await fs.writeFile(proxyCredFilePath, JSON.stringify(updatedData, null, 2), 'utf8');
+                logger.info(`[Kiro Sync] Synced credentials to ${proxyCredFilePath} (source: ${tokenFileName})`);
+            } catch (writeErr) {
+                logger.warn(`[Kiro Sync] Failed to write proxy credential file: ${writeErr.message}`);
+            }
+        }
+
+        return merged;
+    } catch (error) {
+        logger.warn(`[Kiro Sync] Failed to sync from Kiro IDE: ${error.message}`);
+        return null;
+    }
+}
+
 /**
  * Kiro API Service - Node.js implementation based on the Python ki2api
  * Provides OpenAI-compatible API for Claude Sonnet 4 via Kiro/CodeWhisperer
@@ -650,6 +762,30 @@ async loadCredentials() {
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
         this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
         this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
+
+        // Auto-sync from Kiro IDE cache if the loaded token is already expired.
+        // This handles the case where users upload credentials that have since
+        // been rotated by Kiro IDE's background refresh.
+        if (this.expiresAt) {
+            const expiresAt = new Date(this.expiresAt);
+            if (expiresAt <= new Date()) {
+                logger.warn('[Kiro Auth] Loaded token is expired (' + this.expiresAt + '), attempting sync from Kiro IDE...');
+                const tokenFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+                const synced = await syncFromKiroIDE(tokenFilePath);
+                if (synced) {
+                    this.accessToken = synced.accessToken;
+                    this.refreshToken = synced.refreshToken;
+                    this.expiresAt = synced.expiresAt;
+                    if (synced.clientId) this.clientId = synced.clientId;
+                    if (synced.clientSecret) this.clientSecret = synced.clientSecret;
+                    if (synced.profileArn) this.profileArn = synced.profileArn;
+                    if (synced.region) this.region = synced.region;
+                    logger.info('[Kiro Auth] Startup sync from Kiro IDE successful');
+                } else {
+                    logger.warn('[Kiro Auth] Startup sync from Kiro IDE failed, credentials remain expired');
+                }
+            }
+        }
     } catch (error) {
         logger.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }
@@ -798,6 +934,34 @@ async saveCredentialsToFile(filePath, newData) {
             }
         } catch (error) {
             logger.error('[Kiro Auth] Token refresh failed:', error.message);
+
+            // Fallback: attempt to recover by syncing from Kiro IDE source files.
+            // This handles the common case where the refresh token has been consumed
+            // by Kiro IDE (AWS IAM Identity Center refresh tokens are one-time use).
+            logger.info('[Kiro Auth] Attempting fallback recovery from Kiro IDE source files...');
+            const synced = await syncFromKiroIDE(tokenFilePath);
+            if (synced) {
+                this.accessToken = synced.accessToken;
+                this.refreshToken = synced.refreshToken;
+                this.expiresAt = synced.expiresAt;
+                if (synced.clientId) this.clientId = synced.clientId;
+                if (synced.clientSecret) this.clientSecret = synced.clientSecret;
+                if (synced.profileArn) this.profileArn = synced.profileArn;
+                logger.info('[Kiro Auth] Fallback recovery successful, credentials restored from Kiro IDE');
+
+                // Reset the pool manager's refresh status since we recovered
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    poolManager.resetProviderRefreshStatus(
+                        this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API,
+                        this.uuid
+                    );
+                }
+                return; // Recovered successfully, suppress the error
+            }
+
+            // Both native refresh and Kiro IDE fallback failed
+            logger.error('[Kiro Auth] Kiro IDE fallback also failed, no recovery possible');
             throw new Error(`Token refresh failed: ${error.message}`);
         }
     }
