@@ -201,6 +201,21 @@ export class CodexConverter extends BaseConverter {
         delete codexRequest.temperature;
         delete codexRequest.top_p;
         delete codexRequest.user;
+        delete codexRequest.prompt_cache_retention;
+        delete codexRequest.safety_identifier;
+
+        if (Array.isArray(codexRequest.tools)) {
+            this.buildToolNameMap(codexRequest.tools);
+            codexRequest.tools = this.convertTools(codexRequest.tools);
+        }
+
+        if (codexRequest.tool_choice) {
+            codexRequest.tool_choice = this.convertToolChoice(codexRequest.tool_choice);
+        }
+
+        if (!codexRequest.instructions || !String(codexRequest.instructions).trim()) {
+            codexRequest.instructions = 'You are a helpful coding assistant.';
+        }
         
         // 添加 reasoning 配置
         codexRequest.reasoning = {
@@ -593,7 +608,7 @@ export class CodexConverter extends BaseConverter {
         }
 
         if (toolChoice.type === 'function') {
-            const name = toolChoice.function?.name;
+            const name = toolChoice.function?.name || toolChoice.name;
             const shortName = name ? (this.toolNameMap.get(name) || this.shortenToolName(name)) : '';
             return {
                 type: 'function',

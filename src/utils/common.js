@@ -1972,7 +1972,7 @@ function createErrorResponse(error, fromProvider) {
  */
 function createStreamErrorResponse(error, fromProvider) {
     const protocolPrefix = getProtocolPrefix(fromProvider);
-    const rawStatusCode = error.status || error.code || 500;
+    const rawStatusCode = error.response?.status || error.status || error.statusCode || error.code || 500;
     const statusCode = ensureValidStatusCode(rawStatusCode);
     const errorMessage = error.message || "An error occurred during streaming.";
     
@@ -2011,6 +2011,7 @@ function createStreamErrorResponse(error, fromProvider) {
         case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
             // OpenAI Responses API 流式错误格式（SSE event + data）
             const responsesError = {
+                type: "error",
                 id: `resp_${Date.now()}`,
                 object: "error",
                 created: Math.floor(Date.now() / 1000),

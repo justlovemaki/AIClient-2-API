@@ -403,8 +403,12 @@ export class CodexApiService {
                 cleanedBody.tools = [];
             }
             if (Array.isArray(cleanedBody.tools)) {
+                const isJsonMode = cleanedBody.text?.format?.type === 'json_object' || cleanedBody.response_format?.type === 'json_object';
+                if (isJsonMode) {
+                    cleanedBody.tools = cleanedBody.tools.filter(t => t.type !== 'web_search');
+                }
                 const hasWebSearch = cleanedBody.tools.some(t => t.type === 'web_search');
-                if (!hasWebSearch) {
+                if (!hasWebSearch && !isJsonMode) {
                     cleanedBody.tools.push({type: 'web_search'});
                 }
                 if (!upstreamModel.endsWith('spark')) {
@@ -605,11 +609,52 @@ export class CodexApiService {
         }
     }
 
+    isValidCodexResponseOutputItem(item) {
+        if (!item || typeof item.type !== 'string' || item.type.length === 0) {
+            return false;
+        }
+        if (item.type === 'function_call') {
+            const hasName = typeof item.name === 'string' && item.name.trim().length > 0;
+            const hasCallId = (typeof item.call_id === 'string' && item.call_id.trim().length > 0) ||
+                (typeof item.id === 'string' && item.id.trim().length > 0);
+            return hasName && hasCallId;
+        }
+        return true;
+    }
+
+    sanitizeCodexResponseOutputItems(items, source) {
+        if (!Array.isArray(items)) {
+            return [];
+        }
+        const valid = [];
+        for (const item of items) {
+            if (this.isValidCodexResponseOutputItem(item)) {
+                valid.push(item);
+            } else {
+                const safe = item && typeof item === 'object' ? {
+                    type: item.type,
+                    id: item.id,
+                    call_id: item.call_id,
+                    hasName: typeof item.name === 'string' && item.name.length > 0,
+                    hasArguments: item.arguments !== undefined
+                } : item;
+                logger.warn(`[Codex] Dropping malformed Responses output item from ${source}: ${JSON.stringify(safe)}`);
+            }
+        }
+        return valid;
+    }
+
     /**
      * 收集 Codex 输出项
      */
     collectCodexOutputItemDone(eventData, outputItemsByIndex, outputItemsFallback) {
-        if (!eventData.item) {
+        if (!this.isValidCodexResponseOutputItem(eventData.item)) {
+            const safe = eventData.item && typeof eventData.item === 'object' ? {
+                type: eventData.item.type,
+                id: eventData.item.id,
+                call_id: eventData.item.call_id
+            } : eventData.item;
+            logger.warn(`[Codex] Dropping malformed Responses output item from response.output_item.done: ${JSON.stringify(safe)}`);
             return;
         }
         if (eventData.output_index !== undefined) {
@@ -623,8 +668,18 @@ export class CodexApiService {
      * 修正 Codex 完成输出
      */
     patchCodexCompletedOutput(eventData, outputItemsByIndex, outputItemsFallback) {
-        const response = eventData.response || {};
-        const output = response.output;
+        if (!eventData.response) {
+            eventData.response = {};
+        }
+
+        let output = eventData.response.output;
+        if (Array.isArray(output)) {
+            const sanitizedOutput = this.sanitizeCodexResponseOutputItems(output, 'response.completed.output');
+            if (sanitizedOutput.length !== output.length) {
+                eventData.response.output = sanitizedOutput;
+                output = sanitizedOutput;
+            }
+        }
 
         const shouldPatch = (!output || !Array.isArray(output) || output.length === 0) &&
             (outputItemsByIndex.size > 0 || outputItemsFallback.length > 0);
@@ -642,10 +697,7 @@ export class CodexApiService {
         // 添加 fallback 项
         items.push(...outputItemsFallback);
 
-        if (!eventData.response) {
-            eventData.response = {};
-        }
-        eventData.response.output = items;
+        eventData.response.output = this.sanitizeCodexResponseOutputItems(items, 'collected.output_items');
 
         return eventData;
     }
@@ -675,6 +727,11 @@ export class CodexApiService {
                     try {
                         let parsed = JSON.parse(dataStr);
 
+                        if (!parsed || typeof parsed.type !== 'string') {
+                            logger.warn('[Codex] Dropping malformed SSE event without type');
+                            continue;
+                        }
+
                         if (parsed.type === 'error') {
                             logger.error('[Codex] API returned error in stream:', parsed.error || parsed);
                             const errorMsg = (parsed.error && parsed.error.message) || JSON.stringify(parsed.error || parsed);
@@ -684,6 +741,12 @@ export class CodexApiService {
                                 error.skipErrorCount = true;
                             }
                             throw error;
+                        }
+
+                        if ((parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') &&
+                            !this.isValidCodexResponseOutputItem(parsed.item)) {
+                            this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
+                            continue;
                         }
 
                         if (parsed.type === 'response.output_item.done') {
@@ -712,6 +775,11 @@ export class CodexApiService {
                 try {
                     let parsed = JSON.parse(dataStr);
 
+                    if (!parsed || typeof parsed.type !== 'string') {
+                        logger.warn('[Codex] Dropping malformed final SSE event without type');
+                        return;
+                    }
+
                     if (parsed.type === 'error') {
                         logger.error('[Codex] API returned error in final stream buffer:', parsed.error || parsed);
                         const errorMsg = (parsed.error && parsed.error.message) || JSON.stringify(parsed.error || parsed);
@@ -721,6 +789,12 @@ export class CodexApiService {
                             error.skipErrorCount = true;
                         }
                         throw error;
+                    }
+
+                    if ((parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') &&
+                        !this.isValidCodexResponseOutputItem(parsed.item)) {
+                        this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
+                        return;
                     }
 
                     if (parsed.type === 'response.output_item.done') {
@@ -776,6 +850,10 @@ export class CodexApiService {
 
             try {
                 let parsed = JSON.parse(jsonData);
+                if (!parsed || typeof parsed.type !== 'string') {
+                    logger.debug('[Codex] Dropping malformed non-stream event without type');
+                    continue;
+                }
                 switch (parsed.type) {
                     case 'error':
                         logger.error('[Codex] API returned error:', parsed.error || parsed);
@@ -787,8 +865,10 @@ export class CodexApiService {
                         }
                         throw error;
                     case 'response.output_item.added':
-                        if (parsed.item) {
-                            outputItems.set(parsed.item.id, parsed.item);
+                        if (this.isValidCodexResponseOutputItem(parsed.item)) {
+                            outputItems.set(parsed.item.id || parsed.item.call_id, parsed.item);
+                        } else {
+                            this.sanitizeCodexResponseOutputItems([parsed.item], 'response.output_item.added');
                         }
                         break;
                     case 'response.output_item.done':
