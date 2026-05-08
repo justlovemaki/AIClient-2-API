@@ -151,4 +151,33 @@ describe('Codex Responses compatibility', () => {
         }
     });
 
+
+    test('normalizes Responses function_call call_id from item id', () => {
+        const converter = new CodexConverter();
+        const response = converter.toOpenAIResponsesResponse({
+            type: 'response.completed',
+            response: {
+                id: 'resp_tool',
+                model: 'gpt-5.5',
+                output: [{
+                    id: 'fc_1',
+                    type: 'function_call',
+                    name: 'get_probe',
+                    arguments: '{}',
+                    status: 'completed'
+                }],
+                usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
+            }
+        }, 'gpt-5.5');
+
+        expect(response.output[0]).toMatchObject({
+            id: 'fc_1',
+            call_id: 'fc_1',
+            type: 'function_call',
+            name: 'get_probe',
+            arguments: '{}',
+            status: 'completed'
+        });
+    });
+
 });

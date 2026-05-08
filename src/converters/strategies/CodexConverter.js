@@ -819,8 +819,10 @@ export class CodexConverter extends BaseConverter {
                         });
                     }
                 } else if (item.type === 'function_call') {
+                    const callId = item.call_id || item.id || `call_${uuidv4().replace(/-/g, '')}`;
                     output.push({
-                        id: item.call_id || `call_${uuidv4().replace(/-/g, '')}`,
+                        id: item.id || callId,
+                        call_id: callId,
                         type: "function_call",
                         name: this.getOriginalToolName(item.name),
                         arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments),

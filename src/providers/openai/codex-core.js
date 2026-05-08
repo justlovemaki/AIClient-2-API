@@ -622,6 +622,25 @@ export class CodexApiService {
         return true;
     }
 
+    normalizeCodexResponseOutputItem(item) { // codexResponsesOutputItemGuard
+        if (!this.isValidCodexResponseOutputItem(item)) {
+            return item;
+        }
+        if (item.type !== 'function_call') {
+            return item;
+        }
+        const itemId = typeof item.id === 'string' && item.id.trim().length > 0 ? item.id : null;
+        const callId = typeof item.call_id === 'string' && item.call_id.trim().length > 0 ? item.call_id : itemId;
+        if (!callId) {
+            return item;
+        }
+        return {
+            ...item,
+            id: itemId || callId,
+            call_id: callId
+        };
+    }
+
     sanitizeCodexResponseOutputItems(items, source) {
         if (!Array.isArray(items)) {
             return [];
@@ -629,7 +648,7 @@ export class CodexApiService {
         const valid = [];
         for (const item of items) {
             if (this.isValidCodexResponseOutputItem(item)) {
-                valid.push(item);
+                valid.push(this.normalizeCodexResponseOutputItem(item));
             } else {
                 const safe = item && typeof item === 'object' ? {
                     type: item.type,
@@ -657,10 +676,11 @@ export class CodexApiService {
             logger.warn(`[Codex] Dropping malformed Responses output item from response.output_item.done: ${JSON.stringify(safe)}`);
             return;
         }
+        const item = this.normalizeCodexResponseOutputItem(eventData.item);
         if (eventData.output_index !== undefined) {
-            outputItemsByIndex.set(eventData.output_index, eventData.item);
+            outputItemsByIndex.set(eventData.output_index, item);
         } else {
-            outputItemsFallback.push(eventData.item);
+            outputItemsFallback.push(item);
         }
     }
 
@@ -743,10 +763,12 @@ export class CodexApiService {
                             throw error;
                         }
 
-                        if ((parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') &&
-                            !this.isValidCodexResponseOutputItem(parsed.item)) {
-                            this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
-                            continue;
+                        if (parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') {
+                            if (!this.isValidCodexResponseOutputItem(parsed.item)) {
+                                this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
+                                continue;
+                            }
+                            parsed = { ...parsed, item: this.normalizeCodexResponseOutputItem(parsed.item) };
                         }
 
                         if (parsed.type === 'response.output_item.done') {
@@ -791,10 +813,12 @@ export class CodexApiService {
                         throw error;
                     }
 
-                    if ((parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') &&
-                        !this.isValidCodexResponseOutputItem(parsed.item)) {
-                        this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
-                        return;
+                    if (parsed.type === 'response.output_item.added' || parsed.type === 'response.output_item.done') {
+                        if (!this.isValidCodexResponseOutputItem(parsed.item)) {
+                            this.sanitizeCodexResponseOutputItems([parsed.item], parsed.type);
+                            return;
+                        }
+                        parsed = { ...parsed, item: this.normalizeCodexResponseOutputItem(parsed.item) };
                     }
 
                     if (parsed.type === 'response.output_item.done') {
@@ -866,7 +890,8 @@ export class CodexApiService {
                         throw error;
                     case 'response.output_item.added':
                         if (this.isValidCodexResponseOutputItem(parsed.item)) {
-                            outputItems.set(parsed.item.id || parsed.item.call_id, parsed.item);
+                            const item = this.normalizeCodexResponseOutputItem(parsed.item);
+                            outputItems.set(item.id || item.call_id, item);
                         } else {
                             this.sanitizeCodexResponseOutputItems([parsed.item], 'response.output_item.added');
                         }
