@@ -977,7 +977,10 @@ async saveCredentialsToFile(filePath, newData) {
             systemPrompt = `${builtInPrefix}`;
         }
         
-        const processedMessages = messages;
+        const processedMessages = messages.map(message => ({
+            ...message,
+            content: Array.isArray(message.content) ? [...message.content] : message.content
+        }));
 
         if (processedMessages.length === 0) {
             throw new Error('No user messages found');
@@ -1148,10 +1151,15 @@ async saveCredentialsToFile(filePath, newData) {
         const history = [];
         let startIndex = 0;
 
+        let prependSystemToCurrentMessage = false;
+
         // Handle system prompt
         if (systemPrompt) {
-            // If the first message is a user message, prepend system prompt to it
-            if (processedMessages[0].role === 'user') {
+            // Keep single-turn requests as a single current message. Duplicating the same user
+            // payload into history and currentMessage can make Kiro reject large agent prompts.
+            if (processedMessages[0].role === 'user' && processedMessages.length === 1) {
+                prependSystemToCurrentMessage = true;
+            } else if (processedMessages[0].role === 'user') {
                 let firstUserContent = this.getContentText(processedMessages[0]);
                 history.push({
                     userInputMessage: {
@@ -1387,6 +1395,12 @@ async saveCredentialsToFile(filePath, newData) {
             // Kiro API 要求 content 不能为空，即使有 toolResults
             if (!currentContent) {
                 currentContent = currentToolResults.length > 0 ? 'Tool results provided.' : 'Continue';
+            }
+
+            if (prependSystemToCurrentMessage) {
+                currentContent = currentContent
+                    ? `${systemPrompt}\n\n${currentContent}`
+                    : systemPrompt;
             }
         }
 
