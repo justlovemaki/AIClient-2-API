@@ -180,4 +180,80 @@ describe('Codex Responses compatibility', () => {
         });
     });
 
+
+    test('canonical Responses stream densifies sparse upstream function_call indexes', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_sparse_tool', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_sparse_tool'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_item.done',
+                response_id: 'resp_sparse_tool',
+                output_index: 3,
+                item: {
+                    id: 'fc_sparse',
+                    call_id: 'call_sparse',
+                    type: 'function_call',
+                    name: 'get_city_time',
+                    arguments: '{"city":"Paris"}',
+                    status: 'completed'
+                }
+            }, 'gpt-5.5', 'req_sparse_tool'));
+
+            const functionEvents = events.filter(event => event.output_index !== undefined);
+            expect(functionEvents.map(event => event.output_index)).toEqual([0, 0, 0, 0]);
+            expect(functionEvents.map(event => event.type)).toEqual([
+                'response.output_item.added',
+                'response.function_call_arguments.delta',
+                'response.function_call_arguments.done',
+                'response.output_item.done'
+            ]);
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+    test('canonical Responses stream keeps text and sparse function_call indexes dense', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_text_tool_sparse', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_text_tool_sparse'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_text.delta',
+                response_id: 'resp_text_tool_sparse',
+                delta: 'Need a tool.'
+            }, 'gpt-5.5', 'req_text_tool_sparse'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_item.done',
+                response_id: 'resp_text_tool_sparse',
+                output_index: 5,
+                item: {
+                    id: 'fc_after_text',
+                    call_id: 'call_after_text',
+                    type: 'function_call',
+                    name: 'get_city_time',
+                    arguments: '{"city":"Paris"}',
+                    status: 'completed'
+                }
+            }, 'gpt-5.5', 'req_text_tool_sparse'));
+
+            const indexedEvents = events.filter(event => event.output_index !== undefined);
+            expect(indexedEvents.map(event => event.output_index)).toEqual([0, 0, 0, 1, 1, 1, 1]);
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
 });
