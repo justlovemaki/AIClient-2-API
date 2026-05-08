@@ -5,12 +5,13 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { BaseConverter } from '../BaseConverter.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { MODEL_PROTOCOL_PREFIX, getCodexResponsesStreamMode } from '../../utils/common.js';
 import {
     generateResponseCreated,
     generateResponseInProgress,
     generateOutputItemAdded,
     generateContentPartAdded,
+    generateOutputTextDelta,
     generateOutputTextDone,
     generateContentPartDone,
     generateOutputItemDone,
@@ -130,7 +131,7 @@ export class CodexConverter extends BaseConverter {
             case MODEL_PROTOCOL_PREFIX.OPENAI:
                 return this.toOpenAIStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
-                return this.toOpenAIResponsesStreamChunk(chunk, model);
+                return this.toOpenAIResponsesStreamChunk(chunk, model, requestId);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiStreamChunk(chunk, model, requestId);
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
@@ -1208,13 +1209,13 @@ export class CodexConverter extends BaseConverter {
     /**
      * Codex → OpenAI Responses 流式响应转换
      */
-    toOpenAIResponsesStreamChunk(chunk, model) {
-        if(true){
+    toOpenAIResponsesStreamChunk(chunk, model, requestId) {
+        if (getCodexResponsesStreamMode() !== 'canonical') {
             return chunk;
         }
 
         const type = chunk.type;
-        const resId = chunk.response?.id || 'default';
+        const resId = requestId || chunk.response?.id || chunk.response_id || 'default';
         
         if (!this.streamParams.has(resId)) {
             this.streamParams.set(resId, {
@@ -1222,7 +1223,11 @@ export class CodexConverter extends BaseConverter {
                 createdAt: Math.floor(Date.now() / 1000),
                 responseID: resId,
                 functionCallIndex: -1,
-                eventsSent: new Set()
+                eventsSent: new Set(),
+                outputText: '',
+                hasText: false,
+                messageItemId: null,
+                functionCalls: []
             });
         }
         const state = this.streamParams.get(resId);
@@ -1249,57 +1254,166 @@ export class CodexConverter extends BaseConverter {
 
         if (type === 'response.output_text.delta') {
             if (!state.eventsSent.has('output_item_added')) {
-                events.push(generateOutputItemAdded(state.responseID));
+                const added = generateOutputItemAdded(state.responseID);
+                state.messageItemId = added.item?.id || state.messageItemId;
+                events.push(added);
                 state.eventsSent.add('output_item_added');
             }
             if (!state.eventsSent.has('content_part_added')) {
                 events.push(generateContentPartAdded(state.responseID));
                 state.eventsSent.add('content_part_added');
             }
+            const delta = typeof chunk.delta === 'string' ? chunk.delta : '';
+            state.outputText += delta;
+            state.hasText = true;
+            events.push(generateOutputTextDelta(state.responseID, delta));
+            return events;
+        }
+
+        if (type === 'response.output_text.done') {
+            if (typeof chunk.text === 'string') {
+                state.outputText = chunk.text;
+                state.hasText = true;
+            }
+            return null;
+        }
+
+        if (type === 'response.output_item.added' && chunk.item?.type === 'function_call') {
+            const itemId = chunk.item.id || chunk.item.call_id || `fc_${uuidv4().replace(/-/g, '')}`;
+            const callId = chunk.item.call_id || itemId;
+            const call = {
+                id: itemId,
+                call_id: callId,
+                type: 'function_call',
+                name: this.getOriginalToolName(chunk.item.name),
+                arguments: '{}',
+                status: 'in_progress',
+                output_index: chunk.output_index ?? state.functionCalls.length,
+                hasArgsDelta: false
+            };
+            state.functionCalls.push(call);
             events.push({
-                type: "response.output_text.delta",
+                type: 'response.output_item.added',
                 response_id: state.responseID,
-                delta: chunk.delta
+                output_index: call.output_index,
+                item: { ...call, arguments: '' }
+            });
+            return events;
+        }
+
+        if (type === 'response.function_call_arguments.delta') {
+            const delta = typeof chunk.delta === 'string' ? chunk.delta : '';
+            const call = state.functionCalls.find(c => c.id === chunk.item_id || c.call_id === chunk.item_id);
+            if (!call) return null;
+            call.arguments = call.arguments && call.arguments !== '{}' ? call.arguments + delta : delta;
+            call.hasArgsDelta = true;
+            events.push({
+                type: 'response.function_call_arguments.delta',
+                response_id: state.responseID,
+                item_id: call.id,
+                output_index: call.output_index,
+                delta
             });
             return events;
         }
 
         if (type === 'response.output_item.done' && chunk.item?.type === 'function_call') {
-            events.push({
-                type: "response.output_item.added",
-                response_id: state.responseID,
-                item: {
-                    id: chunk.item.call_id,
-                    type: "function_call",
+            const itemId = chunk.item.id || chunk.item.call_id || `fc_${uuidv4().replace(/-/g, '')}`;
+            const callId = chunk.item.call_id || itemId;
+            let args = chunk.item.arguments;
+            if (args === undefined || args === null) args = '{}';
+            if (typeof args !== 'string') args = JSON.stringify(args);
+            let call = state.functionCalls.find(c => c.id === itemId || c.call_id === callId);
+            if (!call) {
+                call = {
+                    id: itemId,
+                    call_id: callId,
+                    type: 'function_call',
                     name: this.getOriginalToolName(chunk.item.name),
-                    arguments: typeof chunk.item.arguments === 'string' ? chunk.item.arguments : JSON.stringify(chunk.item.arguments),
-                    status: "completed"
-                }
+                    arguments: args,
+                    status: 'in_progress',
+                    output_index: chunk.output_index ?? state.functionCalls.length,
+                    hasArgsDelta: false
+                };
+                state.functionCalls.push(call);
+                events.push({
+                    type: 'response.output_item.added',
+                    response_id: state.responseID,
+                    output_index: call.output_index,
+                    item: { ...call, arguments: '' }
+                });
+            }
+            call.name = this.getOriginalToolName(chunk.item.name);
+            call.arguments = args;
+            call.status = 'completed';
+            if (!call.hasArgsDelta) {
+                events.push({
+                    type: 'response.function_call_arguments.delta',
+                    response_id: state.responseID,
+                    item_id: call.id,
+                    output_index: call.output_index,
+                    delta: args
+                });
+                call.hasArgsDelta = true;
+            }
+            events.push({
+                type: 'response.function_call_arguments.done',
+                response_id: state.responseID,
+                item_id: call.id,
+                output_index: call.output_index,
+                arguments: args
             });
             events.push({
-                type: "response.output_item.done",
+                type: 'response.output_item.done',
                 response_id: state.responseID,
-                item_id: chunk.item.call_id
+                output_index: call.output_index,
+                item: {
+                    id: call.id,
+                    call_id: call.call_id,
+                    type: 'function_call',
+                    name: call.name,
+                    arguments: call.arguments,
+                    status: 'completed'
+                }
             });
             return events;
         }
 
         if (type === 'response.completed') {
-            events.push(
-                generateOutputTextDone(state.responseID),
-                generateContentPartDone(state.responseID),
-                generateOutputItemDone(state.responseID)
-            );
+            if (state.hasText && !state.eventsSent.has('text_done')) {
+                events.push(
+                    generateOutputTextDone(state.responseID),
+                    generateContentPartDone(state.responseID),
+                    generateOutputItemDone(state.responseID)
+                );
+                state.eventsSent.add('text_done');
+            }
             const completedEvent = generateResponseCompleted(state.responseID);
+            const output = [];
+            if (state.hasText) {
+                output.push(...(completedEvent.response.output || []).filter(item => item.type === 'message'));
+            }
+            output.push(...state.functionCalls.map(call => ({
+                id: call.id,
+                call_id: call.call_id,
+                type: 'function_call',
+                name: call.name,
+                arguments: call.arguments || '{}',
+                status: 'completed'
+            })));
+            if (output.length > 0) {
+                completedEvent.response.output = output;
+            }
+            completedEvent.response.status = 'completed';
             completedEvent.response.usage = {
-                input_tokens: chunk.response.usage?.input_tokens || 0,
-                output_tokens: chunk.response.usage?.output_tokens || 0,
-                total_tokens: chunk.response.usage?.total_tokens || 0,
+                input_tokens: chunk.response?.usage?.input_tokens || 0,
+                output_tokens: chunk.response?.usage?.output_tokens || 0,
+                total_tokens: chunk.response?.usage?.total_tokens || 0,
                 input_tokens_details: {
-                    cached_tokens: this.getCachedInputTokens(chunk.response.usage)
+                    cached_tokens: this.getCachedInputTokens(chunk.response?.usage)
                 },
                 output_tokens_details: {
-                    reasoning_tokens: chunk.response.usage?.output_tokens_details?.reasoning_tokens || 0
+                    reasoning_tokens: chunk.response?.usage?.output_tokens_details?.reasoning_tokens || 0
                 }
             };
             events.push(completedEvent);

@@ -399,6 +399,11 @@ export function getProtocolPrefix(provider) {
     return provider; // Return original if no hyphen is found
 }
 
+export function getCodexResponsesStreamMode() {
+    const mode = String(process.env.CODEX_RESPONSES_STREAM_MODE || 'raw').trim().toLowerCase();
+    return mode === 'canonical' ? 'canonical' : 'raw';
+}
+
 export const ENDPOINT_TYPE = {
     OPENAI_CHAT: 'openai_chat',
     OPENAI_RESPONSES: 'openai_responses',
