@@ -256,4 +256,76 @@ describe('Codex Responses compatibility', () => {
         }
     });
 
+    test('canonical Responses stream preserves output_text.done-only text', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_done_only', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_done_only'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_text.done',
+                response_id: 'resp_done_only',
+                text: 'Done-only text'
+            }, 'gpt-5.5', 'req_done_only'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.completed',
+                response: { id: 'resp_done_only', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
+            }, 'gpt-5.5', 'req_done_only'));
+
+            expect(events.map(event => event.type)).toEqual([
+                'response.created',
+                'response.in_progress',
+                'response.output_item.added',
+                'response.content_part.added',
+                'response.output_text.done',
+                'response.content_part.done',
+                'response.output_item.done',
+                'response.completed'
+            ]);
+            expect(events.find(event => event.type === 'response.output_text.done').text).toBe('Done-only text');
+            expect(events.at(-1).response.output[0].content[0].text).toBe('Done-only text');
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+    test('canonical Responses stream preserves completed output message text without prior delta', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_completed_text', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_completed_text'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.completed',
+                response: {
+                    id: 'resp_completed_text',
+                    output: [{
+                        id: 'msg_completed_text',
+                        type: 'message',
+                        role: 'assistant',
+                        status: 'completed',
+                        content: [{ type: 'output_text', text: 'Final output text' }]
+                    }],
+                    usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
+                }
+            }, 'gpt-5.5', 'req_completed_text'));
+
+            expect(events.find(event => event.type === 'response.output_text.done').text).toBe('Final output text');
+            expect(events.at(-1).response.output[0].content[0].text).toBe('Final output text');
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+
 });

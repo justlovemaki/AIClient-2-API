@@ -12,9 +12,6 @@ import {
     generateOutputItemAdded,
     generateContentPartAdded,
     generateOutputTextDelta,
-    generateOutputTextDone,
-    generateContentPartDone,
-    generateOutputItemDone,
     generateResponseCompleted
 } from '../../providers/openai/openai-responses-core.mjs';
 
@@ -1262,6 +1259,68 @@ export class CodexConverter extends BaseConverter {
             }
             return textEvents;
         };
+        const extractMessageText = (item) => {
+            if (!item || item.type !== 'message') return '';
+            if (typeof item.content === 'string') return item.content;
+            if (!Array.isArray(item.content)) return '';
+            return item.content.map(part => {
+                if (typeof part === 'string') return part;
+                if ((part?.type === 'output_text' || part?.type === 'text') && typeof part.text === 'string') {
+                    return part.text;
+                }
+                return '';
+            }).join('');
+        };
+        const extractCompletedMessageText = (response) => {
+            const output = Array.isArray(response?.output) ? response.output : [];
+            return output.map(extractMessageText).filter(Boolean).join('');
+        };
+        const setOutputText = (text) => {
+            if (typeof text !== 'string' || text.length === 0) return;
+            state.outputText = text;
+            state.hasText = true;
+        };
+        const buildTextOutputItem = () => ({
+            id: state.messageItemId,
+            summary: [],
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [{
+                type: 'output_text',
+                text: state.outputText,
+                annotations: [],
+                logprobs: []
+            }]
+        });
+        const buildTextDoneEvents = () => {
+            const outputIndex = getMessageOutputIndex();
+            const itemId = state.messageItemId;
+            const outputItem = buildTextOutputItem();
+            return [{
+                type: 'response.output_text.done',
+                item_id: itemId,
+                output_index: outputIndex,
+                content_index: 0,
+                text: state.outputText,
+                logprobs: []
+            }, {
+                type: 'response.content_part.done',
+                item_id: itemId,
+                output_index: outputIndex,
+                content_index: 0,
+                part: {
+                    type: 'output_text',
+                    text: state.outputText,
+                    annotations: [],
+                    logprobs: []
+                }
+            }, {
+                type: 'response.output_item.done',
+                output_index: outputIndex,
+                item: outputItem
+            }];
+        };
 
         if (type === 'response.created') {
             state.responseID = chunk.response.id;
@@ -1286,16 +1345,23 @@ export class CodexConverter extends BaseConverter {
             events.push(...ensureTextLifecycleStarted());
             const delta = typeof chunk.delta === 'string' ? chunk.delta : '';
             state.outputText += delta;
-            state.hasText = true;
+            if (delta.length > 0) state.hasText = true;
             events.push(patchTextOutputIndex(generateOutputTextDelta(state.responseID, delta)));
             return events;
         }
 
         if (type === 'response.output_text.done') {
-            if (typeof chunk.text === 'string') {
-                state.outputText = chunk.text;
-                state.hasText = true;
-            }
+            setOutputText(chunk.text);
+            return null;
+        }
+
+        if (type === 'response.content_part.done' && chunk.part?.type === 'output_text') {
+            setOutputText(chunk.part.text);
+            return null;
+        }
+
+        if (type === 'response.output_item.done' && chunk.item?.type === 'message') {
+            setOutputText(extractMessageText(chunk.item));
             return null;
         }
 
@@ -1401,19 +1467,18 @@ export class CodexConverter extends BaseConverter {
         }
 
         if (type === 'response.completed') {
+            setOutputText(extractCompletedMessageText(chunk.response));
             if (state.hasText && !state.eventsSent.has('text_done')) {
                 events.push(
                     ...ensureTextLifecycleStarted(),
-                    patchTextOutputIndex(generateOutputTextDone(state.responseID)),
-                    patchTextOutputIndex(generateContentPartDone(state.responseID)),
-                    patchTextOutputIndex(generateOutputItemDone(state.responseID))
+                    ...buildTextDoneEvents()
                 );
                 state.eventsSent.add('text_done');
             }
             const completedEvent = generateResponseCompleted(state.responseID);
             const output = [];
             if (state.hasText) {
-                output.push(...(completedEvent.response.output || []).filter(item => item.type === 'message'));
+                output.push(buildTextOutputItem());
             }
             output.push(...state.functionCalls.map(call => ({
                 id: call.id,
