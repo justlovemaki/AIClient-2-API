@@ -328,4 +328,142 @@ describe('Codex Responses compatibility', () => {
     });
 
 
+    test('preserves Responses input developer instructions when top-level instructions are absent', () => {
+        const converter = new CodexConverter();
+        const request = converter.toOpenAIResponsesToCodexRequest({
+            model: 'gpt-5.5',
+            input: [{
+                role: 'developer',
+                content: [{ type: 'input_text', text: 'Use terse answers.' }]
+            }, {
+                role: 'user',
+                content: [{ type: 'input_text', text: 'Say OK.' }]
+            }]
+        });
+
+        expect(request.instructions).toBe('You are a helpful coding assistant.');
+        expect(request.input.map(item => item.role)).toEqual(['developer', 'user']);
+    });
+
+    test('canonical Responses stream keeps completed output ordered by emitted output indexes', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_tool_then_text', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_tool_then_text'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_item.done',
+                response_id: 'resp_tool_then_text',
+                output_index: 4,
+                item: {
+                    id: 'fc_first',
+                    call_id: 'call_first',
+                    type: 'function_call',
+                    name: 'get_city_time',
+                    arguments: '{"city":"Paris"}',
+                    status: 'completed'
+                }
+            }, 'gpt-5.5', 'req_tool_then_text'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_text.delta',
+                response_id: 'resp_tool_then_text',
+                delta: 'Tool requested.'
+            }, 'gpt-5.5', 'req_tool_then_text'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.completed',
+                response: { id: 'resp_tool_then_text', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
+            }, 'gpt-5.5', 'req_tool_then_text'));
+
+            expect(events.at(-1).response.output.map(item => item.type)).toEqual(['function_call', 'message']);
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+    test('canonical Responses stream keeps output_text.done-only text before later tool indexes', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_done_text_tool', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_done_text_tool'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_text.done',
+                response_id: 'resp_done_text_tool',
+                text: 'Done text first.'
+            }, 'gpt-5.5', 'req_done_text_tool'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.output_item.done',
+                response_id: 'resp_done_text_tool',
+                output_index: 9,
+                item: {
+                    id: 'fc_after_done',
+                    call_id: 'call_after_done',
+                    type: 'function_call',
+                    name: 'get_city_time',
+                    arguments: '{"city":"Paris"}',
+                    status: 'completed'
+                }
+            }, 'gpt-5.5', 'req_done_text_tool'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.completed',
+                response: { id: 'resp_done_text_tool', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
+            }, 'gpt-5.5', 'req_done_text_tool'));
+
+            const indexedEvents = events.filter(event => event.output_index !== undefined);
+            expect(indexedEvents.map(event => event.output_index)).toEqual([0, 0, 1, 1, 1, 1, 0, 0, 0]);
+            expect(events.at(-1).response.output.map(item => item.type)).toEqual(['message', 'function_call']);
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+    test('canonical Responses stream preserves image_generation_call completed output', () => {
+        const converter = new CodexConverter();
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'canonical';
+        try {
+            const events = [];
+            const push = value => events.push(...(Array.isArray(value) ? value : [value]).filter(Boolean));
+            const imageCall = {
+                id: 'ig_1',
+                type: 'image_generation_call',
+                status: 'completed',
+                result: 'iVBORw0KGgo=',
+                output_format: 'png'
+            };
+
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.created',
+                response: { id: 'resp_image', model: 'gpt-5.5' }
+            }, 'gpt-5.5', 'req_image'));
+            push(converter.toOpenAIResponsesStreamChunk({
+                type: 'response.completed',
+                response: {
+                    id: 'resp_image',
+                    output: [imageCall],
+                    usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
+                }
+            }, 'gpt-5.5', 'req_image'));
+
+            expect(events.at(-1).response.output[0]).toMatchObject({
+                id: 'ig_1',
+                type: 'image_generation_call',
+                status: 'completed'
+            });
+            expect(events.at(-1).response.output[0].output_index).toBeUndefined();
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
+    });
+
+
 });

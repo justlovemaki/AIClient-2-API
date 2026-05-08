@@ -211,9 +211,7 @@ export class CodexConverter extends BaseConverter {
             codexRequest.tool_choice = this.convertToolChoice(codexRequest.tool_choice);
         }
 
-        if (!codexRequest.instructions || !String(codexRequest.instructions).trim()) {
-            codexRequest.instructions = 'You are a helpful coding assistant.';
-        }
+        const hasExplicitInstructions = !!(codexRequest.instructions && String(codexRequest.instructions).trim());
         
         // 添加 reasoning 配置
         codexRequest.reasoning = {
@@ -225,8 +223,8 @@ export class CodexConverter extends BaseConverter {
         // 确保 input 数组中的每个项都有 type: "message"，并将系统角色转换为开发者角色
         if (codexRequest.input && Array.isArray(codexRequest.input)) {
             codexRequest.input = codexRequest.input.filter(item => {
-                // 如果 instructions 已存在，过滤掉 input 中的 system/developer 消息以避免重复
-                if (codexRequest.instructions && (item.role === 'system' || item.role === 'developer')) {
+                // 如果显式 instructions 已存在，过滤掉 input 中的 system/developer 消息以避免重复
+                if (hasExplicitInstructions && (item.role === 'system' || item.role === 'developer')) {
                     return false;
                 }
                 return true;
@@ -244,6 +242,10 @@ export class CodexConverter extends BaseConverter {
                 return item;
             });
         }
+        if (!hasExplicitInstructions && (!codexRequest.instructions || !String(codexRequest.instructions).trim())) {
+            codexRequest.instructions = 'You are a helpful coding assistant.';
+        }
+
         // 确保 text.format 是对象而非字符串
         if (codexRequest.text?.format && typeof codexRequest.text.format === 'string') {
             const fmt = codexRequest.text.format;
@@ -1228,7 +1230,8 @@ export class CodexConverter extends BaseConverter {
                 messageItemId: null,
                 messageOutputIndex: null,
                 nextOutputIndex: 0,
-                functionCalls: []
+                functionCalls: [],
+                imageGenerationCalls: []
             });
         }
         const state = this.streamParams.get(resId);
@@ -1352,17 +1355,37 @@ export class CodexConverter extends BaseConverter {
 
         if (type === 'response.output_text.done') {
             setOutputText(chunk.text);
-            return null;
+            if (state.hasText) events.push(...ensureTextLifecycleStarted());
+            return events.length > 0 ? events : null;
         }
 
         if (type === 'response.content_part.done' && chunk.part?.type === 'output_text') {
             setOutputText(chunk.part.text);
-            return null;
+            if (state.hasText) events.push(...ensureTextLifecycleStarted());
+            return events.length > 0 ? events : null;
         }
 
         if (type === 'response.output_item.done' && chunk.item?.type === 'message') {
             setOutputText(extractMessageText(chunk.item));
-            return null;
+            if (state.hasText) events.push(...ensureTextLifecycleStarted());
+            return events.length > 0 ? events : null;
+        }
+
+        if (type === 'response.output_item.done' && chunk.item?.type === 'image_generation_call') {
+            const outputIndex = state.nextOutputIndex++;
+            state.imageGenerationCalls.push({ ...chunk.item, output_index: outputIndex });
+            events.push({
+                type: 'response.output_item.added',
+                response_id: state.responseID,
+                output_index: outputIndex,
+                item: { ...chunk.item, status: chunk.item.status || 'in_progress' }
+            }, {
+                type: 'response.output_item.done',
+                response_id: state.responseID,
+                output_index: outputIndex,
+                item: { ...chunk.item, status: chunk.item.status || 'completed' }
+            });
+            return events;
         }
 
         if (type === 'response.output_item.added' && chunk.item?.type === 'function_call') {
@@ -1467,7 +1490,13 @@ export class CodexConverter extends BaseConverter {
         }
 
         if (type === 'response.completed') {
+            const completedOutput = Array.isArray(chunk.response?.output) ? chunk.response.output : [];
             setOutputText(extractCompletedMessageText(chunk.response));
+            for (const item of completedOutput) {
+                if (item?.type === 'image_generation_call' && !state.imageGenerationCalls.some(existing => existing.id && existing.id === item.id)) {
+                    state.imageGenerationCalls.push({ ...item, output_index: state.nextOutputIndex++ });
+                }
+            }
             if (state.hasText && !state.eventsSent.has('text_done')) {
                 events.push(
                     ...ensureTextLifecycleStarted(),
@@ -1476,18 +1505,31 @@ export class CodexConverter extends BaseConverter {
                 state.eventsSent.add('text_done');
             }
             const completedEvent = generateResponseCompleted(state.responseID);
-            const output = [];
+            const outputItems = [];
             if (state.hasText) {
-                output.push(buildTextOutputItem());
+                outputItems.push({ output_index: getMessageOutputIndex(), item: buildTextOutputItem() });
             }
-            output.push(...state.functionCalls.map(call => ({
-                id: call.id,
-                call_id: call.call_id,
-                type: 'function_call',
-                name: call.name,
-                arguments: call.arguments || '{}',
-                status: 'completed'
+            outputItems.push(...state.functionCalls.map(call => ({
+                output_index: call.output_index,
+                item: {
+                    id: call.id,
+                    call_id: call.call_id,
+                    type: 'function_call',
+                    name: call.name,
+                    arguments: call.arguments || '{}',
+                    status: 'completed'
+                }
             })));
+            outputItems.push(...state.imageGenerationCalls.map(call => {
+                const { output_index, ...item } = call;
+                return {
+                    output_index,
+                    item: { ...item, status: item.status || 'completed' }
+                };
+            }));
+            const output = outputItems
+                .sort((a, b) => a.output_index - b.output_index)
+                .map(entry => entry.item);
             if (output.length > 0) {
                 completedEvent.response.output = output;
             }

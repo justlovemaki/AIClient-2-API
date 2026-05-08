@@ -652,11 +652,11 @@ export class CodexApiService {
             } else {
                 const safe = item && typeof item === 'object' ? {
                     type: item.type,
-                    id: item.id,
-                    call_id: item.call_id,
+                    hasId: typeof item.id === 'string' && item.id.length > 0,
+                    hasCallId: typeof item.call_id === 'string' && item.call_id.length > 0,
                     hasName: typeof item.name === 'string' && item.name.length > 0,
                     hasArguments: item.arguments !== undefined
-                } : item;
+                } : { valueType: typeof item };
                 logger.warn(`[Codex] Dropping malformed Responses output item from ${source}: ${JSON.stringify(safe)}`);
             }
         }
@@ -670,9 +670,9 @@ export class CodexApiService {
         if (!this.isValidCodexResponseOutputItem(eventData.item)) {
             const safe = eventData.item && typeof eventData.item === 'object' ? {
                 type: eventData.item.type,
-                id: eventData.item.id,
-                call_id: eventData.item.call_id
-            } : eventData.item;
+                hasId: typeof eventData.item.id === 'string' && eventData.item.id.length > 0,
+                hasCallId: typeof eventData.item.call_id === 'string' && eventData.item.call_id.length > 0
+            } : { valueType: typeof eventData.item };
             logger.warn(`[Codex] Dropping malformed Responses output item from response.output_item.done: ${JSON.stringify(safe)}`);
             return;
         }
@@ -695,10 +695,8 @@ export class CodexApiService {
         let output = eventData.response.output;
         if (Array.isArray(output)) {
             const sanitizedOutput = this.sanitizeCodexResponseOutputItems(output, 'response.completed.output');
-            if (sanitizedOutput.length !== output.length) {
-                eventData.response.output = sanitizedOutput;
-                output = sanitizedOutput;
-            }
+            eventData.response.output = sanitizedOutput;
+            output = sanitizedOutput;
         }
 
         const shouldPatch = (!output || !Array.isArray(output) || output.length === 0) &&
