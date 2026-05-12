@@ -92,6 +92,58 @@ function getHeaderValue(headers, headerName) {
     return null;
 }
 
+function hasNonEmptyString(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function normalizeImageGenerationItemStatus(item) {
+    if (!item || typeof item !== 'object') {
+        return item;
+    }
+
+    if (item.type === 'image_generation_call' && hasNonEmptyString(item.result)) {
+        return {
+            ...item,
+            status: 'completed'
+        };
+    }
+
+    return item;
+}
+
+function normalizeImageGenerationOutputItems(output) {
+    if (!Array.isArray(output)) {
+        return output;
+    }
+
+    return output.map(normalizeImageGenerationItemStatus);
+}
+
+export function normalizeResponsesImageGenerationStatus(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return payload;
+    }
+
+    const normalized = { ...payload };
+
+    if (Array.isArray(normalized.output)) {
+        normalized.output = normalizeImageGenerationOutputItems(normalized.output);
+    }
+
+    if (normalized.item && typeof normalized.item === 'object') {
+        normalized.item = normalizeImageGenerationItemStatus(normalized.item);
+    }
+
+    if (normalized.response && typeof normalized.response === 'object') {
+        normalized.response = {
+            ...normalized.response,
+            output: normalizeImageGenerationOutputItems(normalized.response.output)
+        };
+    }
+
+    return normalized;
+}
+
 function parseRetryAfterMs(value, now = Date.now()) {
     if (value === null || value === undefined) return null;
 
@@ -697,7 +749,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             // 处理 chunkToSend 可能是数组或对象的情况
             const chunksToSend = Array.isArray(chunkToSend) ? chunkToSend : [chunkToSend];
 
-            for (const chunk of chunksToSend) {
+            for (const rawChunk of chunksToSend) {
+                const chunk = normalizeResponsesImageGenerationStatus(rawChunk);
                 // 再次检查客户端连接状态
                 if (clientDisconnected.value) {
                     break;
@@ -992,6 +1045,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             logger.info(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
+        clientResponse = normalizeResponsesImageGenerationStatus(clientResponse);
 
         // 监控钩子：非流式响应
         const hookRequestId = getPluginHookRequestId(CONFIG);
