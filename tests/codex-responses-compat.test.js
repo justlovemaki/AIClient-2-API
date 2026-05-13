@@ -51,12 +51,33 @@ describe('Codex Responses compatibility', () => {
         expect(request.tool_choice.name).toBe(request.tools[0].name);
     });
 
-    test('keeps Responses stream chunks raw by default', () => {
+    test('canonicalizes Responses stream chunks by default', () => {
         const converter = new CodexConverter();
-        const chunk = { type: 'response.output_text.delta', delta: 'OK' };
         delete process.env.CODEX_RESPONSES_STREAM_MODE;
 
-        expect(converter.toOpenAIResponsesStreamChunk(chunk, 'gpt-5.5', 'req_raw')).toBe(chunk);
+        const events = converter.toOpenAIResponsesStreamChunk({
+            type: 'response.output_text.delta',
+            response_id: 'resp_default',
+            delta: 'OK'
+        }, 'gpt-5.5', 'req_default');
+
+        expect(events.map(event => event.type)).toEqual([
+            'response.output_item.added',
+            'response.content_part.added',
+            'response.output_text.delta'
+        ]);
+        expect(events.at(-1).delta).toBe('OK');
+    });
+
+    test('keeps Responses stream chunks raw when explicitly requested', () => {
+        const converter = new CodexConverter();
+        const chunk = { type: 'response.output_text.delta', delta: 'OK' };
+        process.env.CODEX_RESPONSES_STREAM_MODE = 'raw';
+        try {
+            expect(converter.toOpenAIResponsesStreamChunk(chunk, 'gpt-5.5', 'req_raw')).toBe(chunk);
+        } finally {
+            delete process.env.CODEX_RESPONSES_STREAM_MODE;
+        }
     });
 
     test('canonical Responses stream emits typed text lifecycle', () => {

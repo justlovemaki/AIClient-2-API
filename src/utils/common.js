@@ -400,7 +400,7 @@ export function getProtocolPrefix(provider) {
 }
 
 export function getCodexResponsesStreamMode() {
-    const mode = String(process.env.CODEX_RESPONSES_STREAM_MODE || 'raw').trim().toLowerCase();
+    const mode = String(process.env.CODEX_RESPONSES_STREAM_MODE || 'canonical').trim().toLowerCase();
     return mode === 'canonical' ? 'canonical' : 'raw';
 }
 
@@ -1797,6 +1797,27 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
                 if (Array.isArray(incomingSystemText)) {
                     incomingSystemText = incomingSystemText
                         .map(item => (typeof item === 'string' ? item : item.text || JSON.stringify(item)))
+                        .join('\n');
+                } else {
+                    incomingSystemText = JSON.stringify(incomingSystemText);
+                }
+            }
+            break;
+        case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            if (requestBody.instructions) {
+                incomingSystemText = requestBody.instructions;
+            } else if (Array.isArray(requestBody.input)) {
+                const responsesSystemMessage = requestBody.input.find(item =>
+                    item.role === 'system' || item.role === 'developer' || item.type === 'system' || item.type === 'developer'
+                );
+                if (responsesSystemMessage?.content) {
+                    incomingSystemText = responsesSystemMessage.content;
+                }
+            }
+            if (typeof incomingSystemText === 'object' && incomingSystemText !== null) {
+                if (Array.isArray(incomingSystemText)) {
+                    incomingSystemText = incomingSystemText
+                        .map(item => (typeof item === 'string' ? item : item.text || item.content || JSON.stringify(item)))
                         .join('\n');
                 } else {
                     incomingSystemText = JSON.stringify(incomingSystemText);

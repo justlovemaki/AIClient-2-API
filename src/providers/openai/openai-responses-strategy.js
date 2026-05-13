@@ -66,42 +66,23 @@ class ResponsesAPIStrategy extends ProviderStrategy {
             return requestBody;
         }
 
+        const existingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES);
+
         const newSystemText = config.SYSTEM_PROMPT_MODE === 'append' && existingSystemText
             ? `${existingSystemText}\n${filePromptContent}`
             : filePromptContent;
 
-        // Apply system prompt replacements
         const finalSystemText = applySystemPromptReplacements(newSystemText, config.SYSTEM_PROMPT_REPLACEMENTS);
 
-        // In Responses API, system instructions are typically passed in 'instructions' field
-        // or in the input array with role: 'system'
-        requestBody.instructions = requestBody.instructions || finalSystemText;
+        const systemMessageIndex = Array.isArray(requestBody.input)
+            ? requestBody.input.findIndex(m =>
+                m.role === 'system' || m.role === 'developer' || m.type === 'system' || m.type === 'developer'
+            )
+            : -1;
 
-        // If using instructions field is not desired, append to input array instead
-        if (!requestBody.instructions || config.SYSTEM_PROMPT_MODE === 'append') {
-            if (typeof requestBody.input === 'string') {
-                // Convert to array format to add system message
-                requestBody.input = [
-                    { role: 'system', content: finalSystemText },
-                    { role: 'user', content: requestBody.input }
-                ];
-            } else if (Array.isArray(requestBody.input)) {
-                // Check if system message already exists
-                const systemMessageIndex = requestBody.input.findIndex(m =>
-                    m.role === 'system' || (m.type && m.type === 'system')
-                );
-
-                if (systemMessageIndex !== -1) {
-                    requestBody.input[systemMessageIndex].content = finalSystemText;
-                } else {
-                    requestBody.input.unshift({ role: 'system', content: finalSystemText });
-                }
-            } else {
-                // If input is not defined, initialize with system message
-                requestBody.input = [{ role: 'system', content: finalSystemText }];
-            }
-        } else if (requestBody.instructions) {
-            // If system prompt mode is not append, then replace the instructions
+        if (!requestBody.instructions && systemMessageIndex !== -1) {
+            requestBody.input[systemMessageIndex].content = finalSystemText;
+        } else {
             requestBody.instructions = finalSystemText;
         }
 

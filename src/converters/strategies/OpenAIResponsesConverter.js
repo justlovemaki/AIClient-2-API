@@ -115,6 +115,41 @@ export class OpenAIResponsesConverter extends BaseConverter {
     // 转换到 OpenAI 格式
     // =============================================================================
 
+    normalizeOpenAIToolChoice(toolChoice) {
+        if (!toolChoice || typeof toolChoice !== 'object') {
+            return toolChoice;
+        }
+        if (toolChoice.type === 'function') {
+            const name = toolChoice.function?.name || toolChoice.name;
+            if (name) {
+                return { type: 'function', function: { name } };
+            }
+        }
+        return toolChoice;
+    }
+
+    normalizeClaudeToolChoice(toolChoice) {
+        if (!toolChoice) {
+            return undefined;
+        }
+        if (typeof toolChoice === 'string') {
+            if (toolChoice === 'auto') {
+                return { type: 'auto' };
+            }
+            if (toolChoice === 'required') {
+                return { type: 'any' };
+            }
+            return undefined;
+        }
+        if (toolChoice.type === 'function') {
+            const name = toolChoice.function?.name || toolChoice.name;
+            if (name) {
+                return { type: 'tool', name };
+            }
+        }
+        return undefined;
+    }
+
     /**
      * 将 OpenAI Responses 请求转换为标准 OpenAI 请求
      */
@@ -242,7 +277,7 @@ export class OpenAIResponsesConverter extends BaseConverter {
         }
 
         if (responsesRequest.tool_choice) {
-            openaiRequest.tool_choice = responsesRequest.tool_choice;
+            openaiRequest.tool_choice = this.normalizeOpenAIToolChoice(responsesRequest.tool_choice);
         }
 
         return openaiRequest;
@@ -482,19 +517,9 @@ export class OpenAIResponsesConverter extends BaseConverter {
             }));
         }
 
-        if (responsesRequest.tool_choice) {
-            if (typeof responsesRequest.tool_choice === 'string') {
-                if (responsesRequest.tool_choice === 'auto') {
-                    claudeRequest.tool_choice = { type: 'auto' };
-                } else if (responsesRequest.tool_choice === 'required') {
-                    claudeRequest.tool_choice = { type: 'any' };
-                }
-            } else if (responsesRequest.tool_choice.type === 'function') {
-                claudeRequest.tool_choice = {
-                    type: 'tool',
-                    name: responsesRequest.tool_choice.function.name
-                };
-            }
+        const claudeToolChoice = this.normalizeClaudeToolChoice(responsesRequest.tool_choice);
+        if (claudeToolChoice) {
+            claudeRequest.tool_choice = claudeToolChoice;
         }
 
         return claudeRequest;
