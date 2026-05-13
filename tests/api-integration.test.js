@@ -17,6 +17,12 @@ import { fetch } from 'undici';
 // Test server configuration
 const TEST_SERVER_BASE_URL = process.env.TEST_SERVER_BASE_URL || 'http://10.0.1.137:3000';
 const TEST_API_KEY = process.env.TEST_API_KEY || '123456'; // You may need to adjust this based on your server config
+const RUN_HTTP_INTEGRATION_TESTS = process.env.RUN_HTTP_INTEGRATION_TESTS === '1';
+const RUN_PROVIDER_MATRIX_TESTS = process.env.RUN_PROVIDER_MATRIX_TESTS === '1';
+const OPENAI_RESPONSES_PROVIDER = process.env.TEST_OPENAI_RESPONSES_PROVIDER || 'openaiResponses-custom';
+const OPENAI_RESPONSES_MODEL = process.env.TEST_OPENAI_RESPONSES_MODEL || 'gpt-5.5';
+const describeIfHttp = RUN_HTTP_INTEGRATION_TESTS ? describe : describe.skip;
+const describeIfProviderMatrix = RUN_PROVIDER_MATRIX_TESTS ? describe : describe.skip;
 const MODEL_PROVIDER = {
     // Model provider constants
     GEMINI_CLI: 'gemini-cli-oauth',
@@ -78,8 +84,8 @@ const REAL_TEST_DATA = {
 };
 
 // To run all integration tests:
-// npx jest ./tests/api-integration.test.js
-describe('API Integration Tests with HTTP Requests', () => {
+// RUN_HTTP_INTEGRATION_TESTS=1 npx jest ./tests/api-integration.test.js
+describeIfHttp('API Integration Tests with HTTP Requests', () => {
     beforeAll(async () => {
         // Test server connectivity
         try {
@@ -96,9 +102,58 @@ describe('API Integration Tests with HTTP Requests', () => {
         // Jest handles test results summary automatically
     });
 
+    describe('Default OpenAI Responses Endpoint', () => {
+        test('OpenAI /v1/responses streaming smoke', async () => {
+            const response = await makeRequest(
+                `${TEST_SERVER_BASE_URL}/v1/responses`,
+                'POST',
+                'bearer',
+                { 'model-provider': OPENAI_RESPONSES_PROVIDER },
+                {
+                    model: OPENAI_RESPONSES_MODEL,
+                    input: [{
+                        role: 'user',
+                        content: [{ type: 'input_text', text: 'Reply with exactly: OK' }]
+                    }],
+                    stream: true,
+                    max_output_tokens: 32,
+                    tools: [{
+                        type: 'function',
+                        name: 'noop_tool',
+                        description: 'A no-op tool for Responses stream compatibility smoke tests.',
+                        parameters: { type: 'object', properties: {}, additionalProperties: false }
+                    }],
+                    tool_choice: 'auto'
+                }
+            );
+
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+            const responseText = await response.text();
+            const eventTypes = responseText
+                .split(/\r?\n/)
+                .filter(line => line.startsWith('data: '))
+                .map(line => line.slice(6).trim())
+                .filter(data => data && data !== '[DONE]')
+                .map(data => {
+                    try {
+                        return JSON.parse(data).type;
+                    } catch {
+                        return undefined;
+                    }
+                })
+                .filter(Boolean);
+
+            expect(eventTypes.length).toBeGreaterThan(0);
+            expect(eventTypes).toContain('response.created');
+            expect(eventTypes.every(type => typeof type === 'string')).toBe(true);
+        }, 60000);
+    });
+
     // To run all OpenAI Compatible Endpoints tests:
     // npx jest ./tests/api-integration.test.js -t "OpenAI Compatible Endpoints"
-    describe('OpenAI Compatible Endpoints', () => {
+    describeIfProviderMatrix('OpenAI Compatible Endpoints', () => {
         // To run this test:
         // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/chat/completions non-streaming Gemini"
         test('OpenAI /v1/chat/completions non-streaming Gemini', async () => {
@@ -286,7 +341,7 @@ describe('API Integration Tests with HTTP Requests', () => {
 
     // To run all Claude Native Endpoints tests:
     // npx jest ./tests/api-integration.test.js -t "Claude Native Endpoints"
-    describe('Claude Native Endpoints', () => {
+    describeIfProviderMatrix('Claude Native Endpoints', () => {
         // To run this test:
         // npx jest ./tests/api-integration.test.js -t "Claude /v1/messages non-streaming"
         test('Claude /v1/messages non-streaming', async () => {
@@ -349,7 +404,7 @@ describe('API Integration Tests with HTTP Requests', () => {
 
     // To run all Claude Kiro Endpoints tests:
     // npx jest ./tests/api-integration.test.js -t "Claude Kiro Endpoints"
-    describe('Claude Kiro Endpoints', () => {
+    describeIfProviderMatrix('Claude Kiro Endpoints', () => {
         // To run this test:
         // npx jest ./tests/api-integration.test.js -t "Claude Kiro /v1/messages non-streaming"
         test('Claude Kiro /v1/messages non-streaming', async () => {
@@ -415,7 +470,7 @@ describe('API Integration Tests with HTTP Requests', () => {
 
     // To run all Gemini Native Endpoints tests:
     // npx jest ./tests/api-integration.test.js -t "Gemini Native Endpoints"
-    describe('Gemini Native Endpoints', () => {
+    describeIfProviderMatrix('Gemini Native Endpoints', () => {
         // To run this test:
         // npx jest ./tests/api-integration.test.js -t "Gemini /v1beta/models/{model}:generateContent"
         test('Gemini /v1beta/models/{model}:generateContent', async () => {
@@ -476,7 +531,7 @@ describe('API Integration Tests with HTTP Requests', () => {
 
     // To run all Model List Endpoints tests:
     // npx jest ./tests/api-integration.test.js -t "Model List Endpoints"
-    describe('Model List Endpoints', () => {
+    describeIfProviderMatrix('Model List Endpoints', () => {
         // To run this test:
         // npx jest ./tests/api-integration.test.js -t "OpenAI /v1/models Gemini"
         test('OpenAI /v1/models Gemini', async () => {
