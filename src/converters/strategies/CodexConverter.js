@@ -210,6 +210,7 @@ export class CodexConverter extends BaseConverter {
         if (codexRequest.tool_choice) {
             codexRequest.tool_choice = this.convertToolChoice(codexRequest.tool_choice);
         }
+        // codexResponsesToolChoiceCompat
 
         const hasExplicitInstructions = !!(codexRequest.instructions && String(codexRequest.instructions).trim());
         
