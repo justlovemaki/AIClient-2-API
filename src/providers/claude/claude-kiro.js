@@ -944,6 +944,30 @@ async saveCredentialsToFile(filePath, newData) {
      * Kiro API 不接受空字符串 key 的 JSON 对象（如 {"": "value"}）
      */
     _sanitizeToolInput(input) {
+        // 如果 input 是字符串，尝试解析为 JSON 对象
+        if (typeof input === 'string') {
+            try {
+                const parsed = JSON.parse(input);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    input = parsed;
+                } else {
+                    return input;
+                }
+            } catch (e) {
+                // 尝试把单引号替换成双引号再解析
+                try {
+                    const fixed = input.replace(/'/g, '"');
+                    const parsed = JSON.parse(fixed);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        input = parsed;
+                    } else {
+                        return input;
+                    }
+                } catch (e2) {
+                    return input;
+                }
+            }
+        }
         if (!input || typeof input !== 'object' || Array.isArray(input)) {
             return input;
         }
@@ -1248,13 +1272,36 @@ async saveCredentialsToFile(filePath, newData) {
                 prependSystemToCurrentMessage = true;
             } else if (processedMessages[0].role === 'user') {
                 let firstUserContent = this.getContentText(processedMessages[0]);
-                history.push({
+                // 提取第一条 user 消息里的图片
+                let firstUserImages = [];
+                if (Array.isArray(processedMessages[0].content)) {
+                    for (const part of processedMessages[0].content) {
+                        if (part.type === 'image' && part.source?.data) {
+                            firstUserImages.push({
+                                format: part.source.media_type.split('/')[1],
+                                source: { bytes: part.source.data }
+                            });
+                        } else if (part.type === 'image_url' && part.image_url) {
+                            const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
+                            if (imageUrl && imageUrl.startsWith('data:')) {
+                                const [header, data] = imageUrl.split(',');
+                                const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
+                                firstUserImages.push({ format: mediaType.split('/')[1] || 'jpeg', source: { bytes: data } });
+                            }
+                        }
+                    }
+                }
+                const firstHistoryMsg = {
                     userInputMessage: {
                         content: `${systemPrompt}\n\n${firstUserContent}`,
                         modelId: codewhispererModel,
                         origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
                     }
-                });
+                };
+                if (firstUserImages.length > 0) {
+                    firstHistoryMsg.userInputMessage.images = firstUserImages;
+                }
+                history.push(firstHistoryMsg);
                 startIndex = 1; // Start processing from the second message
             } else {
                 // If the first message is not a user message, or if there's no initial user message,
@@ -1300,16 +1347,24 @@ async saveCredentialsToFile(filePath, newData) {
                             });
                         } else if (part.type === 'image') {
                             if (shouldKeepImages) {
-                                // 最近 5 条消息内的图片保留原始数据
                                 images.push({
                                     format: part.source.media_type.split('/')[1],
-                                    source: {
-                                        bytes: part.source.data
-                                    }
+                                    source: { bytes: part.source.data }
                                 });
                             } else {
-                                // 超过 5 条历史记录的图片只记录数量
                                 imageCount++;
+                            }
+                        } else if (part.type === 'image_url' && part.image_url) {
+                            const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
+                            if (imageUrl && imageUrl.startsWith('data:')) {
+                                const [header, data] = imageUrl.split(',');
+                                const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
+                                const fmt = mediaType.split('/')[1] || 'jpeg';
+                                if (shouldKeepImages) {
+                                    images.push({ format: fmt, source: { bytes: data } });
+                                } else {
+                                    imageCount++;
+                                }
                             }
                         }
                     }
@@ -1367,8 +1422,38 @@ async saveCredentialsToFile(filePath, newData) {
                             });
                         }
                     }
-                } else {
+                } else if (message.content !== null && message.content !== undefined) {
+                    // content 为 null 时（只有 tool_calls 没有文本）保持 content 为空字符串
                     assistantResponseMessage.content = this.getContentText(message);
+                }
+
+                // 处理 OpenAI 格式的 tool_calls（content 为 null 时）
+                if (Array.isArray(message.tool_calls)) {
+                    console.log('[Kiro Fix] Processing tool_calls:', JSON.stringify(message.tool_calls));
+                    for (const tc of message.tool_calls) {
+                        let input = {};
+                        try {
+                            const args = tc.function?.arguments;
+                            if (typeof args === 'string') {
+                                // 尝试解析 JSON，支持单引号格式
+                                input = JSON.parse(args.replace(/'/g, '"'));
+                            } else if (typeof args === 'object' && args !== null) {
+                                input = args;
+                            }
+                        } catch (e) {
+                            input = { raw_arguments: tc.function?.arguments };
+                        }
+                        toolUses.push({
+                            input: this._sanitizeToolInput(input),
+                            name: toolNameMaps.toKiroName(tc.function?.name || ''),
+                            toolUseId: tc.id
+                        });
+                    }
+                }
+
+                // Kiro API 不接受空字符串 content，当有 toolUses 时用占位符
+                if (!assistantResponseMessage.content && toolUses.length > 0) {
+                    assistantResponseMessage.content = ' ';
                 }
 
                 if (thinkingText) {
@@ -1418,7 +1503,7 @@ async saveCredentialsToFile(filePath, newData) {
                         });
                     }
                 }
-            } else {
+            } else if (currentMessage.content !== null && currentMessage.content !== undefined) {
                 assistantResponseMessage.content = this.getContentText(currentMessage);
             }
             if (thinkingText) {
@@ -1469,10 +1554,16 @@ async saveCredentialsToFile(filePath, newData) {
                     } else if (part.type === 'image') {
                         currentImages.push({
                             format: part.source.media_type.split('/')[1],
-                            source: {
-                                bytes: part.source.data
-                            }
+                            source: { bytes: part.source.data }
                         });
+                    } else if (part.type === 'image_url' && part.image_url) {
+                        const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
+                        if (imageUrl && imageUrl.startsWith('data:')) {
+                            const [header, data] = imageUrl.split(',');
+                            const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
+                            const fmt = mediaType.split('/')[1] || 'jpeg';
+                            currentImages.push({ format: fmt, source: { bytes: data } });
+                        }
                     }
                 }
             } else {
@@ -2239,6 +2330,11 @@ async saveCredentialsToFile(filePath, newData) {
 
         const requestData = await this.buildCodewhispererRequest(messages, model, body.tools, body.system, body.thinking);
         const toolNameMaps = requestData._kiroToolNameMaps;
+
+        // 调试：打印发给 Kiro 的请求体
+        logger.info('[Kiro Debug] Request history length: ' + (requestData.conversationState?.history?.length || 0));
+        const historyStr = JSON.stringify(requestData.conversationState?.history || [], null, 2);
+        logger.info('[Kiro Debug] History: ' + historyStr.substring(0, 3000));
 
         const token = this.accessToken;
         const headers = {
