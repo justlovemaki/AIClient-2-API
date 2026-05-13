@@ -403,7 +403,7 @@ export class CodexApiService {
                 cleanedBody.tools = [];
             }
             if (Array.isArray(cleanedBody.tools)) {
-                const isJsonMode = cleanedBody.text?.format?.type === 'json_object' || cleanedBody.response_format?.type === 'json_object';
+                const isJsonMode = cleanedBody.text?.format?.type === 'json_object' || cleanedBody.response_format?.type === 'json_object'; // jsonModeSkipsWebSearch
                 if (isJsonMode) {
                     cleanedBody.tools = cleanedBody.tools.filter(t => t.type !== 'web_search');
                 }

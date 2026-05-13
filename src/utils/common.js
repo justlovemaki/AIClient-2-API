@@ -2037,7 +2037,7 @@ function createStreamErrorResponse(error, fromProvider) {
         case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
             // OpenAI Responses API 流式错误格式（SSE event + data）
             const responsesError = {
-                type: "error",
+                type: "error", // responsesStreamErrorHasType
                 id: `resp_${Date.now()}`,
                 object: "error",
                 created: Math.floor(Date.now() / 1000),
