@@ -96,12 +96,34 @@ function hasNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
-function normalizeImageGenerationItemStatus(item) {
+const IMAGE_GENERATION_NON_COMPLETED_STATUSES = new Set([
+    'failed',
+    'incomplete',
+    'cancelled',
+    'canceled',
+    'error'
+]);
+
+function isCompletedStatus(value) {
+    return typeof value === 'string' && value.toLowerCase() === 'completed';
+}
+
+function isNonCompletedTerminalStatus(value) {
+    return typeof value === 'string' && IMAGE_GENERATION_NON_COMPLETED_STATUSES.has(value.toLowerCase());
+}
+
+function normalizeImageGenerationItemStatus(item, terminalContext = false) {
     if (!item || typeof item !== 'object') {
         return item;
     }
 
-    if (item.type === 'image_generation_call' && hasNonEmptyString(item.result)) {
+    if (
+        terminalContext &&
+        item.type === 'image_generation_call' &&
+        hasNonEmptyString(item.result) &&
+        !isCompletedStatus(item.status) &&
+        !isNonCompletedTerminalStatus(item.status)
+    ) {
         return {
             ...item,
             status: 'completed'
@@ -111,12 +133,12 @@ function normalizeImageGenerationItemStatus(item) {
     return item;
 }
 
-function normalizeImageGenerationOutputItems(output) {
+function normalizeImageGenerationOutputItems(output, terminalContext = false) {
     if (!Array.isArray(output)) {
         return output;
     }
 
-    return output.map(normalizeImageGenerationItemStatus);
+    return output.map(item => normalizeImageGenerationItemStatus(item, terminalContext));
 }
 
 export function normalizeResponsesImageGenerationStatus(payload) {
@@ -125,19 +147,24 @@ export function normalizeResponsesImageGenerationStatus(payload) {
     }
 
     const normalized = { ...payload };
+    const eventType = normalized.type;
+    const isOutputItemDone = eventType === 'response.output_item.done';
+    const isResponseCompletedEvent = eventType === 'response.completed';
+    const isCompletedResponse = isCompletedStatus(normalized.status);
 
     if (Array.isArray(normalized.output)) {
-        normalized.output = normalizeImageGenerationOutputItems(normalized.output);
+        normalized.output = normalizeImageGenerationOutputItems(normalized.output, isCompletedResponse);
     }
 
     if (normalized.item && typeof normalized.item === 'object') {
-        normalized.item = normalizeImageGenerationItemStatus(normalized.item);
+        normalized.item = normalizeImageGenerationItemStatus(normalized.item, isOutputItemDone);
     }
 
     if (normalized.response && typeof normalized.response === 'object') {
+        const responseCompleted = isResponseCompletedEvent || isCompletedStatus(normalized.response.status);
         normalized.response = {
             ...normalized.response,
-            output: normalizeImageGenerationOutputItems(normalized.response.output)
+            output: normalizeImageGenerationOutputItems(normalized.response.output, responseCompleted)
         };
     }
 
