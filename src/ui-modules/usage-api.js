@@ -384,6 +384,39 @@ export async function handleGetSingleInstanceUsage(req, res, currentConfig, prov
         }
         
         // 如果刷新成功且有全局缓存，建议更新全局缓存（可选，这里先只返回单个结果）
+        try {
+            const cache = await readUsageCache();
+            if (cache && cache.providers && cache.providers[providerType]) {
+                const providerCache = cache.providers[providerType];
+                if (providerCache.instances && Array.isArray(providerCache.instances)) {
+                    const idx = providerCache.instances.findIndex(inst => inst.uuid === uuid);
+                    if (idx !== -1) {
+                        providerCache.instances[idx] = instanceResult;
+                    } else {
+                        providerCache.instances.push(instanceResult);
+                    }
+                    // 重新计算 count
+                    let successCount = 0;
+                    let errorCount = 0;
+                    providerCache.instances.forEach(inst => {
+                        if (inst.success) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    });
+                    providerCache.successCount = successCount;
+                    providerCache.errorCount = errorCount;
+                    providerCache.totalCount = providerCache.instances.length;
+                    
+                    cache.timestamp = new Date().toISOString();
+                    await writeUsageCache(cache);
+                    logger.info(`[Usage API] Updated global usage cache for single instance ${providerType}:${uuid}`);
+                }
+            }
+        } catch (cacheError) {
+            logger.warn(`[Usage API] Failed to update global usage cache for single instance:`, cacheError.message);
+        }
         
         const finalResults = {
             ...instanceResult,

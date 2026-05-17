@@ -6,14 +6,30 @@
 
 **複数のクライアント専用大規模言語モデルAPI（Gemini CLI、Antigravity、Codex, Grok、Kiro ...）を模擬リクエストし、ローカルのOpenAI互換インターフェースに統一的にラッピングする強力なプロキシ。**
 
-<a href="https://trendshift.io/repositories/15832" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15832" alt="justlovemaki%2FAIClient-2-API | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-</div>
 </div>
 
 <div align="center">
 
-<a href="https://deepwiki.com/justlovemaki/AIClient-2-API"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"  style="width: 134px; height: 23px;margin-bottom: 3px;"></a>
+<table align="center">
+  <thead>
+    <tr>
+      <th align="center">Dockerダウンロード数10万超</th>
+      <th align="center">Trendshiftで2位にランクイン</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center" valign="middle">
+        <img src="https://docker-card.justlikemaki.workers.dev/justlikemaki/aiclient-2-api?layout=compact&theme=github" alt="AIClient2API" style="width: 100%; max-width: 520px; height: 320px;object-fit: contain;" />
+      </td>
+      <td align="center" valign="middle">
+        <a href="https://trendshift.io/repositories/15832" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15832" alt="justlovemaki%2FAIClient-2-API | Trendshift" style="width: 360px; height: 120px;"/></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/justlovemaki/AIClient-2-API)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-≥20.0.0-green.svg)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/docker-≥20.0.0-blue.svg)](https://hub.docker.com/r/justlikemaki/aiclient-2-api)
