@@ -7,6 +7,7 @@ import { loadSectionIfActive } from './navigation.js';
 
 // 提供商配置缓存
 let currentProviderConfigs = null;
+let isCurrentPasswordDefault = false;
 
 function getSelectedModelProviders() {
     const modelProviderEl = document.getElementById('modelProvider');
@@ -40,6 +41,7 @@ function updateConfigHandoffSummary() {
     const selectedProviders = getSelectedModelProviders();
     const keyStatusEl = document.getElementById('configHandoffKeyStatus');
     const providersEl = document.getElementById('configHandoffProviders');
+    const passwordStatusEl = document.getElementById('configHandoffPasswordStatus');
 
     if (keyStatusEl) {
         keyStatusEl.textContent = maskApiKey(apiKeyValue);
@@ -49,6 +51,16 @@ function updateConfigHandoffSummary() {
         providersEl.textContent = selectedProviders.length > 0
             ? selectedProviders.map(provider => provider.name).join(' / ')
             : t('config.handoff.providersMissing');
+    }
+
+    if (passwordStatusEl) {
+        if (isCurrentPasswordDefault) {
+            passwordStatusEl.textContent = t('config.handoff.passwordDefault');
+            passwordStatusEl.style.color = 'var(--danger-color)';
+        } else {
+            passwordStatusEl.textContent = t('config.handoff.passwordSafe');
+            passwordStatusEl.style.color = 'var(--success-color)';
+        }
     }
 }
 
@@ -60,6 +72,148 @@ function navigateToSection(sectionId) {
     }
 
     window.location.hash = `#${sectionId}`;
+}
+
+function showChangePasswordModal() {
+    // 移除已存在的模态框
+    const existingModal = document.querySelector('.handoff-password-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay handoff-password-modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-key"></i>
+                    <span data-i18n="config.handoff.changePasswordTitle">${t('config.handoff.changePasswordTitle') || '修改后台登录密码'}</span>
+                </h3>
+                <button class="modal-close" type="button" aria-label="${t('common.close') || '关闭'}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem;">
+                <form id="handoffPasswordForm" onsubmit="return false;">
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label for="handoffNewPassword" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;" data-i18n="config.advanced.adminPassword">${t('config.advanced.adminPassword') || '新密码'}</label>
+                        <div class="password-input-wrapper" style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="handoffNewPassword" class="form-control" style="width: 100%; padding-right: 2.5rem;" autocomplete="new-password" required>
+                            <button type="button" class="password-toggle" data-target="handoffNewPassword" style="position: absolute; right: 0.75rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="handoffConfirmPassword" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;" data-i18n="config.handoff.confirmPassword">${t('config.handoff.confirmPassword') || '确认新密码'}</label>
+                        <div class="password-input-wrapper" style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="handoffConfirmPassword" class="form-control" style="width: 100%; padding-right: 2.5rem;" autocomplete="new-password" required>
+                            <button type="button" class="password-toggle" data-target="handoffConfirmPassword" style="position: absolute; right: 0.75rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <small class="form-text" style="color: var(--text-secondary); display: block; margin-bottom: 1rem;" data-i18n="config.handoff.passwordHelpText">
+                        <i class="fas fa-info-circle"></i> ${t('config.handoff.passwordHelpText') || '密码长度必须至少为 12 位，且修改后需要重新登录。'}
+                    </small>
+                </form>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end; padding: 1rem 1.5rem; background: var(--bg-secondary); border-top: 1px solid var(--border-color); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+                <button type="button" class="btn btn-secondary cancel-btn" data-i18n="common.cancel">${t('common.cancel') || '取消'}</button>
+                <button type="button" class="btn btn-danger confirm-btn">
+                    <i class="fas fa-save"></i> <span data-i18n="common.confirm">${t('common.confirm') || '确定'}</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    // 绑定密码切换显示/隐藏事件
+    modal.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = btn.getAttribute('data-target');
+            const input = modal.querySelector(`#${targetId}`);
+            if (input) {
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                btn.querySelector('i').className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    });
+
+    const closeBtn = modal.querySelector('.modal-close');
+    const cancelBtn = modal.querySelector('.cancel-btn');
+    const confirmBtn = modal.querySelector('.confirm-btn');
+
+    const handleClose = () => {
+        modal.remove();
+    };
+
+    closeBtn.addEventListener('click', handleClose);
+    cancelBtn.addEventListener('click', handleClose);
+
+    confirmBtn.addEventListener('click', async () => {
+        const newPasswordEl = modal.querySelector('#handoffNewPassword');
+        const confirmPasswordEl = modal.querySelector('#handoffConfirmPassword');
+        const newPassword = newPasswordEl.value;
+        const confirmPassword = confirmPasswordEl.value;
+
+        if (!newPassword) {
+            showToast(t('common.error'), t('common.passwordEmpty') || '密码不能为空', 'error');
+            newPasswordEl.focus();
+            return;
+        }
+
+        if (newPassword.length < 12) {
+            showToast(t('common.error'), t('common.passwordTooShort') || '密码长度至少为 12 位', 'error');
+            newPasswordEl.focus();
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            showToast(t('common.error'), t('config.handoff.passwordMismatch') || '两次输入的新密码不一致', 'error');
+            confirmPasswordEl.focus();
+            return;
+        }
+
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span data-i18n="config.handoff.saving">${t('config.handoff.saving') || '保存中...'}</span>`;
+            
+            await window.apiClient.post('/admin-password', { password: newPassword });
+            
+            showToast(t('common.success'), t('config.handoff.passwordUpdated') || '密码修改成功，即将重新登录...', 'success');
+            
+            // 延迟退出并重新登录
+            setTimeout(() => {
+                if (typeof window.logout === 'function') {
+                    window.logout();
+                } else {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('authTokenExpiry');
+                    window.location.href = '/login.html';
+                }
+            }, 1500);
+        } catch (error) {
+            console.error('Failed to change admin password:', error);
+            showToast(t('common.error'), t('common.error') + ': ' + error.message, 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `<i class="fas fa-save"></i> <span data-i18n="common.confirm">${t('common.confirm') || '确定'}</span>`;
+        }
+    });
+
+    // ESC键关闭模态框
+    const handleEscKey = (event) => {
+        if (event.key === 'Escape') {
+            handleClose();
+            document.removeEventListener('keydown', handleEscKey);
+        }
+    };
+    document.addEventListener('keydown', handleEscKey);
+
+    document.body.appendChild(modal);
 }
 
 function initConfigPageHelpers() {
@@ -78,6 +232,9 @@ function initConfigPageHelpers() {
     bindOnce(saveAndAccessBtn, 'click', async () => {
         await saveConfiguration({ navigateToAccess: true });
     }, 'configSaveAndAccess');
+
+    const changePwdBtn = document.getElementById('configHandoffChangePwdBtn');
+    bindOnce(changePwdBtn, 'click', () => showChangePasswordModal(), 'configHandoffChangePwdBtn');
 }
 
 /**
@@ -483,6 +640,7 @@ async function loadConfiguration() {
             });
         });
 
+        isCurrentPasswordDefault = data.isDefaultPassword === true;
         updateConfigHandoffSummary();
         
     } catch (error) {
@@ -634,20 +792,37 @@ async function saveConfiguration(options = {}) {
         await window.apiClient.post('/config', config);
         
         // 如果输入了新密码，单独保存密码
+        let passwordUpdated = false;
         if (adminPassword) {
             try {
                 await window.apiClient.post('/admin-password', { password: adminPassword });
                 // 清空密码输入框
                 const adminPasswordEl = document.getElementById('adminPassword');
                 if (adminPasswordEl) adminPasswordEl.value = '';
-                showToast(t('common.success'), t('common.passwordUpdated'), 'success');
+                showToast(t('common.success'), t('common.passwordUpdated') || '密码已更新，即将重新登录...', 'success');
+                passwordUpdated = true;
             } catch (pwdError) {
                 console.error('Failed to save admin password:', pwdError);
                 showToast(t('common.error'), t('common.error') + ': ' + pwdError.message, 'error');
+                return; // 终止执行
             }
         }
         
         await window.apiClient.post('/reload-config');
+        
+        if (passwordUpdated) {
+            setTimeout(() => {
+                if (typeof window.logout === 'function') {
+                    window.logout();
+                } else {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('authTokenExpiry');
+                    window.location.href = '/login.html';
+                }
+            }, 1500);
+            return;
+        }
+
         showToast(t('common.success'), t('common.configSaved'), 'success');
 
         if (window.loadAccessInfo) {

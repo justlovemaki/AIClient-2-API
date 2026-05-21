@@ -11,6 +11,7 @@
  * node src/core/master.js [原有的命令行参数]
  */
 
+import './security-hardening.js';
 import { fork } from 'child_process';
 import logger from '../utils/logger.js';
 import * as http from 'http';

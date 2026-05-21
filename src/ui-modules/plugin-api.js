@@ -49,8 +49,9 @@ export async function handleUploadPlugin(req, res) {
     return new Promise((resolve) => {
         pluginUpload.single('file')(req, res, async (err) => {
             if (err) {
+                logger.error('[UI API] Plugin upload validation failed:', err);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: err.message } }));
+                res.end(JSON.stringify({ error: { message: '插件上传失败' } }));
                 return resolve(true);
             }
 
@@ -77,7 +78,7 @@ export async function handleUploadPlugin(req, res) {
             } catch (error) {
                 logger.error('[UI API] Failed to upload plugin:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: '安装失败：' + error.message } }));
+                res.end(JSON.stringify({ error: { message: '插件安装失败' } }));
                 resolve(true);
             }
         });
@@ -140,7 +141,7 @@ export async function handleInstallPlugin(req, res) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
-                message: '安装失败：' + error.message
+                message: '插件安装失败'
             }
         }));
         return true;

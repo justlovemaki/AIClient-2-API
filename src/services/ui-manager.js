@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { isUIApiPath } from '../utils/ui-utils.js';
 import { getPluginManager } from '../core/plugin-manager.js';
+import { resolvePluginStaticFile } from '../core/plugin-security.js';
 
 // Import UI modules
 import * as auth from '../ui-modules/auth.js';
@@ -35,10 +36,7 @@ export async function serveStaticFiles(pathParam, res) {
         const pluginManager = getPluginManager();
         const plugin = pluginManager.getPluginByStaticPath(pathParam);
         if (plugin && plugin._baseDir) {
-            // 假设静态文件名就是路径的最后一部分，或者插件内部有映射
-            // 这里我们简单处理：如果路径匹配，就在插件目录下寻找该文件
-            const fileName = pathParam.split('/').pop();
-            filePath = path.join(plugin._baseDir, fileName);
+            filePath = resolvePluginStaticFile(plugin, pathParam);
         }
     }
 

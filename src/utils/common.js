@@ -471,21 +471,67 @@ export function formatExpiryLog(tag, expiryDate, nearMinutes) {
     return { message, isNearExpiry };
 }
 
+function normalizeIpAddress(ip) {
+    if (!ip) return null;
+
+    let normalized = String(ip).trim();
+    if (!normalized) return null;
+
+    // Clean up IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1 -> 127.0.0.1)
+    if (normalized.startsWith('::ffff:')) {
+        normalized = normalized.substring('::ffff:'.length);
+    }
+
+    return normalized || null;
+}
+
+function parseTrustedProxyIps(value) {
+    if (Array.isArray(value)) {
+        return value
+            .flatMap(item => parseTrustedProxyIps(item))
+            .filter(Boolean);
+    }
+
+    if (typeof value !== 'string') {
+        return [];
+    }
+
+    return value
+        .split(',')
+        .map(item => normalizeIpAddress(item))
+        .filter(Boolean);
+}
+
+function isTrustedProxyIp(ip, trustedProxyIps) {
+    const normalizedIp = normalizeIpAddress(ip);
+    if (!normalizedIp) return false;
+
+    return parseTrustedProxyIps(trustedProxyIps).some(trustedIp => trustedIp === normalizedIp);
+}
+
 /**
- * Get client IP address from request
+ * Get client IP address from request.
+ *
+ * x-forwarded-for is client-controlled unless the immediate peer is a trusted
+ * reverse proxy. Keep TRUST_PROXY disabled by default for login rate limits.
+ *
  * @param {http.IncomingMessage} req - The HTTP request object.
+ * @param {Object} [config] - Optional server configuration.
  * @returns {string} The client IP address.
  */
-export function getClientIp(req) {
-    const forwarded = req.headers['x-forwarded-for'];
-    let ip = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
-    
-    // Clean up IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1 -> 127.0.0.1)
-    if (ip && ip.includes('::ffff:')) {
-        ip = ip.replace('::ffff:', '');
+export function getClientIp(req, config = {}) {
+    const socketIp = normalizeIpAddress(req.socket?.remoteAddress);
+
+    if (config?.TRUST_PROXY === true && isTrustedProxyIp(socketIp, config.TRUSTED_PROXY_IPS)) {
+        const forwarded = req.headers?.['x-forwarded-for'];
+        const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+        const forwardedIp = normalizeIpAddress(forwardedValue?.split(',')[0]);
+        if (forwardedIp) {
+            return forwardedIp;
+        }
     }
-    
-    return ip || 'unknown';
+
+    return socketIp || 'unknown';
 }
 
 /**

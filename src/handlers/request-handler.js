@@ -50,7 +50,7 @@ function parseRequestBody(req) {
 export function createRequestHandler(config, providerPoolManager) {
     return async function requestHandler(req, res) {
         // Generate unique request ID and set it in logger context
-        const clientIp = getClientIp(req);
+        const clientIp = getClientIp(req, config);
         const requestId = `${clientIp}:${generateRequestId()}`;
 
         return requestContext.run({ requestId }, async () => {

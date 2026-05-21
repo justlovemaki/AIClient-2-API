@@ -327,7 +327,7 @@ export async function handleLoginRequest(req, res) {
         return true;
     }
 
-    const ip = getClientIp(req);
+    const ip = getClientIp(req, CONFIG);
     
     // 1. 检查锁定状态
     const lockout = loginAttemptManager.isLockedOut(ip);
