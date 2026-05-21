@@ -234,6 +234,11 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
                 // 应用提供商映射（如果有）
                 const provider = providerMap[providerType] || providerType;
                 const tempFilePath = req.file.path;
+
+                // 校验 provider 名称安全，只允许字母、数字、下划线和连字符，防止目录遍历与特殊字符注入
+                if (typeof provider !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(provider)) {
+                    throw new Error('Invalid provider format');
+                }
                 
                 // 根据实际的provider移动文件到正确的目录
                 let targetDir = path.join(process.cwd(), 'configs', provider);
@@ -247,9 +252,20 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
                     targetDir = path.join(targetDir, subFolder);
                 }
                 
-                await fs.mkdir(targetDir, { recursive: true });
-                
                 const targetFilePath = path.join(targetDir, req.file.filename);
+
+                // 安全边界防御：计算绝对路径以防止路径穿越，确保目标文件严格存在于 configs 目录内
+                const allowedBaseDir = path.resolve(process.cwd(), 'configs');
+                const absoluteTargetFilePath = path.resolve(targetFilePath);
+                
+                const relativeToConfigs = path.relative(allowedBaseDir, absoluteTargetFilePath);
+                const isInsideConfigs = !path.isAbsolute(relativeToConfigs) && !relativeToConfigs.startsWith('..') && relativeToConfigs !== '..';
+                
+                if (!isInsideConfigs) {
+                    throw new Error('Target directory escape detected');
+                }
+                
+                await fs.mkdir(targetDir, { recursive: true });
                 await fs.rename(tempFilePath, targetFilePath);
                 
                 const relativePath = path.relative(process.cwd(), targetFilePath);
@@ -277,6 +293,10 @@ export function handleUploadOAuthCredentials(req, res, options = {}) {
 
             } catch (error) {
                 logger.error(`${logPrefix} File upload processing error:`, error);
+                // 发生错误时确保清理上传至 configs/temp 目录的临时文件，避免堆积
+                if (req.file && req.file.path && existsSync(req.file.path)) {
+                    await fs.unlink(req.file.path).catch(() => {});
+                }
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     error: {

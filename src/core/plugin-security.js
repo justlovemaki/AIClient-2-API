@@ -57,6 +57,45 @@ export function assertPathInside(basePath, targetPath, message) {
     }
 }
 
+export function normalizePluginArchiveEntryName(entryName, pluginId) {
+    validatePluginId(pluginId);
+
+    if (typeof entryName !== 'string' || !entryName) {
+        throw new Error('[Security Hardening] 插件包包含无效文件路径');
+    }
+
+    const normalizedSeparators = entryName.replace(/\\/g, '/');
+    if (
+        normalizedSeparators.includes('\0') ||
+        normalizedSeparators.startsWith('/') ||
+        normalizedSeparators.startsWith('//') ||
+        /^[A-Za-z]:\//.test(normalizedSeparators) ||
+        normalizedSeparators.includes(':')
+    ) {
+        throw new Error(`[Security Hardening] 插件包包含不安全路径: ${entryName}`);
+    }
+
+    let parts = normalizedSeparators.split('/').filter(Boolean);
+    if (parts.includes('..')) {
+        throw new Error(`[Security Hardening] 检测到 Zip Slip 路径穿越拦截: ${entryName}`);
+    }
+
+    if (parts[0] === pluginId) {
+        parts = parts.slice(1);
+    }
+
+    if (parts.length === 0 || parts.includes('..')) {
+        throw new Error(`[Security Hardening] 插件包包含无效文件路径: ${entryName}`);
+    }
+
+    const safeRelativePath = path.posix.normalize(parts.join('/'));
+    if (safeRelativePath === '.' || safeRelativePath.startsWith('../') || path.posix.isAbsolute(safeRelativePath)) {
+        throw new Error(`[Security Hardening] 检测到 Zip Slip 路径穿越拦截: ${entryName}`);
+    }
+
+    return safeRelativePath;
+}
+
 export function shouldScanPluginFile(fileName) {
     const ext = path.extname(fileName).toLowerCase();
     return TEXT_FILE_EXTENSIONS.has(ext) || ext === '';

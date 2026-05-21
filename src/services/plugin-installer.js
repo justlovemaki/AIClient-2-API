@@ -3,10 +3,13 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
+import dns from 'dns/promises';
+import net from 'net';
 import logger from '../utils/logger.js';
 import { getPluginManager } from '../core/plugin-manager.js';
 import {
     assertPathInside,
+    normalizePluginArchiveEntryName,
     shouldScanPluginFile,
     validatePluginId,
     validatePluginTextContent
@@ -15,18 +18,133 @@ import {
 const DEFAULT_MARKET_URL = 'https://source.hex2077.dev/files/market.json';
 const LOCAL_MARKET_FILE = path.join(process.cwd(), 'configs', 'market.json');
 const PLUGINS_DIR = path.join(process.cwd(), 'src', 'plugins-user');
-const STATIC_DIR = path.join(process.cwd(), 'static');
-const TEMP_DIR = path.join(process.cwd(), 'tmp', 'plugin-downloads');
+const MAX_PLUGIN_ZIP_BYTES = 10 * 1024 * 1024;
+const MAX_DOWNLOAD_REDIRECTS = 5;
+
+function isPrivateIPv4(ip) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(part => Number.isNaN(part))) return true;
+
+    const [a, b] = parts;
+    return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        a >= 224
+    );
+}
+
+function isPrivateIPv6(ip) {
+    const normalized = ip.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return true;
+    if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+    if (normalized.startsWith('::ffff:')) {
+        return isPrivateIPv4(normalized.slice(7));
+    }
+    return false;
+}
+
+function isBlockedAddress(address) {
+    const family = net.isIP(address);
+    if (family === 4) return isPrivateIPv4(address);
+    if (family === 6) return isPrivateIPv6(address);
+    return true;
+}
+
+async function resolvePublicAddresses(hostname) {
+    const normalizedHostname = hostname.replace(/^\[(.*)\]$/, '$1');
+    const literalIpFamily = net.isIP(normalizedHostname);
+    const addresses = literalIpFamily
+        ? [{ address: normalizedHostname, family: literalIpFamily }]
+        : await dns.lookup(normalizedHostname, { all: true, verbatim: true });
+
+    if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
+        throw new Error('[Security Hardening] Plugin download URL resolves to a blocked address');
+    }
+
+    return addresses;
+}
+
+function secureLookup(hostname, options, callback) {
+    resolvePublicAddresses(hostname)
+        .then((addresses) => {
+            const family = options?.family;
+            const selected = family ? addresses.find(address => address.family === family) : addresses[0];
+            if (!selected) {
+                callback(new Error('[Security Hardening] No allowed address for requested IP family'));
+                return;
+            }
+            callback(null, selected.address, selected.family);
+        })
+        .catch(callback);
+}
+
+export async function validatePluginDownloadUrl(downloadUrl) {
+    let url;
+    try {
+        url = new URL(downloadUrl);
+    } catch (error) {
+        throw new Error('[Security Hardening] Invalid plugin download URL');
+    }
+
+    if (url.protocol !== 'https:') {
+        throw new Error('[Security Hardening] Plugin download URL must use https');
+    }
+
+    if (url.username || url.password) {
+        throw new Error('[Security Hardening] Plugin download URL must not contain credentials');
+    }
+
+    await resolvePublicAddresses(url.hostname);
+
+    return url.toString();
+}
+
+async function downloadPluginArchive(downloadUrl, redirectsRemaining = MAX_DOWNLOAD_REDIRECTS) {
+    const safeUrl = await validatePluginDownloadUrl(downloadUrl);
+    const response = await axios({
+        method: 'get',
+        url: safeUrl,
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        maxRedirects: 0,
+        maxContentLength: MAX_PLUGIN_ZIP_BYTES,
+        maxBodyLength: MAX_PLUGIN_ZIP_BYTES,
+        lookup: secureLookup,
+        validateStatus: status => (status >= 200 && status < 300) || (status >= 300 && status < 400)
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+        if (redirectsRemaining <= 0 || !response.headers.location) {
+            throw new Error('[Security Hardening] Plugin download redirect is not allowed');
+        }
+        const redirectedUrl = new URL(response.headers.location, safeUrl).toString();
+        return downloadPluginArchive(redirectedUrl, redirectsRemaining - 1);
+    }
+
+    const buffer = Buffer.from(response.data);
+    if (buffer.length > MAX_PLUGIN_ZIP_BYTES) {
+        throw new Error('[Security Hardening] Plugin package exceeds maximum allowed size');
+    }
+    return buffer;
+}
 
 export function validatePluginArchiveBuffer(buffer, label = 'plugin archive') {
+    validatePluginId(label, 'plugin archive id');
     const zip = new AdmZip(buffer);
     const zipEntries = zip.getEntries();
 
     for (const entry of zipEntries) {
-        if (entry.isDirectory || !shouldScanPluginFile(entry.entryName)) continue;
+        if (entry.isDirectory) continue;
+        const relativePath = normalizePluginArchiveEntryName(entry.entryName, label);
+        if (!shouldScanPluginFile(relativePath)) continue;
 
         const content = entry.getData().toString('utf8');
-        validatePluginTextContent(content, `${label}/${entry.entryName}`);
+        validatePluginTextContent(content, `${label}/${relativePath}`);
     }
 }
 
@@ -72,10 +190,9 @@ export async function fetchMarketPlugins(url = null) {
  * 内部通用的安装逻辑
  * @private
  */
-async function _executeInstall(id, zipPath) {
+async function _executeInstallFromBuffer(id, zipBuffer) {
     validatePluginId(id);
     const pluginPath = path.join(PLUGINS_DIR, id);
-    const zipBuffer = await fs.readFile(zipPath);
     validatePluginArchiveBuffer(zipBuffer, id);
     const zip = new AdmZip(zipBuffer);
     const zipEntries = zip.getEntries();
@@ -87,14 +204,8 @@ async function _executeInstall(id, zipPath) {
     for (const entry of zipEntries) {
         if (entry.isDirectory) continue;
 
-        let relativePath = entry.entryName;
-        const pathParts = relativePath.split('/');
-        if (pathParts.length > 1 && pathParts[0] === id) {
-            pathParts.shift();
-            relativePath = pathParts.join('/');
-        }
-        
-        const targetPath = path.join(pluginPath, relativePath);
+        const relativePath = normalizePluginArchiveEntryName(entry.entryName, id);
+        const targetPath = path.resolve(pluginPath, relativePath);
         
         // 路径越界拦截校验
         assertPathInside(pluginPath, targetPath, `[Security Hardening] 检测到 Zip Slip 路径穿越拦截: ${entry.entryName}`);
@@ -121,28 +232,14 @@ async function _executeInstall(id, zipPath) {
 export async function installPlugin(pluginInfo) {
     const { id, downloadUrl } = pluginInfo;
     validatePluginId(id);
-    const zipPath = path.join(TEMP_DIR, `${id}.zip`);
 
     try {
-        if (!existsSync(TEMP_DIR)) await fs.mkdir(TEMP_DIR, { recursive: true });
-
-        const response = await axios({
-            method: 'get',
-            url: downloadUrl,
-            responseType: 'arraybuffer',
-            timeout: 30000
-        });
-
-        await fs.writeFile(zipPath, Buffer.from(response.data));
-        await _executeInstall(id, zipPath);
+        const zipBuffer = await downloadPluginArchive(downloadUrl);
+        await _executeInstallFromBuffer(id, zipBuffer);
         return true;
     } catch (error) {
         logger.error(`[PluginInstaller] Installation failed for ${id}:`, error.message);
         throw error;
-    } finally {
-        if (existsSync(zipPath)) {
-            await fs.unlink(zipPath).catch(() => {});
-        }
     }
 }
 
@@ -151,19 +248,15 @@ export async function installPlugin(pluginInfo) {
  */
 export async function installPluginFromBuffer(pluginId, buffer) {
     validatePluginId(pluginId);
-    const zipPath = path.join(TEMP_DIR, `${pluginId}_upload_${Date.now()}.zip`);
 
     try {
-        if (!existsSync(TEMP_DIR)) await fs.mkdir(TEMP_DIR, { recursive: true });
-        await fs.writeFile(zipPath, buffer);
-        await _executeInstall(pluginId, zipPath);
+        if (buffer.length > MAX_PLUGIN_ZIP_BYTES) {
+            throw new Error('[Security Hardening] Plugin package exceeds maximum allowed size');
+        }
+        await _executeInstallFromBuffer(pluginId, buffer);
         return true;
     } catch (error) {
         logger.error(`[PluginInstaller] Upload installation failed:`, error.message);
         throw error;
-    } finally {
-        if (existsSync(zipPath)) {
-            await fs.unlink(zipPath).catch(() => {});
-        }
     }
 }

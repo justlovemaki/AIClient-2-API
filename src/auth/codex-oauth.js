@@ -504,7 +504,7 @@ class CodexAuth {
             const targetDir = path.join(projectDir, 'configs', 'codex');
             await fs.promises.mkdir(targetDir, { recursive: true });
             const timestamp = Date.now();
-            const filename = `${timestamp}_codex-${email}.json`;
+            const filename = `${timestamp}_codex-${email}_oauth_creds.json`;
             credsPath = path.join(targetDir, filename);
         }
 

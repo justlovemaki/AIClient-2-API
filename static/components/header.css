@@ -28,6 +28,14 @@
     letter-spacing: -0.025em;
 }
 
+.header h1 .header-logo {
+    height: 1.5rem;
+    width: 1.5rem;
+    margin-right: 0.5rem;
+    border-radius: 50%;
+    object-fit: contain;
+}
+
 .header h1 i {
     margin-right: 0.5rem;
 }
