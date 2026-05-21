@@ -67,6 +67,8 @@ export const MODEL_PROVIDER = {
     CODEX_API: 'openai-codex-oauth',
     FORWARD_API: 'forward-api',
     GROK_WEB: 'grok-web',
+    ASTRAFLOW_API: 'openai-astraflow',
+    ASTRAFLOW_CN_API: 'openai-astraflow-cn',
     AUTO: 'auto',
 };
 

@@ -1,4 +1,36 @@
 {
+  "openai-astraflow": [
+    {
+      "customName": "Astraflow Global节点",
+      "OPENAI_API_KEY": "sk-astraflow-global-key",
+      "OPENAI_BASE_URL": "https://api-us-ca.umodelverse.ai/v1",
+      "checkModelName": null,
+      "checkHealth": false,
+      "uuid": "a1f39c65-d3c5-41b1-9985-9f6e3d7bastr",
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
+  "openai-astraflow-cn": [
+    {
+      "customName": "Astraflow China节点",
+      "OPENAI_API_KEY": "sk-astraflow-china-key",
+      "OPENAI_BASE_URL": "https://api.modelverse.cn/v1",
+      "checkModelName": null,
+      "checkHealth": false,
+      "uuid": "b2f39c65-d3c5-41b1-9985-9f6e3d7bcnst",
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
   "openai-custom": [
     {
       "customName": "OpenAI节点1",

@@ -122,6 +122,8 @@ export const PROVIDER_MODELS = {
         'gpt-image-2',
     ],
     'forward-api': [],
+    'openai-astraflow': [],
+    'openai-astraflow-cn': [],
     'grok-web': [
         'grok-4.1-mini',
         'grok-4.1-thinking',
