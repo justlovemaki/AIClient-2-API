@@ -452,6 +452,13 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await pluginApi.handleTogglePlugin(req, res, pluginName);
     }
 
+    // Uninstall plugin
+    const uninstallPluginMatch = pathParam.match(/^\/api\/plugins\/(.+)$/);
+    if (method === 'DELETE' && uninstallPluginMatch) {
+        const pluginName = decodeURIComponent(uninstallPluginMatch[1]);
+        return await pluginApi.handleUninstallPlugin(req, res, pluginName);
+    }
+
     // Custom models management
     if (method === 'GET' && pathParam === '/api/custom-models') {
         return await customModelsApi.handleGetCustomModels(req, res, currentConfig);

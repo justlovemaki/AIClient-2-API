@@ -225,16 +225,32 @@ function formatTimestamp(val) {
 }
 
 /**
+ * 解析 Tier ID 获取计划名称
+ */
+function parseTierId(tierId) {
+    if (!tierId) return 'FREE';
+    if (typeof tierId !== 'string') return String(tierId);
+    if (tierId.includes('-')) return tierId;
+    const parts = tierId.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[parts.length - 2].toLowerCase() === 'for') {
+        const startIndex = Math.max(0, parts.length - 3);
+        return parts.slice(startIndex).join(' ');
+    }
+    return parts[parts.length - 1];
+}
+
+/**
  * 获取计划类别样式类名
  */
 function getPlanClass(plan) {
     if (!plan) return 'plan-default';
     const p = plan.toLowerCase();
-    if (p.includes('free')) return 'plan-free';
+    if (p.includes('ultra')) return 'plan-ultra';
+    if (p.includes('team') || p.includes('ent')) return 'plan-team';
     if (p.includes('pro+') || p.includes('pro +')) return 'plan-pro-plus'; // 独立识别 pro+
     if (p.includes('pro')) return 'plan-pro';
     if (p.includes('plus') || p.includes('+')) return 'plan-plus';
-    if (p.includes('team') || p.includes('ent')) return 'plan-team';
+    if (p.includes('free')) return 'plan-free';
     if (p.includes('basic')) return 'plan-basic';
     if (p.includes('super')) return 'plan-super';
     if (p.includes('heavy')) return 'plan-heavy';
@@ -406,7 +422,7 @@ export function formatGeminiUsage(usageData) {
 
         // 计算平均使用率作为概要 (因为各模型额度独立，用平均值更能反映整体可用性)
         const avgUsedPercent = items.length > 0 ? totalPercent / items.length : 0;
-        const plan = usageData.tierId || 'FREE-TIER';
+        const plan = parseTierId(usageData.tierId);
 
         return {
             summary: {
@@ -476,7 +492,7 @@ export function formatAntigravityUsage(usageData) {
 
         // 计算平均使用率作为概要
         const avgUsedPercent = items.length > 0 ? totalPercent / items.length : 0;
-        const plan = usageData.tierId || 'FREE-TIER';
+        const plan = parseTierId(usageData.tierId);
 
         return {
             summary: {

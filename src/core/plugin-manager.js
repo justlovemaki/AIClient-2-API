@@ -610,6 +610,7 @@ class PluginManager {
         const list = [];
         for (const [name, plugin] of this.plugins) {
             const pluginConfig = this.pluginsConfig.plugins[name] || {};
+            const isUserPlugin = !!(plugin._baseDir && isInsidePath(USER_PLUGINS_DIR, plugin._baseDir));
             list.push({
                 name: plugin.name,
                 version: plugin.version || '1.0.0',
@@ -617,7 +618,8 @@ class PluginManager {
                 enabled: plugin._enabled === true,
                 hasMiddleware: typeof plugin.middleware === 'function',
                 hasRoutes: Array.isArray(plugin.routes) && plugin.routes.length > 0,
-                hasHooks: plugin.hooks && Object.keys(plugin.hooks).length > 0
+                hasHooks: plugin.hooks && Object.keys(plugin.hooks).length > 0,
+                isBuiltin: !isUserPlugin
             });
         }
         return list;
@@ -660,6 +662,47 @@ class PluginManager {
             }
             plugin._enabled = false;
         }
+    }
+
+    /**
+     * 卸载插件
+     * @param {string} name - 插件名称
+     */
+    async uninstallPlugin(name) {
+        validatePluginId(name);
+        
+        // 只能卸载用户插件
+        const pluginDir = path.join(USER_PLUGINS_DIR, name);
+        
+        if (!isInsidePath(USER_PLUGINS_DIR, pluginDir)) {
+            throw new Error('不合法的插件名称');
+        }
+        
+        if (!existsSync(pluginDir)) {
+            throw new Error('插件不存在或为内置插件，无法卸载');
+        }
+        
+        const plugin = this.plugins.get(name);
+        if (plugin) {
+            if (plugin._enabled && typeof plugin.destroy === 'function') {
+                try {
+                    await this.executePluginOperation(plugin, 'destroy', () => plugin.destroy());
+                } catch (error) {
+                    logger.error(`[PluginManager] Failed to destroy plugin ${name} during uninstall:`, error.message);
+                }
+            }
+            this.plugins.delete(name);
+        }
+        
+        // 从配置中移除
+        if (this.pluginsConfig.plugins[name]) {
+            delete this.pluginsConfig.plugins[name];
+            await this.saveConfig();
+        }
+        
+        // 删除文件目录
+        await fs.rm(pluginDir, { recursive: true, force: true });
+        logger.info(`[PluginManager] Uninstalled plugin: ${name}`);
     }
 
     /**

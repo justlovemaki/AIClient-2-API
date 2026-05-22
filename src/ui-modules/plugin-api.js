@@ -198,3 +198,36 @@ export async function handleTogglePlugin(req, res, pluginName) {
         return true;
     }
 }
+
+/**
+ * 卸载插件
+ */
+export async function handleUninstallPlugin(req, res, pluginName) {
+    try {
+        const pluginManager = getPluginManager();
+        await pluginManager.uninstallPlugin(pluginName);
+
+        // 广播更新事件
+        broadcastEvent('plugin_update', {
+            action: 'uninstall',
+            pluginName,
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            message: `Plugin ${pluginName} uninstalled successfully`
+        }));
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Failed to uninstall plugin:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            error: {
+                message: 'Failed to uninstall plugin: ' + error.message
+            }
+        }));
+        return true;
+    }
+}

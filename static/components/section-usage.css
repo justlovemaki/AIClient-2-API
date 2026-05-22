@@ -428,6 +428,7 @@
 .collapsed-plan-badge.plan-pro { background: #fef3c7; color: #92400e; border-color: #fde68a; }
 .collapsed-plan-badge.plan-pro-plus { background: #f3f0ff; color: #6b21a8; border-color: #d8b4fe; }
 .collapsed-plan-badge.plan-team { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.collapsed-plan-badge.plan-ultra { background: #fff1f2; color: #9f1239; border-color: #fecdd3; }
 .collapsed-plan-badge.plan-basic { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
 .collapsed-plan-badge.plan-super { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
 .collapsed-plan-badge.plan-heavy { background: #f3e8ff; color: #6b21a8; border-color: #e9d5ff; }
@@ -439,6 +440,7 @@
 [data-theme="dark"] .collapsed-plan-badge.plan-pro { background: #78350f; color: #fef3c7; border-color: #92400e; }
 [data-theme="dark"] .collapsed-plan-badge.plan-pro-plus { background: #4c1d95; color: #f5f3ff; border-color: #7c3aed; }
 [data-theme="dark"] .collapsed-plan-badge.plan-team { background: #064e3b; color: #dcfce7; border-color: #065f46; }
+[data-theme="dark"] .collapsed-plan-badge.plan-ultra { background: #881337; color: #ffe4e6; border-color: #be123c; }
 [data-theme="dark"] .collapsed-plan-badge.plan-basic { background: #1e293b; color: #cbd5e1; border-color: #334155; }
 [data-theme="dark"] .collapsed-plan-badge.plan-super { background: #0c4a6e; color: #e0f2fe; border-color: #075985; }
 [data-theme="dark"] .collapsed-plan-badge.plan-heavy { background: #4c1d95; color: #f5f3ff; border-color: #5b21b6; }
