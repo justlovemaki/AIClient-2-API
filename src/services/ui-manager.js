@@ -29,7 +29,13 @@ export { broadcastEvent, initializeUIManagement, handleUploadOAuthCredentials, u
  */
 export async function serveStaticFiles(pathParam, res) {
     // 1. 尝试从系统 static 目录服务
-    let filePath = path.join(process.cwd(), 'static', pathParam === '/' || pathParam === '/index.html' ? 'index.html' : pathParam.replace('/static/', ''));
+    const staticDir = path.resolve(process.cwd(), 'static');
+    let filePath = path.resolve(staticDir, pathParam === '/' || pathParam === '/index.html' ? 'index.html' : pathParam.replace('/static/', ''));
+
+    // Prevent path traversal - ensure resolved path is within the static directory
+    if (!filePath.startsWith(staticDir + path.sep) && filePath !== staticDir) {
+        return false;
+    }
 
     if (!existsSync(filePath)) {
         // 2. 尝试从插件目录服务
