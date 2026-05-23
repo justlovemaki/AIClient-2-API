@@ -34,10 +34,17 @@ const translations = {
         'nav.upload': '凭据文件管理',
         'nav.usage': '用量查询',
         'nav.logs': '实时日志',
+        'nav.sponsors': '赞助商',
         'nav.plugins': '插件管理',
         'nav.models': '可用模型',
         'nav.customModels': '自定义模型',
         'nav.playground': '模型测试',
+
+        // Sponsors
+        'sponsors.title': '💎 赞助商',
+        'sponsors.subtitle': '*排序按赞助先后顺序排列，均推荐注册使用。*',
+        'sponsors.becomeTitle': '成为赞助商',
+        'sponsors.becomeDesc': '如果您有意赞助本项目，请扫描左侧微信二维码（添加时请注明来意：赞助）。',
 
         // Dashboard
         'dashboard.title': '系统概览',
@@ -1181,10 +1188,17 @@ const translations = {
         'nav.upload': 'Credential Files',
         'nav.usage': 'Usage Query',
         'nav.logs': 'Real-time Logs',
+        'nav.sponsors': 'Sponsors',
         'nav.plugins': 'Plugin Management',
         'nav.models': 'Available Models',
         'nav.customModels': 'Custom Models',
         'nav.playground': 'Playground',
+
+        // Sponsors
+        'sponsors.title': '💎 Sponsors',
+        'sponsors.subtitle': '*Sorted by sponsorship order, registration and use recommended.*',
+        'sponsors.becomeTitle': 'Become a Sponsor',
+        'sponsors.becomeDesc': 'If you are interested in sponsoring this project, please scan the WeChat QR code on the left (please indicate: Sponsorship).',
         
         // Dashboard
         'dashboard.title': 'System Overview',
