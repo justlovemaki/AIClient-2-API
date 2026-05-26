@@ -925,14 +925,16 @@ async saveCredentialsToFile(filePath, newData) {
         return getContentTextUtil(message);
     }
 
-    _extractTextAndImagesFromContent(content) {
-        const result = { text: '', images: [] };
+    _extractTextAndImagesFromContent(content, totalMessages = null) {
+        const result = { text: '', images: [], imageCount: 0 };
+        const shouldKeepImages = totalMessages === null ? true : (totalMessages - 1) <= 5;
         if (Array.isArray(content)) {
             for (const part of content) {
                 if (part.type === 'text') {
                     result.text += part.text || '';
                 } else if (part.type === 'image' && part.source?.data) {
-                    result.images.push({
+                    result.imageCount++;
+                    if (shouldKeepImages) result.images.push({
                         format: part.source.media_type.split('/')[1],
                         source: { bytes: part.source.data }
                     });
@@ -941,7 +943,8 @@ async saveCredentialsToFile(filePath, newData) {
                     if (imageUrl && imageUrl.startsWith('data:')) {
                         const [header, data] = imageUrl.split(',');
                         const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
-                        result.images.push({
+                        result.imageCount++;
+                        if (shouldKeepImages) result.images.push({
                             format: mediaType.split('/')[1] || 'jpeg',
                             source: { bytes: data }
                         });
@@ -1262,10 +1265,15 @@ async saveCredentialsToFile(filePath, newData) {
             if (processedMessages[0].role === 'user' && processedMessages.length === 1) {
                 prependSystemToCurrentMessage = true;
             } else if (processedMessages[0].role === 'user') {
-                const firstUserPayload = this._extractTextAndImagesFromContent(processedMessages[0].content);
+                const firstUserPayload = this._extractTextAndImagesFromContent(processedMessages[0].content, processedMessages.length);
+                const firstImagePlaceholder = firstUserPayload.imageCount > 0 && firstUserPayload.images.length === 0
+                    ? `[此消息包含 ${firstUserPayload.imageCount} 张图片，已在历史记录中省略]`
+                    : '';
                 const firstHistoryMsg = {
                     userInputMessage: {
-                        content: `${systemPrompt}\n\n${firstUserPayload.text}`,
+                        content: firstUserPayload.text
+                            ? `${systemPrompt}\n\n${firstUserPayload.text}${firstImagePlaceholder ? `\n${firstImagePlaceholder}` : ''}`
+                            : `${systemPrompt}${firstImagePlaceholder ? `\n${firstImagePlaceholder}` : ''}`,
                         modelId: codewhispererModel,
                         origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
                     }
