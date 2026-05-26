@@ -12,6 +12,7 @@ import { generateUUID, createProviderConfig, formatSystemPath, detectProviderFro
 import { broadcastEvent } from './event-broadcast.js';
 import { getRegisteredProviders, getServiceAdapter, invalidateServiceAdapter, serviceInstances } from '../providers/adapter.js';
 import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
+import { normalizeProviderConfigFields } from '../utils/provider-config-normalizer.js';
 
 
 
@@ -400,7 +401,7 @@ export async function handleDetectProviderModels(req, res, currentConfig, provid
         }
 
         const body = await getRequestBody(req);
-        const draftConfig = filterMaskedData(body?.providerConfig || {});
+        const draftConfig = normalizeProviderConfigFields(filterMaskedData(body?.providerConfig || {}));
 
         const providerPools = loadProviderPools(currentConfig, providerPoolManager);
         const providers = providerPools[providerType] || [];
@@ -503,7 +504,7 @@ async function _handleAddProvider(req, res, currentConfig, providerPoolManager, 
         }
         
         // 过滤掉脱敏字段
-        const filteredConfig = filterMaskedData(providerConfig);
+        const filteredConfig = normalizeProviderConfigFields(filterMaskedData(providerConfig));
         if (usesManagedModelList(providerType)) {
             filteredConfig.supportedModels = normalizeModelIds(filteredConfig.supportedModels);
             filteredConfig.notSupportedModels = [];
@@ -605,7 +606,7 @@ async function _handleUpdateProvider(req, res, currentConfig, providerPoolManage
         const existingProvider = providers[providerIndex];
         
         // 过滤掉传入配置中的脱敏占位符，避免覆盖真实数据
-        const filteredConfig = filterMaskedData(providerConfig);
+        const filteredConfig = normalizeProviderConfigFields(filterMaskedData(providerConfig));
         if (usesManagedModelList(providerType)) {
             filteredConfig.supportedModels = normalizeModelIds(filteredConfig.supportedModels);
             filteredConfig.notSupportedModels = [];

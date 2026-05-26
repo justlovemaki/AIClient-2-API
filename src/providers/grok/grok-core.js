@@ -4,35 +4,12 @@ import * as http from 'http';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError, getRetryAfterMs } from '../../utils/common.js';
-import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
 import { ConverterFactory } from '../../converters/ConverterFactory.js';
 import * as readline from 'readline';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 import { ImagineWebSocketService } from './ws-imagine.js';
-
-// Chrome 136 TLS cipher suites
-const CHROME_CIPHERS = [
-    'TLS_AES_128_GCM_SHA256', 'TLS_AES_256_GCM_SHA384', 'TLS_CHACHA20_POLY1305_SHA256',
-    'ECDHE-ECDSA-AES128-GCM-SHA256', 'ECDHE-RSA-AES128-GCM-SHA256', 'ECDHE-ECDSA-AES256-GCM-SHA384',
-    'ECDHE-RSA-AES256-GCM-SHA384', 'ECDHE-ECDSA-CHACHA20-POLY1305', 'ECDHE-RSA-CHACHA20-POLY1305',
-    'ECDHE-RSA-AES128-SHA', 'ECDHE-RSA-AES256-SHA', 'AES128-GCM-SHA256', 'AES256-GCM-SHA384',
-    'AES128-SHA', 'AES256-SHA',
-].join(':');
-
-const CHROME_SIGALGS = [
-    'ecdsa_secp256r1_sha256', 'rsa_pss_rsae_sha256', 'rsa_pkcs1_sha256',
-    'ecdsa_secp384r1_sha384', 'rsa_pss_rsae_sha384', 'rsa_pkcs1_sha384',
-    'rsa_pss_rsae_sha512', 'rsa_pkcs1_sha512',
-].join(':');
-
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 5, timeout: 120000 });
-const httpsAgent = new https.Agent({
-    keepAlive: true, maxSockets: 100, maxFreeSockets: 5, timeout: 120000,
-    ciphers: CHROME_CIPHERS, sigalgs: CHROME_SIGALGS, minVersion: 'TLSv1.2', maxVersion: 'TLSv1.3',
-    ALPNProtocols: ['http/1.1'], ecdhCurve: 'X25519:P-256:P-384', honorCipherOrder: false, sessionTimeout: 300,
-});
 
 const CORE_MODEL_MAPPING = {
     'grok-4.1-mini': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_GROK_4_1_MINI_THINKING', modeId: 'grok-4-1-mini' },
@@ -230,9 +207,6 @@ export class GrokApiService {
             ...otherOptions
         } = options;
 
-        // 检查是否启用了 TLS Sidecar
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB);
-
         const axiosConfig = { 
             method, 
             url, 
@@ -242,13 +216,6 @@ export class GrokApiService {
             ...otherOptions
         };
         if (responseType) axiosConfig.responseType = responseType;
-
-        // 如果未启用 TLS Sidecar，则配置 httpAgent 和 httpsAgent
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB);
-        }
         
         this._applySidecar(axiosConfig);
 
@@ -353,29 +320,24 @@ export class GrokApiService {
         }
     }
 
+    /**
+     * 获取使用限制信息（返回 API 原始数据）
+     */
     async getUsageLimits() {
         try {
             const response = await this._request({
                 url: `${this.baseUrl}/rest/rate-limits`,
-                data: { "requestKind": "DEFAULT", "modelName": "grok-3" },
+                data: { "requestKind": "DEFAULT", "modelName": "fast" },
                 timeout: 30000
             });
-            const data = response.data;
-            let remaining = data.remainingTokens !== undefined ? data.remainingTokens : (data.remainingQueries !== undefined ? data.remainingQueries : data.totalQueries);
-            if (data.totalQueries > 0) {
-                data.totalLimit = data.totalQueries;
-                data.usedQueries = Math.max(0, data.totalQueries - (data.remainingQueries || 0));
-                data.unit = 'queries';
-            } else {
-                data.totalLimit = data.totalTokens || 0;
-                data.usedQueries = Math.max(0, (data.totalTokens || 0) - (data.remainingTokens || 0));
-                data.unit = 'tokens';
-            }
+            
             this.lastSyncAt = Date.now();
-            this.config.usageData = data;
             this.config.lastHealthCheckTime = new Date().toISOString();
-            return { lastUpdated: this.lastSyncAt, remaining, ...data };
-        } catch (error) { throw error; }
+            
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     }
 
     isExpiryDateNear() {

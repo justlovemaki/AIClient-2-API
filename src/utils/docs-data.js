@@ -40,7 +40,7 @@ export const HELP_DATA = {
         { path: "/api/help", desc: "获取启动帮助信息 (JSON/Text)" },
         { path: "/api/example", desc: "获取 API 资源指南 (JSON/Text)" }
     ],
-    docker: "docker run -d -p 3000:3000 -v \"$(pwd)/configs:/app/configs\" justlikemaki/aiclient-2-api"
+    docker: "docker run -d -p 3000:3000 -v \"$(pwd)/configs:/app/configs\" -v \"$(pwd)/plugins:/app/src/plugins-user\" justlikemaki/aiclient-2-api"
 };
 
 export const API_GUIDE_DATA = [

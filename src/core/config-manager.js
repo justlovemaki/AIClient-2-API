@@ -94,6 +94,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         LOGIN_MAX_ATTEMPTS: 5, // 最大失败重试次数
         LOGIN_LOCKOUT_DURATION: 1800, // 锁定持续时间（秒），默认30分钟
         LOGIN_MIN_INTERVAL: 5000, // 两次尝试之间的最小间隔（毫秒），默认1秒
+        TRUST_PROXY: false, // 是否信任反向代理传入的 x-forwarded-for
+        TRUSTED_PROXY_IPS: ['127.0.0.1', '::1'], // 允许提供 x-forwarded-for 的反向代理 IP 列表
         PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
         MAX_ERROR_COUNT: 10, // 提供商最大错误次数
         CUSTOM_MODELS_FILE_PATH: null, // 自定义模型配置文件路径
@@ -160,6 +162,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         { flag: '--login-max-attempts',   configKey: 'LOGIN_MAX_ATTEMPTS',     type: 'int' },
         { flag: '--login-lockout-duration', configKey: 'LOGIN_LOCKOUT_DURATION', type: 'int' },
         { flag: '--login-min-interval',   configKey: 'LOGIN_MIN_INTERVAL',     type: 'int' },
+        { flag: '--trust-proxy',          configKey: 'TRUST_PROXY',            type: 'bool' },
+        { flag: '--trusted-proxy-ips',    configKey: 'TRUSTED_PROXY_IPS',      type: 'stringList' },
         { flag: '--scheduled-health-check-enabled', configKey: 'SCHEDULE_HEALTH_CHECK_ENABLED', type: 'bool' },
         { flag: '--scheduled-health-check-interval', configKey: 'SCHEDULE_HEALTH_CHECK_INTERVAL', type: 'int' },
         { flag: '--no-ui',                configKey: 'UI_ENABLED',            type: 'flag', value: false },
@@ -184,6 +188,9 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 break;
             case 'string':
                 currentConfig[def.configKey] = rawValue;
+                break;
+            case 'stringList':
+                currentConfig[def.configKey] = rawValue.split(',').map(item => item.trim()).filter(Boolean);
                 break;
             case 'int':
                 currentConfig[def.configKey] = parseInt(rawValue, 10);

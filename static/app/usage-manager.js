@@ -4,16 +4,6 @@ import { showToast, bindOnce } from './utils.js';
 import { getAuthHeaders } from './auth.js';
 import { t, getCurrentLanguage } from './i18n.js';
 
-/**
- * 不支持显示用量数据的提供商列表
- * 这些提供商只显示模型名称和重置时间，不显示用量数字和进度条
- * 
- * 注：gemini-antigravity 已支持 remainingPercent，移除限制
- */
-const PROVIDERS_WITHOUT_USAGE_DISPLAY = [
-    'gemini-antigravity',
-];
-
 // 提供商配置缓存
 let currentProviderConfigs = null;
 let usagePageDataPromise = null;
@@ -27,15 +17,6 @@ export function updateUsageProviderConfigs(configs) {
 }
 
 /**
- * 检查提供商是否支持显示用量
- * @param {string} providerType - 提供商类型
- * @returns {boolean} 是否支持显示用量
- */
-function shouldShowUsage(providerType) {
-    return !PROVIDERS_WITHOUT_USAGE_DISPLAY.includes(providerType);
-}
-
-/**
  * 初始化用量管理功能
  */
 export function initUsageManager() {
@@ -43,6 +24,9 @@ export function initUsageManager() {
     bindOnce(refreshBtn, 'click', refreshUsage, 'refreshUsage');
 }
 
+/**
+ * 加载页面数据
+ */
 export function loadUsagePageData() {
     if (usagePageDataPromise) {
         return usagePageDataPromise;
@@ -71,24 +55,14 @@ async function loadSupportedProviders() {
             headers: getAuthHeaders()
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const providers = await response.json();
         
         listEl.innerHTML = '';
-        
-        // 按照 currentProviderConfigs 的顺序渲染，确保顺序一致性
-        const displayOrder = currentProviderConfigs 
-            ? currentProviderConfigs.map(c => c.id) 
-            : providers;
+        const displayOrder = currentProviderConfigs ? currentProviderConfigs.map(c => c.id) : providers;
 
         displayOrder.forEach(providerId => {
-            // 必须是后端支持且前端配置可见的提供商
-            const isSupported = providers.includes(providerId);
-            if (!isSupported) return;
-
+            if (!providers.includes(providerId)) return;
             if (currentProviderConfigs) {
                 const config = currentProviderConfigs.find(c => c.id === providerId);
                 if (config && config.visible === false) return;
@@ -97,930 +71,458 @@ async function loadSupportedProviders() {
             const tag = document.createElement('span');
             tag.className = 'provider-tag';
             tag.textContent = getProviderDisplayName(providerId);
-            tag.title = t('usage.doubleClickToRefresh') || '双击刷新该提供商用量';
-            tag.setAttribute('data-i18n-title', 'usage.doubleClickToRefresh');
-            
-            // 添加双击事件
-            tag.addEventListener('dblclick', () => {
-                refreshProviderUsage(providerId);
-            });
-            
+            tag.title = t('usage.doubleClickToRefresh');
+            tag.addEventListener('dblclick', () => refreshProviderUsage(providerId));
             listEl.appendChild(tag);
         });
     } catch (error) {
         console.error('获取支持的提供商列表失败:', error);
-        listEl.innerHTML = `<span class="error-text" data-i18n="usage.failedToLoad">${t('usage.failedToLoad')}</span>`;
+        listEl.innerHTML = `<span class="error-text">${t('usage.failedToLoad')}</span>`;
     }
 }
 
 /**
- * 加载用量数据（优先从缓存读取）
+ * 加载用量数据
  */
 export async function loadUsage() {
     const loadingEl = document.getElementById('usageLoading');
     const errorEl = document.getElementById('usageError');
     const contentEl = document.getElementById('usageContent');
-    const emptyEl = document.getElementById('usageEmpty');
-    const lastUpdateEl = document.getElementById('usageLastUpdate');
 
-    // 显示加载状态
     if (loadingEl) loadingEl.style.display = 'block';
     if (errorEl) errorEl.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = 'none';
 
     try {
-        // 不带 refresh 参数，优先读取缓存
-        const response = await fetch('/api/usage', {
-            method: 'GET',
-            headers: getAuthHeaders()
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
+        const response = await fetch('/api/usage', { method: 'GET', headers: getAuthHeaders() });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         
-        // 隐藏加载状态
         if (loadingEl) loadingEl.style.display = 'none';
-        
-        // 渲染用量数据
         renderUsageData(data, contentEl);
-        
-        // 更新服务端系统时间
-        if (data.serverTime) {
-            const serverTimeEl = document.getElementById('serverTimeValue');
-            if (serverTimeEl) {
-                serverTimeEl.textContent = new Date(data.serverTime).toLocaleString(getCurrentLanguage());
-            }
-        }
-        
-        // 更新最后更新时间
-        if (lastUpdateEl) {
-            const timeStr = new Date(data.timestamp || Date.now()).toLocaleString(getCurrentLanguage());
-            if (data.fromCache && data.timestamp) {
-                lastUpdateEl.textContent = t('usage.lastUpdateCache', { time: timeStr });
-                lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdateCache');
-                lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
-            } else {
-                lastUpdateEl.textContent = t('usage.lastUpdate', { time: timeStr });
-                lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdate');
-                lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
-            }
-        }
+        updateTimeInfo(data);
     } catch (error) {
         console.error('获取用量数据失败:', error);
-        
         if (loadingEl) loadingEl.style.display = 'none';
         if (errorEl) {
             errorEl.style.display = 'block';
-            const errorMsgEl = document.getElementById('usageErrorMessage');
-            if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || (t('usage.title') + t('common.refresh.failed'));
-            }
+            document.getElementById('usageErrorMessage').textContent = error.message;
         }
     }
 }
 
 /**
- * 刷新用量数据（强制从服务器获取最新数据）
+ * 刷新全部用量
  */
 export async function refreshUsage() {
-    const loadingEl = document.getElementById('usageLoading');
-    const errorEl = document.getElementById('usageError');
-    const contentEl = document.getElementById('usageContent');
-    const emptyEl = document.getElementById('usageEmpty');
-    const lastUpdateEl = document.getElementById('usageLastUpdate');
     const refreshBtn = document.getElementById('refreshUsageBtn');
-
-    // 显示加载状态
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (errorEl) errorEl.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = 'none';
     if (refreshBtn) refreshBtn.disabled = true;
 
     try {
-        // 带 refresh=true 参数，强制刷新
-        const response = await fetch('/api/usage?refresh=true', {
-            method: 'GET',
-            headers: getAuthHeaders()
-        });
-
+        // 使用更明显的反馈：显示加载中的 Toast
+        showToast(t('usage.loading'), 'info');
+        
+        const response = await fetch('/api/usage?refresh=true', { method: 'GET', headers: getAuthHeaders() });
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
         }
-
+        
         const data = await response.json();
         
-        // 隐藏加载状态
-        if (loadingEl) loadingEl.style.display = 'none';
+        // 渲染数据
+        renderUsageData(data, document.getElementById('usageContent'));
+        updateTimeInfo(data);
         
-        // 渲染用量数据
-        renderUsageData(data, contentEl);
-        
-        // 更新服务端系统时间
-        if (data.serverTime) {
-            const serverTimeEl = document.getElementById('serverTimeValue');
-            if (serverTimeEl) {
-                serverTimeEl.textContent = new Date(data.serverTime).toLocaleString(getCurrentLanguage());
-            }
-        }
-        
-        // 更新最后更新时间
-        if (lastUpdateEl) {
-            const timeStr = new Date().toLocaleString(getCurrentLanguage());
-            lastUpdateEl.textContent = t('usage.lastUpdate', { time: timeStr });
-            lastUpdateEl.setAttribute('data-i18n', 'usage.lastUpdate');
-            lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
-        }
-
-        showToast(t('common.success'), t('common.refresh.success'), 'success');
+        // 成功提示
+        showToast(t('common.refresh.success'), 'success');
     } catch (error) {
-        console.error('获取用量数据失败:', error);
-        
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (errorEl) {
-            errorEl.style.display = 'block';
-            const errorMsgEl = document.getElementById('usageErrorMessage');
-            if (errorMsgEl) {
-                errorMsgEl.textContent = error.message || (t('usage.title') + t('common.refresh.failed'));
-            }
-        }
-        
-        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
+        console.error('刷新用量失败:', error);
+        showToast(t('common.error'), error.message || t('common.requestFailed'), 'error');
     } finally {
         if (refreshBtn) refreshBtn.disabled = false;
     }
 }
 
 /**
- * 渲染用量数据
- * @param {Object} data - 用量数据
- * @param {HTMLElement} container - 容器元素
+ * 刷新单个实例
+ */
+export async function refreshSingleInstanceUsage(providerType, uuid, displayName) {
+    try {
+        showToast(t('usage.refreshingInstance', { name: displayName }), 'info');
+        const response = await fetch(`/api/usage/${providerType}/${uuid}?refresh=true`, { 
+            method: 'GET', 
+            headers: getAuthHeaders() 
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // 局部更新该实例的卡片
+        if (data && data.uuid) {
+            updateSingleInstanceCard(providerType, data);
+            showToast(t('common.refresh.success'), 'success');
+        } else {
+            await loadUsage();
+        }
+    } catch (error) {
+        console.error('刷新单个实例用量失败:', error);
+        showToast(error.message || t('common.requestFailed'), 'error');
+    }
+}
+
+/**
+ * 更新单个实例卡片 (局部更新 DOM)
+ */
+function updateSingleInstanceCard(providerType, instanceData) {
+    const container = document.getElementById('usageContent');
+    if (!container) return;
+
+    const group = container.querySelector(`.usage-provider-group[data-provider="${providerType}"]`);
+    if (!group) return;
+
+    const grid = group.querySelector('.usage-cards-grid');
+    if (!grid) return;
+
+    // 找到该实例的卡片。卡片本身没有 data-uuid 属性，我们需要通过内部的 span 查找或添加它
+    // 在 createInstanceUsageCard 中，我们可以为卡片添加 data-uuid
+    const cards = grid.querySelectorAll('.usage-instance-card');
+    let targetCard = null;
+    
+    for (const card of cards) {
+        if (card.getAttribute('data-uuid') === instanceData.uuid) {
+            targetCard = card;
+            break;
+        }
+    }
+
+    if (targetCard) {
+        const isCollapsed = targetCard.classList.contains('collapsed');
+        const newCard = createInstanceUsageCard(instanceData, providerType);
+        newCard.classList.toggle('collapsed', isCollapsed);
+        grid.replaceChild(newCard, targetCard);
+    }
+}
+
+/**
+ * 刷新单个提供商
+ */
+export async function refreshProviderUsage(providerType) {
+    try {
+        showToast(t('usage.refreshingProvider', { name: getProviderDisplayName(providerType) }), 'info');
+        const response = await fetch(`/api/usage/${providerType}?refresh=true`, { method: 'GET', headers: getAuthHeaders() });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // 如果返回了全量数据或该提供商的数据，尝试局部更新
+        if (data.providers && data.providers[providerType]) {
+            updateSingleProviderGroup(providerType, data.providers[providerType]);
+            updateTimeInfo(data);
+        } else {
+            await loadUsage();
+        }
+        
+        showToast(t('common.refresh.success'), 'success');
+    } catch (error) {
+        console.error('刷新提供商用量失败:', error);
+        showToast(error.message || t('common.requestFailed'), 'error');
+    }
+}
+
+/**
+ * 更新单个提供商分组 (局部更新 DOM)
+ */
+function updateSingleProviderGroup(providerType, providerData) {
+    const container = document.getElementById('usageContent');
+    if (!container) return;
+
+    const existingGroup = container.querySelector(`.usage-provider-group[data-provider="${providerType}"]`);
+    const instances = (providerData.instances || []).filter(i => !i.isDisabled && !i.error?.includes('not initialized'));
+    
+    if (instances.length === 0) {
+        if (existingGroup) existingGroup.remove();
+        if (container.children.length === 0) {
+            renderUsageData({ providers: {} }, container);
+        }
+        return;
+    }
+
+    const newGroup = createProviderGroup(providerType, instances);
+    if (existingGroup) {
+        // 保留展开/折叠状态
+        if (!existingGroup.classList.contains('collapsed')) {
+            newGroup.classList.remove('collapsed');
+        }
+        container.replaceChild(newGroup, existingGroup);
+    } else {
+        // 如果原本没有，则按顺序插入或直接追加
+        container.appendChild(newGroup);
+        // 这里简化处理，实际可能需要根据 displayOrder 重新排序
+    }
+}
+
+/**
+ * 更新时间相关信息
+ */
+function updateTimeInfo(data) {
+    if (data.serverTime) {
+        const el = document.getElementById('serverTimeValue');
+        if (el) el.textContent = new Date(data.serverTime).toLocaleString(getCurrentLanguage());
+    }
+    
+    const lastUpdateEl = document.getElementById('usageLastUpdate');
+    if (lastUpdateEl) {
+        const timeStr = new Date(data.timestamp || Date.now()).toLocaleString(getCurrentLanguage());
+        const key = data.fromCache ? 'usage.lastUpdateCache' : 'usage.lastUpdate';
+        lastUpdateEl.textContent = t(key, { time: timeStr });
+        // 恢复国际化属性以便动态切换语言
+        lastUpdateEl.setAttribute('data-i18n', key);
+        lastUpdateEl.setAttribute('data-i18n-params', JSON.stringify({ time: timeStr }));
+    }
+}
+
+/**
+ * 渲染数据
  */
 function renderUsageData(data, container) {
     if (!container) return;
-
-    // 清空容器
     container.innerHTML = '';
 
-    if (!data || !data.providers || Object.keys(data.providers).length === 0) {
-        container.innerHTML = `
-            <div class="usage-empty">
-                <i class="fas fa-chart-bar"></i>
-                <p data-i18n="usage.noData">${t('usage.noData')}</p>
-            </div>
-        `;
+    if (!data?.providers || Object.keys(data.providers).length === 0) {
+        container.innerHTML = `<div class="usage-empty"><p>${t('usage.noData')}</p></div>`;
         return;
     }
 
-    // 按提供商分组收集已初始化且未禁用的实例
     const groupedInstances = {};
-    
-    for (const [providerType, providerData] of Object.entries(data.providers)) {
-        // 如果配置了不可见，则跳过
-        if (currentProviderConfigs) {
-            const config = currentProviderConfigs.find(c => c.id === providerType);
-            if (config && config.visible === false) continue;
-        }
-
-        if (providerData.instances && providerData.instances.length > 0) {
-            const validInstances = [];
-            for (const instance of providerData.instances) {
-                // 过滤掉服务实例未初始化的
-                if (instance.error === '服务实例未初始化' || instance.error === 'Service instance not initialized') {
-                    continue;
-                }
-                // 过滤掉已禁用的提供商
-                if (instance.isDisabled) {
-                    continue;
-                }
-                validInstances.push(instance);
-            }
-            if (validInstances.length > 0) {
-                groupedInstances[providerType] = validInstances;
-            }
-        }
+    for (const [type, pData] of Object.entries(data.providers)) {
+        if (currentProviderConfigs?.find(c => c.id === type)?.visible === false) continue;
+        const valid = (pData.instances || []).filter(i => !i.isDisabled && !i.error?.includes('not initialized'));
+        if (valid.length > 0) groupedInstances[type] = valid;
     }
 
-    if (Object.keys(groupedInstances).length === 0) {
-        container.innerHTML = `
-            <div class="usage-empty">
-                <i class="fas fa-chart-bar"></i>
-                <p data-i18n="usage.noInstances">${t('usage.noInstances')}</p>
-            </div>
-        `;
-        return;
-    }
-
-    // 按提供商分组渲染，使用统一的显示顺序
-    const displayOrder = currentProviderConfigs 
-        ? currentProviderConfigs.map(c => c.id) 
-        : Object.keys(groupedInstances);
-
-    displayOrder.forEach(providerType => {
-        const instances = groupedInstances[providerType];
-        if (instances && instances.length > 0) {
-            const groupContainer = createProviderGroup(providerType, instances);
-            container.appendChild(groupContainer);
-        }
+    const displayOrder = currentProviderConfigs ? currentProviderConfigs.map(c => c.id) : Object.keys(groupedInstances);
+    displayOrder.forEach(type => {
+        if (groupedInstances[type]) container.appendChild(createProviderGroup(type, groupedInstances[type]));
     });
 }
 
 /**
- * 刷新特定提供商类型的用量数据
- * @param {string} providerType - 提供商类型
- */
-export async function refreshProviderUsage(providerType) {
-    const loadingEl = document.getElementById('usageLoading');
-    const refreshBtn = document.getElementById('refreshUsageBtn');
-    const contentEl = document.getElementById('usageContent');
-
-    // 显示加载状态
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (refreshBtn) refreshBtn.disabled = true;
-
-    try {
-        const providerName = getProviderDisplayName(providerType);
-        showToast(t('common.info'), t('usage.refreshingProvider', { name: providerName }), 'info');
-
-        // 调用按提供商刷新的 API
-        const response = await fetch(`/api/usage/${providerType}?refresh=true`, {
-            method: 'GET',
-            headers: getAuthHeaders()
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const providerData = await response.json();
-        
-        // 获取当前完整数据并更新其中一个提供商的数据
-        // 注意：这里为了保持页面一致性，我们重新获取一次完整数据（走缓存）来重新渲染
-        // 或者手动在当前 DOM 中更新该提供商的部分。
-        // 为了简单可靠，我们重新 loadUsage()，它会读取刚刚更新过的后端缓存
-        await loadUsage();
-
-        showToast(t('common.success'), t('common.refresh.success'), 'success');
-    } catch (error) {
-        console.error(`刷新提供商 ${providerType} 失败:`, error);
-        showToast(t('common.error'), t('common.refresh.failed') + ': ' + error.message, 'error');
-    } finally {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (refreshBtn) refreshBtn.disabled = false;
-    }
-}
-
-/**
- * 创建提供商分组容器
- * @param {string} providerType - 提供商类型
- * @param {Array} instances - 实例数组
- * @returns {HTMLElement} 分组容器元素
+ * 创建分组
  */
 function createProviderGroup(providerType, instances) {
-    const groupContainer = document.createElement('div');
-    groupContainer.className = 'usage-provider-group collapsed';
+    const group = document.createElement('div');
+    group.className = 'usage-provider-group collapsed';
+    group.setAttribute('data-provider', providerType);
     
-    const providerDisplayName = getProviderDisplayName(providerType);
-    const providerIcon = getProviderIcon(providerType);
-    const instanceCount = instances.length;
     const successCount = instances.filter(i => i.success).length;
-    
-    // 分组头部（可点击折叠）
-    const header = document.createElement('div');
-    header.className = 'usage-group-header';
-    header.innerHTML = `
-        <div class="usage-group-title">
-            <i class="fas fa-chevron-right toggle-icon"></i>
-            <i class="${providerIcon} provider-icon"></i>
-            <span class="provider-name">${providerDisplayName}</span>
-            <span class="instance-count" data-i18n="usage.group.instances" data-i18n-params='{"count":"${instanceCount}"}'>${t('usage.group.instances', { count: instanceCount })}</span>
-            <span class="success-count ${successCount === instanceCount ? 'all-success' : ''}" data-i18n="usage.group.success" data-i18n-params='{"count":"${successCount}","total":"${instanceCount}"}'>${t('usage.group.success', { count: successCount, total: instanceCount })}</span>
+    group.innerHTML = `
+        <div class="usage-group-header">
+            <div class="usage-group-title">
+                <i class="fas fa-chevron-right toggle-icon"></i>
+                <i class="${getProviderIcon(providerType)} provider-icon"></i>
+                <span class="provider-name">${getProviderDisplayName(providerType)}</span>
+                <span class="instance-count">${t('usage.group.instances', { count: instances.length })}</span>
+                <span class="success-count ${successCount === instances.length ? 'all-success' : ''}">${t('usage.group.success', { count: successCount, total: instances.length })}</span>
+            </div>
+            <div class="usage-group-actions">
+                <button class="btn-toggle-cards"><i class="fas fa-expand-alt"></i></button>
+            </div>
         </div>
-        <div class="usage-group-actions">
-            <button class="btn-toggle-cards" title="${t('usage.group.expandAll')}">
-                <i class="fas fa-expand-alt"></i>
-            </button>
-        </div>
+        <div class="usage-group-content"><div class="usage-cards-grid"></div></div>
     `;
     
-    // 点击头部切换分组折叠状态
-    const titleDiv = header.querySelector('.usage-group-title');
-    titleDiv.addEventListener('click', () => {
-        groupContainer.classList.toggle('collapsed');
-    });
+    group.querySelector('.usage-group-title').onclick = () => group.classList.toggle('collapsed');
     
-    groupContainer.appendChild(header);
-    
-    // 展开/折叠所有卡片按钮事件
-    const toggleCardsBtn = header.querySelector('.btn-toggle-cards');
-    toggleCardsBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // 阻止事件冒泡到分组头部
-        
-        const cards = groupContainer.querySelectorAll('.usage-instance-card');
+    const toggleBtn = group.querySelector('.btn-toggle-cards');
+    toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        const cards = group.querySelectorAll('.usage-instance-card');
         const allCollapsed = Array.from(cards).every(card => card.classList.contains('collapsed'));
-        
-        // 如果全部折叠，则全部展开；否则全部折叠
-        cards.forEach(card => {
-            if (allCollapsed) {
-                card.classList.remove('collapsed');
-            } else {
-                card.classList.add('collapsed');
-            }
-        });
-        
-        // 更新按钮图标和提示文本
-        const icon = toggleCardsBtn.querySelector('i');
-        if (allCollapsed) {
-            icon.className = 'fas fa-compress-alt';
-            toggleCardsBtn.title = t('usage.group.collapseAll');
-        } else {
-            icon.className = 'fas fa-expand-alt';
-            toggleCardsBtn.title = t('usage.group.expandAll');
-        }
-    });
+        cards.forEach(card => card.classList.toggle('collapsed', !allCollapsed));
+        const icon = toggleBtn.querySelector('i');
+        icon.className = allCollapsed ? 'fas fa-compress-alt' : 'fas fa-expand-alt';
+    };
     
-    // 分组内容（卡片网格）
-    const content = document.createElement('div');
-    content.className = 'usage-group-content';
-    
-    const gridContainer = document.createElement('div');
-    gridContainer.className = 'usage-cards-grid';
-    
-    for (const instance of instances) {
-        const instanceCard = createInstanceUsageCard(instance, providerType);
-        gridContainer.appendChild(instanceCard);
-    }
-    
-    content.appendChild(gridContainer);
-    groupContainer.appendChild(content);
-    
-    return groupContainer;
+    const grid = group.querySelector('.usage-cards-grid');
+    instances.forEach(inst => grid.appendChild(createInstanceUsageCard(inst, providerType)));
+
+    return group;
 }
 
 /**
- * 创建实例用量卡片
- * @param {Object} instance - 实例数据
- * @param {string} providerType - 提供商类型
- * @returns {HTMLElement} 卡片元素
+ * 创建实例卡片 (全面适配新结构)
  */
 function createInstanceUsageCard(instance, providerType) {
     const card = document.createElement('div');
     card.className = `usage-instance-card ${instance.success ? 'success' : 'error'} collapsed`;
+    card.setAttribute('data-uuid', instance.uuid);
 
-    const providerDisplayName = getProviderDisplayName(providerType);
-    const providerIcon = getProviderIcon(providerType);
+    const usage = instance.usage || {};
+    const summary = usage.summary || { usedPercent: 0, status: 'normal' };
+    const user = usage.user || {};
+    const displayName = user.email || instance.name || instance.uuid;
 
-    // 检查是否应该显示用量信息
-    const showUsage = shouldShowUsage(providerType);
+    // 使用后端返回的 planClass，如果缺失则兜底
+    const planClass = summary.planClass || 'plan-default';
 
-    // 计算总用量（用于折叠摘要显示）
-    const totalUsage = instance.usage ? calculateTotalUsage(instance.usage.usageBreakdown) : { hasData: false, percent: 0 };
-    const progressClass = totalUsage.percent >= 90 ? 'danger' : (totalUsage.percent >= 70 ? 'warning' : 'normal');
-
-    // 折叠摘要 - 两行显示
-    const collapsedSummary = document.createElement('div');
-    collapsedSummary.className = 'usage-card-collapsed-summary';
-    
-    const statusIcon = instance.success
-        ? '<i class="fas fa-check-circle status-success"></i>'
-        : '<i class="fas fa-times-circle status-error"></i>';
-    
-    // 显示名称：优先自定义名称，其次 uuid
-    const displayName = instance.name || instance.uuid;
-
-    const displayUsageText = totalUsage.isCodex 
-        ? `${totalUsage.percent.toFixed(1)}%`
-        : `${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}`;
-    
-    collapsedSummary.innerHTML = `
-        <div class="collapsed-summary-row collapsed-summary-name-row">
-            <i class="fas fa-chevron-right usage-toggle-icon"></i>
-            <span class="collapsed-name" title="${displayName} (${t('usage.clickToManage') || '点击管理此节点'})" 
-                  onclick="event.stopPropagation(); window.jumpToProviderNode('${providerType}', '${instance.uuid}', event)"
-                  style="cursor: pointer; transition: color 0.2s;">${displayName}</span>
-            ${statusIcon}
+    card.innerHTML = `
+        <div class="usage-card-collapsed-summary">
+            <div class="collapsed-summary-row collapsed-summary-name-row">
+                <i class="fas fa-chevron-right usage-toggle-icon"></i>
+                <span class="collapsed-name" title="${displayName} ${t('usage.clickToManage')}" onclick="event.stopPropagation(); window.jumpToProviderNode('${providerType}', '${instance.uuid}', event)">${displayName}</span>
+                ${summary.plan ? `<span class="collapsed-plan-badge ${planClass}">${summary.plan}</span>` : ''}
+                ${instance.success ? '<i class="fas fa-check-circle status-success"></i>' : '<i class="fas fa-times-circle status-error"></i>'}
+            </div>
+            ${instance.success ? `
+            <div class="collapsed-summary-row collapsed-summary-usage-row">
+                <div class="collapsed-progress-bar ${summary.status}"><div class="progress-fill" style="width: ${summary.usedPercent}%"></div></div>
+                <span class="collapsed-percent">
+                    ${summary.unit === 'percent' 
+                        ? `${summary.usedPercent.toFixed(1)}%` 
+                        : `${formatNumber(summary.totalUsed || 0)} / ${formatNumber(summary.totalLimit || 0)}`
+                    }
+                </span>
+            </div>
+            ` : (instance.error ? `<div class="collapsed-summary-row collapsed-summary-usage-row"><span class="collapsed-error">${t('common.error')}</span></div>` : '')}
         </div>
-        ${showUsage ? `
-        <div class="collapsed-summary-row collapsed-summary-usage-row">
-            ${totalUsage.hasData ? `
-                <div class="collapsed-progress-bar ${progressClass}">
-                    <div class="progress-fill" style="width: ${totalUsage.percent}%"></div>
+        <div class="usage-card-expanded-content">
+            <div class="usage-instance-header">
+                <div class="instance-header-top">
+                    <div class="instance-provider-type"><i class="${getProviderIcon(providerType)}"></i><span>${getProviderDisplayName(providerType)}</span></div>
+                    <div class="instance-status-badges">
+                        ${instance.configFilePath ? `<button class="btn-download-config" title="${t('usage.card.downloadConfig')}"><i class="fas fa-download"></i></button>` : ''}
+                        <button class="btn-refresh-usage" title="${t('usage.card.refresh')}"><i class="fas fa-sync-alt"></i></button>
+                        ${instance.isDisabled ? `<span class="badge badge-disabled">${t('usage.card.status.disabled')}</span>` : `<span class="badge ${instance.isHealthy ? 'badge-healthy' : 'badge-unhealthy'}">${t(instance.isHealthy ? 'usage.card.status.healthy' : 'usage.card.status.unhealthy')}</span>`}
+                    </div>
                 </div>
-                <span class="collapsed-percent">${totalUsage.percent.toFixed(1)}%</span>
-                <span class="collapsed-usage-text">${displayUsageText}</span>
-            ` : (instance.error ? `<span class="collapsed-error" data-i18n="common.error">${t('common.error')}</span>` : '')}
-        </div>
-        ` : ''}
-    `;
-    
-    // 点击折叠摘要切换展开状态
-    collapsedSummary.addEventListener('click', (e) => {
-        e.stopPropagation();
-        card.classList.toggle('collapsed');
-    });
-    
-    card.appendChild(collapsedSummary);
-
-    // 展开内容区域
-    const expandedContent = document.createElement('div');
-    expandedContent.className = 'usage-card-expanded-content';
-
-    // 实例头部 - 整合用户信息
-    const header = document.createElement('div');
-    header.className = 'usage-instance-header';
-    
-    const healthBadge = instance.isDisabled
-        ? `<span class="badge badge-disabled" data-i18n="usage.card.status.disabled">${t('usage.card.status.disabled')}</span>`
-        : (instance.isHealthy
-            ? `<span class="badge badge-healthy" data-i18n="usage.card.status.healthy">${t('usage.card.status.healthy')}</span>`
-            : `<span class="badge badge-unhealthy" data-i18n="usage.card.status.unhealthy">${t('usage.card.status.unhealthy')}</span>`);
-
-    // 下载按钮
-    const downloadBtnHTML = instance.configFilePath ? `
-        <button class="btn-download-config" title="${t('usage.card.downloadConfig') || '下载授权文件'}" data-path="${instance.configFilePath}">
-            <i class="fas fa-download"></i>
-        </button>
-    ` : '';
-
-    // 获取用户邮箱和订阅信息
-    const userEmail = instance.usage?.user?.email || '';
-    const subscriptionTitle = instance.usage?.subscription?.title || '';
-    
-    // 用户信息行
-    const userInfoHTML = userEmail ? `
-        <div class="instance-user-info">
-            <span class="user-email" title="${userEmail}"><i class="fas fa-envelope"></i> ${userEmail}</span>
-            ${subscriptionTitle ? `<span class="user-subscription">${subscriptionTitle}</span>` : ''}
-        </div>
-    ` : '';
-
-    header.innerHTML = `
-        <div class="instance-header-top">
-            <div class="instance-provider-type">
-                <i class="${providerIcon}"></i>
-                <span>${providerDisplayName}</span>
+                <div class="instance-name"><span class="instance-name-text" title="${displayName}">${displayName}</span></div>
+                <div class="instance-user-info">
+                    ${user.label ? `<span class="user-email"><i class="fas fa-envelope"></i> ${user.label}</span>` : ''}
+                </div>
             </div>
-            <div class="instance-status-badges">
-                ${downloadBtnHTML}
-                ${statusIcon}
-                ${healthBadge}
-            </div>
+            <div class="usage-instance-content"></div>
         </div>
-        <div class="instance-name">
-            <span class="instance-name-text" title="${instance.name || instance.uuid} (${t('usage.clickToManage') || '点击管理此节点'})" 
-                  onclick="window.jumpToProviderNode('${providerType}', '${instance.uuid}', event)"
-                  style="cursor: pointer; transition: color 0.2s;">${instance.name || instance.uuid}</span>
-        </div>
-        ${userInfoHTML}
     `;
+
+    card.querySelector('.usage-card-collapsed-summary').onclick = () => card.classList.toggle('collapsed');
     
-    // 添加下载按钮点击事件
     if (instance.configFilePath) {
-        const downloadBtn = header.querySelector('.btn-download-config');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                downloadConfigFile(instance.configFilePath);
-            });
-        }
+        card.querySelector('.btn-download-config').onclick = (e) => { e.stopPropagation(); downloadConfigFile(instance.configFilePath); };
     }
-
-    expandedContent.appendChild(header);
-
-    // 实例内容 - 只显示用量和到期时间
-    const content = document.createElement('div');
-    content.className = 'usage-instance-content';
-
-    if (instance.error) {
-        content.innerHTML = `
-            <div class="usage-error-message">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>${instance.error}</span>
-            </div>
-        `;
-    } else if (instance.usage) {
-        content.appendChild(renderUsageDetails(instance.usage, providerType));
-    }
-
-    expandedContent.appendChild(content);
-    card.appendChild(expandedContent);
     
+    card.querySelector('.btn-refresh-usage').onclick = (e) => { 
+        e.stopPropagation(); 
+        refreshSingleInstanceUsage(providerType, instance.uuid, displayName); 
+    };
+
+    const contentArea = card.querySelector('.usage-instance-content');
+    if (instance.error) {
+        contentArea.innerHTML = `<div class="usage-error-message"><i class="fas fa-exclamation-triangle"></i> <span>${instance.error}</span></div>`;
+    } else if (instance.usage) {
+        contentArea.appendChild(renderUsageDetails(instance.usage));
+    }
+
     return card;
 }
 
 /**
- * 渲染用量详情 - 显示总用量、用量明细和到期时间
- * @param {Object} usage - 用量数据
- * @param {string} providerType - 提供商类型
- * @returns {HTMLElement} 详情元素
+ * 渲染用量详情 (全面适配新结构)
  */
-function renderUsageDetails(usage, providerType) {
+function renderUsageDetails(usage) {
     const container = document.createElement('div');
     container.className = 'usage-details';
 
-    // 检查是否应该显示用量信息
-    const showUsage = shouldShowUsage(providerType);
+    const { summary, items } = usage;
     
-    // 计算总用量
-    const totalUsage = calculateTotalUsage(usage.usageBreakdown);
-    
-    // 总用量进度条（不支持显示用量的提供商不显示）
-    if (totalUsage.hasData && showUsage) {
-        const totalSection = document.createElement('div');
-        totalSection.className = 'usage-section total-usage';
-        
-        const progressClass = totalUsage.percent >= 90 ? 'danger' : (totalUsage.percent >= 70 ? 'warning' : 'normal');
-        
-        // 提取第一个有重置时间的条目（通常是总配额）
-        let resetTimeHTML = '';
-        if (totalUsage.isCodex && totalUsage.resetAfterSeconds !== undefined) {
-            const resetTimeText = formatTimeRemaining(totalUsage.resetAfterSeconds);
-            resetTimeHTML = `
-                <div class="total-reset-info" data-i18n="usage.resetInfo" data-i18n-params='{"time":"${resetTimeText}"}'>
-                    <i class="fas fa-history"></i> ${t('usage.resetInfo', { time: resetTimeText })}
-                </div>
-            `;
-        } else {
-            const resetTimeEntry = usage.usageBreakdown.find(b => b.resetTime && b.resetTime !== '--');
-            if (resetTimeEntry) {
-                const formattedResetTime = formatDate(resetTimeEntry.resetTime);
-                resetTimeHTML = `
-                    <div class="total-reset-info" data-i18n="usage.card.resetAt" data-i18n-params='{"time":"${formattedResetTime}"}'>
-                        <i class="fas fa-history"></i> ${t('usage.card.resetAt', { time: formattedResetTime })}
-                    </div>
-                `;
-            }
-        }
-
-        const displayValue = totalUsage.isCodex 
-            ? `${totalUsage.percent.toFixed(1)}%`
-            : `${formatNumber(totalUsage.used)} / ${formatNumber(totalUsage.limit)}`;
-
-        totalSection.innerHTML = `
+    if (summary?.usedPercent !== undefined) {
+        const total = document.createElement('div');
+        total.className = 'usage-section total-usage';
+        total.innerHTML = `
             <div class="total-usage-header">
-                <span class="total-label">
-                    <i class="fas fa-chart-pie"></i>
-                    <span data-i18n="usage.card.totalUsage">${t('usage.card.totalUsage')}</span>
-                </span>
-                <span class="total-value">${displayValue}</span>
+                <span class="total-label"><i class="fas fa-chart-pie"></i> <span>${t('usage.card.totalUsage')}</span></span>
+                <span class="total-value">${summary.usedPercent.toFixed(1)}%</span>
             </div>
-            <div class="progress-bar ${progressClass}">
-                <div class="progress-fill" style="width: ${totalUsage.percent}%"></div>
-            </div>
+            <div class="progress-bar ${summary.status}"><div class="progress-fill" style="width: ${summary.usedPercent}%"></div></div>
             <div class="total-footer">
-                <div class="total-percent">${totalUsage.percent.toFixed(2)}%</div>
-                ${resetTimeHTML}
+                ${summary.resetAt ? `<div class="total-reset-info"><i class="fas fa-history"></i> ${t('usage.card.resetAt', { time: formatDate(summary.resetAt) })}</div>` : ''}
             </div>
         `;
-        
-        container.appendChild(totalSection);
+        container.appendChild(total);
     }
 
-    // 用量明细（包含免费试用和奖励信息）
-    if (usage.usageBreakdown && usage.usageBreakdown.length > 0) {
-        const breakdownSection = document.createElement('div');
-        breakdownSection.className = 'usage-section usage-breakdown-compact';
-        
-        let breakdownHTML = '';
-        
-        for (const breakdown of usage.usageBreakdown) {
-            breakdownHTML += createUsageBreakdownHTML(breakdown, providerType);
-        }
-        
-        breakdownSection.innerHTML = breakdownHTML;
-        container.appendChild(breakdownSection);
+    if (items?.length > 0) {
+        const breakdown = document.createElement('div');
+        breakdown.className = 'usage-section usage-breakdown-compact';
+        items.forEach(item => {
+            const val = item.unit === 'percent' ? `${item.percent.toFixed(1)}%` : `${formatNumber(item.used)} / ${formatNumber(item.limit)}`;
+            const itemEl = document.createElement('div');
+            itemEl.className = 'breakdown-item-compact';
+            itemEl.innerHTML = `
+                <div class="breakdown-header-compact"><span class="breakdown-name">${item.label}</span><span class="breakdown-usage">${val}</span></div>
+                <div class="progress-bar-small ${item.status}"><div class="progress-fill" style="width: ${item.percent}%"></div></div>
+                ${item.resetAt ? `<div class="extra-usage-info reset-time"><i class="fas fa-history"></i> ${formatDate(item.resetAt)}</div>` : ''}
+            `;
+            breakdown.appendChild(itemEl);
+        });
+        container.appendChild(breakdown);
     }
 
     return container;
 }
 
-/**
- * 创建用量明细 HTML（紧凑版）
- * @param {Object} breakdown - 用量明细数据
- * @param {string} providerType - 提供商类型
- * @returns {string} HTML 字符串
- */
-function createUsageBreakdownHTML(breakdown, providerType) {
-    // 特殊处理 Codex
-    if (breakdown.rateLimit && breakdown.rateLimit.primary_window) {
-        return createCodexUsageBreakdownHTML(breakdown);
-    }
-
-    // 检查是否应该显示用量信息
-    const showUsage = shouldShowUsage(providerType);
-
-    // 优先使用 remainingPercent（antigravity 等提供商提供）
-    const hasRemainingPct = breakdown.remainingPercent !== undefined && breakdown.remainingPercent !== null;
-    const usagePercent = hasRemainingPct
-        ? (100 - breakdown.remainingPercent)
-        : (breakdown.usageLimit > 0
-            ? Math.min(100, (breakdown.currentUsage / breakdown.usageLimit) * 100)
-            : 0);
-    const remainingPercent = hasRemainingPct ? breakdown.remainingPercent : (100 - usagePercent);
-    const progressFillPercent = hasRemainingPct ? remainingPercent : usagePercent;
-    
-    const progressClass = remainingPercent <= 10 ? 'danger' : (remainingPercent <= 30 ? 'warning' : 'normal');
-
-    // 显示格式：如果有 remainingPercent，显示剩余百分比；否则显示已用/总量
-    let usageDisplay = '';
-    if (hasRemainingPct) {
-        usageDisplay = `<span class="breakdown-usage">${remainingPercent}%</span>`;
-    } else if (showUsage && breakdown.usageLimit > 0) {
-        usageDisplay = `<span class="breakdown-usage">${formatNumber(breakdown.currentUsage)} / ${formatNumber(breakdown.usageLimit)}</span>`;
-    }
-
-    let html = `
-        <div class="breakdown-item-compact">
-            <div class="breakdown-header-compact">
-                <span class="breakdown-name">${breakdown.displayName || breakdown.modelName || breakdown.resourceType}</span>
-                ${usageDisplay}
-            </div>
-            ${showUsage ? `
-            <div class="progress-bar-small ${progressClass}">
-                <div class="progress-fill" style="width: ${progressFillPercent}%"></div>
-            </div>
-            ` : ''}
-    `;
-
-    // 如果有重置时间，则显示
-    if (breakdown.resetTime && breakdown.resetTime !== '--') {
-        const formattedResetTime = formatDate(breakdown.resetTime);
-        const resetText = t('usage.card.resetAt', { time: formattedResetTime });
-        html += `
-            <div class="extra-usage-info reset-time">
-                <span class="extra-label">
-                    <i class="fas fa-history"></i> 
-                    <span data-i18n="usage.card.resetAt" data-i18n-params='${JSON.stringify({ time: formattedResetTime })}'>${resetText}</span>
-                </span>
-            </div>
-        `;
-    }
-
-    // 免费试用信息
-    if (breakdown.freeTrial && breakdown.freeTrial.status === 'ACTIVE') {
-        html += `
-            <div class="extra-usage-info free-trial">
-                <span class="extra-label"><i class="fas fa-gift"></i> <span data-i18n="usage.card.freeTrial">${t('usage.card.freeTrial')}</span></span>
-                <span class="extra-value">${formatNumber(breakdown.freeTrial.currentUsage)} / ${formatNumber(breakdown.freeTrial.usageLimit)}</span>
-                <span class="extra-expires" data-i18n="usage.card.expires" data-i18n-params='{"time":"${formatDate(breakdown.freeTrial.expiresAt)}"}'>${t('usage.card.expires', { time: formatDate(breakdown.freeTrial.expiresAt) })}</span>
-            </div>
-        `;
-    }
-
-    // 奖励信息
-    if (breakdown.bonuses && breakdown.bonuses.length > 0) {
-        for (const bonus of breakdown.bonuses) {
-            if (bonus.status === 'ACTIVE') {
-                html += `
-                    <div class="extra-usage-info bonus">
-                        <span class="extra-label"><i class="fas fa-star"></i> ${bonus.displayName || bonus.code}</span>
-                        <span class="extra-value">${formatNumber(bonus.currentUsage)} / ${formatNumber(bonus.usageLimit)}</span>
-                        <span class="extra-expires" data-i18n="usage.card.expires" data-i18n-params='{"time":"${formatDate(bonus.expiresAt)}"}'>${t('usage.card.expires', { time: formatDate(bonus.expiresAt) })}</span>
-                    </div>
-                `;
-            }
-        }
-    }
-
-    html += '</div>';
-    return html;
-}
-
-/**
- * 创建 Codex 专用的用量明细 HTML
- * @param {Object} breakdown - 包含 rateLimit 的用量明细
- * @returns {string} HTML 字符串
- */
-function createCodexUsageBreakdownHTML(breakdown) {
-    const rl = breakdown.rateLimit;
-    const secondary = rl.secondary_window;
-    
-    if (!secondary) return '';
-
-    const secondaryPercent = secondary.used_percent || 0;
-    const secondaryProgressClass = secondaryPercent >= 90 ? 'danger' : (secondaryPercent >= 70 ? 'warning' : 'normal');
-    const secondaryResetText = formatTimeRemaining(secondary.reset_after_seconds);
-
-    return `
-        <div class="breakdown-item-compact codex-usage-item">
-            <div class="breakdown-header-compact">
-                <span class="breakdown-name" data-i18n="usage.weeklyLimit"><i class="fas fa-calendar-alt"></i> ${t('usage.weeklyLimit')}</span>
-                <span class="breakdown-usage">${secondaryPercent}%</span>
-            </div>
-            <div class="progress-bar-small ${secondaryProgressClass}">
-                <div class="progress-fill" style="width: ${secondaryPercent}%"></div>
-            </div>
-            <div class="codex-reset-info" data-i18n="usage.resetInfo" data-i18n-params='{"time":"${secondaryResetText}"}'>
-                <i class="fas fa-history"></i> ${t('usage.resetInfo', { time: secondaryResetText })}
-            </div>
-        </div>
-    `;
-}
-
-/**
- * 格式化剩余时间
- * @param {number} seconds - 秒数
- * @returns {string} 格式化后的时间
- */
-function formatTimeRemaining(seconds) {
-    if (seconds <= 0) return t('usage.time.soon');
-    
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (days > 0) return t('usage.time.days', { days, hours });
-    if (hours > 0) return t('usage.time.hours', { hours, minutes });
-    return t('usage.time.minutes', { minutes });
-}
-
-/**
- * 计算总用量（包含基础用量、免费试用和奖励）
- * @param {Array} usageBreakdown - 用量明细数组
- * @returns {Object} 总用量信息
- */
-function calculateTotalUsage(usageBreakdown) {
-    if (!usageBreakdown || usageBreakdown.length === 0) {
-        return { hasData: false, used: 0, limit: 0, percent: 0 };
-    }
-
-    // 特殊处理 Codex
-    const codexEntry = usageBreakdown.find(b => b.rateLimit && b.rateLimit.secondary_window);
-    if (codexEntry) {
-        const secondary = codexEntry.rateLimit.secondary_window;
-        const secondaryPercent = secondary.used_percent || 0;
-        
-        // 只有当周限制达到 100% 时，总用量才显示 100%
-        // 否则按正常逻辑计算（或者这里可以理解为非 100% 时不改变原有的总用量逻辑，
-        // 但根据用户反馈，Codex 应该主要关注周限制）
-        // 重新审视需求：达到周限制时，总用量直接100%，重置时间设置为周限制时间
-        
-        if (secondaryPercent >= 100) {
-            return {
-                hasData: true,
-                used: 100,
-                limit: 100,
-                percent: 100,
-                isCodex: true,
-                resetAfterSeconds: secondary.reset_after_seconds
-            };
-        }
-        // 如果未达到 100%，则继续执行下面的常规计算逻辑
-    }
-
-    let totalUsed = 0;
-    let totalLimit = 0;
-
-    for (const breakdown of usageBreakdown) {
-        // 基础用量
-        totalUsed += breakdown.currentUsage || 0;
-        totalLimit += breakdown.usageLimit || 0;
-        
-        // 免费试用用量
-        if (breakdown.freeTrial && breakdown.freeTrial.status === 'ACTIVE') {
-            totalUsed += breakdown.freeTrial.currentUsage || 0;
-            totalLimit += breakdown.freeTrial.usageLimit || 0;
-        }
-        
-        // 奖励用量
-        if (breakdown.bonuses && breakdown.bonuses.length > 0) {
-            for (const bonus of breakdown.bonuses) {
-                if (bonus.status === 'ACTIVE') {
-                    totalUsed += bonus.currentUsage || 0;
-                    totalLimit += bonus.usageLimit || 0;
-                }
-            }
-        }
-    }
-
-    const percent = totalLimit > 0 ? Math.min(100, (totalUsed / totalLimit) * 100) : 0;
-
-    return {
-        hasData: true,
-        used: totalUsed,
-        limit: totalLimit,
-        percent: percent
-    };
-}
-
-/**
- * 获取提供商显示名称
- * @param {string} providerType - 提供商类型
- * @returns {string} 显示名称
- */
-function getProviderDisplayName(providerType) {
-    // 优先从外部传入的配置中获取名称
+function getProviderDisplayName(type) {
     if (currentProviderConfigs) {
-        const config = currentProviderConfigs.find(c => c.id === providerType);
-        if (config && config.name) {
-            return config.name;
-        }
+        const config = currentProviderConfigs.find(c => c.id === type);
+        if (config?.name) return config.name;
     }
-
-    const names = {
-        'claude-kiro-oauth': 'Claude Kiro OAuth',
-        'gemini-cli-oauth': 'Gemini CLI OAuth',
-        'gemini-antigravity': 'Gemini Antigravity',
-        'openai-codex-oauth': 'Codex OAuth',
-        'openai-qwen-oauth': 'Qwen OAuth',
-        'grok-web': 'Grok Web'
-    };
-    return names[providerType] || providerType;
+    const names = { 'claude-kiro-oauth': 'Claude Kiro', 'gemini-cli-oauth': 'Gemini CLI', 'gemini-antigravity': 'Antigravity', 'openai-codex-oauth': 'Codex', 'grok-web': 'Grok Web' };
+    return names[type] || type;
 }
 
-/**
- * 获取提供商图标
- * @param {string} providerType - 提供商类型
- * @returns {string} 图标类名
- */
-function getProviderIcon(providerType) {
-    // 优先从外部传入的配置中获取图标
+function getProviderIcon(type) {
     if (currentProviderConfigs) {
-        const config = currentProviderConfigs.find(c => c.id === providerType);
-        if (config && config.icon) {
-            // 如果 icon 已经包含 fa- 则直接使用，否则加上 fas
-            return config.icon.startsWith('fa-') ? `fas ${config.icon}` : config.icon;
-        }
+        const config = currentProviderConfigs.find(c => c.id === type);
+        if (config?.icon) return config.icon.startsWith('fa-') ? `fas ${config.icon}` : config.icon;
     }
-
-    const icons = {
-        'claude-kiro-oauth': 'fas fa-robot',
-        'gemini-cli-oauth': 'fas fa-gem',
-        'gemini-antigravity': 'fas fa-rocket',
-        'openai-codex-oauth': 'fas fa-terminal',
-        'openai-qwen-oauth': 'fas fa-code',
-        'grok-web': 'fas fa-brain'
-    };
-    return icons[providerType] || 'fas fa-server';
+    const icons = { 'claude-kiro-oauth': 'fas fa-robot', 'gemini-cli-oauth': 'fas fa-gem', 'gemini-antigravity': 'fas fa-rocket', 'openai-codex-oauth': 'fas fa-terminal', 'grok-web': 'fas fa-brain' };
+    return icons[type] || 'fas fa-server';
 }
 
-
-/**
- * 下载配置文件
- * @param {string} filePath - 文件路径
- */
-async function downloadConfigFile(filePath) {
-    if (!filePath) return;
-    
+async function downloadConfigFile(path) {
     try {
-        const fileName = filePath.split(/[/\\]/).pop();
-        const response = await fetch(`/api/upload-configs/download/${encodeURIComponent(filePath)}`, {
-            method: 'GET',
-            headers: getAuthHeaders()
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
+        const response = await fetch(`/api/upload-configs/download/${encodeURIComponent(path)}`, { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName;
+        a.download = path.split(/[/\\]/).pop();
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        
-        showToast(t('common.success'), t('usage.card.downloadSuccess') || '文件下载成功', 'success');
+        showToast(t('common.success'), t('usage.card.downloadSuccess'), 'success');
     } catch (error) {
-        console.error('下载配置文件失败:', error);
-        showToast(t('common.error'), (t('usage.card.downloadFailed') || '下载配置文件失败') + ': ' + error.message, 'error');
+        showToast(t('common.error'), t('usage.card.downloadFailed') + ': ' + error.message, 'error');
     }
 }
 
-/**
- * 格式化数字（向上取整保留两位小数）
- * @param {number} num - 数字
- * @returns {string} 格式化后的数字
- */
 function formatNumber(num) {
     if (num === null || num === undefined) return '0.00';
-    // 向上取整到两位小数
-    const rounded = Math.ceil(num * 100) / 100;
-    return rounded.toFixed(2);
+    return (Math.ceil(num * 100) / 100).toFixed(2);
 }
 
-/**
- * 格式化日期
- * @param {string} dateStr - ISO 日期字符串
- * @returns {string} 格式化后的日期
- */
-function formatDate(dateStr) {
-    if (!dateStr) return '--';
+function formatDate(str) {
+    if (!str) return '--';
     try {
-        const date = new Date(dateStr);
-        return date.toLocaleString(getCurrentLanguage(), {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        return new Date(str).toLocaleString(getCurrentLanguage(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     } catch (e) {
-        return dateStr;
+        return str;
     }
 }

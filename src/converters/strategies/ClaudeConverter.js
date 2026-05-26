@@ -3,39 +3,36 @@
  * 处理Claude（Anthropic）协议与其他协议之间的转换
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import logger from '../../utils/logger.js';
-import { BaseConverter } from '../BaseConverter.js';
+import {BaseConverter} from '../BaseConverter.js';
 import {
     checkAndAssignOrDefault,
-    cleanJsonSchemaProperties as cleanJsonSchema,
+    cleanJsonSchemaForOpenAI,
     determineReasoningEffortFromBudget,
+    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
+    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT,
     OPENAI_DEFAULT_MAX_TOKENS,
     OPENAI_DEFAULT_TEMPERATURE,
-    OPENAI_DEFAULT_TOP_P,
-    GEMINI_DEFAULT_MAX_TOKENS,
-    GEMINI_DEFAULT_TEMPERATURE,
-    GEMINI_DEFAULT_TOP_P,
-    GEMINI_DEFAULT_INPUT_TOKEN_LIMIT,
-    GEMINI_DEFAULT_OUTPUT_TOKEN_LIMIT
+    OPENAI_DEFAULT_TOP_P
 } from '../utils.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import {MODEL_PROTOCOL_PREFIX} from '../../utils/common.js';
 import {
-    generateResponseCreated,
-    generateResponseInProgress,
-    generateOutputItemAdded,
-    generateContentPartAdded,
-    generateOutputTextDone,
-    generateContentPartDone,
-    generateOutputItemDone,
-    generateResponseCompleted,
-    generateOutputTextDelta,
-    streamStateManager,
-    startToolCall,
     finishToolCall,
+    generateContentPartAdded,
+    generateContentPartDone,
     generateFunctionCallArgsDelta,
     generateFunctionCallArgsDone,
-    generateFunctionCallOutputItemDone
+    generateFunctionCallOutputItemDone,
+    generateOutputItemAdded,
+    generateOutputItemDone,
+    generateOutputTextDelta,
+    generateOutputTextDone,
+    generateResponseCompleted,
+    generateResponseCreated,
+    generateResponseInProgress,
+    startToolCall,
+    streamStateManager
 } from '../../providers/openai/openai-responses-core.mjs';
 
 /**
@@ -135,6 +132,13 @@ export class ClaudeConverter extends BaseConverter {
 
         // 处理消息
         if (claudeRequest.messages && Array.isArray(claudeRequest.messages)) {
+            // thinking 模式启用（enabled / adaptive）时，上游
+            // （DeepSeek / Kimi / SiliconFlow / iFlow / GLM-4.6 / MiniMax M2 等）
+            // 强制要求带 tool_calls 的 assistant 消息携带 reasoning_content 字段，缺失即 400。
+            // 字段存在即可，值可为空字符串（客户端历史未保留 thinking 块时的兜底）。
+            const thinkingType = claudeRequest.thinking && claudeRequest.thinking.type;
+            const thinkingEnabled = thinkingType === "enabled" || thinkingType === "adaptive";
+
             const tempOpenAIMessages = [];
             for (const msg of claudeRequest.messages) {
                 const role = msg.role;
@@ -166,37 +170,64 @@ export class ClaudeConverter extends BaseConverter {
                     }
                 }
 
+                // 抽取 assistant 消息中的 thinking 块作为 reasoning_content
+                let reasoningContent = '';
+                if (role === "assistant" && Array.isArray(msg.content)) {
+                    const reasoningParts = [];
+                    for (const block of msg.content) {
+                        if (block && typeof block === 'object' && block.type === 'thinking' && block.thinking) {
+                            reasoningParts.push(typeof block.thinking === 'string' ? block.thinking : String(block.thinking));
+                        }
+                    }
+                    if (reasoningParts.length > 0) {
+                        reasoningContent = reasoningParts.join('\n');
+                    }
+                }
+
                 // 处理assistant消息中的工具调用
                 if (role === "assistant" && Array.isArray(msg.content) && msg.content.length > 0) {
-                    const firstPart = msg.content[0];
-                    if (firstPart.type === "tool_use") {
-                        const funcName = firstPart.name || "";
-                        const funcArgs = firstPart.input || {};
-                        tempOpenAIMessages.push({
+                    const toolUsePart = msg.content.find(b => b && b.type === "tool_use");
+                    if (toolUsePart) {
+                        const funcName = toolUsePart.name || "";
+                        const funcArgs = toolUsePart.input || {};
+                        const toolCallMsg = {
                             role: "assistant",
                             content: '',
                             tool_calls: [
                                 {
-                                    id: firstPart.id || `call_${funcName}_1`,
+                                    id: toolUsePart.id || `call_${funcName}_1`,
                                     type: "function",
                                     function: {
                                         name: funcName,
                                         arguments: JSON.stringify(funcArgs)
                                     },
-                                    index: firstPart.index || 0
+                                    index: toolUsePart.index || 0
                                 }
                             ]
-                        });
+                        };
+                        // 带 tool_calls 的 assistant 消息：thinking 启用则强制携带 reasoning_content（空串兜底）
+                        if (thinkingEnabled || reasoningContent) {
+                            toolCallMsg.reasoning_content = reasoningContent;
+                        }
+                        tempOpenAIMessages.push(toolCallMsg);
                         continue;
                     }
                 }
 
                 // 普通文本消息
                 const contentConverted = this.processClaudeContentToOpenAIContent(msg.content || "");
-                if (contentConverted && (Array.isArray(contentConverted) ? contentConverted.length > 0 : contentConverted.trim().length > 0)) {
+                const hasContent = contentConverted && (Array.isArray(contentConverted) ? contentConverted.length > 0 : contentConverted.trim().length > 0);
+                if (hasContent) {
+                    const openaiMsg = { role: role, content: contentConverted };
+                    if (reasoningContent) {
+                        openaiMsg.reasoning_content = reasoningContent;
+                    }
+                    tempOpenAIMessages.push(openaiMsg);
+                } else if (reasoningContent) {
                     tempOpenAIMessages.push({
                         role: role,
-                        content: contentConverted
+                        content: '',
+                        reasoning_content: reasoningContent
                     });
                 }
             }
@@ -246,7 +277,7 @@ export class ClaudeConverter extends BaseConverter {
                     function: {
                         name: tool.name || "",
                         description: tool.description || "",
-                        parameters: cleanJsonSchema(tool.input_schema || {})
+                        parameters: cleanJsonSchemaForOpenAI(tool.input_schema || {})
                     }
                 });
             }
@@ -254,10 +285,23 @@ export class ClaudeConverter extends BaseConverter {
             openaiRequest.tool_choice = "auto";
         }
 
-        // 处理thinking转换
-        if (claudeRequest.thinking && claudeRequest.thinking.type === "enabled") {
+        // 处理thinking转换（enabled / adaptive 都映射为 OpenAI reasoning_effort）
+        const _thinkingType = claudeRequest.thinking && claudeRequest.thinking.type;
+        if (_thinkingType === "enabled" || _thinkingType === "adaptive") {
+            // adaptive 没有 budget_tokens，effort 来自 output_config.effort（high/medium/low/xhigh/max）
+            // enabled 则按 budget_tokens 推算
+            // OpenAI 兼容上游只接受 low/medium/high，需收敛 max/xhigh -> high
+            const effortFromConfig = claudeRequest.output_config && claudeRequest.output_config.effort;
             const budgetTokens = claudeRequest.thinking.budget_tokens;
-            const reasoningEffort = determineReasoningEffortFromBudget(budgetTokens);
+            let reasoningEffort = effortFromConfig
+                ? String(effortFromConfig).toLowerCase()
+                : determineReasoningEffortFromBudget(budgetTokens);
+            if (reasoningEffort === "max" || reasoningEffort === "xhigh") {
+                reasoningEffort = "high";
+            }
+            if (!["low", "medium", "high"].includes(reasoningEffort)) {
+                reasoningEffort = "high";
+            }
             openaiRequest.reasoning_effort = reasoningEffort;
 
             let maxCompletionTokens = null;

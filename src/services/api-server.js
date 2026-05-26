@@ -1,3 +1,4 @@
+import '../core/security-hardening.js';
 import logger from '../utils/logger.js';
 import * as http from 'http';
 import { initializeConfig, CONFIG } from '../core/config-manager.js';

@@ -130,7 +130,9 @@ function generateResponsePage(isSuccess, message) {
     const title = isSuccess ? '授权成功！' : '授权失败';
     const countdownHtml = isSuccess ? `
         <p>此窗口将在 <span id="countdown" style="font-weight: bold; color: #2196f3;">10</span> 秒后自动关闭。</p>
+        <p style="font-size: 12px; color: #999;">提示：您可以按 F12 查看详细日志。</p>
         <script>
+            console.log("Kiro OAuth Result:", ${JSON.stringify(message)});
             let countdown = 10;
             const timer = setInterval(() => {
                 countdown--;
@@ -238,27 +240,28 @@ async function handleKiroSocialAuth(provider, currentConfig, options = {}) {
     // 启动本地回调服务器并获取端口
     let handlerPort;
     const providerKey = 'claude-kiro-oauth';
+    const serverOptions = { ...options, socialProvider: provider };
+    
     if (options.port) {
         const port = parseInt(options.port);
         await closeKiroServer(providerKey, port);
-        const server = await createKiroHttpCallbackServer(port, codeVerifier, state, options);
+        const server = await createKiroHttpCallbackServer(port, codeVerifier, state, serverOptions);
         activeKiroServers.set(providerKey, { server, port });
         handlerPort = port;
     } else {
-        handlerPort = await startKiroCallbackServer(codeVerifier, state, options);
+        handlerPort = await startKiroCallbackServer(codeVerifier, state, serverOptions);
     }
     
     // 使用 HTTP localhost 作为 redirect_uri
-    const redirectUri = `http://127.0.0.1:${handlerPort}/oauth/callback`;
+    const redirectUri = `kiro://kiro.kiroAgent/authenticate-success`;
     
-    // 构建授权 URL
+    // 构建授权 URL (按照用户提供的逻辑修复)
     const authUrl = `${KIRO_OAUTH_CONFIG.authServiceEndpoint}/login?` +
         `idp=${provider}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `code_challenge=${codeChallenge}&` +
         `code_challenge_method=S256&` +
-        `state=${state}&` +
-        `prompt=select_account`;
+        `state=${state}`;
     
     return {
         authUrl,
@@ -498,58 +501,86 @@ function stopKiroPollingTask(taskId) {
  * 启动 Kiro 回调服务器（用于 Social Auth HTTP 回调）
  */
 async function startKiroCallbackServer(codeVerifier, expectedState, options = {}) {
+    const providerKey = 'claude-kiro-oauth';
     const portStart = KIRO_OAUTH_CONFIG.callbackPortStart;
     const portEnd = KIRO_OAUTH_CONFIG.callbackPortEnd;
     
+    // 启动前先尝试关闭该提供商已有的服务器
+    await closeKiroServer(providerKey);
+    
     for (let port = portStart; port <= portEnd; port++) {
-    // 关闭已存在的服务器
-    await closeKiroServer(port);
-    
-    try {
-        const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, options);
-        activeKiroServers.set('claude-kiro-oauth', { server, port });
-        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
-        return port;
-    } catch (err) {
-            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用，尝试下一个...`);
+        // 如果端口被本系统其他 OAuth 任务占用，也尝试关闭
+        await closeKiroServer(null, port);
+        
+        try {
+            const server = await createKiroHttpCallbackServer(port, codeVerifier, expectedState, { ...options, providerKey });
+            activeKiroServers.set(providerKey, { server, port });
+            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 回调服务器已启动于端口 ${port}`);
+            return port;
+        } catch (err) {
+            if (err.code === 'EADDRINUSE') {
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 端口 ${port} 被占用 (EADDRINUSE)，尝试下一个...`);
+            } else {
+                logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} 在端口 ${port} 启动服务器时出错: ${err.message}`);
+            }
+        }
     }
-    }
     
-    throw new Error('所有端口都被占用');
+    throw new Error('所有端口都被占用，无法启动回调服务器');
 }
 
 /**
  * 关闭 Kiro 服务器
  */
 async function closeKiroServer(provider, port = null) {
-    const existing = activeKiroServers.get(provider);
-    if (existing) {
-        try {
-            const closePromise = new Promise((resolve, reject) => {
-                existing.server.close((err) => {
-                    if (err) reject(err);
-                    else resolve();
+    if (provider) {
+        const existing = activeKiroServers.get(provider);
+        if (existing) {
+            try {
+                const serverPort = existing.port;
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 正在关闭提供商 ${provider} 在端口 ${serverPort} 上的服务器...`);
+                
+                // 强行关闭所有活跃连接 (Node.js 18.2+)
+                if (existing.server.closeAllConnections) {
+                    existing.server.closeAllConnections();
+                }
+
+                const closePromise = new Promise((resolve, reject) => {
+                    existing.server.close((err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
                 });
-            });
 
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Server close timeout after 2s')), 2000);
-            });
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('关闭超时 (2s)')), 2000);
+                });
 
-            await Promise.race([closePromise, timeoutPromise]);
-            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 已关闭提供商 ${provider} 在端口 ${existing.port} 上的旧服务器`);
-        } catch (error) {
-            logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} 关闭提供商 ${provider} 服务器失败或超时: ${error.message}`);
-        } finally {
-            activeKiroServers.delete(provider);
+                await Promise.race([closePromise, timeoutPromise]);
+                logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 已成功关闭提供商 ${provider} 在端口 ${serverPort} 上的旧服务器`);
+            } catch (error) {
+                logger.warn(`${KIRO_OAUTH_CONFIG.logPrefix} 关闭提供商 ${provider} 服务器时遇到问题 (可能已释放或正在关闭): ${error.message}`);
+            } finally {
+                // 只有当 Map 中还是这个实例时才删除 (双重检查)
+                const current = activeKiroServers.get(provider);
+                if (current && current.server === existing.server) {
+                    activeKiroServers.delete(provider);
+                }
+            }
         }
     }
 
     if (port) {
+        // 查找占用该端口的其他提供商并关闭
+        const providersToClose = [];
         for (const [p, info] of activeKiroServers.entries()) {
             if (info.port === port) {
-                await closeKiroServer(p);
+                providersToClose.push(p);
             }
+        }
+        
+        for (const p of providersToClose) {
+            await closeKiroServer(p);
         }
     }
 }
@@ -558,14 +589,15 @@ async function closeKiroServer(provider, port = null) {
  * 创建 Kiro HTTP 回调服务器
  */
 function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options = {}) {
-    const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
+    const redirectUri = `kiro://kiro.kiroAgent/authenticate-success`;
+    const providerKey = options.providerKey || 'claude-kiro-oauth';
     
     return new Promise((resolve, reject) => {
         const server = http.createServer(async (req, res) => {
             try {
                 const url = new URL(req.url, `http://127.0.0.1:${port}`);
                 
-                if (url.pathname === '/oauth/callback') {
+                if (url.pathname === '/oauth/callback' || url.pathname === '/authenticate-success') {
                     const code = url.searchParams.get('code');
                     const state = url.searchParams.get('state');
                     const errorParam = url.searchParams.get('error');
@@ -621,6 +653,7 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                         accessToken: tokenData.accessToken,
                         refreshToken: tokenData.refreshToken,
                         profileArn: tokenData.profileArn,
+                        socialProvider: options.socialProvider,
                         expiresAt: new Date(Date.now() + (tokenData.expiresIn || 3600) * 1000).toISOString(),
                         authMethod: 'social',
                         region: 'us-east-1'
@@ -650,7 +683,11 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
                     
                     // 关闭服务器
                     server.close(() => {
-                        activeKiroServers.delete('claude-kiro-oauth');
+                        const current = activeKiroServers.get(providerKey);
+                        if (current && current.server === server) {
+                            activeKiroServers.delete(providerKey);
+                            logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 服务器已正常关闭并从活跃列表移除`);
+                        }
                     });
                     
                 } else {
@@ -671,7 +708,11 @@ function createKiroHttpCallbackServer(port, codeVerifier, expectedState, options
         setTimeout(() => {
             if (server.listening) {
                 server.close(() => {
-                    activeKiroServers.delete('claude-kiro-oauth');
+                    const current = activeKiroServers.get(providerKey);
+                    if (current && current.server === server) {
+                        activeKiroServers.delete(providerKey);
+                        logger.info(`${KIRO_OAUTH_CONFIG.logPrefix} 服务器因超时关闭并从活跃列表移除`);
+                    }
                 });
             }
         }, KIRO_OAUTH_CONFIG.authTimeout);

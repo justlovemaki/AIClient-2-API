@@ -17,22 +17,6 @@ export class OpenAIApiService {
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_OPENAI ?? false;
         logger.info(`[OpenAI] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
 
-        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
-        const httpAgent = new http.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-        const httpsAgent = new https.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM);
-        
         const axiosConfig = {
             baseURL: this.baseUrl,
             headers: {
@@ -40,14 +24,6 @@ export class OpenAIApiService {
                 'Authorization': `Bearer ${this.apiKey}`
             },
         };
-        
-        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            // 配置自定义代理
-            configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM);
-        }
         
         this.axiosInstance = axios.create(axiosConfig);
     }

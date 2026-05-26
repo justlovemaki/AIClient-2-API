@@ -69,6 +69,7 @@ export function initPluginManager() {
     window.installPlugin = installPlugin;
     window.showPayment = showPayment;
     window.togglePlugin = togglePlugin;
+    window.uninstallPlugin = uninstallPlugin;
 }
 
 /**
@@ -171,7 +172,8 @@ function renderPluginsList() {
                     <h3>${plugin.name}</h3>
                     <span class="plugin-version">v${plugin.version}</span>
                 </div>
-                <div class="plugin-actions">
+                <div class="plugin-actions" style="display: flex; align-items: center; gap: 10px;">
+                    ${!plugin.isBuiltin ? `<button class="btn-uninstall-icon" title="卸载插件" onclick="window.uninstallPlugin('${plugin.name}')" style="background: none; border: none; color: var(--danger-color); cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;"><i class="fas fa-trash-alt"></i></button>` : ''}
                     <label class="toggle-switch">
                         <input type="checkbox" ${plugin.enabled ? 'checked' : ''} onchange="window.togglePlugin('${plugin.name}', this.checked)">
                         <span class="toggle-slider"></span>
@@ -245,7 +247,9 @@ function renderMarketList() {
     if (emptyEl) emptyEl.style.display = 'none';
     
     marketPluginsList.forEach(plugin => {
-        const isInstalled = pluginsList.some(p => p.name === plugin.id);
+        const installedPlugin = pluginsList.find(p => p.name === plugin.id);
+        const isInstalled = !!installedPlugin;
+        const hasUpdate = isInstalled && compareVersions(plugin.version, installedPlugin.version) > 0;
         const isIncompatible = plugin.minSystemVersion && compareVersions(currentSystemVersion, plugin.minSystemVersion) < 0;
         
         const card = document.createElement('div');
@@ -253,8 +257,14 @@ function renderMarketList() {
         card.id = `market-card-${plugin.id}`;
         
         let actionButton = '';
-        if (isInstalled) {
+        if (isInstalled && !hasUpdate) {
             actionButton = `<button class="btn btn-secondary btn-install" disabled><i class="fas fa-check"></i> ${t('plugins.market.installed') || '已安装'}</button>`;
+        } else if (hasUpdate) {
+            if (plugin.isPaid) {
+                actionButton = `<button class="btn btn-primary btn-install" style="background: var(--warning-color); border-color: var(--warning-color)" onclick="window.showPayment('${plugin.id}')"><i class="fas fa-sync-alt"></i> 更新到 v${plugin.version}</button>`;
+            } else {
+                actionButton = `<button class="btn btn-primary btn-install" onclick="window.installPlugin('${plugin.id}')"><i class="fas fa-sync-alt"></i> 更新到 v${plugin.version}</button>`;
+            }
         } else if (isIncompatible) {
             actionButton = `<button class="btn btn-secondary btn-install" disabled title="${t('plugins.market.versionIncompatible', { version: plugin.minSystemVersion })}"><i class="fas fa-exclamation-triangle"></i> ${t('plugins.market.incompatible') || '版本不兼容'}</button>`;
         } else if (plugin.isPaid) {
@@ -300,7 +310,19 @@ export function showPayment(pluginId) {
     document.getElementById('paymentTitle').textContent = `购买插件: ${plugin.name}`;
     document.getElementById('paymentPrice').textContent = plugin.price || '付费插件';
     document.getElementById('paymentDesc').textContent = plugin.description;
-    document.getElementById('paymentQR').src = plugin.qrCode || '';
+    
+    const paymentQREl = document.getElementById('paymentQR');
+    const paymentQRHintEl = document.getElementById('paymentQRHint');
+    if (plugin.qrCode) {
+        paymentQREl.src = plugin.qrCode;
+        paymentQREl.style.display = 'block';
+        if (paymentQRHintEl) paymentQRHintEl.style.display = 'block';
+    } else {
+        paymentQREl.src = '';
+        paymentQREl.style.display = 'none';
+        if (paymentQRHintEl) paymentQRHintEl.style.display = 'none';
+    }
+    
     document.getElementById('paymentLink').href = plugin.paymentUrl || '#';
     
     document.getElementById('paymentModal').classList.add('show');
@@ -387,10 +409,50 @@ export async function togglePlugin(pluginName, enabled) {
         });
         showToast(t('common.success'), t('plugins.toggle.success', { name: pluginName, status: enabled ? t('common.enabled') : t('common.disabled') }), 'success');
         loadPlugins();
+        if (typeof renderMarketList === 'function') {
+            renderMarketList();
+        } else {
+            loadMarketPlugins();
+        }
         showToast(t('common.info'), t('plugins.restart.required'), 'info');
     } catch (error) {
         console.error(`Failed to toggle plugin ${pluginName}:`, error);
         showToast(t('common.error'), t('plugins.toggle.failed'), 'error');
         loadPlugins();
+        if (typeof renderMarketList === 'function') {
+            renderMarketList();
+        } else {
+            loadMarketPlugins();
+        }
+    }
+}
+
+/**
+ * 卸载插件
+ */
+export async function uninstallPlugin(pluginName) {
+    const confirmed = confirm(`确定要卸载插件 "${pluginName}" 吗？\n警告：此操作将永久删除插件目录和所有配置，请提前备份插件数据！`);
+    if (!confirmed) return;
+
+    try {
+        const response = await apiRequest(`/api/plugins/${encodeURIComponent(pluginName)}`, {
+            method: 'DELETE'
+        });
+
+        if (response && response.success) {
+            showToast(t('common.success') || '成功', `插件 ${pluginName} 卸载成功`, 'success');
+            await loadPlugins();
+            if (typeof renderMarketList === 'function') {
+                renderMarketList();
+            } else {
+                loadMarketPlugins();
+            }
+            showToast(t('common.info') || '提示', '请重启服务以使更改生效', 'info');
+        } else {
+            throw new Error(response?.error?.message || '卸载失败');
+        }
+    } catch (error) {
+        console.error(`Failed to uninstall plugin ${pluginName}:`, error);
+        showToast(t('common.error') || '错误', '卸载失败: ' + error.message, 'error');
     }
 }

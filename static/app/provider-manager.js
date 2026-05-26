@@ -1616,7 +1616,7 @@ function showKiroAuthMethodSelector(providerType) {
             </div>
             <div class="modal-body">
                 <div class="auth-method-options" style="display: flex; flex-direction: column; gap: 12px;">
-                    <!-- <button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                    <button class="auth-method-btn" data-method="google" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fab fa-google" style="font-size: 24px; color: #4285f4;"></i>
                         <div style="text-align: left;">
                             <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.google">${t('oauth.kiro.google')}</div>
@@ -1629,7 +1629,7 @@ function showKiroAuthMethodSelector(providerType) {
                             <div style="font-weight: 600; color: #333;" data-i18n="oauth.kiro.github">${t('oauth.kiro.github')}</div>
                             <div style="font-size: 12px; color: #666;" data-i18n="oauth.kiro.githubDesc">${t('oauth.kiro.githubDesc')}</div>
                         </div>
-                    </button> -->
+                    </button>
                     <button class="auth-method-btn" data-method="builder-id" style="display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
                         <i class="fab fa-aws" style="font-size: 24px; color: #ff9900;"></i>
                         <div style="text-align: left;">
@@ -3291,6 +3291,11 @@ function showAuthModal(authUrl, authInfo) {
             <div class="auth-instructions">
                 <h4 data-i18n="oauth.modal.steps">${t('oauth.modal.steps')}</h4>
                 <p><strong data-i18n="oauth.kiro.authMethodLabel">${t('oauth.kiro.authMethodLabel')}</strong> ${methodDisplay}</p>
+                ${authInfo.authMethod !== 'builder-id' ? `
+                <div style="margin-bottom: 12px; padding: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 13px; color: #1e40af; line-height: 1.4;">
+                    <i class="fas fa-info-circle"></i> <span data-i18n-html="oauth.kiro.manualHint">${t('oauth.kiro.manualHint')}</span>
+                </div>
+                ` : ''}
                 <ol>
                     <li data-i18n="oauth.kiro.step1">${t('oauth.kiro.step1')}</li>
                     <li data-i18n="oauth.kiro.step2" data-i18n-params='{"method":"${methodAccount}"}'>${t('oauth.kiro.step2', { method: methodAccount })}</li>
@@ -3474,17 +3479,26 @@ function showAuthModal(authUrl, authInfo) {
     // 在浏览器中打开按钮
     const openBtn = modal.querySelector('.open-auth-btn');
     openBtn.addEventListener('click', () => {
-        // 使用子窗口打开，以便监听 URL 变化
-        const width = 600;
-        const height = 700;
-        const left = (window.screen.width - width) / 2 + 600;
-        const top = (window.screen.height - height) / 2;
-        
-        const authWindow = window.open(
-            authUrl,
-            'OAuthAuthWindow',
-            `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
-        );
+        // Kiro Google/GitHub 授权使用新标签页打开，并提示开启 F12
+        const isKiroSocial = authInfo.provider === 'claude-kiro-oauth' && authInfo.authMethod === 'social';
+        let authWindow;
+
+        if (isKiroSocial) {
+            authWindow = window.open(authUrl, '_blank');
+            showToast(t('common.info'), '已在新标签页打开授权，建议按 F12 开启开发者工具以查看过程日志', 'info');
+        } else {
+            // 使用子窗口打开，以便监听 URL 变化
+            const width = 600;
+            const height = 700;
+            const left = (window.screen.width - width) / 2 + 600;
+            const top = (window.screen.height - height) / 2;
+            
+            authWindow = window.open(
+                authUrl,
+                'OAuthAuthWindow',
+                `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+            );
+        }
 
         let pollTimer = null;
         const cleanupAuthListeners = () => {
@@ -3541,7 +3555,7 @@ function showAuthModal(authUrl, authInfo) {
                     <h4 style="color: #92400e; margin-bottom: 8px;"><i class="fas fa-exclamation-circle"></i> <span data-i18n="oauth.manual.title">${t('oauth.manual.title')}</span></h4>
                     <p style="font-size: 0.875rem; color: #b45309; margin-bottom: 10px;" data-i18n-html="oauth.manual.desc">${t('oauth.manual.desc')}</p>
                     <div class="auth-url-container" style="display: flex; gap: 5px;">
-                        <input type="text" class="manual-callback-input" data-i18n="oauth.manual.placeholder" placeholder="粘贴回调 URL (包含 code=...)" style="flex: 1; padding: 8px; border: 1px solid #fcd34d; border-radius: 4px; background: white; color: black;">
+                        <input type="text" class="manual-callback-input" data-i18n="oauth.manual.placeholder" placeholder="粘贴回调 URL (包含 code=...) 或 kiro:// 链接" style="flex: 1; padding: 8px; border: 1px solid #fcd34d; border-radius: 4px; background: white; color: black;">
                         <button class="btn btn-success apply-callback-btn" style="padding: 8px 15px; white-space: nowrap; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer;">
                             <i class="fas fa-check"></i> <span data-i18n="oauth.manual.submit">${t('oauth.manual.submit')}</span>
                         </button>
@@ -3557,8 +3571,20 @@ function showAuthModal(authUrl, authInfo) {
             // 处理回调 URL 的核心逻辑
             const processCallback = (urlStr, isManualInput = false) => {
                 try {
-                    // 尝试清理 URL（有些用户可能会复制多余的文字）
-                    const cleanUrlStr = urlStr.trim().match(/https?:\/\/[^\s]+/)?.[0] || urlStr.trim();
+                    // 尝试清理 URL（允许 kiro:// 协议）
+                    let cleanUrlStr = urlStr.trim();
+                    const match = cleanUrlStr.match(/(https?|kiro):\/\/[^\s]+/);
+                    if (match) {
+                        cleanUrlStr = match[0];
+                    }
+                    
+                    // 替换 kiro://kiro.kiroAgent 为本地 HTTP 地址
+                    if (cleanUrlStr.startsWith('kiro://kiro.kiroAgent')) {
+                        const localPort = authInfo.port || 19876;
+                        cleanUrlStr = cleanUrlStr.replace('kiro://kiro.kiroAgent', `http://localhost:${localPort}`);
+                        console.log('Detected Kiro deep link, converted to local HTTP:', cleanUrlStr);
+                    }
+
                     const url = new URL(cleanUrlStr);
                     
                     if (url.searchParams.has('code') || url.searchParams.has('token')) {

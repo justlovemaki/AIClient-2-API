@@ -3,7 +3,7 @@
     "id": "ip-node-proxy",
     "name": "IP 节点代理绑定",
     "version": "1.0.0",
-    "minSystemVersion": "3.0.6",
+    "minSystemVersion": "3.1.1",
     "isPaid": true,
     "price": "￥699",
     "description": "按客户端 IP 为指定提供商节点1对1绑定出站代理，实现精准的链路控制和 TLS 指纹伪装覆盖。",

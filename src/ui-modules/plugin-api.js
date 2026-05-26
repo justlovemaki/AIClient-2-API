@@ -49,8 +49,9 @@ export async function handleUploadPlugin(req, res) {
     return new Promise((resolve) => {
         pluginUpload.single('file')(req, res, async (err) => {
             if (err) {
+                logger.error('[UI API] Plugin upload validation failed:', err);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: err.message } }));
+                res.end(JSON.stringify({ error: { message: '插件上传失败' } }));
                 return resolve(true);
             }
 
@@ -77,7 +78,7 @@ export async function handleUploadPlugin(req, res) {
             } catch (error) {
                 logger.error('[UI API] Failed to upload plugin:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: '安装失败：' + error.message } }));
+                res.end(JSON.stringify({ error: { message: '插件安装失败' } }));
                 resolve(true);
             }
         });
@@ -140,7 +141,7 @@ export async function handleInstallPlugin(req, res) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             error: {
-                message: '安装失败：' + error.message
+                message: '插件安装失败'
             }
         }));
         return true;
@@ -192,6 +193,39 @@ export async function handleTogglePlugin(req, res, pluginName) {
         res.end(JSON.stringify({
             error: {
                 message: 'Failed to toggle plugin: ' + error.message
+            }
+        }));
+        return true;
+    }
+}
+
+/**
+ * 卸载插件
+ */
+export async function handleUninstallPlugin(req, res, pluginName) {
+    try {
+        const pluginManager = getPluginManager();
+        await pluginManager.uninstallPlugin(pluginName);
+
+        // 广播更新事件
+        broadcastEvent('plugin_update', {
+            action: 'uninstall',
+            pluginName,
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            message: `Plugin ${pluginName} uninstalled successfully`
+        }));
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Failed to uninstall plugin:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            error: {
+                message: 'Failed to uninstall plugin: ' + error.message
             }
         }));
         return true;

@@ -36,7 +36,7 @@
 
 .config-handoff-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1rem;
 }
 
@@ -57,6 +57,21 @@
 .config-handoff-item strong {
     font-size: 1rem;
     line-height: 1.45;
+}
+
+.config-handoff-password-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+#configHandoffChangePwdBtn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    height: auto;
+    line-height: 1.2;
 }
 
 .config-panel {
@@ -654,5 +669,10 @@ input:checked + .toggle-slider:before {
 
 [data-theme="dark"] .restart-instructions {
     background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .config-handoff-item {
+    background: rgba(0, 0, 0, 0.2);
     border-color: var(--border-color);
 }

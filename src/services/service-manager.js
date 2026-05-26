@@ -618,11 +618,15 @@ export async function getProviderStatus(config, options = {}) {
             .map(item => {
                 const slim = {};
                 for (const f of slimFields) {
-                    slim[f] = item.hasOwnProperty(f) ? item[f] : null;
+                    let val = item.hasOwnProperty(f) ? item[f] : null;
+                    if (f === 'uuid' && typeof val === 'string' && val.length > 8) {
+                        val = val.substring(0, 8) + '...' + val.substring(val.length - 4);
+                    }
+                    slim[f] = val;
                 }
                 // identify 字段
                 if (identifyField && item.hasOwnProperty(identifyField)) {
-                    let tmpCustomName = item.customName ? `${item.customName}` : (item.uuid || 'NoUUID');
+                    let tmpCustomName = item.customName ? `${item.customName}` : (slim.uuid || 'NoUUID');
                     let identifyStr = `${tmpCustomName}::${key}`;
                     slim.identify = identifyStr;
                 } else {

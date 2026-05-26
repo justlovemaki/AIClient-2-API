@@ -305,7 +305,7 @@ function getProviderTypeFields(providerType) {
                 id: 'KIRO_BASE_URL',
                 label: `${t('modal.provider.field.baseUrl')} <span class="optional-tag">${t('config.optional')}</span>`,
                 type: 'text',
-                placeholder: 'https://codewhisperer.{{region}}.amazonaws.com/generateAssistantResponse'
+                placeholder: 'https://q.{{region}}.amazonaws.com/generateAssistantResponse'
             },
             {
                 id: 'KIRO_REFRESH_URL',

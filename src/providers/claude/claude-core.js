@@ -32,22 +32,6 @@ export class ClaudeApiService {
      * @returns {object} Axios instance.
      */
     createClient() {
-        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
-        const httpAgent = new http.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-        const httpsAgent = new https.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
-        
         const axiosConfig = {
             baseURL: this.baseUrl,
             headers: {
@@ -56,14 +40,6 @@ export class ClaudeApiService {
                 'anthropic-version': '2023-06-01', // Claude API 版本
             },
         };
-
-        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            // 配置自定义代理
-            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
-        }
         
         return axios.create(axiosConfig);
     }

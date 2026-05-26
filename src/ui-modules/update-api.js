@@ -3,13 +3,15 @@ import { atomicWriteFile, withFileLock } from '../utils/file-lock.js';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { CONFIG } from '../core/config-manager.js';
 import { parseProxyUrl } from '../utils/proxy-utils.js';
 import { getRequestBody } from '../utils/common.js';
+import { isValidVersionTag } from '../utils/version-tag.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const GITHUB_REPO = 'justlovemaki/AIClient2API';
 
 function buildGitHubApiCandidates(repo) {
@@ -39,7 +41,8 @@ function buildGitHubApiCandidates(repo) {
 }
 
 function buildTarballCandidates(repo, tag) {
-    const githubTarballPath = `${repo}/archive/refs/tags/${tag}.tar.gz`;
+    const safeTag = encodeURIComponent(tag);
+    const githubTarballPath = `${repo}/archive/refs/tags/${safeTag}.tar.gz`;
     return [
         {
             name: 'gh-proxy.org',
@@ -183,7 +186,7 @@ async function getVersionsFromGitHub(limit = 10) {
             // 提取版本号并排序
             const versions = tags
                 .map(tag => tag.name)
-                .filter(name => /^v?\d+\.\d+/.test(name));
+                .filter(isValidVersionTag);
             
             if (versions.length === 0) {
                 logger.warn(`[Update] No valid version tags found via ${candidate.name}`);
@@ -265,7 +268,7 @@ export async function checkForUpdates() {
             try {
                 // 获取最近的 10 个 tag
                 const { stdout } = await execAsync('git tag --sort=-v:refname');
-                const tags = stdout.trim().split('\n').filter(t => t);
+                const tags = stdout.trim().split('\n').filter(isValidVersionTag);
                 if (tags.length > 0) {
                     availableVersions = tags.slice(0, 10);
                     latestTag = availableVersions[0];
@@ -317,6 +320,11 @@ export async function checkForUpdates() {
  * @returns {Promise<Object>} 更新结果
  */
 export async function performUpdate(targetTag = null) {
+    if (targetTag !== null) {
+        if (!isValidVersionTag(targetTag)) {
+            throw new Error('Invalid version tag format');
+        }
+    }
     // 首先检查是否有更新
     const updateInfo = await checkForUpdates();
     
@@ -327,6 +335,9 @@ export async function performUpdate(targetTag = null) {
     // 如果未提供 targetTag，使用最新版本
     const latestTag = updateInfo.latestVersion;
     const finalTag = targetTag || latestTag;
+    if (!isValidVersionTag(finalTag)) {
+        throw new Error('Invalid version tag format');
+    }
     
     // 如果是更新到最新版本，且当前已是最新版本
     if (!targetTag && !updateInfo.hasUpdate) {
@@ -374,7 +385,7 @@ export async function performUpdate(targetTag = null) {
     // 执行 checkout 到目标 tag
     try {
         logger.info(`[Update] Checking out to ${finalTag}...`);
-        await execAsync(`git checkout ${finalTag}`);
+        await execFileAsync('git', ['checkout', finalTag]);
     } catch (error) {
         logger.error('[Update] Failed to checkout:', error.message);
         throw new Error(`Failed to switch to version ${finalTag}: ` + error.message);
@@ -397,11 +408,15 @@ export async function performUpdate(targetTag = null) {
     try {
         // 确保本地版本号有 v 前缀，以匹配 git tag 格式
         const localVersionTag = updateInfo.localVersion.startsWith('v') ? updateInfo.localVersion : `v${updateInfo.localVersion}`;
-        const { stdout: diffOutput } = await execAsync(`git diff ${localVersionTag}..${finalTag} --name-only`);
-        if (diffOutput.includes('package.json') || diffOutput.includes('package-lock.json')) {
-            logger.info('[Update] package.json changed, running npm install...');
-            await execAsync('npm install');
-            needsRestart = true;
+        if (isValidVersionTag(localVersionTag) && isValidVersionTag(finalTag)) {
+            const { stdout: diffOutput } = await execFileAsync('git', ['diff', `${localVersionTag}..${finalTag}`, '--name-only']);
+            if (diffOutput.includes('package.json') || diffOutput.includes('package-lock.json')) {
+                logger.info('[Update] package.json changed, running npm install...');
+                await execAsync('npm install');
+                needsRestart = true;
+            }
+        } else {
+            logger.warn('[Update] Skipping package change check due to invalid version tag');
         }
     } catch (error) {
         logger.warn('[Update] Failed to check package changes:', error.message);
@@ -433,6 +448,11 @@ async function performTarballUpdate(localVersion, latestTag) {
     const appDir = process.cwd();
     const tempDir = path.join(appDir, '.update_temp');
     const tarballPath = path.join(tempDir, 'update.tar.gz');
+    
+    // 在 try 块外部声明变量，确保 catch 块可以访问并进行灾难恢复
+    const pluginsUserPath = path.join(appDir, 'src', 'plugins-user');
+    const pluginsUserBackupPath = path.join(tempDir, 'plugins-user_backup');
+    let hasPluginsUserBackup = false;
     
     logger.info(`[Update] Starting tarball update to ${latestTag}...`);
     
@@ -479,7 +499,7 @@ async function performTarballUpdate(localVersion, latestTag) {
         
         // 3. 解压 tarball
         logger.info('[Update] Extracting tarball...');
-        await execAsync(`tar -xzf "${tarballPath}" -C "${tempDir}"`);
+        await execFileAsync('tar', ['-xzf', tarballPath, '-C', tempDir]);
         
         // 4. 找到解压后的目录（格式通常是 repo-name-tag）
         const extractedItems = await fs.readdir(tempDir);
@@ -499,6 +519,13 @@ async function performTarballUpdate(localVersion, latestTag) {
             ? readFileSync(path.join(appDir, 'package.json'), 'utf-8')
             : null;
         
+        // 备份 src/plugins-user 目录（如果存在）
+        if (existsSync(pluginsUserPath)) {
+            logger.info(`[Update] Backing up plugins-user from ${pluginsUserPath} to ${pluginsUserBackupPath}...`);
+            await fs.rename(pluginsUserPath, pluginsUserBackupPath);
+            hasPluginsUserBackup = true;
+        }
+        
         // 5.5 在解压前删除 src/ 和 static/ 目录，确保旧代码被完全清除
         const dirsToClean = ['src', 'static'];
         for (const dirName of dirsToClean) {
@@ -516,7 +543,8 @@ async function performTarballUpdate(localVersion, latestTag) {
             'node_modules',      // 依赖目录
             '.update_temp',      // 临时更新目录
             'logs',              // 日志目录
-            'tls-sidecar'        // TLS Sidecar 目录
+            'tls-sidecar',        // TLS Sidecar 目录
+            'plugins-user'            // 根目录下的插件目录 (保持向后兼容)
         ];
         
         // 7. 复制新文件到应用目录
@@ -546,6 +574,19 @@ async function performTarballUpdate(localVersion, latestTag) {
             // 复制新文件/目录
             await copyRecursive(srcItemPath, destItemPath);
             logger.info(`[Update] Copied: ${item}`);
+        }
+        
+        // 7.5 恢复备份的 plugins-user 目录
+        if (hasPluginsUserBackup) {
+            const targetPluginsUserPath = path.join(appDir, 'src', 'plugins-user');
+            logger.info(`[Update] Restoring plugins-user to ${targetPluginsUserPath}...`);
+            if (existsSync(targetPluginsUserPath)) {
+                await fs.rm(targetPluginsUserPath, { recursive: true, force: true });
+            }
+            // 确保 src 目录存在（正常情况下已被拷贝出来，但以防万一）
+            await fs.mkdir(path.dirname(targetPluginsUserPath), { recursive: true });
+            await fs.rename(pluginsUserBackupPath, targetPluginsUserPath);
+            logger.info(`[Update] plugins-user restored successfully`);
         }
         
         // 8. 检查是否需要更新依赖
@@ -586,6 +627,23 @@ async function performTarballUpdate(localVersion, latestTag) {
         };
         
     } catch (error) {
+        // 灾难恢复：如果备份了 plugins-user 且升级失败，尝试将其移回原位
+        try {
+            if (hasPluginsUserBackup && existsSync(pluginsUserBackupPath)) {
+                const targetPluginsUserPath = path.join(appDir, 'src', 'plugins-user');
+                logger.info(`[Update] Update failed. Restoring plugins-user to original location for disaster recovery...`);
+                // 确保目标父目录 src 存在
+                await fs.mkdir(path.dirname(targetPluginsUserPath), { recursive: true });
+                if (existsSync(targetPluginsUserPath)) {
+                    await fs.rm(targetPluginsUserPath, { recursive: true, force: true });
+                }
+                await fs.rename(pluginsUserBackupPath, targetPluginsUserPath);
+                logger.info(`[Update] Disaster recovery: plugins-user restored successfully`);
+            }
+        } catch (restoreError) {
+            logger.error('[Update] Disaster recovery failed to restore plugins-user:', restoreError.message);
+        }
+
         // 清理临时目录
         try {
             if (existsSync(tempDir)) {

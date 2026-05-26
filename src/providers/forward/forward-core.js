@@ -27,38 +27,15 @@ export class ForwardApiService {
 
         logger.info(`[Forward] Base URL: ${this.baseUrl}, System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
 
-        const httpAgent = new http.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-        const httpsAgent = new https.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-
         const headers = {
             'Content-Type': 'application/json'
         };
         headers[this.headerName] = `${this.headerValuePrefix}${this.apiKey}`;
 
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
-        
         const axiosConfig = {
             baseURL: this.baseUrl,
             headers,
         };
-        
-        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            // 配置自定义代理
-            configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
-        }
         
         this.axiosInstance = axios.create(axiosConfig);
     }

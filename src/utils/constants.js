@@ -32,7 +32,9 @@ export const NETWORK = {
     // 最大端口号
     MAX_PORT: 65535,
     // 默认服务器端口
-    DEFAULT_PORT: 3000
+    DEFAULT_PORT: 3000,
+    // 默认超时时间（毫秒）
+    DEFAULT_TIMEOUT: 120000
 };
 
 // 请求重试相关常量

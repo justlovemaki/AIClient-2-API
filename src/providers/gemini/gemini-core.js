@@ -482,17 +482,39 @@ export class GeminiApiService {
 
             const loadResponse = await this.callApi('loadCodeAssist', loadRequest, false, 0, 'load-code-assist');
 
+            // 提取账号邮箱
+            if (loadResponse.manageSubscriptionUri) {
+                const uri = loadResponse.manageSubscriptionUri;
+                const emailMatch = uri.match(/Email=([^&]+)/);
+                if (emailMatch) {
+                    this.accountEmail = decodeURIComponent(emailMatch[1]);
+                    logger.info(`[Gemini] Extracted account email: ${this.accountEmail}`);
+                }
+            } else{
+                const res = await this.authClient.getTokenInfo(this.authClient.credentials.access_token);
+                if(res?.email){
+                    this.accountEmail = res.email;
+                    logger.info(`[Antigravity] Extracted account email from token info: ${this.accountEmail}`);
+                }
+            }
+
             // Check if we already have a project ID from the response
             if (loadResponse.cloudaicompanionProject) {
+                // 尝试从 allowedTiers 中获取当前 tierId，如果存在 paidTier 则优先使用 paidTier.id
+                const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
+                const baseTier = defaultTier?.id || 'free-tier';
+                this.tierId = loadResponse.paidTier?.name ? `${loadResponse.paidTier.name}(${baseTier.replace('-tier', '')})` : baseTier;
                 return loadResponse.cloudaicompanionProject;
             }
 
             // If no existing project, we need to onboard
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const tierId = defaultTier?.id || 'free-tier';
+            const baseTier = defaultTier?.id || 'free-tier';
+            const tierId = loadResponse.paidTier?.name ? `${loadResponse.paidTier.name}(${baseTier.replace('-tier', '')})` : baseTier;
+            this.tierId = tierId;
 
             const onboardRequest = {
-                tierId: tierId,
+                tierId: baseTier,
                 cloudaicompanionProject: initialProjectId,
                 metadata: clientMetadata,
             };
@@ -863,103 +885,39 @@ export class GeminiApiService {
     }
 
     /**
-     * 获取模型配额信息
-     * @returns {Promise<Object>} 模型配额信息
+     * 获取模型配额信息 (返回原始 API 数据)
+     * @returns {Promise<Object>} 原始配额信息
      */
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
         
-        // 注意：V2 架构下不再在 getUsageLimits 中同步刷新 token
-        // 如果 token 过期，PoolManager 后台会自动处理
-        // if (this.isExpiryDateNear()) {
-        //     logger.info('[Gemini] Token is near expiry, refreshing before getUsageLimits request...');
-        //     await this.initializeAuth(true);
-        // }
-
         try {
-            const modelsWithQuotas = await this.getModelsWithQuotas();
-            return modelsWithQuotas;
-        } catch (error) {
-            logger.error('[Gemini] Failed to get usage limits:', error.message);
-            throw error;
-        }
-    }
-
-    /**
-     * 获取带配额信息的模型列表
-     * @returns {Promise<Object>} 模型配额信息
-     */
-    async getModelsWithQuotas() {
-        try {
-            // 解析模型配额信息
-            const result = {
-                lastUpdated: Date.now(),
-                models: {}
+            const quotaURL = `${this.codeAssistEndpoint}/${this.apiVersion}:retrieveUserQuota`;
+            const requestBody = {
+                project: `${this.projectId}`
+            };
+            const requestOptions = {
+                url: quotaURL,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'json',
+                body: JSON.stringify(requestBody)
             };
 
-            // 调用 retrieveUserQuota 接口获取用户配额信息
-            try {
-                const quotaURL = `${this.codeAssistEndpoint}/${this.apiVersion}:retrieveUserQuota`;
-                const requestBody = {
-                    project: `${this.projectId}`
+            this._applySidecar(requestOptions);
+            const res = await this.authClient.request(requestOptions);
+            if (res.data) {
+                return {
+                    ...res.data,
+                    tierId: this.tierId,
+                    account: this.accountEmail
                 };
-                const requestOptions = {
-                    url: quotaURL,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    responseType: 'json',
-                    body: JSON.stringify(requestBody)
-                };
-
-                this._applySidecar(requestOptions);
-                const res = await this.authClient.request(requestOptions);
-                // logger.info(`[Gemini] retrieveUserQuota success`, JSON.stringify(res.data));
-                if (res.data && res.data.buckets) {
-                    const buckets = res.data.buckets;
-                    
-                    // 遍历 buckets 数组，提取配额信息
-                    for (const bucket of buckets) {
-                        const modelId = bucket.modelId;
-                        
-                        // 检查模型是否在支持的模型列表中
-                        if (!GEMINI_MODELS.includes(modelId)) continue;
-                        
-                        const modelInfo = {
-                            remaining: bucket.remainingFraction || 0,
-                            resetTime: bucket.resetTime || null,
-                            resetTimeRaw: bucket.resetTime
-                        };
-                        
-                        result.models[modelId] = modelInfo;
-                    }
-
-                    // 对模型按名称排序
-                    const sortedModels = {};
-                    Object.keys(result.models).sort().forEach(key => {
-                        sortedModels[key] = result.models[key];
-                    });
-                    result.models = sortedModels;
-                    // logger.info(`[Gemini] Sorted Models:`, sortedModels);
-                    logger.info(`[Gemini] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
-                }
-            } catch (fetchError) {
-                logger.error(`[Gemini] Failed to fetch user quota:`, fetchError.message);
-                
-                // 如果 retrieveUserQuota 失败，回退到使用固定模型列表
-                for (const modelId of GEMINI_MODELS) {
-                    result.models[modelId] = {
-                        remaining: 0,
-                        resetTime: null,
-                        resetTimeRaw: null
-                    };
-                }
             }
-
-            return result;
+            throw new Error('No data received from retrieveUserQuota');
         } catch (error) {
-            logger.error('[Gemini] Failed to get models with quotas:', error.message);
+            logger.error('[Gemini] Failed to get usage limits:', error.message);
             throw error;
         }
     }

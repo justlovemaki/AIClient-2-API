@@ -19,7 +19,7 @@ const OAUTH_PROVIDERS = {
         port: 8085,
         credentialsDir: '.gemini',
         credentialsFile: 'oauth_creds.json',
-        scope: ['https://www.googleapis.com/auth/cloud-platform'],
+        scope: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/userinfo.email'],
         logPrefix: '[Gemini Auth]'
     },
     'gemini-antigravity': {
@@ -28,7 +28,7 @@ const OAUTH_PROVIDERS = {
         port: 8086,
         credentialsDir: '.antigravity',
         credentialsFile: 'oauth_creds.json',
-        scope: ['https://www.googleapis.com/auth/cloud-platform'],
+        scope: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/userinfo.email'],
         logPrefix: '[Antigravity Auth]'
     }
 };

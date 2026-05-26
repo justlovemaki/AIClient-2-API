@@ -22,9 +22,6 @@ class Logger {
         this.currentLogFile = null;
         this.logStream = null;
         this.asyncStorage = new AsyncLocalStorage(); // 使用 AsyncLocalStorage 存储请求上下文
-        this.requestContext = new Map(); // 存储请求上下文
-        this.contextTTL = 5 * 60 * 1000; // 请求上下文 TTL：5 分钟
-        this._contextCleanupTimer = null;
         this.levels = {
             debug: 0,
             info: 1,
@@ -91,9 +88,8 @@ class Logger {
         if (!requestId) {
             requestId = randomUUID().substring(0, 8);
         }
-        this.requestContext.set(requestId, { _createdAt: Date.now() });
-        this._ensureContextCleanup();
-        return this.asyncStorage.run(requestId, callback);
+        // 直接存储对象，避免使用外部 Map 导致内存堆积
+        return this.asyncStorage.run({ requestId, _createdAt: Date.now() }, callback);
     }
 
     /**
@@ -105,9 +101,8 @@ class Logger {
         if (!requestId) {
             requestId = randomUUID().substring(0, 8);
         }
-        this.asyncStorage.enterWith(requestId);
-        this.requestContext.set(requestId, { ...context, _createdAt: Date.now() });
-        this._ensureContextCleanup();
+        const fullContext = { ...context, requestId, _createdAt: Date.now() };
+        this.asyncStorage.enterWith(fullContext);
         return requestId;
     }
 
@@ -116,63 +111,35 @@ class Logger {
      * @returns {string} 请求ID
      */
     getCurrentRequestId() {
-        // 从 AsyncLocalStorage 中获取当前请求ID
-        return this.asyncStorage.getStore();
+        const store = this.asyncStorage.getStore();
+        return typeof store === 'object' ? store.requestId : store;
     }
 
     /**
      * 获取当前请求上下文
-     * @param {string} requestId - 请求ID
+     * @param {string} requestId - 请求ID (已弃用，优先从当前异步环境获取)
      * @returns {Object} 上下文信息
      */
     getRequestContext(requestId) {
-        if (!requestId) {
-            requestId = this.getCurrentRequestId();
+        const store = this.asyncStorage.getStore();
+        if (typeof store === 'object') {
+            return store;
         }
-        return this.requestContext.get(requestId) || {};
+        return store ? { requestId: store } : {};
     }
 
     /**
-     * 清除请求上下文
-     * @param {string} requestId - 请求ID
+     * 清除请求上下文 (AsyncLocalStorage 会在异步操作结束时自动清除)
      */
-    clearRequestContext(requestId) {
-        if (requestId) {
-            this.requestContext.delete(requestId);
-        }
-        // AsyncLocalStorage 不需要手动清除，run() 会在结束时自动处理
-        // 如果使用了 enterWith，则没有简单的方法在该异步路径中清除
+    clearRequestContext() {
+        // 不需要手动清除
     }
 
 
     /**
-     * 启动定期清理过期请求上下文的定时器（防止内存泄漏）
-     * 每 60 秒扫描一次，清除超过 contextTTL 的条目
+     * 已弃用：AsyncLocalStorage 自动管理生命周期，不再需要手动清理
      */
     _ensureContextCleanup() {
-        if (this._contextCleanupTimer) return;
-        this._contextCleanupTimer = setInterval(() => {
-            const now = Date.now();
-            let cleaned = 0;
-            for (const [id, ctx] of this.requestContext) {
-                if (now - (ctx._createdAt || 0) > this.contextTTL) {
-                    this.requestContext.delete(id);
-                    cleaned++;
-                }
-            }
-            if (cleaned > 0) {
-                this.log('warn', [`[Logger] Cleaned ${cleaned} stale request context(s) (TTL: ${this.contextTTL}ms)`]);
-            }
-            // 当 Map 为空时停止定时器
-            if (this.requestContext.size === 0) {
-                clearInterval(this._contextCleanupTimer);
-                this._contextCleanupTimer = null;
-            }
-        }, 60_000);
-        // 不阻止进程退出
-        if (this._contextCleanupTimer.unref) {
-            this._contextCleanupTimer.unref();
-        }
     }
 
     /**
@@ -365,10 +332,6 @@ class Logger {
      * 关闭日志流
      */
     close() {
-        if (this._contextCleanupTimer) {
-            clearInterval(this._contextCleanupTimer);
-            this._contextCleanupTimer = null;
-        }
         if (this.logStream && !this.logStream.destroyed) {
             this.logStream.end();
             this.logStream = null;

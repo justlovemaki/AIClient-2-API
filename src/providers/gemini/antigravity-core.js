@@ -954,11 +954,33 @@ export class AntigravityApiService {
             };
 
             const loadResponse = await this.callApi('loadCodeAssist', loadRequest);
+            
+            // 提取账号邮箱
+            if (loadResponse.manageSubscriptionUri) {
+                const uri = loadResponse.manageSubscriptionUri;
+                const emailMatch = uri.match(/Email=([^&]+)/);
+                if (emailMatch) {
+                    this.accountEmail = decodeURIComponent(emailMatch[1]);
+                    logger.info(`[Antigravity] Extracted account email: ${this.accountEmail}`);
+                }
+            } else{
+                const res = await this.authClient.getTokenInfo(this.authClient.credentials.access_token);
+                if(res?.email){
+                    this.accountEmail = res.email;
+                    logger.info(`[Antigravity] Extracted account email from token info: ${this.accountEmail}`);
+                }
+            }
 
             // Check if we already have a project ID from the response
             if (loadResponse.cloudaicompanionProject) {
                 logger.info(`[Antigravity] Discovered existing Project ID: ${loadResponse.cloudaicompanionProject}`);
                 this.projectId = loadResponse.cloudaicompanionProject;
+                
+                // 尝试从 allowedTiers 中获取当前 tierId，如果存在 paidTier 则优先使用 paidTier.id
+                const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
+                const baseTier = defaultTier?.id || 'free-tier';
+                this.tierId = loadResponse.paidTier?.name ? `${loadResponse.paidTier.name}(${baseTier.replace('-tier', '')})` : baseTier;
+                
                 // 获取可用模型
                 await this.fetchAvailableModels();
                 return loadResponse.cloudaicompanionProject;
@@ -966,10 +988,12 @@ export class AntigravityApiService {
 
             // If no existing project, we need to onboard
             const defaultTier = loadResponse.allowedTiers?.find(tier => tier.isDefault);
-            const tierId = defaultTier?.id || 'free-tier';
+            const baseTier = defaultTier?.id || 'free-tier';
+            const tierId = loadResponse.paidTier?.name ? `${loadResponse.paidTier.name}(${baseTier.replace('-tier', '')})` : baseTier;
+            this.tierId = tierId;
 
             const onboardRequest = {
-                tierId: tierId,
+                tierId: baseTier,
                 cloudaicompanionProject: initialProjectId,
                 metadata: clientMetadata,
             };
@@ -1470,98 +1494,40 @@ export class AntigravityApiService {
     }
 
     /**
-     * 获取模型配额信息
-     * @returns {Promise<Object>} 模型配额信息
+     * 获取模型配额信息 (返回原始 API 数据)
+     * @returns {Promise<Object>} 原始配额信息
      */
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
         
-        try {
-            const modelsWithQuotas = await this.getModelsWithQuotas();
-            return modelsWithQuotas;
-        } catch (error) {
-            logger.error('[Antigravity] Failed to get usage limits:', error.message);
-            throw error;
-        }
-    }
+        for (const baseURL of this.baseURLs) {
+            try {
+                const modelsURL = `${baseURL}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
+                const requestOptions = {
+                    url: modelsURL,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': this.userAgent
+                    },
+                    responseType: 'json',
+                    body: JSON.stringify({ project: this.projectId })
+                };
 
-    /**
-     * 获取带配额信息的模型列表
-     * @returns {Promise<Object>} 模型配额信息
-     */
-    async getModelsWithQuotas() {
-        try {
-            // 解析模型配额信息
-            const result = {
-                lastUpdated: Date.now(),
-                models: {}
-            };
-
-            // 调用 fetchAvailableModels 接口获取模型和配额信息
-            for (const baseURL of this.baseURLs) {
-                try {
-                    const modelsURL = `${baseURL}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
-                    const requestOptions = {
-                        url: modelsURL,
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'User-Agent': this.userAgent
-                        },
-                        responseType: 'json',
-                        body: JSON.stringify({ project: this.projectId })
+                this._applySidecar(requestOptions);
+                const res = await this.authClient.request(requestOptions);
+                if (res.data) {
+                    return {
+                        ...res.data,
+                        tierId: this.tierId,
+                        account: this.accountEmail
                     };
-
-                    this._applySidecar(requestOptions);
-                    const res = await this.authClient.request(requestOptions);
-                    if (res.data) {
-                        if (res.data.models) {
-                            const modelsData = res.data.models;
-                            
-                            // 遍历模型数据，提取配额信息
-                            for (const [modelId, modelData] of Object.entries(modelsData)) {
-                                if (!modelId || (!ANTIGRAVITY_MODELS.includes(modelId) && !modelId.startsWith('claude-'))) {
-                                    continue;
-                                }
-
-                                const aliasName = modelId.startsWith('claude-') ? `gemini-${modelId}` : modelId;
-                                
-                                const modelInfo = {
-                                    remaining: 0,
-                                    resetTime: null,
-                                    resetTimeRaw: null
-                                };
-                                
-                                // 从 quotaInfo 中提取配额信息
-                                if (modelData.quotaInfo) {
-                                    modelInfo.remaining = modelData.quotaInfo.remainingFraction !== undefined ? modelData.quotaInfo.remainingFraction : (modelData.quotaInfo.remaining || 0);
-                                    modelInfo.resetTime = modelData.quotaInfo.resetTime || null;
-                                    modelInfo.resetTimeRaw = modelData.quotaInfo.resetTime;
-                                }
-                                
-                                result.models[aliasName] = modelInfo;
-                            }
-                        }
-
-                        // 对模型按名称排序
-                        const sortedModels = {};
-                        Object.keys(result.models).sort().forEach(key => {
-                            sortedModels[key] = result.models[key];
-                        });
-                        result.models = sortedModels;
-                        logger.info(`[Antigravity] Successfully fetched quotas for ${Object.keys(result.models).length} models`);
-                        break; // 成功获取后退出循环
-                    }
-                } catch (error) {
-                    logger.error(`[Antigravity] Failed to fetch models with quotas from ${baseURL}:`, error.message);
                 }
+            } catch (error) {
+                logger.error(`[Antigravity] Failed to fetch usage limits from ${baseURL}:`, error.message);
             }
-
-            return result;
-        } catch (error) {
-            logger.error('[Antigravity] Failed to get models with quotas:', error.message);
-            throw error;
         }
+        throw new Error('Failed to fetch usage limits from all endpoints');
     }
 
 }

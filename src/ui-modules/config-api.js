@@ -10,6 +10,7 @@ import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { HEALTH_CHECK, PASSWORD, NETWORK, RETRY } from '../utils/constants.js';
 import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
+import { validateCredentials } from './auth.js';
 
 function parseBooleanConfig(value) {
     if (typeof value === 'boolean') return value;
@@ -88,6 +89,8 @@ export async function handleGetConfig(req, res, currentConfig) {
         CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
         CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
         LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
+        TRUST_PROXY: currentConfig.TRUST_PROXY,
+        TRUSTED_PROXY_IPS: currentConfig.TRUSTED_PROXY_IPS,
         PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
         MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
         SYSTEM_PROMPT_REPLACEMENTS: currentConfig.SYSTEM_PROMPT_REPLACEMENTS,
@@ -113,6 +116,7 @@ export async function handleGetConfig(req, res, currentConfig) {
         // 脱敏：只返回是否设置了 API Key，不返回原文
         REQUIRED_API_KEY: currentConfig.REQUIRED_API_KEY ? '******' : '',
         systemPrompt,
+        isDefaultPassword: await validateCredentials('admin123'),
     };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(safeConfig));
@@ -206,6 +210,19 @@ async function _handleUpdateConfig(req, res, currentConfig, body) {
         if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
         if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
         if (newConfig.LOGIN_EXPIRY !== undefined) currentConfig.LOGIN_EXPIRY = newConfig.LOGIN_EXPIRY;
+        if (newConfig.TRUST_PROXY !== undefined) currentConfig.TRUST_PROXY = parseBooleanConfig(newConfig.TRUST_PROXY);
+        if (newConfig.TRUSTED_PROXY_IPS !== undefined) {
+            if (Array.isArray(newConfig.TRUSTED_PROXY_IPS)) {
+                currentConfig.TRUSTED_PROXY_IPS = newConfig.TRUSTED_PROXY_IPS
+                    .map(item => String(item).trim())
+                    .filter(Boolean);
+            } else if (typeof newConfig.TRUSTED_PROXY_IPS === 'string') {
+                currentConfig.TRUSTED_PROXY_IPS = newConfig.TRUSTED_PROXY_IPS
+                    .split(',')
+                    .map(item => item.trim())
+                    .filter(Boolean);
+            }
+        }
         if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
         if (newConfig.MAX_ERROR_COUNT !== undefined) currentConfig.MAX_ERROR_COUNT = newConfig.MAX_ERROR_COUNT;
         if (newConfig.WARMUP_TARGET !== undefined) currentConfig.WARMUP_TARGET = newConfig.WARMUP_TARGET;
@@ -343,6 +360,8 @@ async function _handleUpdateConfig(req, res, currentConfig, body) {
                 CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                 CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                 LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
+                TRUST_PROXY: currentConfig.TRUST_PROXY,
+                TRUSTED_PROXY_IPS: currentConfig.TRUSTED_PROXY_IPS,
                 PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
                 MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
                 WARMUP_TARGET: currentConfig.WARMUP_TARGET,

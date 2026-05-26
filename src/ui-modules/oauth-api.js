@@ -18,6 +18,7 @@ import {
  * 生成 OAuth 授权 URL
  */
 export async function handleGenerateAuthUrl(req, res, currentConfig, providerType) {
+    logger.info(`[UI API] Received request to generate auth URL for ${providerType}`);
     try {
         let authUrl = '';
         let authInfo = {};
@@ -26,8 +27,9 @@ export async function handleGenerateAuthUrl(req, res, currentConfig, providerTyp
         let options = {};
         try {
             options = await getRequestBody(req);
+            logger.debug(`[UI API] Parsed options for ${providerType}:`, JSON.stringify(options));
         } catch (e) {
-            // 如果没有请求体，使用默认空对象
+            logger.warn(`[UI API] Failed to parse request body for ${providerType}, using empty options`);
         }
 
         // 根据提供商类型生成授权链接并启动回调服务器
@@ -141,6 +143,7 @@ export async function handleManualOAuthCallback(req, res) {
         localUrl.protocol = 'http:';
 
         try {
+            console.log(`[OAuth Manual Callback] Sending request to local server: ${localUrl.href}`);
             const response = await fetch(localUrl.href);
 
             if (response.ok) {

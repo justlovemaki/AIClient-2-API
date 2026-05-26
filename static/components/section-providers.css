@@ -1775,3 +1775,8 @@
 [data-theme="dark"] .highlight-note i {
     color: var(--warning-color);
 }
+
+[data-theme="dark"] .providers-handoff-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: var(--border-color);
+}

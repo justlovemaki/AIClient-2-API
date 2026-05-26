@@ -178,6 +178,139 @@ export function extractAndProcessSystemMessages(messages, replacements = []) {
     return { systemInstruction, nonSystemMessages };
 }
 
+// JSON Schema 清理配置常量
+const GEMINI_ALLOWED_KEYS = [
+    "type",
+    "description",
+    "properties",
+    "required",
+    "enum",
+    "items",
+    "nullable"
+];
+
+const OPENAI_EXCLUDED_KEYS = ['$schema'];
+
+/**
+ * 规范化 type 字段值
+ * @param {string|Array} typeValue - type 字段的原始值
+ * @param {Function} caseTransform - 大小写转换函数 (toUpperCase 或 toLowerCase)
+ * @returns {string|undefined} 规范化后的 type 值
+ */
+function normalizeTypeField(typeValue, caseTransform) {
+    if (Array.isArray(typeValue)) {
+        const actualType = typeValue.find(t => t !== 'null');
+        return actualType ? caseTransform(actualType) : undefined;
+    }
+
+    if (typeof typeValue === 'string') {
+        return caseTransform(typeValue);
+    }
+
+    return undefined;
+}
+
+/**
+ * 递归清理 properties 对象
+ * @param {Object} properties - properties 对象
+ * @param {Function} cleanFn - 清理函数
+ * @returns {Object} 清理后的 properties
+ */
+function cleanPropertiesRecursively(properties, cleanFn) {
+    const cleaned = {};
+    for (const [propName, propSchema] of Object.entries(properties)) {
+        cleaned[propName] = cleanFn(propSchema);
+    }
+    return cleaned;
+}
+
+/**
+ * 处理 type 字段（Gemini 格式）
+ * @param {Object} sanitized - 目标对象
+ * @param {string|Array} typeValue - type 字段值
+ */
+function handleGeminiTypeField(sanitized, typeValue) {
+    if (Array.isArray(typeValue) && typeValue.includes('null')) {
+        sanitized.nullable = true;
+    }
+
+    const normalizedType = normalizeTypeField(typeValue, t => t.toUpperCase());
+    if (normalizedType) {
+        sanitized.type = normalizedType;
+    }
+}
+
+/**
+ * 处理 type 字段（OpenAI 格式）
+ * @param {Object} sanitized - 目标对象
+ * @param {string|Array} typeValue - type 字段值
+ */
+function handleOpenAITypeField(sanitized, typeValue) {
+    if (Array.isArray(typeValue)) {
+        sanitized.type = typeValue.map(t => t.toLowerCase());
+    } else if (typeof typeValue === 'string') {
+        sanitized.type = typeValue.toLowerCase();
+    }
+}
+
+/**
+ * 通用 JSON Schema 清理函数
+ * @param {Object} schema - JSON Schema
+ * @param {Object} options - 清理选项
+ * @param {Array} options.allowedKeys - 允许的键白名单（可选）
+ * @param {Array} options.excludedKeys - 排除的键黑名单（可选）
+ * @param {Function} options.typeHandler - type 字段处理函数
+ * @param {Function} recursiveFn - 递归调用的函数
+ * @returns {Object} 清理后的 JSON Schema
+ */
+function cleanJsonSchemaGeneric(schema, options, recursiveFn) {
+    if (!schema || typeof schema !== 'object') {
+        return schema;
+    }
+
+    if (Array.isArray(schema)) {
+        return schema.map(item => recursiveFn(item));
+    }
+
+    const { allowedKeys, excludedKeys, typeHandler } = options;
+    const sanitized = {};
+
+    for (const [key, value] of Object.entries(schema)) {
+        // 应用黑名单过滤
+        if (excludedKeys && excludedKeys.includes(key)) {
+            continue;
+        }
+
+        // 应用白名单过滤
+        if (allowedKeys && !allowedKeys.includes(key)) {
+            continue;
+        }
+
+        // 处理 properties
+        if (key === 'properties' && typeof value === 'object' && value !== null) {
+            sanitized[key] = cleanPropertiesRecursively(value, recursiveFn);
+            continue;
+        }
+
+        // 处理 items
+        if (key === 'items') {
+            sanitized[key] = recursiveFn(value);
+            continue;
+        }
+
+        // 处理 type
+        if (key === 'type') {
+            typeHandler(sanitized, value);
+            continue;
+        }
+
+        // 其他属性直接复制
+        sanitized[key] = value;
+    }
+
+    return sanitized;
+}
+
 /**
  * 清理JSON Schema属性（移除Gemini不支持的属性）
  * Google Gemini API 只支持有限的 JSON Schema 属性，不支持以下属性：
@@ -190,62 +323,32 @@ export function extractAndProcessSystemMessages(messages, replacements = []) {
  * @returns {Object} 清理后的JSON Schema
  */
 export function cleanJsonSchemaProperties(schema) {
-    if (!schema || typeof schema !== 'object') {
-        return schema;
-    }
+    return cleanJsonSchemaGeneric(
+        schema,
+        {
+            allowedKeys: GEMINI_ALLOWED_KEYS,
+            typeHandler: handleGeminiTypeField
+        },
+        cleanJsonSchemaProperties
+    );
+}
 
-    // 如果是数组，递归处理每个元素
-    if (Array.isArray(schema)) {
-        return schema.map(item => cleanJsonSchemaProperties(item));
-    }
-
-    // Gemini 支持的 JSON Schema 属性白名单
-    const allowedKeys = [
-        "type",
-        "description",
-        "properties",
-        "required",
-        "enum",
-        "items",
-        "nullable"
-    ];
-
-    const sanitized = {};
-    for (const [key, value] of Object.entries(schema)) {
-        if (allowedKeys.includes(key)) {
-            // 对于需要递归处理的属性
-            if (key === 'properties' && typeof value === 'object' && value !== null) {
-                const cleanProperties = {};
-                for (const [propName, propSchema] of Object.entries(value)) {
-                    cleanProperties[propName] = cleanJsonSchemaProperties(propSchema);
-                }
-                sanitized[key] = cleanProperties;
-            } else if (key === 'items') {
-                sanitized[key] = cleanJsonSchemaProperties(value);
-            } else if (key === 'type') {
-                // Google Gemini API 不支持数组形式的 type (如 ["string", "null"])
-                // 必须是单个字符串，且通常需要大写 (STRING, NUMBER, OBJECT, ARRAY, BOOLEAN, INTEGER)
-                if (Array.isArray(value)) {
-                    // 如果包含 null，设置 nullable 为 true
-                    if (value.includes('null')) {
-                        sanitized.nullable = true;
-                    }
-                    // 取第一个非 null 类型
-                    const actualType = value.find(t => t !== 'null');
-                    if (actualType) {
-                        sanitized[key] = actualType.toUpperCase();
-                    }
-                } else if (typeof value === 'string') {
-                    sanitized[key] = value.toUpperCase();
-                }
-            } else {
-                sanitized[key] = value;
-            }
-        }
-        // 其他属性（如 exclusiveMinimum, minimum, maximum, pattern 等）被忽略
-    }
-
-    return sanitized;
+/**
+ * 清理JSON Schema属性（用于OpenAI格式）
+ * OpenAI API 要求标准的 JSON Schema 格式，type 字段必须是小写
+ * 移除不必要的属性：$schema, additionalProperties 等
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} 清理后的JSON Schema
+ */
+export function cleanJsonSchemaForOpenAI(schema) {
+    return cleanJsonSchemaGeneric(
+        schema,
+        {
+            excludedKeys: OPENAI_EXCLUDED_KEYS,
+            typeHandler: handleOpenAITypeField
+        },
+        cleanJsonSchemaForOpenAI
+    );
 }
 
 /**

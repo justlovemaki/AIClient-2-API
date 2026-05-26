@@ -35,11 +35,12 @@ const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
     REFRESH_IDC_URL: 'https://oidc.{{region}}.amazonaws.com/token',
     BASE_URL: 'https://q.{{region}}.amazonaws.com/generateAssistantResponse',
+    BASE_RUNTIME_URL: 'https://q.{{region}}.amazonaws.com/generateAssistantResponse',
     DEFAULT_MODEL_NAME: 'claude-sonnet-4-5',
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout for normal requests
     TOKEN_REFRESH_TIMEOUT: 15000, // 15 seconds timeout for token refresh (shorter to avoid blocking)
     USER_AGENT: 'KiroIDE',
-    KIRO_VERSION: '0.11.63',
+    KIRO_VERSION: '0.11.63', //升级到新版本会导致aws用不了，需要找新接口
     CONTENT_TYPE_JSON: 'application/json',
     ACCEPT_JSON: 'application/json',
     AUTH_METHOD_SOCIAL: 'social',
@@ -593,22 +594,6 @@ export class KiroApiService {
         const kiroVersion = KIRO_CONSTANTS.KIRO_VERSION;
         const { osName, nodeVersion } = getSystemRuntimeInfo();
 
-        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
-        const httpAgent = new http.Agent({
-            keepAlive: true,
-            maxSockets: 100,        // 每个主机最多 100 个连接
-            maxFreeSockets: 5,     // 最多保留 5 个空闲连接
-            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
-        });
-        const httpsAgent = new https.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
-        });
-        
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
-        
         const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
             headers: {
@@ -623,14 +608,6 @@ export class KiroApiService {
                 'Connection': 'close'
             },
         };
-
-        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            // 配置自定义代理
-            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
-        }
         
         this.axiosInstance = axios.create(axiosConfig);
 
@@ -752,9 +729,18 @@ async loadCredentials() {
             this.idcRegion = this.region;
         }
 
+        const hasIdcClientCredentials = !!(this.clientId && this.clientSecret);
+        const isSocialAuth = this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL ||
+            (!this.authMethod && !hasIdcClientCredentials);
+
+        let defaultBaseUrl = KIRO_CONSTANTS.BASE_URL;
+        if (isSocialAuth) {
+            defaultBaseUrl = KIRO_CONSTANTS.BASE_RUNTIME_URL;
+        }
+
         this.refreshUrl = (this.config.KIRO_REFRESH_URL || KIRO_CONSTANTS.REFRESH_URL).replace("{{region}}", this.region);
         this.refreshIDCUrl = (this.config.KIRO_REFRESH_IDC_URL || KIRO_CONSTANTS.REFRESH_IDC_URL).replace("{{region}}", this.idcRegion);
-        this.baseUrl = (this.config.KIRO_BASE_URL || KIRO_CONSTANTS.BASE_URL).replace("{{region}}", this.region);
+        this.baseUrl = (this.config.KIRO_BASE_URL || defaultBaseUrl).replace("{{region}}", this.region);
     } catch (error) {
         logger.warn(`[Kiro Auth] Error during credential loading: ${error.message}`);
     }

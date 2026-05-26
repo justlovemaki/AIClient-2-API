@@ -16,24 +16,7 @@ export class OpenAIResponsesApiService {
         this.baseUrl = config.OPENAI_BASE_URL || 'https://api.openai.com/v1';
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_OPENAI ?? false;
         logger.info(`[OpenAIResponses] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
-
-        // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
-        const httpAgent = new http.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-        const httpsAgent = new https.Agent({
-            keepAlive: true,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-            timeout: 120000,
-        });
-
-        // 检查是否启用了 TLS Sidecar
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
-
+        
         const axiosConfig = {
             baseURL: this.baseUrl,
             headers: {
@@ -41,14 +24,6 @@ export class OpenAIResponsesApiService {
                 'Authorization': `Bearer ${this.apiKey}`
             }
         };
-
-        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
-        if (!isTLSSidecarEnabled) {
-            axiosConfig.httpAgent = httpAgent;
-            axiosConfig.httpsAgent = httpsAgent;
-            // 配置自定义代理 (使用 openai-custom 的代理配置)
-            configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
-        }
 
         this.axiosInstance = axios.create(axiosConfig);
 
