@@ -925,6 +925,35 @@ async saveCredentialsToFile(filePath, newData) {
         return getContentTextUtil(message);
     }
 
+    _extractTextAndImagesFromContent(content) {
+        const result = { text: '', images: [] };
+        if (Array.isArray(content)) {
+            for (const part of content) {
+                if (part.type === 'text') {
+                    result.text += part.text || '';
+                } else if (part.type === 'image' && part.source?.data) {
+                    result.images.push({
+                        format: part.source.media_type.split('/')[1],
+                        source: { bytes: part.source.data }
+                    });
+                } else if (part.type === 'image_url' && part.image_url) {
+                    const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
+                    if (imageUrl && imageUrl.startsWith('data:')) {
+                        const [header, data] = imageUrl.split(',');
+                        const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
+                        result.images.push({
+                            format: mediaType.split('/')[1] || 'jpeg',
+                            source: { bytes: data }
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+        result.text = getContentTextUtil({ content });
+        return result;
+    }
+
     /**
      * 清洗 tool_use 的 input 对象，移除空字符串 key 等不合法字段
      * Kiro API 不接受空字符串 key 的 JSON 对象（如 {"": "value"}）
@@ -1257,35 +1286,16 @@ async saveCredentialsToFile(filePath, newData) {
             if (processedMessages[0].role === 'user' && processedMessages.length === 1) {
                 prependSystemToCurrentMessage = true;
             } else if (processedMessages[0].role === 'user') {
-                let firstUserContent = this.getContentText(processedMessages[0]);
-                // 提取第一条 user 消息里的图片
-                let firstUserImages = [];
-                if (Array.isArray(processedMessages[0].content)) {
-                    for (const part of processedMessages[0].content) {
-                        if (part.type === 'image' && part.source?.data) {
-                            firstUserImages.push({
-                                format: part.source.media_type.split('/')[1],
-                                source: { bytes: part.source.data }
-                            });
-                        } else if (part.type === 'image_url' && part.image_url) {
-                            const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
-                            if (imageUrl && imageUrl.startsWith('data:')) {
-                                const [header, data] = imageUrl.split(',');
-                                const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
-                                firstUserImages.push({ format: mediaType.split('/')[1] || 'jpeg', source: { bytes: data } });
-                            }
-                        }
-                    }
-                }
+                const firstUserPayload = this._extractTextAndImagesFromContent(processedMessages[0].content);
                 const firstHistoryMsg = {
                     userInputMessage: {
-                        content: `${systemPrompt}\n\n${firstUserContent}`,
+                        content: `${systemPrompt}\n\n${firstUserPayload.text}`,
                         modelId: codewhispererModel,
                         origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
                     }
                 };
-                if (firstUserImages.length > 0) {
-                    firstHistoryMsg.userInputMessage.images = firstUserImages;
+                if (firstUserPayload.images.length > 0) {
+                    firstHistoryMsg.userInputMessage.images = firstUserPayload.images;
                 }
                 history.push(firstHistoryMsg);
                 startIndex = 1; // Start processing from the second message
