@@ -13,6 +13,10 @@ import {
     importAwsCredentials,
     batchImportGrokTokensStream
 } from '../auth/oauth-handlers.js';
+import { normalizeCodexExternalCredentials } from '../auth/codex-import-normalizer.js';
+
+const CODEX_EXTERNAL_IMPORT_BODY_LIMIT_BYTES = 5 * 1024 * 1024;
+const CODEX_EXTERNAL_IMPORT_MAX_ITEMS = 1000;
 
 /**
  * 生成 OAuth 授权 URL
@@ -418,6 +422,104 @@ export async function handleBatchImportCodexTokens(req, res) {
             res.end();
         } else {
             res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
+            }));
+        }
+        return true;
+    }
+}
+
+/**
+ * 导入 Codex 外部凭据格式（CPA / sub2api，带实时进度 SSE）
+ */
+export async function handleImportCodexExternalCredentials(req, res) {
+    try {
+        const body = await getRequestBody(req, { maxBytes: CODEX_EXTERNAL_IMPORT_BODY_LIMIT_BYTES });
+        const { source, payload, skipDuplicateCheck } = body;
+
+        if (!['cpa', 'sub2api'].includes(source) || payload === undefined) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: 'source must be cpa or sub2api, and payload is required'
+            }));
+            return true;
+        }
+
+        const tokens = normalizeCodexExternalCredentials(source, payload);
+        if (!Array.isArray(tokens) || tokens.length === 0) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: 'No credentials found in payload'
+            }));
+            return true;
+        }
+
+        if (tokens.length > CODEX_EXTERNAL_IMPORT_MAX_ITEMS) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: `Too many credentials. Maximum is ${CODEX_EXTERNAL_IMPORT_MAX_ITEMS}`
+            }));
+            return true;
+        }
+
+        logger.info(`[Codex External Import] Starting ${source} import with ${tokens.length} item(s)...`);
+
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+
+        const sendSSE = (event, data) => {
+            res.write(`event: ${event}\n`);
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+
+        sendSSE('start', {
+            source,
+            total: tokens.length,
+            accessTokenOnlyCount: tokens.filter(token => token.access_token_only).length
+        });
+
+        const result = await batchImportCodexTokensStream(
+            tokens,
+            (progress) => {
+                sendSSE('progress', {
+                    ...progress,
+                    source
+                });
+            },
+            !!skipDuplicateCheck
+        );
+
+        logger.info(`[Codex External Import] Completed ${source}: ${result.success} success, ${result.failed} failed`);
+
+        sendSSE('complete', {
+            success: true,
+            source,
+            total: result.total,
+            successCount: result.success,
+            failedCount: result.failed,
+            accessTokenOnlyCount: tokens.filter(token => token.access_token_only).length,
+            details: result.details
+        });
+
+        res.end();
+        return true;
+    } catch (error) {
+        logger.error('[Codex External Import] Error:', error);
+        if (res.headersSent) {
+            res.write(`event: error\n`);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        } else {
+            res.writeHead(error.statusCode || 500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
                 error: error.message
