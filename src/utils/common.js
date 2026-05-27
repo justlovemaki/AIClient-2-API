@@ -546,11 +546,25 @@ export function getRequestBody(req, options = {}) {
         let body = '';
         let receivedBytes = 0;
         let settled = false;
-        const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : null;
+        const DEFAULT_MAX_BYTES = 10 * 1024 * 1024; // Default 10MB limit
+        const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : DEFAULT_MAX_BYTES;
+
+        // 1. Quick check Content-Length header
+        const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+        if (!isNaN(contentLength) && contentLength > maxBytes) {
+            req.resume(); // drain & discard
+            const error = new Error(`Request body too large. Maximum size is ${maxBytes} bytes.`);
+            error.statusCode = 413;
+            error.code = 'BODY_TOO_LARGE';
+            return reject(error);
+        }
 
         const fail = (error) => {
             if (settled) return;
             settled = true;
+            if (typeof req.destroy === 'function') {
+                req.destroy();
+            }
             reject(error);
         };
 

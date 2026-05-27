@@ -1,7 +1,7 @@
 import deepmerge from 'deepmerge';
 import logger from '../utils/logger.js';
 import requestContext from '../utils/context.js';
-import { handleError, getClientIp } from '../utils/common.js';
+import { handleError, getClientIp, getRequestBody } from '../utils/common.js';
 import { handleUIApiRequests, serveStaticFiles } from '../services/ui-manager.js';
 import { isUIPath, isUIApiPath } from '../utils/ui-utils.js';
 import { handleAPIRequests } from '../services/api-manager.js';
@@ -20,24 +20,6 @@ import { handleGrokAssetsProxy } from '../utils/grok-assets-proxy.js';
  */
 function generateRequestId() {
     return randomUUID().slice(0, 8);
-}
-
-/**
- * Parse request body as JSON
- */
-function parseRequestBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                resolve(body ? JSON.parse(body) : {});
-            } catch (e) {
-                reject(new Error('Invalid JSON in request body'));
-            }
-        });
-        req.on('error', reject);
-    });
 }
 
 /**
@@ -245,7 +227,7 @@ export function createRequestHandler(config, providerPoolManager) {
                     // Handle count_tokens requests (Anthropic API compatible)
                     if (path.includes('/count_tokens') && method === 'POST') {
                         try {
-                            const body = await parseRequestBody(req);
+                            const body = await getRequestBody(req, { maxBytes: 1024 * 1024 * 2 }); // Limit to 1MB
                             logger.info(`[Server] Handling count_tokens request for model: ${body.model}`);
 
                             // Use common utility method directly

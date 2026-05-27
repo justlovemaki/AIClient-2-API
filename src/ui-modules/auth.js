@@ -74,25 +74,40 @@ export async function validateCredentials(password) {
 }
 
 /**
- * 解析请求体JSON
+ * 解析请求体JSON，带大小限制防止 DoS
+ * @param {http.IncomingMessage} req
+ * @param {number} maxBytes 最大允许字节数，默认 10KB（登录接口够用）
  */
-function parseRequestBody(req) {
+function parseRequestBody(req, maxBytes = 10 * 1024) {
     return new Promise((resolve, reject) => {
+        // 1. 先检查 Content-Length header，快速拒绝超大请求（零读取开销）
+        const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+        if (!isNaN(contentLength) && contentLength > maxBytes) {
+            req.resume(); // drain & discard，避免连接挂起
+            return reject(Object.assign(new Error('Request body too large'), { code: 'BODY_TOO_LARGE' }));
+        }
+
         let body = '';
+        let received = 0;
+
         req.on('data', chunk => {
+            received += chunk.length;
+            if (received > maxBytes) {
+                // 超限：立即销毁连接，不再累积数据
+                req.destroy();
+                return reject(Object.assign(new Error('Request body too large'), { code: 'BODY_TOO_LARGE' }));
+            }
             body += chunk.toString();
         });
+
         req.on('end', () => {
             try {
-                if (!body.trim()) {
-                    resolve({});
-                } else {
-                    resolve(JSON.parse(body));
-                }
+                resolve(body.trim() ? JSON.parse(body) : {});
             } catch (error) {
                 reject(new Error('Invalid JSON format'));
             }
         });
+
         req.on('error', reject);
     });
 }
@@ -420,12 +435,23 @@ export async function handleLoginRequest(req, res) {
     } catch (error) {
         logger.error('[Auth] Login processing error:', error);
         const isJsonError = error.message === 'Invalid JSON format';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            success: false,
-            message: error.message || 'Server error',
-            messageCode: isJsonError ? 'login.error.invalidJson' : undefined
-        }));
+        const isBodyTooLarge = error.code === 'BODY_TOO_LARGE';
+
+        if (isBodyTooLarge) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: 'Request body too large',
+                messageCode: 'login.error.bodyTooLarge'
+            }));
+        } else {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: error.message || 'Server error',
+                messageCode: isJsonError ? 'login.error.invalidJson' : undefined
+            }));
+        }
     }
     return true;
 }

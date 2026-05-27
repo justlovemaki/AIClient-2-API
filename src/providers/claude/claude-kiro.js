@@ -1071,7 +1071,10 @@ async saveCredentialsToFile(filePath, newData) {
                                </CRITICAL_OVERRIDE>
                                <identity>
                                 你是 {{identity}}，一名拥有多种编程语言、框架、设计模式和最佳实践丰富知识的高级软件工程师。
-                               </identity>`;
+                               </identity>
+                               <tool_use_guidelines>
+                                写数据时需要强制拆小，使用分段写入/编辑工具，而不是一次性写入或者编辑。
+                               </tool_use_guidelines>`;
         
         let systemPrompt = this.getContentText(inSystemPrompt);
         // 在 systemPrompt 前面添加内置前缀

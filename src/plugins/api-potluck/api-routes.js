@@ -21,35 +21,11 @@ import {
     getAllKeyIds,
     resetAllTokenStats
 } from './key-manager.js';
+import { getRequestBody } from '../../utils/common.js';
 import logger from '../../utils/logger.js';
 
 /**
- * 解析请求体
- * @param {http.IncomingMessage} req
- * @returns {Promise<Object>}
- */
-function parseRequestBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                resolve(body ? JSON.parse(body) : {});
-            } catch (error) {
-                reject(new Error('JSON 格式无效'));
-            }
-        });
-        req.on('error', reject);
-    });
-}
-
-/**
  * 发送 JSON 响应
- * @param {http.ServerResponse} res
- * @param {number} statusCode
- * @param {Object} data
  */
 function sendJson(res, statusCode, data) {
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
@@ -158,7 +134,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
 
         // POST /api/potluck/keys/apply-limit - 批量应用每日限额到所有 Key
         if (method === 'POST' && path === '/api/potluck/keys/apply-limit') {
-            const body = await parseRequestBody(req);
+            const body = await getRequestBody(req, { maxBytes: 1024 * 1024 });
             const { dailyLimit } = body;
             
             if (dailyLimit === undefined || typeof dailyLimit !== 'number' || dailyLimit < 1) {
@@ -177,7 +153,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
 
         // POST /api/potluck/keys - 创建新 Key
         if (method === 'POST' && path === '/api/potluck/keys') {
-            const body = await parseRequestBody(req);
+            const body = await getRequestBody(req, { maxBytes: 1024 * 1024 });
             const { name, dailyLimit } = body;
             const keyData = await createKey(name, dailyLimit);
             sendJson(res, 201, {
@@ -218,7 +194,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
 
             // PUT /api/potluck/keys/:keyId/limit - 更新每日限额
             if (method === 'PUT' && subPath === '/limit') {
-                const body = await parseRequestBody(req);
+                const body = await getRequestBody(req, { maxBytes: 1024 * 1024 });
                 const { dailyLimit } = body;
                 
                 if (typeof dailyLimit !== 'number' || dailyLimit < 0) {
@@ -289,7 +265,7 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
 
             // PUT /api/potluck/keys/:keyId/name - 更新 Key 名称
             if (method === 'PUT' && subPath === '/name') {
-                const body = await parseRequestBody(req);
+                const body = await getRequestBody(req, { maxBytes: 1024 * 1024 });
                 const { name } = body;
                 
                 if (!name || typeof name !== 'string') {
