@@ -416,6 +416,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await oauthApi.handleBatchImportCodexTokens(req, res);
     }
 
+    if (method === 'POST' && pathParam === '/api/codex/import-external-credentials') {
+        return await oauthApi.handleImportCodexExternalCredentials(req, res);
+    }
+
     if (method === 'POST' && pathParam === '/api/grok/batch-import-tokens') {
         return await oauthApi.handleBatchImportGrokTokens(req, res);
     }

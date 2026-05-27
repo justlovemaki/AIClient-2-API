@@ -33,6 +33,7 @@ export class CodexApiService {
         this.idToken = null;
         this.last_refresh = null;
         this.credsPath = null; // 记录本次加载/使用的凭据文件路径，确保刷新后写回同一文件
+        this.accessTokenOnlyRefreshLogged = false;
         this.uuid = config.uuid; // 保存 uuid 用于号池管理
         this.isInitialized = false;
 
@@ -138,6 +139,10 @@ export class CodexApiService {
         // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
         if (needsRefresh || !this.accessToken) {
             if (!this.refreshToken) {
+                if (this.accessToken) {
+                    this.logAccessTokenOnlyRefreshSkipped();
+                    return;
+                }
                 throw new Error('Codex credentials not found. Please authenticate first using OAuth.');
             }
             logger.info('[Codex] Token expiring soon or refresh requested, refreshing...');
@@ -149,6 +154,11 @@ export class CodexApiService {
      * 后台异步刷新 token（不阻塞当前请求）
      */
     triggerBackgroundRefresh() {
+        if (!this.refreshToken) {
+            this.logAccessTokenOnlyRefreshSkipped();
+            return;
+        }
+
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
             logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for background refresh`);
@@ -156,6 +166,12 @@ export class CodexApiService {
                 uuid: this.uuid
             });
         }
+    }
+
+    logAccessTokenOnlyRefreshSkipped() {
+        if (this.accessTokenOnlyRefreshLogged) return;
+        this.accessTokenOnlyRefreshLogged = true;
+        logger.warn('[Codex] Access-token-only credential cannot be refreshed because refresh_token is empty. Re-import or re-authenticate when it expires.');
     }
 
     /**
@@ -460,6 +476,11 @@ export class CodexApiService {
      * 刷新访问令牌
      */
     async refreshAccessToken() {
+        if (!this.refreshToken) {
+            this.logAccessTokenOnlyRefreshSkipped();
+            throw new Error('Cannot refresh Codex access-token-only credential without refresh_token.');
+        }
+
         try {
             const newTokens = await refreshCodexTokensWithRetry(this.refreshToken, this.config);
 
