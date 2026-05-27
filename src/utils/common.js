@@ -561,7 +561,6 @@ export function getRequestBody(req, options = {}) {
                 const error = new Error(`Request body too large. Maximum size is ${maxBytes} bytes.`);
                 error.statusCode = 413;
                 fail(error);
-                req.destroy();
                 return;
             }
             body += chunk.toString();

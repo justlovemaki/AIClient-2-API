@@ -1,4 +1,5 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
+import { EventEmitter } from 'events';
 import { Readable } from 'stream';
 import { getRequestBody } from '../src/utils/common.js';
 
@@ -14,10 +15,16 @@ describe('getRequestBody', () => {
     });
 
     test('rejects JSON bodies that exceed optional maxBytes limit', async () => {
-        await expect(
-            getRequestBody(makeRequest(['{"payload":"too-large"}']), { maxBytes: 8 })
-        ).rejects.toMatchObject({
+        const req = new EventEmitter();
+        req.destroy = jest.fn();
+        const promise = getRequestBody(req, { maxBytes: 8 });
+
+        req.emit('data', Buffer.from('{"payload":"too-large"}'));
+        req.emit('end');
+
+        await expect(promise).rejects.toMatchObject({
             statusCode: 413
         });
+        expect(req.destroy).not.toHaveBeenCalled();
     });
 });
