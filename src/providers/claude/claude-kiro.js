@@ -925,6 +925,38 @@ async saveCredentialsToFile(filePath, newData) {
         return getContentTextUtil(message);
     }
 
+    _extractTextAndImagesFromContent(content, totalMessages = null) {
+        const result = { text: '', images: [], imageCount: 0 };
+        const shouldKeepImages = totalMessages === null ? true : (totalMessages - 1) <= 5;
+        if (Array.isArray(content)) {
+            for (const part of content) {
+                if (part.type === 'text') {
+                    result.text += part.text || '';
+                } else if (part.type === 'image' && part.source?.data) {
+                    result.imageCount++;
+                    if (shouldKeepImages) result.images.push({
+                        format: part.source.media_type.split('/')[1],
+                        source: { bytes: part.source.data }
+                    });
+                } else if (part.type === 'image_url' && part.image_url) {
+                    const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
+                    if (imageUrl && imageUrl.startsWith('data:')) {
+                        const [header, data] = imageUrl.split(',');
+                        const mediaType = header.split(':')[1]?.split(';')[0] || 'image/jpeg';
+                        result.imageCount++;
+                        if (shouldKeepImages) result.images.push({
+                            format: mediaType.split('/')[1] || 'jpeg',
+                            source: { bytes: data }
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+        result.text = getContentTextUtil({ content });
+        return result;
+    }
+
     /**
      * 清洗 tool_use 的 input 对象，移除空字符串 key 等不合法字段
      * Kiro API 不接受空字符串 key 的 JSON 对象（如 {"": "value"}）
@@ -1233,14 +1265,23 @@ async saveCredentialsToFile(filePath, newData) {
             if (processedMessages[0].role === 'user' && processedMessages.length === 1) {
                 prependSystemToCurrentMessage = true;
             } else if (processedMessages[0].role === 'user') {
-                let firstUserContent = this.getContentText(processedMessages[0]);
-                history.push({
+                const firstUserPayload = this._extractTextAndImagesFromContent(processedMessages[0].content, processedMessages.length);
+                const firstImagePlaceholder = firstUserPayload.imageCount > 0 && firstUserPayload.images.length === 0
+                    ? `[此消息包含 ${firstUserPayload.imageCount} 张图片，已在历史记录中省略]`
+                    : '';
+                const firstHistoryMsg = {
                     userInputMessage: {
-                        content: `${systemPrompt}\n\n${firstUserContent}`,
+                        content: firstUserPayload.text
+                            ? `${systemPrompt}\n\n${firstUserPayload.text}${firstImagePlaceholder ? `\n${firstImagePlaceholder}` : ''}`
+                            : `${systemPrompt}${firstImagePlaceholder ? `\n${firstImagePlaceholder}` : ''}`,
                         modelId: codewhispererModel,
                         origin: KIRO_CONSTANTS.ORIGIN_AI_EDITOR,
                     }
-                });
+                };
+                if (firstUserPayload.images.length > 0) {
+                    firstHistoryMsg.userInputMessage.images = firstUserPayload.images;
+                }
+                history.push(firstHistoryMsg);
                 startIndex = 1; // Start processing from the second message
             } else {
                 // If the first message is not a user message, or if there's no initial user message,
