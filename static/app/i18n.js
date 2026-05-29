@@ -104,6 +104,7 @@ const translations = {
         'dashboard.routing.nodeName.claude': 'Claude Custom',
         'dashboard.routing.nodeName.kiro': 'Claude Kiro OAuth',
         'dashboard.routing.nodeName.openai': 'OpenAI Custom',
+        'dashboard.routing.nodeName.atlascloud': 'AtlasCloud',
         'dashboard.routing.nodeName.qwen': 'Qwen OAuth',
         'dashboard.routing.description.qwen': 'Qwen Code Plus',
         'dashboard.routing.nodeName.iflow': 'iFlow OAuth',
@@ -866,6 +867,10 @@ const translations = {
         'playground.stream': '流式输出 (Stream)',
         'playground.status.ready': '已就绪',
         'playground.status.unready': '未就绪',
+        'playground.tab.chat': '测试对话',
+        'playground.tab.settings': '引擎设置',
+        'playground.tab.parameters': '系统参数',
+        'playground.startTesting': '进入对话测试',
 
         // Plugins
         'plugins.title': '插件管理',
@@ -1271,6 +1276,7 @@ const translations = {
         'dashboard.routing.nodeName.claude': 'Claude Custom',
         'dashboard.routing.nodeName.kiro': 'Claude Kiro OAuth',
         'dashboard.routing.nodeName.openai': 'OpenAI Custom',
+        'dashboard.routing.nodeName.atlascloud': 'AtlasCloud',
         'dashboard.routing.nodeName.qwen': 'Qwen OAuth',
         'dashboard.routing.description.qwen': 'Qwen Code Plus',
         'dashboard.routing.nodeName.iflow': 'iFlow OAuth',
@@ -2033,6 +2039,10 @@ const translations = {
         'playground.stream': 'Stream Output',
         'playground.status.ready': 'Ready',
         'playground.status.unready': 'Not Ready',
+        'playground.tab.chat': 'Chat',
+        'playground.tab.settings': 'Engine Settings',
+        'playground.tab.parameters': 'System Params',
+        'playground.startTesting': 'Start Testing',
 
         // Plugins
         'plugins.title': 'Plugin Management',

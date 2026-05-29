@@ -74,6 +74,11 @@ function getBaseProviderConfigs() {
             name: 'OpenAI Responses', 
             icon: 'fa-reply-all'
         },
+        { 
+            id: 'atlascloud', 
+            name: 'AtlasCloud', 
+            icon: 'fa-cloud'
+        },
     ];
 }
 
@@ -88,25 +93,36 @@ function getProviderConfigs(supportedProviders = []) {
     const result = [];
     const usedIds = new Set();
 
-    // 1. 处理 supportedProviders 中匹配基础配置的类型
-    baseConfigs.forEach(config => {
-        const isSupported = supportedProviders.includes(config.id);
-        result.push({ ...config, visible: isSupported });
-        usedIds.add(config.id);
+    // 1. 遍历基础配置，使其按照定义顺序排列，并且让带后缀的自定义提供商紧跟在它的基础母版后面
+    baseConfigs.forEach(baseConfig => {
+        const isSupported = supportedProviders.includes(baseConfig.id);
+        result.push({ ...baseConfig, visible: isSupported });
+        usedIds.add(baseConfig.id);
+
+        // 紧接着寻找匹配该基础 ID 的带后缀的自定义类型（例如 openai-custom-test）
+        supportedProviders.forEach(providerId => {
+            if (usedIds.has(providerId)) return;
+
+            if (providerId.startsWith(baseConfig.id + '-')) {
+                const suffix = providerId.substring(baseConfig.id.length + 1);
+                result.push({
+                    ...baseConfig,
+                    id: providerId,
+                    name: `${baseConfig.name} (${suffix})`,
+                    visible: true
+                });
+                usedIds.add(providerId);
+            }
+        });
     });
 
-    // 2. 处理带有后缀的自定义类型 (例如 openai-custom-test)
+    // 2. 安全兜底：如果还有一些 supportedProviders 既不匹配任何基础 ID 也不匹配任何前缀，就追加到最后
     supportedProviders.forEach(providerId => {
-        if (usedIds.has(providerId)) return;
-
-        // 查找匹配的前缀
-        const baseConfig = baseConfigs.find(bc => providerId.startsWith(bc.id + '-'));
-        if (baseConfig) {
-            const suffix = providerId.substring(baseConfig.id.length + 1);
+        if (!usedIds.has(providerId)) {
             result.push({
-                ...baseConfig,
                 id: providerId,
-                name: `${baseConfig.name} (${suffix})`,
+                name: providerId,
+                icon: 'fa-server',
                 visible: true
             });
             usedIds.add(providerId);
@@ -233,6 +249,20 @@ function getProviderTypeFields(providerType) {
     // 基础配置字段定义
     const fieldConfigs = {
         'openai-custom': [
+            {
+                id: 'OPENAI_API_KEY',
+                label: t('modal.provider.field.apiKey'),
+                type: 'password',
+                placeholder: 'sk-...'
+            },
+            {
+                id: 'OPENAI_BASE_URL',
+                label: 'OpenAI Base URL',
+                type: 'text',
+                placeholder: 'https://api.openai.com/v1'
+            }
+        ],
+        'atlascloud': [
             {
                 id: 'OPENAI_API_KEY',
                 label: t('modal.provider.field.apiKey'),

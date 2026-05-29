@@ -391,6 +391,10 @@ export function getProtocolPrefix(provider) {
     if (provider === 'openai-codex-oauth') {
         return 'codex';
     }
+    // Special case for AtlasCloud - it uses openai protocol
+    if (provider === 'atlascloud' || provider.startsWith('atlascloud-')) {
+        return 'openai';
+    }
 
     const hyphenIndex = provider.indexOf('-');
     if (hyphenIndex !== -1) {

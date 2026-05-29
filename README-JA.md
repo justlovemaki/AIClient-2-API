@@ -88,6 +88,16 @@
       AICodeMirror の本プロジェクトへのスポンサーシップに感謝します！AICodeMirror は、Claude Code / Codex / Gemini CLI 向けに公式の高安定性リレーサービスを提供しており、企業レベルの同時実行性、迅速な請求書発行、24時間365日の専用技術サポートを備えています。Claude Code / Codex / Gemini の公式チャンネルを、元の価格の 38% / 2% / 9% で利用でき、チャージ時にはさらなる割引もあります！AICodeMirror は AIClient2API ユーザーに特別な特典を提供しています：<a href="https://www.aicodemirror.com/register?invitecode=5BUE62">このリンクから登録</a>すると、初回チャージが <strong>20% オフ</strong>になり、法人のお客様は最大 25% オフになります！
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.atlascloud.ai/console/coding-plan">
+        <img src="static/atlascloud.png" alt="Atlas Cloud Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      Atlas Cloud による本プロジェクトへのスポンサーに感謝します！Atlas Cloud は、開発者が動画生成、画像生成、および LLM API にアクセスするための单二の AI API を提供する全モーダル AI 推論プラットフォームです。複数のベンダーの統合を管理する代わりに、一度接続するだけですべてのモダリティにわたる 300 以上の厳選されたモデルに統合アクセスできます。よりリーズナブルな API アクセスのために、Atlas Cloud の新しい<a href="https://www.atlascloud.ai/console/coding-plan">コーディングプランプロモーション (coding plan)</a>をぜひチェックしてください。
+    </td>
+  </tr>
 
 <!--
   <tr>

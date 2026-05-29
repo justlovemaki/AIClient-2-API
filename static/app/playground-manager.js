@@ -183,6 +183,20 @@ function bindEvents() {
         if (e.target.closest('#pg-stop-btn')) handleStop();
         if (e.target.closest('#pg-clear-btn')) clearChat();
         if (e.target.closest('#pg-attach-btn')) el('pg-file-input')?.click();
+
+        // 移动端响应式选项卡切换
+        const tabBtn = e.target.closest('.pg-tab-btn');
+        if (tabBtn) {
+            const targetTab = tabBtn.getAttribute('data-tab');
+            switchPlaygroundTab(targetTab);
+        }
+
+        // 移动端一键进入对话按钮切换
+        const startChatBtn = e.target.closest('[data-tab-switch]');
+        if (startChatBtn) {
+            const targetTab = startChatBtn.getAttribute('data-tab-switch');
+            switchPlaygroundTab(targetTab);
+        }
     });
 
     document.addEventListener('change', (e) => {
@@ -913,4 +927,30 @@ function renderAttachmentPreview() {
         };
         preview.appendChild(tag);
     });
+}
+
+function switchPlaygroundTab(tabName) {
+    const pg = el('playground');
+    if (!pg) return;
+
+    pg.classList.remove('active-tab-chat', 'active-tab-settings', 'active-tab-parameters');
+    pg.classList.add(`active-tab-${tabName}`);
+
+    const tabs = pg.querySelectorAll('.pg-tab-btn');
+    tabs.forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabName) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    if (tabName === 'chat') {
+        setTimeout(() => {
+            const input = getInput();
+            if (input && !input.disabled) {
+                input.focus();
+            }
+        }, 100);
+    }
 }

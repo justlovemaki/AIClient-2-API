@@ -1,5 +1,15 @@
 [
   {
+    "id": "atlas-custom-model",
+    "name": "Atlas Custom Model",
+    "alias": "gpt-4o",
+    "provider": "atlascloud",
+    "actualProvider": "atlascloud",
+    "actualModel": "gpt-4o",
+    "contextLength": 128000,
+    "temperature": 0.7
+  },
+  {
     "id": "my-custom-gpt-4",
     "name": "Custom GPT-4",
     "alias": "gpt-4",

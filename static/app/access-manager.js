@@ -11,6 +11,7 @@ const recommendedModelMap = {
     'claude-custom': 'claude-sonnet-4-6',
     'claude-kiro-oauth': 'claude-sonnet-4-6',
     'openai-custom': 'gpt-4o',
+    'atlascloud': 'gpt-4o',
     'openai-qwen-oauth': 'qwen3-coder-plus',
     'openai-iflow': 'qwen3-max',
     'openai-codex-oauth': 'gpt-5',
@@ -465,6 +466,19 @@ function navigateToSection(sectionId) {
 }
 
 function renderAccessPage(data) {
+    // 按照 getProviderConfigs 的预设顺序对 providers 进行排序，以保持与系统其他地方（如提供商列表、模型测试）的展示顺序一致
+    if (data.providers && data.supportedProviders) {
+        const presetConfigs = getProviderConfigs(data.supportedProviders);
+        const presetOrder = presetConfigs.map(config => config.id);
+        data.providers.sort((a, b) => {
+            const indexA = presetOrder.indexOf(a.id);
+            const indexB = presetOrder.indexOf(b.id);
+            const valA = indexA === -1 ? 999 : indexA;
+            const valB = indexB === -1 ? 999 : indexB;
+            return valA - valB;
+        });
+    }
+
     const configMap = buildProviderConfigMap(data.supportedProviders || []);
     const visibleProviders = getVisibleProviders(data.providers || []);
 

@@ -51,6 +51,7 @@ export class ProviderPoolManager {
         'gemini-cli-oauth': 'gemini-2.5-flash',
         'gemini-antigravity': 'gemini-2.5-flash',
         'openai-custom': 'gpt-4o-mini',
+        'atlascloud': 'gpt-4o-mini',
         'claude-custom': 'claude-3-7-sonnet-20250219',
         'claude-kiro-oauth': 'claude-haiku-4-5',
         'openai-qwen-oauth': 'qwen3-coder-flash',

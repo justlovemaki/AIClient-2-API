@@ -837,7 +837,7 @@ function showSimplePrompt(title, placeholder, callback) {
  * @returns {string} 按钮HTML
  */
 function generateAddGroupButton(providerType) {
-    const allowedTypes = ['claude-custom', 'openai-custom', 'openaiResponses-custom'];
+    const allowedTypes = ['claude-custom', 'openai-custom', 'openaiResponses-custom', 'atlascloud'];
     if (!allowedTypes.includes(providerType)) {
         return '';
     }
@@ -4314,7 +4314,7 @@ function showAddProviderGroupModal(defaultBaseType = null) {
         const isSupported = cachedSupportedProviders.includes(config.id);
         
         // 2. 限制只能添加特定类型的配置组 (Claude Custom, OpenAI Custom, OpenAI Responses)
-        const allowedTypes = ['claude-custom', 'openai-custom', 'openaiResponses-custom'];
+        const allowedTypes = ['claude-custom', 'openai-custom', 'openaiResponses-custom', 'atlascloud'];
         const isAllowed = allowedTypes.includes(config.id);
         
         return isSupported && isAllowed;

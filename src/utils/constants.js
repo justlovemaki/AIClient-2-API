@@ -59,6 +59,7 @@ export const MODEL_PROVIDER = {
     GEMINI_CLI: 'gemini-cli-oauth',
     ANTIGRAVITY: 'gemini-antigravity',
     OPENAI_CUSTOM: 'openai-custom',
+    ATLASCLOUD: 'atlascloud',
     OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',

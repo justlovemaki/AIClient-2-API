@@ -593,11 +593,109 @@
     .pg-workspace .pg-main-layout { grid-template-columns: 240px 1fr 300px; }
 }
 
+.pg-mobile-tabs {
+    display: none;
+}
+
 @media (max-width: 1100px) {
-    .pg-workspace .pg-main-layout { grid-template-columns: 1fr; }
-    .pg-workspace .pg-side-nav, .pg-workspace .pg-config-panel { display: none; }
-    .pg-workspace .pg-input-boundary { padding: 1rem 2rem; }
-    .pg-workspace .pg-messages-wrapper { padding: 1.5rem 2rem; }
+    .pg-mobile-tabs {
+        display: flex;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.5rem 1rem;
+        gap: 0.5rem;
+    }
+    
+    .pg-mobile-tabs .pg-tab-btn {
+        flex: 1;
+        padding: 0.65rem 0.5rem;
+        border: 1px solid transparent;
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .pg-mobile-tabs .pg-tab-btn:hover {
+        color: var(--primary-color);
+        background: var(--bg-secondary);
+        border-color: var(--primary-20);
+    }
+    
+    .pg-mobile-tabs .pg-tab-btn.active {
+        background: var(--primary-10);
+        color: var(--primary-color);
+        border-color: var(--primary-20);
+        box-shadow: 0 2px 8px var(--primary-10);
+    }
+
+    .pg-workspace .pg-main-layout { 
+        grid-template-columns: 1fr; 
+    }
+    
+    /* 默认在移动端隐藏所有面板，根据 active-tab-xxx 展示 */
+    .pg-workspace .pg-side-nav, 
+    .pg-workspace .pg-chat-column, 
+    .pg-workspace .pg-config-panel { 
+        display: none !important; 
+    }
+    
+    .pg-workspace.active-tab-chat .pg-chat-column {
+        display: flex !important;
+    }
+    
+    .pg-workspace.active-tab-settings .pg-side-nav {
+        display: flex !important;
+        width: 100% !important;
+        border-right: none !important;
+        background: var(--bg-primary) !important;
+    }
+    
+    .pg-workspace.active-tab-parameters .pg-config-panel {
+        display: flex !important;
+        width: 100% !important;
+        border-left: none !important;
+        background: var(--bg-primary) !important;
+    }
+
+    .pg-workspace .pg-input-boundary { padding: 1rem 1.5rem 1.5rem; }
+    .pg-workspace .pg-messages-wrapper { padding: 1.5rem 1.5rem; }
+
+    .pg-workspace .pg-mobile-start-chat-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.85rem;
+        border: none;
+        border-radius: 12px;
+        background: var(--primary-color);
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 1rem;
+        box-shadow: 0 4px 12px var(--primary-20);
+    }
+    
+    .pg-workspace .pg-mobile-start-chat-btn:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+    }
+    
+    .pg-workspace .pg-mobile-only-divider {
+        display: block !important;
+    }
 }
 
 /* 其他动画 & 辅助类 */

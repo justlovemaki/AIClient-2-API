@@ -1,4 +1,21 @@
 {
+  "atlascloud": [
+    {
+      "customName": "AtlasCloud节点1",
+      "OPENAI_API_KEY": "sk-atlascloud-key1",
+      "OPENAI_BASE_URL": "https://api.openai.com/v1",
+      "checkModelName": null,
+      "checkHealth": false,
+      "notSupportedModels": [],
+      "uuid": "4f579c65-d3c5-41b1-9985-9f6e3d7bf39d",
+      "isHealthy": true,
+      "isDisabled": false,
+      "lastUsed": null,
+      "usageCount": 0,
+      "errorCount": 0,
+      "lastErrorTime": null
+    }
+  ],
   "openai-custom": [
     {
       "customName": "OpenAI节点1",

@@ -1,7 +1,7 @@
 <link rel="stylesheet" href="components/section-playground.css">
 
 <!-- Playground Workspace -->
-<section id="playground" class="section pg-workspace">
+<section id="playground" class="section pg-workspace active-tab-chat">
     <!-- Header: Workspace Title & Actions -->
     <header class="pg-workspace-header">
         <div class="pg-title-group">
@@ -14,6 +14,19 @@
             <button class="pg-btn-icon" id="pg-clear-btn" data-i18n-title="playground.clearChat" title="重置实验室"><i class="fas fa-redo-alt"></i></button>
         </div>
     </header>
+
+    <!-- Mobile Responsive Tabs -->
+    <div class="pg-mobile-tabs">
+        <button class="pg-tab-btn active" data-tab="chat">
+            <i class="fas fa-comments"></i> <span data-i18n="playground.tab.chat">测试对话</span>
+        </button>
+        <button class="pg-tab-btn" data-tab="settings">
+            <i class="fas fa-sliders-h"></i> <span data-i18n="playground.tab.settings">引擎设置</span>
+        </button>
+        <button class="pg-tab-btn" data-tab="parameters">
+            <i class="fas fa-cog"></i> <span data-i18n="playground.tab.parameters">系统参数</span>
+        </button>
+    </div>
 
     <div class="pg-main-layout">
         <!-- 1. Left Sidebar: Provider & Model -->
@@ -51,6 +64,10 @@
             </div>
             
             <div class="pg-nav-divider"></div>
+            <!-- Mobile Switch button -->
+            <button class="pg-mobile-start-chat-btn" data-tab-switch="chat" style="display: none;">
+                <span data-i18n="playground.startTesting">进入对话测试</span> <i class="fas fa-arrow-right"></i>
+            </button>
         </aside>
 
         <!-- 2. Middle Column: Chat Experience -->
@@ -117,6 +134,11 @@
                     </div>
                 </div>
             </div>
+            <div class="pg-nav-divider pg-mobile-only-divider" style="display: none;"></div>
+            <!-- Mobile Switch button -->
+            <button class="pg-mobile-start-chat-btn" data-tab-switch="chat" style="display: none;">
+                <span data-i18n="playground.startTesting">进入对话测试</span> <i class="fas fa-arrow-right"></i>
+            </button>
         </aside>
     </div>
 

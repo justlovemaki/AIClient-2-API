@@ -167,6 +167,17 @@ function getAvailableRoutes() {
             badgeClass: 'official'
         },
         {
+            provider: 'atlascloud',
+            name: 'AtlasCloud',
+            paths: {
+                openai: '/atlascloud/v1/chat/completions',
+                claude: '/atlascloud/v1/messages'
+            },
+            description: t('dashboard.routing.official'),
+            badge: t('dashboard.routing.official'),
+            badgeClass: 'official'
+        },
+        {
             provider: 'gemini-cli-oauth',
             name: t('dashboard.routing.nodeName.gemini'),
             paths: {
@@ -336,6 +347,7 @@ async function copyCurlExample(provider, options = {}) {
             }
             break;
             
+        case 'atlascloud':
         case 'openai-custom':
         case 'openai-qwen-oauth':
         case 'openai-iflow':
@@ -473,6 +485,7 @@ function renderRoutingExamples(providerConfigs) {
         'gemini-cli-oauth': 'fa-gem',
         'gemini-antigravity': 'fa-rocket',
         'openai-custom': 'fa-comments',
+        'atlascloud': 'fa-cloud',
         'claude-custom': 'fa-brain',
         'claude-kiro-oauth': 'fa-robot',
         'openai-qwen-oauth': 'fa-code',
@@ -489,6 +502,7 @@ function renderRoutingExamples(providerConfigs) {
         'claude-custom': 'claude-sonnet-4-6',
         'claude-kiro-oauth': 'claude-sonnet-4-6',
         'openai-custom': 'gpt-4o',
+        'atlascloud': 'gpt-4o',
         'openai-qwen-oauth': 'qwen3-coder-plus',
         'openai-iflow': 'qwen3-max',
         'openai-codex-oauth': 'gpt-5',

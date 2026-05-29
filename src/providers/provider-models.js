@@ -68,6 +68,7 @@ export const PROVIDER_MODELS = {
     'claude-kiro-oauth': [
         'claude-haiku-4-5',
         'claude-haiku-4-5-20251001',
+        'claude-opus-4-8',
         'claude-opus-4-7',
         'claude-opus-4-6',
         'claude-sonnet-4-6',
@@ -77,6 +78,7 @@ export const PROVIDER_MODELS = {
         'claude-sonnet-4-5-20250929',
     ],
     'openai-custom': [],
+    'atlascloud': [],
     'openaiResponses-custom': [],
     'openai-qwen-oauth': [
         'coder-model',
@@ -140,7 +142,8 @@ export const PROVIDER_MODELS = {
 export const MANAGED_MODEL_LIST_PROVIDERS = [
     'openai-custom',
     'openaiResponses-custom',
-    'claude-custom'
+    'claude-custom',
+    'atlascloud'
 ];
 
 export function getManagedModelListProviderType(providerType) {
