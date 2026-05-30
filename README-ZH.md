@@ -80,16 +80,6 @@
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">
-        <img src="static/aicodemirror.jpg" alt="AICodeMirror Sponsor" width="180">
-      </a>
-    </td>
-    <td width="75%" align="left" valign="middle">
-      感谢 AICodeMirror 赞助本项目！AICodeMirror 为 Claude Code / Codex / Gemini CLI 提供官方高稳定性中转服务，具备企业级并发能力、快速开票和 7/24 专属技术支持。Claude Code / Codex / Gemini 官方渠道价格仅为原价的 38% / 2% / 9%，充值还有额外优惠！AICodeMirror 为 AIClient2API 用户提供专属福利：<a href="https://www.aicodemirror.com/register?invitecode=5BUE62">通过此链接注册</a>即可享受首充 <strong>8折（20% off）</strong> 优惠，企业客户最高可享 75折（25% off）！
-    </td>
-  </tr>
-  <tr>
-    <td width="25%" align="center" valign="middle">
       <a href="https://www.atlascloud.ai/console/coding-plan">
         <img src="static/atlascloud.png" alt="Atlas Cloud Sponsor" width="180">
       </a>
@@ -98,6 +88,18 @@
       感谢 Atlas Cloud 赞助本项目！Atlas Cloud 是一款全模态 AI 推理平台，为开发者提供单一的 AI API 以轻松接入视频生成、图像生成和大语言模型 API。无需管理多个供应商集成，您只需连接一次，即可统一访问跨所有模态的 300 多种精选模型。欢迎查看 Atlas Cloud 全新的 <a href="https://www.atlascloud.ai/console/coding-plan">编码计划促销活动 (coding plan)</a>，以获取更具性价比的 API 接入服务。
     </td>
   </tr>
+  <!--
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">
+        <img src="static/aicodemirror.jpg" alt="AICodeMirror Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      感谢 AICodeMirror 赞助本项目！AICodeMirror 为 Claude Code / Codex / Gemini CLI 提供官方高稳定性中转服务，具备企业级并发能力、快速开票和 7/24 专属技术支持。Claude Code / Codex / Gemini 官方渠道价格仅为原价的 38% / 2% / 9%，充值还有额外优惠！AICodeMirror 为 AIClient2API 用户提供专属福利：<a href="https://www.aicodemirror.com/register?invitecode=5BUE62">通过此链接注册</a>即可享受首充 <strong>8折（20% off）</strong> 优惠，企业客户最高可享 75折（25% off）！
+    </td>
+  </tr>
+  -->
 
 <!--
   <tr>

@@ -278,7 +278,8 @@
     }
 
     /* 隐藏次要元素 */
-    .kiro-buy-link {
+    .kiro-buy-link,
+    .kiro-video-link {
         display: none;
     }
 

@@ -163,6 +163,36 @@
     font-size: 0.875rem;
 }
 
+/* KIRO 视频教程链接 */
+.kiro-video-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #fb7299 0%, #fc4080 100%);
+    color: var(--white);
+    text-decoration: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: var(--transition);
+    box-shadow: 0 2px 8px rgba(251, 114, 153, 0.3);
+}
+
+.kiro-video-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(251, 114, 153, 0.4);
+    background: linear-gradient(135deg, #fc4080 0%, #fb7299 100%);
+}
+
+.kiro-video-link:active {
+    transform: translateY(0);
+}
+
+.kiro-video-link i {
+    font-size: 0.875rem;
+}
+
 /* 暗黑主题适配 */
 [data-theme="dark"] .header {
     background: var(--bg-glass);
