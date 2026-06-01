@@ -3409,7 +3409,7 @@ function showKiroAwsImportModal() {
                                         if (current.success) {
                                             resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #166534;">✓ ${current.path}</span>`;
                                         } else if (current.error === 'duplicate') {
-                                            resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #d97706;">⚠ ${t('oauth.kiro.duplicateCredentials')}</span>
+                                            resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #d97706;">⚠ ${t('oauth.kiro.duplicateAccount')}</span>
                                                 ${current.existingPath ? `<span style="color: #666; font-size: 11px;">(${current.existingPath})</span>` : ''}`;
                                         } else {
                                             resultItem.innerHTML = `凭据 ${current.index}: <span style="color: #991b1b;">✗ ${current.error}</span>`;
@@ -3472,11 +3472,20 @@ function showKiroAwsImportModal() {
                     mergedCredentials.authMethod = 'builder-id';
                 }
                 
-                const response = await window.apiClient.post('/kiro/import-aws-credentials', {
-                    credentials: mergedCredentials
+                const response = await fetch('/api/kiro/import-aws-credentials', {
+                    method: 'POST',
+                    headers: window.apiClient ? window.apiClient.getAuthHeaders() : {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ credentials: mergedCredentials })
                 });
+                const result = await response.json().catch(() => ({}));
                 
-                if (response.success) {
+                if (!response.ok && result.error !== 'duplicate') {
+                    throw new Error(result.error?.message || result.message || result.error || `${t('common.requestFailed')} (${t('common.status')}: ${response.status})`);
+                }
+                
+                if (result.success) {
                     importSuccess = true;
                     showToast(t('common.success'), t('oauth.kiro.awsImportSuccess'), 'success');
                     modal.remove();
@@ -3484,12 +3493,12 @@ function showKiroAwsImportModal() {
                     // 刷新提供商列表和配置列表
                     loadProviders();
                     loadConfigList();
-                } else if (response.error === 'duplicate') {
+                } else if (result.error === 'duplicate') {
                     // 显示重复凭据警告
-                    const existingPath = response.existingPath || '';
-                    showToast(t('common.warning'), t('oauth.kiro.duplicateCredentials') + (existingPath ? ` (${existingPath})` : ''), 'warning');
+                    const existingPath = result.existingPath || '';
+                    showToast(t('common.warning'), t('oauth.kiro.duplicateAccount') + (existingPath ? ` (${existingPath})` : ''), 'warning');
                 } else {
-                    showToast(t('common.error'), response.error || t('oauth.kiro.awsImportFailed'), 'error');
+                    showToast(t('common.error'), result.error || t('oauth.kiro.awsImportFailed'), 'error');
                 }
             }
         } catch (error) {
